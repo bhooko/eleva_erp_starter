@@ -3,7 +3,17 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 relative">
+    <button type="button"
+            id="projectEditToggle"
+            class="absolute top-4 right-4 inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-700 bg-slate-900/70 text-slate-300 hover:text-emerald-300 hover:border-emerald-400"
+            aria-expanded="false"
+            title="Edit project details">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.76.76-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" />
+      </svg>
+      <span class="sr-only">Edit project</span>
+    </button>
     <div class="flex flex-wrap items-start gap-6">
       <div class="flex-1 min-w-[240px]">
         <h2 class="text-xl font-semibold text-slate-100">{{ project.name }}</h2>
@@ -20,6 +30,43 @@
           <div class="text-xs uppercase text-slate-400">Customer</div>
           <div class="text-sm text-slate-100">{{ project.customer_name or '—' }}</div>
         </div>
+      </div>
+      <div id="projectEditForm" class="mt-6 w-full hidden">
+        <form method="post" action="{{ url_for('project_edit', project_id=project.id) }}" class="space-y-4">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectName">Project name</label>
+              <input id="projectName" name="name" required value="{{ project.name }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLiftType">Lift type</label>
+              <select id="projectLiftType" name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="" {% if not project.lift_type %}selected{% endif %}>Not specified</option>
+                {% for lt in LIFT_TYPES %}
+                  <option value="{{ lt }}" {% if project.lift_type == lt %}selected{% endif %}>{{ lt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectSiteName">Site name</label>
+              <input id="projectSiteName" name="site_name" value="{{ project.site_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectCustomer">Customer</label>
+              <input id="projectCustomer" name="customer_name" value="{{ project.customer_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectAddress">Site address</label>
+            <textarea id="projectAddress" name="site_address" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">{{ project.site_address or '' }}</textarea>
+          </div>
+          <div class="flex items-center gap-3 justify-end">
+            <button type="button" id="projectEditCancel" class="px-4 py-2 rounded-xl border border-slate-700 text-sm text-slate-300 hover:border-slate-500">Cancel</button>
+            <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Save changes</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -133,4 +180,37 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      const toggle = document.getElementById('projectEditToggle');
+      const form = document.getElementById('projectEditForm');
+      const cancel = document.getElementById('projectEditCancel');
+      if (!toggle || !form) return;
+
+      const closeForm = () => {
+        form.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      };
+
+      toggle.addEventListener('click', () => {
+        const isHidden = form.classList.contains('hidden');
+        if (isHidden) {
+          form.classList.remove('hidden');
+          toggle.setAttribute('aria-expanded', 'true');
+        } else {
+          closeForm();
+        }
+      });
+
+      if (cancel) {
+        cancel.addEventListener('click', () => {
+          closeForm();
+        });
+      }
+    })();
+  </script>
 {% endblock %}
