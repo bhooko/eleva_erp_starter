@@ -4,7 +4,7 @@
 {% block content %}
 <!-- Fallbacks if STAGES / LIFT_TYPES not passed from app.py -->
 {% set STAGES = STAGES if STAGES is defined else [
-  'Template QC','Stage 1','Stage 2','Stage 3','Completion','Structure','Cladding','Service','Repair','Material'
+  'Template QC','Stage 1','Stage 2','Stage 3','Completion','Completion QC','Structure','Cladding','Service','Repair','Material'
 ] %}
 {% set LIFT_TYPES = LIFT_TYPES if LIFT_TYPES is defined else ['Hydraulic','MRL','MR','Dumbwaiter','Goods'] %}
 

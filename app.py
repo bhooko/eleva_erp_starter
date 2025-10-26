@@ -4,7 +4,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, U
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading
 
-from sqlalchemy import case, inspect
+from sqlalchemy import case, inspect, func, or_
 from sqlalchemy.exc import OperationalError
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -26,8 +26,9 @@ login_manager.login_view = "login"
 # ---------------------- QC Profile choices (visible in UI) ----------------------
 STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
-    "Completion", "Structure", "Cladding", "Service", "Repair", "Material"
+    "Completion", "Completion QC", "Structure", "Cladding", "Service", "Repair", "Material"
 ]
+PROJECT_CORE_STAGES = ["Template QC", "Stage 1", "Stage 2", "Stage 3", "Completion QC"]
 LIFT_TYPES = ["Hydraulic", "MRL", "MR", "Dumbwaiter", "Goods"]
 # -------------------------------------------------------------------------------
 
@@ -36,6 +37,34 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
+    first_name = db.Column(db.String(80), nullable=True)
+    last_name = db.Column(db.String(80), nullable=True)
+    department = db.Column(db.String(120), nullable=True)
+    role = db.Column(db.String(120), nullable=True)
+    mobile_number = db.Column(db.String(40), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    display_picture = db.Column(db.String(255), nullable=True)
+
+    @property
+    def display_name(self):
+        parts = [p for p in [self.first_name, self.last_name] if p]
+        return " ".join(parts) if parts else self.username
+
+    @property
+    def is_admin(self):
+        role = (self.role or "").strip().lower()
+        return role == "admin" or self.username.lower() == "admin"
+
+
+class Project(db.Model):
+    __tablename__ = "project"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    site_name = db.Column(db.String(200), nullable=True)
+    site_address = db.Column(db.Text, nullable=True)
+    customer_name = db.Column(db.String(200), nullable=True)
+    lift_type = db.Column(db.String(40), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
 class FormSchema(db.Model):
@@ -79,6 +108,8 @@ class QCWork(db.Model):
     stage = db.Column(db.String(40), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
 
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+
     status = db.Column(db.String(40), default="Open")  # Open / In Progress / Closed
     due_date = db.Column(db.DateTime, nullable=True)
 
@@ -89,6 +120,7 @@ class QCWork(db.Model):
     template = db.relationship("FormSchema")
     creator = db.relationship("User", foreign_keys=[created_by])
     assignee = db.relationship("User", foreign_keys=[assigned_to])
+    project = db.relationship("Project", backref=db.backref("tasks", lazy="dynamic"))
 
 
 class QCWorkComment(db.Model):
@@ -178,6 +210,24 @@ def ensure_qc_columns():
         cur.execute("ALTER TABLE submission ADD COLUMN work_id INTEGER;")
         added_sub.append("work_id")
 
+    # user profile additions
+    cur.execute("PRAGMA table_info(user)")
+    user_cols = [r[1] for r in cur.fetchall()]
+    added_user = []
+    user_column_defs = {
+        "first_name": "TEXT",
+        "last_name": "TEXT",
+        "department": "TEXT",
+        "role": "TEXT",
+        "mobile_number": "TEXT",
+        "email": "TEXT",
+        "display_picture": "TEXT"
+    }
+    for col, col_type in user_column_defs.items():
+        if col not in user_cols:
+            cur.execute(f"ALTER TABLE user ADD COLUMN {col} {col_type};")
+            added_user.append(col)
+
     # qc_work (only attempt to alter when table exists)
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='qc_work'")
     qc_exists = cur.fetchone() is not None
@@ -188,6 +238,9 @@ def ensure_qc_columns():
         if "assigned_to" not in qc_cols:
             cur.execute("ALTER TABLE qc_work ADD COLUMN assigned_to INTEGER;")
             added_qc.append("assigned_to")
+        if "project_id" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN project_id INTEGER;")
+            added_qc.append("project_id")
 
     conn.commit()
     conn.close()
@@ -201,6 +254,11 @@ def ensure_qc_columns():
         print(f"✅ Auto-added in submission: {', '.join(added_sub)}")
     else:
         print("✔️ submission OK")
+
+    if added_user:
+        print(f"✅ Auto-added in user: {', '.join(added_user)}")
+    else:
+        print("✔️ user OK")
 
     if qc_exists:
         if added_qc:
@@ -224,6 +282,7 @@ def ensure_tables():
 
     models = [
         User.__table__,
+        Project.__table__,
         FormSchema.__table__,
         Submission.__table__,
         QCWork.__table__,
@@ -248,6 +307,10 @@ def bootstrap_db():
     for u, p in default_users:
         if not User.query.filter_by(username=u).first():
             db.session.add(User(username=u, password=p))
+
+    admin_user = User.query.filter_by(username="admin").first()
+    if admin_user and not admin_user.role:
+        admin_user.role = "Admin"
 
     if not FormSchema.query.filter_by(name="QC - New Installation").first():
         sample_schema = [
@@ -299,9 +362,48 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    if request.method == "POST":
+        first_name = (request.form.get("first_name") or "").strip()
+        last_name = (request.form.get("last_name") or "").strip()
+        remove_avatar = request.form.get("remove_avatar") == "1"
+
+        current_user.first_name = first_name or None
+        current_user.last_name = last_name or None
+
+        file = request.files.get("display_picture")
+        if remove_avatar:
+            current_user.display_picture = None
+        elif file and file.filename:
+            if not allowed_file(file.filename, kind="photo"):
+                flash("Please upload a PNG, JPG, JPEG or WEBP image for the display picture.", "error")
+                return redirect(url_for("profile"))
+            fname = secure_filename(file.filename)
+            dest_name = f"avatar_{current_user.id}_{int(datetime.datetime.utcnow().timestamp())}_{fname}"
+            dest_path = os.path.join(app.config["UPLOAD_FOLDER"], dest_name)
+            file.save(dest_path)
+            rel_path = os.path.relpath(dest_path, "static") if dest_path.startswith("static") else os.path.join("uploads", dest_name)
+            current_user.display_picture = rel_path.replace("\\", "/")
+
+        db.session.commit()
+        flash("Profile updated.", "success")
+        return redirect(url_for("profile"))
+
+    return render_template("profile.html")
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    viewing_user = current_user
+    selected_user_id = request.args.get("user_id", type=int)
+    if selected_user_id and current_user.is_admin:
+        candidate = db.session.get(User, selected_user_id)
+        if candidate:
+            viewing_user = candidate
+
     status_order = case(
         (QCWork.status == "Open", 0),
         (QCWork.status == "In Progress", 1),
@@ -310,16 +412,53 @@ def dashboard():
     )
     tasks = (
         QCWork.query
-        .filter(QCWork.assigned_to == current_user.id)
+        .filter(QCWork.assigned_to == viewing_user.id)
         .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
         .all()
     )
-    open_count = (
-        QCWork.query
-        .filter(QCWork.assigned_to == current_user.id, QCWork.status != "Closed")
-        .count()
+    counts = (
+        db.session.query(
+            func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0)
+        )
+        .filter(QCWork.assigned_to == viewing_user.id)
+        .one()
     )
-    return render_template("dashboard.html", tasks=tasks, open_count=open_count, category_label=None)
+    open_count, in_progress_count = [int(c or 0) for c in counts]
+
+    team_load = []
+    if current_user.is_admin:
+        rows = (
+            db.session.query(
+                User,
+                func.coalesce(func.count(QCWork.id), 0).label("total"),
+                func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0).label("open"),
+                func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0).label("in_progress")
+            )
+            .outerjoin(QCWork, QCWork.assigned_to == User.id)
+            .group_by(User.id)
+            .order_by(User.username.asc())
+            .all()
+        )
+        team_load = [
+            {
+                "user": member,
+                "total": int(total or 0),
+                "open": int(open_tasks or 0),
+                "in_progress": int(progress or 0)
+            }
+            for member, total, open_tasks, progress in rows
+        ]
+
+    return render_template(
+        "dashboard.html",
+        tasks=tasks,
+        open_count=open_count,
+        in_progress_count=in_progress_count,
+        viewing_user=viewing_user,
+        team_load=team_load,
+        category_label=None
+    )
 
 
 # ---------------------- FORMS (TEMPLATES) ----------------------
@@ -536,6 +675,192 @@ def submission_view(sub_id):
                            subcategory_label=f"Submission #{sub.id}", subcategory_url=None)
 
 
+# ---------------------- PROJECTS ----------------------
+@app.route("/projects", methods=["GET", "POST"])
+@login_required
+def projects_list():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        site_name = (request.form.get("site_name") or "").strip()
+        site_address = (request.form.get("site_address") or "").strip()
+        customer_name = (request.form.get("customer_name") or "").strip()
+        lift_type = (request.form.get("lift_type") or "").strip()
+
+        if not name:
+            flash("Project name is required.", "error")
+            return redirect(url_for("projects_list"))
+
+        if lift_type and lift_type not in LIFT_TYPES:
+            flash("Select a valid lift type.", "error")
+            return redirect(url_for("projects_list"))
+
+        project = Project(
+            name=name,
+            site_name=site_name or None,
+            site_address=site_address or None,
+            customer_name=customer_name or None,
+            lift_type=lift_type or None
+        )
+        db.session.add(project)
+        db.session.commit()
+        flash("Project created.", "success")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    projects = Project.query.order_by(Project.created_at.desc()).all()
+    stats_rows = (
+        db.session.query(
+            QCWork.project_id,
+            func.count(QCWork.id).label("total"),
+            func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0).label("open"),
+            func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0).label("in_progress"),
+            func.coalesce(func.sum(case((QCWork.status == "Closed", 1), else_=0)), 0).label("closed")
+        )
+        .filter(QCWork.project_id.isnot(None))
+        .group_by(QCWork.project_id)
+        .all()
+    )
+    stats_map = {
+        row.project_id: {
+            "total": int(row.total or 0),
+            "open": int(row.open or 0),
+            "in_progress": int(row.in_progress or 0),
+            "closed": int(row.closed or 0)
+        }
+        for row in stats_rows
+    }
+    return render_template(
+        "projects.html",
+        projects=projects,
+        stats_map=stats_map,
+        LIFT_TYPES=LIFT_TYPES
+    )
+
+
+@app.route("/projects/<int:project_id>")
+@login_required
+def project_detail(project_id):
+    project = Project.query.get_or_404(project_id)
+    tasks_by_stage = {}
+    for stage in PROJECT_CORE_STAGES:
+        tasks_by_stage[stage] = (
+            QCWork.query
+            .filter(QCWork.project_id == project.id, QCWork.stage == stage)
+            .order_by(QCWork.created_at.desc())
+            .all()
+        )
+
+    stage_cards = []
+    for stage in PROJECT_CORE_STAGES:
+        stage_tasks = tasks_by_stage.get(stage, [])
+        if not stage_tasks:
+            status = "empty"
+        else:
+            unfinished = [t for t in stage_tasks if t.status != "Closed"]
+            status = "completed" if not unfinished else "active"
+        stage_cards.append({
+            "name": stage,
+            "tasks": stage_tasks,
+            "status": status
+        })
+
+    other_tasks = (
+        QCWork.query
+        .filter(QCWork.project_id == project.id)
+        .filter(or_(QCWork.stage.is_(None), ~QCWork.stage.in_(PROJECT_CORE_STAGES)))
+        .order_by(QCWork.created_at.desc())
+        .all()
+    )
+    templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
+    templates_by_stage = {
+        stage: [t for t in templates if t.stage == stage]
+        for stage in PROJECT_CORE_STAGES
+    }
+    users = User.query.order_by(User.username.asc()).all()
+    return render_template(
+        "project_detail.html",
+        project=project,
+        tasks_by_stage=tasks_by_stage,
+        stage_cards=stage_cards,
+        other_tasks=other_tasks,
+        templates=templates,
+        templates_by_stage=templates_by_stage,
+        users=users,
+        PROJECT_CORE_STAGES=PROJECT_CORE_STAGES,
+        STAGES=STAGES,
+        LIFT_TYPES=LIFT_TYPES
+    )
+
+
+@app.route("/projects/<int:project_id>/tasks/create", methods=["POST"])
+@login_required
+def project_task_create(project_id):
+    project = Project.query.get_or_404(project_id)
+    stage = (request.form.get("stage") or "").strip()
+    template_id = request.form.get("template_id", type=int)
+    assigned_to = request.form.get("assigned_to", type=int)
+    due = (request.form.get("due_date") or "").strip()
+
+    if stage not in PROJECT_CORE_STAGES:
+        flash("Select one of the core project stages.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    template = db.session.get(FormSchema, template_id) if template_id else None
+    if not template:
+        template = (
+            FormSchema.query
+            .filter_by(stage=stage)
+            .order_by(FormSchema.name.asc())
+            .first()
+        )
+    if not template:
+        flash("Choose a template for this stage.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    due_dt = None
+    if due:
+        try:
+            due_dt = datetime.datetime.strptime(due, "%Y-%m-%d")
+        except Exception:
+            flash("Invalid due date format.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    work = QCWork(
+        site_name=project.site_name or project.name,
+        client_name=project.customer_name,
+        address=project.site_address,
+        template_id=template.id,
+        stage=stage,
+        lift_type=project.lift_type or template.lift_type,
+        project_id=project.id,
+        due_date=due_dt,
+        created_by=current_user.id,
+        assigned_to=assigned_to
+    )
+    db.session.add(work)
+    db.session.flush()
+    log_work_event(
+        work.id,
+        "created_from_project",
+        actor_id=current_user.id,
+        details={
+            "project_id": project.id,
+            "stage": stage,
+            "assigned_to": assigned_to,
+            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None
+        }
+    )
+    if assigned_to:
+        log_work_event(
+            work.id,
+            "assigned",
+            actor_id=current_user.id,
+            details={"assigned_to": assigned_to}
+        )
+    db.session.commit()
+    flash("QC task created for the project.", "success")
+    return redirect(url_for("qc_work_detail", work_id=work.id))
+
+
 # ---------------------- QC TABS ----------------------
 @app.route("/qc")
 @login_required
@@ -560,11 +885,13 @@ def qc_home():
     work_items = query.all()
     templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
     users = User.query.order_by(User.username.asc()).all()
+    projects = Project.query.order_by(Project.name.asc()).all()
     return render_template(
         "qc.html",
         work_items=work_items,
         templates=templates,
         users=users,
+        projects=projects,
         STAGES=STAGES,
         LIFT_TYPES=LIFT_TYPES,
         status_filter=status
@@ -582,6 +909,14 @@ def qc_work_new():
     lift_type = (request.form.get("lift_type") or "").strip()
     due = (request.form.get("due_date") or "").strip()
     assigned_to = request.form.get("assigned_to", type=int)
+    project_id = request.form.get("project_id", type=int)
+
+    project = db.session.get(Project, project_id) if project_id else None
+    if project:
+        site_name = site_name or project.site_name or project.name
+        client_name = client_name or (project.customer_name or "")
+        address = address or (project.site_address or "")
+        lift_type = lift_type or (project.lift_type or "")
 
     if not site_name or not template_id:
         flash("Site name and Template are required.", "error")
@@ -604,6 +939,7 @@ def qc_work_new():
         template_id=template_id,
         stage=stage or (template.stage if template else None),
         lift_type=lift_type or (template.lift_type if template else None),
+        project_id=project.id if project else None,
         due_date=due_dt,
         created_by=current_user.id,
         assigned_to=assigned_to
@@ -617,7 +953,8 @@ def qc_work_new():
         details={
             "site_name": work.site_name,
             "assigned_to": assigned_to,
-            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None
+            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
+            "project_id": work.project_id
         }
     )
     if assigned_to:

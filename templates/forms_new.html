@@ -5,7 +5,7 @@
 {% block content %}
 <!-- Section title comes from base.html logic; we still show a card for the profile -->
 <div class="grid gap-6">
-  <form method="POST" action="{{ url_for('qc.forms_new') }}"
+  <form method="POST" action="{{ url_for('forms_new') }}"
         class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/20">
     <div class="mb-4">
       <label class="block text-sm text-slate-400 mb-1">Form name</label>
@@ -21,7 +21,8 @@
         <select name="stage" required
                 class="w-full rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
           <option value="" disabled {% if not request.form.get('stage') %}selected{% endif %}>Select stage</option>
-          {% for s in ["Template QC","Stage 1","Stage 2","Stage 3","Completion","Structure","Cladding","Service","Repair","Material"] %}
+          {% set stage_options = STAGES if STAGES is defined else ["Template QC","Stage 1","Stage 2","Stage 3","Completion","Completion QC","Structure","Cladding","Service","Repair","Material"] %}
+          {% for s in stage_options %}
             <option value="{{ s }}" {% if request.form.get('stage') == s %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
@@ -33,7 +34,8 @@
         <select name="lift_type" required
                 class="w-full rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
           <option value="" disabled {% if not request.form.get('lift_type') %}selected{% endif %}>Select lift type</option>
-          {% for lt in ["Hydraulic","MRL","MR","Dumbwaiter","Goods"] %}
+          {% set lift_options = LIFT_TYPES if LIFT_TYPES is defined else ["Hydraulic","MRL","MR","Dumbwaiter","Goods"] %}
+          {% for lt in lift_options %}
             <option value="{{ lt }}" {% if request.form.get('lift_type') == lt %}selected{% endif %}>{{ lt }}</option>
           {% endfor %}
         </select>

@@ -32,6 +32,15 @@
         <p class="text-slate-300"><span class="text-slate-400">Address:</span> {{ work.address or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Stage:</span> {{ work.stage or work.template.stage or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Lift:</span> {{ work.lift_type or work.template.lift_type or '—' }}</p>
+        <p class="text-slate-300"><span class="text-slate-400">Project:</span>
+          {% if work.project %}
+            <a href="{{ url_for('project_detail', project_id=work.project.id) }}" class="text-emerald-300 hover:text-emerald-200">
+              {{ work.project.name }}
+            </a>
+          {% else %}
+            —
+          {% endif %}
+        </p>
       </div>
       <div class="space-y-1">
         <p class="text-slate-300"><span class="text-slate-400">Status:</span> {{ work.status }}</p>
