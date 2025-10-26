@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid md:grid-cols-2 gap-6">
+  <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800">
+    <h2 class="text-2xl font-bold mb-2">Welcome to Eleva ERP</h2>
+    <p class="text-slate-300 mb-4">Sign in with the test users for now:</p>
+    <ul class="list-disc ml-6 text-slate-300">
+      <li>user1 / pass</li>
+      <li>user2 / pass</li>
+      <li>admin / admin</li>
+    </ul>
+  </div>
+  <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800">
+    <h3 class="text-lg font-semibold mb-2">Fast reload while you code</h3>
+    <p class="text-slate-300">Run: <code class="bg-slate-800 px-1 rounded">flask run --debug</code> and keep this page open. Your changes will reload automatically.</p>
+  </div>
+</div>
+
+<div class="mt-6">
+  <a href="{{ url_for('login') }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition">Go to Login</a>
+</div>
+{% endblock %}

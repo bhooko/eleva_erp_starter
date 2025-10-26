@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – {{ 'Edit Form' if item else 'New Form' }}{% endblock %}
+
+{% block content %}
+<!-- Fallbacks if STAGES / LIFT_TYPES not passed from app.py -->
+{% set STAGES = STAGES if STAGES is defined else [
+  'Template QC','Stage 1','Stage 2','Stage 3','Completion','Structure','Cladding','Service','Repair','Material'
+] %}
+{% set LIFT_TYPES = LIFT_TYPES if LIFT_TYPES is defined else ['Hydraulic','MRL','MR','Dumbwaiter','Goods'] %}
+
+<div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 shadow-inner shadow-black/20 animate-slide">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-semibold tracking-tight">{{ 'Edit Form' if item else 'New Form' }}</h2>
+    <a href="{{ url_for('forms_list') }}" class="text-sm px-3 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">Back to Forms</a>
+  </div>
+
+  <form method="post" class="grid md:grid-cols-2 gap-4">
+    <!-- Form Name -->
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Form name</label>
+      <input name="name"
+             value="{{ item.name if item else '' }}"
+             class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+             placeholder="QC - New Installation"
+             required>
+    </div>
+
+    <!-- Min Photos -->
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Min photos when all items are Good</label>
+      <input type="number" min="0" name="min_photos"
+             value="{{ item.min_photos_if_all_good if item else 3 }}"
+             class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+             required>
+      <p class="text-xs text-slate-400 mt-1">Require at least this many photos (e.g., cabin, machine room, shaft) when all items are marked <strong>Good</strong>.</p>
+    </div>
+
+    <!-- Stage (QC profile) -->
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Stage</label>
+      <select name="stage"
+              class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+        <option value="" {% if not (item and item.stage) %}selected{% endif %}>Select stage</option>
+        {% for s in STAGES %}
+          <option value="{{ s }}" {% if item and item.stage==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Lift Type (QC profile) -->
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Lift Type</label>
+      <select name="lift_type"
+              class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+        <option value="" {% if not (item and item.lift_type) %}selected{% endif %}>Select lift type</option>
+        {% for lt in LIFT_TYPES %}
+          <option value="{{ lt }}" {% if item and item.lift_type==lt %}selected{% endif %}>{{ lt }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Schema JSON -->
+    <div class="md:col-span-2">
+      <label class="block text-sm text-slate-300 mb-1">Schema JSON</label>
+      <textarea name="schema_json" rows="14"
+                class="w-full px-3 py-2 rounded-2xl bg-slate-900/60 border border-slate-800 font-mono text-xs leading-5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                required>{{ item.schema_json if item else '[\n  { "label": "Item 1", "type": "select", "required": true, "options": ["Good","NG"], "photo_required_if_ng": true },\n  { "label": "Remarks", "type": "textarea", "required": false }\n]' }}</textarea>
+      <p class="text-xs text-slate-400 mt-2">
+        Field types: <code>text</code>, <code>textarea</code>, <code>select</code>. For <code>select</code>, provide <code>options</code>.
+        Set <code>photo_required_if_ng: true</code> to require a photo if value is <code>NG</code>.
+      </p>
+    </div>
+
+    <!-- Actions -->
+    <div class="md:col-span-2 flex items-center gap-3 mt-2">
+      <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">
+        Save
+      </button>
+      <a href="{{ url_for('forms_list') }}"
+         class="px-5 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 transition">
+        Cancel
+      </a>
+      <span class="ml-auto text-xs text-slate-400">Tip: Keep schemas short & clear for faster field checks on-site.</span>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Forms{% endblock %}
+
+{% block content %}
+<div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-semibold">All Form Templates</h2>
+    <a href="{{ url_for('forms_new') }}" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 text-white text-sm transition">
+      + New Form
+    </a>
+  </div>
+
+  {% if forms|length == 0 %}
+    <p class="text-slate-400 text-sm">No forms created yet. Click “New Form” to add one.</p>
+  {% else %}
+    <div class="overflow-auto">
+      <table class="min-w-[700px] w-full text-sm">
+        <thead class="text-slate-300 border-b border-slate-800">
+          <tr class="text-left">
+            <th class="py-2 pr-3">Name</th>
+            <th class="py-2 pr-3">Stage / Lift Type</th>
+            <th class="py-2 pr-3">Min Photos (all Good)</th>
+            <th class="py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for f in forms %}
+          <tr class="hover:bg-slate-800/40 transition">
+            <!-- Form name -->
+            <td class="py-3 pr-3 font-medium text-slate-100">{{ f.name }}</td>
+
+            <!-- Stage & Lift Type badges -->
+            <td class="py-3 pr-3">
+              <div class="flex flex-wrap gap-2 text-xs">
+                {% if f.stage %}
+                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ f.stage }}</span>
+                {% endif %}
+                {% if f.lift_type %}
+                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ f.lift_type }}</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Min Photos -->
+            <td class="py-3 pr-3 text-slate-300">{{ f.min_photos_if_all_good }}</td>
+
+            <!-- Actions -->
+            <td class="py-3">
+              <div class="flex flex-wrap items-center gap-3 text-sm">
+                <a href="{{ url_for('forms_fill', form_id=f.id) }}" class="text-emerald-400 hover:underline">Fill</a>
+                <a href="{{ url_for('forms_edit', form_id=f.id) }}" class="text-sky-400 hover:underline">Edit</a>
+                <form action="{{ url_for('forms_delete', form_id=f.id) }}" method="post" class="inline" onsubmit="return confirm('Delete form?');">
+                  <button class="text-rose-400 hover:underline" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

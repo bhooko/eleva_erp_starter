@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – QC – New form{% endblock %}
+{% block header %}Eleva ERP{% endblock %}
+
+{% block content %}
+<!-- Section title comes from base.html logic; we still show a card for the profile -->
+<div class="grid gap-6">
+  <form method="POST" action="{{ url_for('qc.forms_new') }}"
+        class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/20">
+    <div class="mb-4">
+      <label class="block text-sm text-slate-400 mb-1">Form name</label>
+      <input type="text" name="form_name" value="{{ request.form.get('form_name','QC - New form') }}"
+             class="w-full rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+             placeholder="QC - New form">
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <!-- Stage -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1">Stage</label>
+        <select name="stage" required
+                class="w-full rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+          <option value="" disabled {% if not request.form.get('stage') %}selected{% endif %}>Select stage</option>
+          {% for s in ["Template QC","Stage 1","Stage 2","Stage 3","Completion","Structure","Cladding","Service","Repair","Material"] %}
+            <option value="{{ s }}" {% if request.form.get('stage') == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Lift Type -->
+      <div>
+        <label class="block text-sm text-slate-400 mb-1">Lift Type</label>
+        <select name="lift_type" required
+                class="w-full rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+          <option value="" disabled {% if not request.form.get('lift_type') %}selected{% endif %}>Select lift type</option>
+          {% for lt in ["Hydraulic","MRL","MR","Dumbwaiter","Goods"] %}
+            <option value="{{ lt }}" {% if request.form.get('lift_type') == lt %}selected{% endif %}>{{ lt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="mt-6 flex items-center gap-3">
+      <button type="submit"
+              class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">
+        Save profile
+      </button>
+      <a href="{{ url_for('forms_list') if 'forms_list' in current_app.view_functions else url_for('dashboard') }}"
+         class="px-4 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">
+        Cancel
+      </a>
+      <div class="text-sm text-slate-400 ml-auto">
+        These selections will be saved as the form's basic profile.
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

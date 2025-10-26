@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-6 rounded-2xl bg-slate-900 border border-slate-800">
+  <h2 class="text-xl font-bold mb-4">{{ fs.name }}</h2>
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    {% for field in schema %}
+      <div>
+        <label class="block text-sm mb-1">{{ field.label }} {% if field.required %}<span class="text-rose-400">*</span>{% endif %}</label>
+        {% if field.type == 'text' %}
+          <input name="{{ field.label }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}>
+        {% elif field.type == 'textarea' %}
+          <textarea name="{{ field.label }}" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}></textarea>
+        {% elif field.type == 'select' %}
+          <select name="{{ field.label }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}>
+            <option value="">-- Select --</option>
+            {% for opt in field.options %}
+              <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm mb-1">Photos (multiple allowed)</label>
+        <input type="file" name="photos" multiple accept="image/*" class="w-full">
+        <p class="text-xs text-slate-400 mt-1">If any item is NG: at least one photo is required. If all Good: at least {{ fs.min_photos_if_all_good }} photos (cabin, machine room, shaft).</p>
+      </div>
+      <div>
+        <label class="block text-sm mb-1">Videos (optional, multiple)</label>
+        <input type="file" name="videos" multiple accept="video/*" class="w-full">
+      </div>
+    </div>
+
+    <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">Submit</button>
+  </form>
+</div>
+{% endblock %}

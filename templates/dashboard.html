@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Dashboard{% endblock %}
+
+{% block content %}
+<div class="grid md:grid-cols-3 gap-6">
+
+  <!-- Forms Summary -->
+  <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20">
+    <h3 class="text-lg font-semibold mb-2">Form Templates</h3>
+    <a href="{{ url_for('forms_new') }}" class="text-emerald-400 hover:underline">+ New form</a>
+
+    <ul class="mt-4 space-y-2">
+      {% for f in forms %}
+      <li class="border border-slate-800 rounded-xl px-3 py-3 bg-slate-950/40 hover:bg-slate-800/40 transition">
+        <div class="flex items-center justify-between">
+          <span class="font-medium text-slate-100">{{ f.name }}</span>
+          <div class="flex gap-2 text-sm">
+            <a class="text-emerald-400 hover:underline" href="{{ url_for('forms_fill', form_id=f.id) }}">Fill</a>
+            <a class="text-sky-400 hover:underline" href="{{ url_for('forms_edit', form_id=f.id) }}">Edit</a>
+          </div>
+        </div>
+
+        <!-- Stage & Lift Type badges -->
+        <div class="flex flex-wrap gap-2 text-xs text-slate-300 mt-2">
+          {% if f.stage %}
+            <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">{{ f.stage }}</span>
+          {% endif %}
+          {% if f.lift_type %}
+            <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">{{ f.lift_type }}</span>
+          {% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="text-slate-400">No forms yet.</li>
+      {% endfor %}
+    </ul>
+
+    <a href="{{ url_for('forms_list') }}" class="inline-block mt-4 text-slate-300 hover:underline text-sm">
+      View all templates
+    </a>
+  </div>
+
+  <!-- Recent Submissions -->
+  <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 md:col-span-2 shadow-inner shadow-black/20">
+    <h3 class="text-lg font-semibold mb-3">Recent Submissions</h3>
+    {% if submissions|length == 0 %}
+      <div class="text-slate-400">No submissions yet.</div>
+    {% else %}
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for s in submissions %}
+        <a href="{{ url_for('submission_view', sub_id=s.id) }}"
+           class="block rounded-xl border border-slate-800 p-3 bg-slate-950/40 hover:bg-slate-800/60 transition">
+          <div class="text-xs text-slate-400 mb-1">
+            {{ s.created_at.strftime('%Y-%m-%d %H:%M') }}
+          </div>
+          <div class="font-semibold text-slate-100">{{ s.form.name }}</div>
+          <div class="flex flex-wrap gap-2 text-[11px] text-slate-400 mt-1">
+            {% if s.form.stage %}
+              <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{{ s.form.stage }}</span>
+            {% endif %}
+            {% if s.form.lift_type %}
+              <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{{ s.form.lift_type }}</span>
+            {% endif %}
+          </div>
+          <div class="text-xs text-slate-400 mt-1">By {{ s.user.username }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
