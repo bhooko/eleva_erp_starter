@@ -28,6 +28,67 @@
       Address: {{ work.address or '—' }}
     </p>
 
+    {% set status_order = {'Open': 0, 'In Progress': 1, 'Closed': 2} %}
+    {% set statuses = [
+      {'key': 'Open', 'title': 'Open', 'description': 'Work has been created and is waiting to begin.'},
+      {'key': 'In Progress', 'title': 'In Progress', 'description': 'Technicians are actively working on the assignment.'},
+      {'key': 'Closed', 'title': 'Closed', 'description': 'All work has been completed and verified.'},
+    ] %}
+    {% set current_position = status_order.get(work.status, -1) %}
+
+    <div class="status-timeline mt-6">
+      <div class="flex items-start">
+        {% for step in statuses %}
+          {% set step_index = status_order.get(step.key, loop.index0) %}
+          {% set state = 'pending' %}
+          {% if current_position > step_index %}
+            {% set state = 'complete' %}
+          {% elif current_position == step_index %}
+            {% set state = 'current' %}
+          {% endif %}
+          <div class="flex-1 px-2">
+            <div class="flex items-center">
+              {% if not loop.first %}
+                <div class="status-connector flex-1 h-0.5 mr-3">
+                  {% if current_position >= step_index %}
+                    <div class="status-connector-fill is-active"></div>
+                  {% endif %}
+                </div>
+              {% endif %}
+
+              <div class="status-node {{ 'is-current' if state == 'current' else '' }} flex h-12 w-12 items-center justify-center rounded-full border text-sm font-semibold shadow-sm
+                {{ 'bg-emerald-500/90 border-emerald-200 text-white shadow-emerald-500/20' if state == 'complete' else '' }}
+                {{ 'bg-emerald-500/15 border-emerald-300/80 text-emerald-100 shadow-emerald-500/30' if state == 'current' else '' }}
+                {{ 'bg-slate-900/60 border-slate-700 text-slate-400' if state == 'pending' else '' }}
+              ">
+                {% if state == 'complete' %}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                {% else %}
+                  <span>{{ step_index + 1 }}</span>
+                {% endif %}
+              </div>
+
+              {% if not loop.last %}
+                <div class="status-connector flex-1 h-0.5 ml-3">
+                  {% if current_position > step_index %}
+                    <div class="status-connector-fill is-active"></div>
+                  {% elif current_position == step_index %}
+                    <div class="status-connector-fill is-partial"></div>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="mt-3 text-center space-y-1">
+              <p class="text-sm font-medium text-slate-200">{{ step.title }}</p>
+              <p class="text-xs text-slate-400 leading-relaxed max-w-[180px] mx-auto">{{ step.description }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="flex flex-wrap items-center gap-3 text-sm">
       <span class="px-2 py-1 rounded bg-slate-800 border border-slate-700">Stage: {{ work.stage or work.template.stage or '—' }}</span>
       <span class="px-2 py-1 rounded bg-slate-800 border border-slate-700">Lift Type: {{ work.lift_type or work.template.lift_type or '—' }}</span>

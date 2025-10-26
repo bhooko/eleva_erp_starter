@@ -37,6 +37,49 @@
       transition: opacity 150ms ease, transform 150ms ease;
       border: 1px solid rgba(148,163,184,0.2);
     }
+
+    .status-timeline { animation: fadeInUp 280ms ease both; }
+    .status-node {
+      transition: transform 180ms ease, box-shadow 220ms ease, border-color 220ms ease, background-color 220ms ease;
+      will-change: transform, box-shadow;
+    }
+    .status-node:hover { transform: translateY(-3px); }
+    .status-node.is-current { animation: statusPulse 2400ms ease-in-out infinite; }
+
+    .status-connector {
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(71,85,105,0.5);
+    }
+    .status-connector-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, rgba(52,211,153,0.25), rgba(16,185,129,0.85));
+      transform-origin: left center;
+      opacity: 0;
+    }
+    .status-connector-fill.is-active { animation: connectorGrow 520ms ease forwards; }
+    .status-connector-fill.is-partial { animation: connectorPartial 520ms ease forwards; }
+
+    @keyframes statusPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.35); }
+      50% { box-shadow: 0 0 0 12px rgba(16,185,129,0); }
+    }
+
+    @keyframes connectorGrow {
+      from { transform: scaleX(0); opacity: 0; }
+      to { transform: scaleX(1); opacity: 1; }
+    }
+
+    @keyframes connectorPartial {
+      from { transform: scaleX(0); opacity: 0; }
+      to { transform: scaleX(0.45); opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-200">
