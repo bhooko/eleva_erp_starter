@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Project {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-start gap-6">
+      <div class="flex-1 min-w-[240px]">
+        <h2 class="text-xl font-semibold text-slate-100">{{ project.name }}</h2>
+        <p class="text-sm text-slate-400 mt-1">Lift type: {{ project.lift_type or 'Not specified' }}</p>
+        <p class="text-xs text-slate-500 mt-2">Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-4 min-w-[260px]">
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+          <div class="text-xs uppercase text-slate-400">Site</div>
+          <div class="text-sm text-slate-100">{{ project.site_name or '—' }}</div>
+          <div class="text-xs text-slate-500 mt-1 leading-relaxed">{{ project.site_address or 'No address recorded yet.' }}</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+          <div class="text-xs uppercase text-slate-400">Customer</div>
+          <div class="text-sm text-slate-100">{{ project.customer_name or '—' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-slate-100">Core QC Stages</h3>
+      <p class="text-xs text-slate-400">Each stage links to a dedicated QC task.</p>
+    </div>
+    {% set status_labels = {'empty': 'Not created', 'active': 'In progress', 'completed': 'Completed'} %}
+    {% for chunk in stage_cards|batch(3, fill_with=None) %}
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-4 last:mb-0">
+        {% for card in chunk if card %}
+          {% set bg_class = {
+            'empty': 'border-slate-800 bg-slate-950/40',
+            'active': 'border-amber-400/60 bg-amber-500/10',
+            'completed': 'border-emerald-400/60 bg-emerald-500/10'
+          }[card.status] %}
+          {% set badge_class = {
+            'empty': 'bg-slate-800 text-slate-300',
+            'active': 'bg-amber-400/20 text-amber-200',
+            'completed': 'bg-emerald-400/20 text-emerald-200'
+          }[card.status] %}
+          <div class="rounded-2xl border p-4 space-y-4 {{ bg_class }}">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-semibold text-slate-100">{{ card.name }}</div>
+                <div class="text-xs text-slate-300">{{ card.tasks|length }} task{{ '' if card.tasks|length == 1 else 's' }}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-lg text-xs uppercase tracking-wide {{ badge_class }}">{{ status_labels[card.status] }}</span>
+            </div>
+
+            {% if card.tasks %}
+              <div class="space-y-2">
+                {% for task in card.tasks %}
+                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}"
+                     class="block px-3 py-2 rounded-xl border border-slate-800/50 bg-slate-900/60 hover:bg-slate-900/80 transition">
+                    <div class="flex items-center justify-between text-sm">
+                      <span class="text-slate-100">#{{ task.id }} – {{ task.status }}</span>
+                      <span class="text-xs text-slate-400">{{ task.due_date.strftime('%Y-%m-%d') if task.due_date else 'No due' }}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1">Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
+                  </a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-xs text-slate-300">No QC task has been created for this stage yet.</p>
+            {% endif %}
+
+            <form method="post" action="{{ url_for('project_task_create', project_id=project.id) }}" class="space-y-2">
+              <input type="hidden" name="stage" value="{{ card.name }}">
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Template</label>
+                {% set stage_templates = templates_by_stage.get(card.name, []) %}
+                <select name="template_id" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700" required>
+                  {% if stage_templates %}
+                    <option value="" selected disabled>Select template</option>
+                    {% for tpl in stage_templates %}
+                      <option value="{{ tpl.id }}">{{ tpl.name }}</option>
+                    {% endfor %}
+                  {% else %}
+                    <option value="" selected disabled>No tagged templates – choose any</option>
+                    {% for tpl in templates %}
+                      <option value="{{ tpl.id }}">{{ tpl.name }} ({{ tpl.stage or 'No stage' }})</option>
+                    {% endfor %}
+                  {% endif %}
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assign to</label>
+                  <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700">
+                    <option value="" selected>Unassigned</option>
+                    {% for member in users %}
+                      <option value="{{ member.id }}">{{ member.display_name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Due date</label>
+                  <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700">
+                </div>
+              </div>
+              <button class="w-full px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create stage task</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-slate-100">Additional Project Tasks</h3>
+      <span class="text-xs text-slate-400 uppercase tracking-wide">{{ other_tasks|length }} item{{ '' if other_tasks|length == 1 else 's' }}</span>
+    </div>
+    {% if other_tasks|length == 0 %}
+      <p class="text-sm text-slate-400">No other QC tasks linked to this project.</p>
+    {% else %}
+      <div class="space-y-3">
+        {% for task in other_tasks %}
+          <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="block px-4 py-3 rounded-2xl border border-slate-800 bg-slate-950/40 hover:bg-slate-900/60 transition">
+            <div class="flex flex-wrap items-center gap-3 justify-between text-sm">
+              <div class="font-medium text-slate-100">#{{ task.id }} – {{ task.stage or 'No stage' }}</div>
+              <div class="text-xs text-slate-400">Status: {{ task.status }}</div>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">{{ task.site_name }} &bull; {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

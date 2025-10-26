@@ -5,23 +5,32 @@
 <div class="space-y-6">
   <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-center gap-6">
     <div>
-      <h2 class="text-lg font-semibold text-slate-100">Your Task Load</h2>
-      <p class="text-sm text-slate-400 mt-1">Monitor and action the QC tasks assigned to you.</p>
+      <h2 class="text-lg font-semibold text-slate-100">Task Load</h2>
+      <p class="text-sm text-slate-400 mt-1">Monitor and action the QC tasks assigned to {{ viewing_user.display_name }}.</p>
+      {% if current_user.is_admin and viewing_user.id != current_user.id %}
+        <p class="text-xs text-emerald-300/80 mt-2">Administrator view – showing {{ viewing_user.username }}'s workload.</p>
+      {% endif %}
     </div>
-    <div class="ml-auto text-center">
-      <div class="text-4xl font-bold text-emerald-400">{{ open_count }}</div>
-      <div class="text-xs uppercase tracking-wide text-slate-400">Open Tasks</div>
+    <div class="ml-auto flex items-center gap-6">
+      <div class="text-center">
+        <div class="text-4xl font-bold text-emerald-400">{{ open_count }}</div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Open Tasks</div>
+      </div>
+      <div class="text-center">
+        <div class="text-4xl font-bold text-sky-400">{{ in_progress_count }}</div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">In Progress</div>
+      </div>
     </div>
   </div>
 
   <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6">
     <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold text-slate-100">Assigned Tasks</h3>
+      <h3 class="text-lg font-semibold text-slate-100">{{ viewing_user.display_name }}'s Assigned Tasks</h3>
       <a href="{{ url_for('qc_home') }}" class="text-sm text-emerald-400 hover:underline">View all QC tasks</a>
     </div>
 
     {% if tasks|length == 0 %}
-      <div class="text-slate-400 text-sm">No tasks assigned to you yet.</div>
+      <div class="text-slate-400 text-sm">No tasks assigned to {{ viewing_user.display_name }} yet.</div>
     {% else %}
       <div class="space-y-4">
         {% for task in tasks %}
@@ -49,6 +58,11 @@
               {% if task.address %}
                 <p class="text-xs text-slate-400 mt-2">{{ task.address }}</p>
               {% endif %}
+              {% if task.project %}
+                <p class="text-xs text-emerald-300 mt-1">Project:
+                  <a href="{{ url_for('project_detail', project_id=task.project.id) }}" class="hover:underline">{{ task.project.name }}</a>
+                </p>
+              {% endif %}
             </div>
             <div class="flex flex-col items-start gap-2">
               <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Open Task</a>
@@ -59,5 +73,31 @@
       </div>
     {% endif %}
   </div>
+
+  {% if team_load %}
+    <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-slate-100">Team Assignment Overview</h3>
+        <p class="text-xs text-slate-400">Click a teammate to inspect their queue.</p>
+      </div>
+      <div class="space-y-2">
+        {% for member in team_load %}
+          {% set is_current = member.user.id == viewing_user.id %}
+          <a href="{{ url_for('dashboard', user_id=member.user.id) }}"
+             class="flex flex-wrap items-center gap-4 justify-between px-4 py-3 rounded-2xl border transition {{ 'border-emerald-500/60 bg-emerald-500/10' if is_current else 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-900/60' }}">
+            <div>
+              <div class="text-sm font-semibold text-slate-100">{{ member.user.display_name }}</div>
+              <div class="text-xs text-slate-400">{{ member.user.username }}</div>
+            </div>
+            <div class="flex items-center gap-4 text-xs uppercase tracking-wide">
+              <div class="text-emerald-300">Open <span class="ml-1 text-base font-semibold text-emerald-400">{{ member.open }}</span></div>
+              <div class="text-sky-300">In Progress <span class="ml-1 text-base font-semibold text-sky-400">{{ member.in_progress }}</span></div>
+              <div class="text-slate-300">Total <span class="ml-1 text-base font-semibold text-slate-100">{{ member.total }}</span></div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}
