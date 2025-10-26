@@ -2,72 +2,62 @@
 {% block title %}Eleva ERP – Dashboard{% endblock %}
 
 {% block content %}
-<div class="grid md:grid-cols-3 gap-6">
-
-  <!-- Forms Summary -->
-  <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20">
-    <h3 class="text-lg font-semibold mb-2">Form Templates</h3>
-    <a href="{{ url_for('forms_new') }}" class="text-emerald-400 hover:underline">+ New form</a>
-
-    <ul class="mt-4 space-y-2">
-      {% for f in forms %}
-      <li class="border border-slate-800 rounded-xl px-3 py-3 bg-slate-950/40 hover:bg-slate-800/40 transition">
-        <div class="flex items-center justify-between">
-          <span class="font-medium text-slate-100">{{ f.name }}</span>
-          <div class="flex gap-2 text-sm">
-            <a class="text-emerald-400 hover:underline" href="{{ url_for('forms_fill', form_id=f.id) }}">Fill</a>
-            <a class="text-sky-400 hover:underline" href="{{ url_for('forms_edit', form_id=f.id) }}">Edit</a>
-          </div>
-        </div>
-
-        <!-- Stage & Lift Type badges -->
-        <div class="flex flex-wrap gap-2 text-xs text-slate-300 mt-2">
-          {% if f.stage %}
-            <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">{{ f.stage }}</span>
-          {% endif %}
-          {% if f.lift_type %}
-            <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">{{ f.lift_type }}</span>
-          {% endif %}
-        </div>
-      </li>
-      {% else %}
-      <li class="text-slate-400">No forms yet.</li>
-      {% endfor %}
-    </ul>
-
-    <a href="{{ url_for('forms_list') }}" class="inline-block mt-4 text-slate-300 hover:underline text-sm">
-      View all templates
-    </a>
+<div class="space-y-6">
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-center gap-6">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100">Your Task Load</h2>
+      <p class="text-sm text-slate-400 mt-1">Monitor and action the QC tasks assigned to you.</p>
+    </div>
+    <div class="ml-auto text-center">
+      <div class="text-4xl font-bold text-emerald-400">{{ open_count }}</div>
+      <div class="text-xs uppercase tracking-wide text-slate-400">Open Tasks</div>
+    </div>
   </div>
 
-  <!-- Recent Submissions -->
-  <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 md:col-span-2 shadow-inner shadow-black/20">
-    <h3 class="text-lg font-semibold mb-3">Recent Submissions</h3>
-    {% if submissions|length == 0 %}
-      <div class="text-slate-400">No submissions yet.</div>
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-slate-100">Assigned Tasks</h3>
+      <a href="{{ url_for('qc_home') }}" class="text-sm text-emerald-400 hover:underline">View all QC tasks</a>
+    </div>
+
+    {% if tasks|length == 0 %}
+      <div class="text-slate-400 text-sm">No tasks assigned to you yet.</div>
     {% else %}
-      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {% for s in submissions %}
-        <a href="{{ url_for('submission_view', sub_id=s.id) }}"
-           class="block rounded-xl border border-slate-800 p-3 bg-slate-950/40 hover:bg-slate-800/60 transition">
-          <div class="text-xs text-slate-400 mb-1">
-            {{ s.created_at.strftime('%Y-%m-%d %H:%M') }}
+      <div class="space-y-4">
+        {% for task in tasks %}
+          <div class="border border-slate-800 rounded-2xl bg-slate-950/40 p-4 flex flex-col gap-3 md:flex-row md:items-center">
+            <div class="flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm uppercase tracking-wide text-slate-400">#{{ task.id }}</span>
+                <span class="text-sm font-semibold text-slate-100">{{ task.site_name }}</span>
+                {% if task.client_name %}
+                  <span class="text-xs text-slate-400">— {{ task.client_name }}</span>
+                {% endif %}
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs text-slate-300 mt-2">
+                <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">{{ task.status }}</span>
+                {% if task.due_date %}
+                  <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">Due {{ task.due_date.strftime('%Y-%m-%d') }}</span>
+                {% endif %}
+                {% if task.stage or task.template.stage %}
+                  <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">Stage: {{ task.stage or task.template.stage }}</span>
+                {% endif %}
+                {% if task.lift_type or task.template.lift_type %}
+                  <span class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700">Lift: {{ task.lift_type or task.template.lift_type }}</span>
+                {% endif %}
+              </div>
+              {% if task.address %}
+                <p class="text-xs text-slate-400 mt-2">{{ task.address }}</p>
+              {% endif %}
+            </div>
+            <div class="flex flex-col items-start gap-2">
+              <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Open Task</a>
+              <a href="{{ url_for('forms_fill', form_id=task.template_id, work_id=task.id) }}" class="px-4 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 text-sm">New Submission</a>
+            </div>
           </div>
-          <div class="font-semibold text-slate-100">{{ s.form.name }}</div>
-          <div class="flex flex-wrap gap-2 text-[11px] text-slate-400 mt-1">
-            {% if s.form.stage %}
-              <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{{ s.form.stage }}</span>
-            {% endif %}
-            {% if s.form.lift_type %}
-              <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{{ s.form.lift_type }}</span>
-            {% endif %}
-          </div>
-          <div class="text-xs text-slate-400 mt-1">By {{ s.user.username }}</div>
-        </a>
         {% endfor %}
       </div>
     {% endif %}
   </div>
-
 </div>
 {% endblock %}
