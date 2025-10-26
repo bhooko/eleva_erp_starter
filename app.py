@@ -2,9 +2,10 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3
+import os, json, datetime, sqlite3, threading
 
-from sqlalchemy import case
+from sqlalchemy import case, inspect
+from sqlalchemy.exc import OperationalError
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -177,13 +178,16 @@ def ensure_qc_columns():
         cur.execute("ALTER TABLE submission ADD COLUMN work_id INTEGER;")
         added_sub.append("work_id")
 
-    # qc_work
-    cur.execute("PRAGMA table_info(qc_work)")
-    qc_cols = [r[1] for r in cur.fetchall()]
+    # qc_work (only attempt to alter when table exists)
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='qc_work'")
+    qc_exists = cur.fetchone() is not None
     added_qc = []
-    if "assigned_to" not in qc_cols:
-        cur.execute("ALTER TABLE qc_work ADD COLUMN assigned_to INTEGER;")
-        added_qc.append("assigned_to")
+    if qc_exists:
+        cur.execute("PRAGMA table_info(qc_work)")
+        qc_cols = [r[1] for r in cur.fetchall()]
+        if "assigned_to" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN assigned_to INTEGER;")
+            added_qc.append("assigned_to")
 
     conn.commit()
     conn.close()
@@ -198,14 +202,46 @@ def ensure_qc_columns():
     else:
         print("✔️ submission OK")
 
-    if added_qc:
-        print(f"✅ Auto-added in qc_work: {', '.join(added_qc)}")
+    if qc_exists:
+        if added_qc:
+            print(f"✅ Auto-added in qc_work: {', '.join(added_qc)}")
+        else:
+            print("✔️ qc_work OK")
     else:
-        print("✔️ qc_work OK")
+        print("ℹ️ qc_work table did not exist prior to ensure_qc_columns")
+
+
+def ensure_tables():
+    """Ensure all known tables exist. Creates them if missing."""
+    created_tables = []
+    inspector = inspect(db.engine)
+    try:
+        existing_tables = set(inspector.get_table_names())
+    except OperationalError:
+        # Database file might be missing – create all tables fresh.
+        db.create_all()
+        existing_tables = set(inspect(db.engine).get_table_names())
+
+    models = [
+        User.__table__,
+        FormSchema.__table__,
+        Submission.__table__,
+        QCWork.__table__,
+        QCWorkComment.__table__,
+        QCWorkLog.__table__,
+    ]
+
+    for table in models:
+        if table.name not in existing_tables:
+            table.create(bind=db.engine, checkfirst=True)
+            created_tables.append(table.name)
+
+    if created_tables:
+        print(f"✅ Created missing tables: {', '.join(created_tables)}")
 
 
 def bootstrap_db():
-    db.create_all()        # creates qc_work if missing
+    ensure_tables()
     ensure_qc_columns()    # adds missing columns safely
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
@@ -774,6 +810,29 @@ def initdb():
     """Initialize database and seed sample data"""
     bootstrap_db()
     print("Database initialized with default users and sample form.")
+
+
+_bootstrap_lock = threading.Lock()
+_bootstrapped = False
+
+
+def ensure_bootstrap():
+    global _bootstrapped
+    if _bootstrapped:
+        return
+    with _bootstrap_lock:
+        if _bootstrapped:
+            return
+        try:
+            bootstrap_db()
+            _bootstrapped = True
+        except Exception as exc:
+            app.logger.exception("Database bootstrap failed: %s", exc)
+
+
+@app.before_request
+def _ensure_db_ready():
+    ensure_bootstrap()
 
 
 if __name__ == "__main__":
