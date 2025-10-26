@@ -4,6 +4,8 @@ from flask_login import LoginManager, login_user, login_required, logout_user, U
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3
 
+from sqlalchemy import case
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__, instance_relative_config=True)
@@ -80,10 +82,40 @@ class QCWork(db.Model):
     due_date = db.Column(db.DateTime, nullable=True)
 
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     template = db.relationship("FormSchema")
-    creator = db.relationship("User")
+    creator = db.relationship("User", foreign_keys=[created_by])
+    assignee = db.relationship("User", foreign_keys=[assigned_to])
+
+
+class QCWorkComment(db.Model):
+    __tablename__ = "qc_work_comment"
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    attachments_json = db.Column(db.Text, default="[]")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    work = db.relationship("QCWork", backref=db.backref("comments", cascade="all, delete-orphan"))
+    author = db.relationship("User")
+
+
+class QCWorkLog(db.Model):
+    __tablename__ = "qc_work_log"
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    action = db.Column(db.String(120), nullable=False)
+    from_status = db.Column(db.String(40), nullable=True)
+    to_status = db.Column(db.String(40), nullable=True)
+    details_json = db.Column(db.Text, default="{}")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    work = db.relationship("QCWork", backref=db.backref("logs", cascade="all, delete-orphan"))
+    actor = db.relationship("User")
 
 
 @login_manager.user_loader
@@ -93,12 +125,29 @@ def load_user(user_id):
 
 ALLOWED_PHOTO = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_VIDEO = {"mp4", "mov", "avi", "mkv"}
+ALLOWED_ATTACHMENTS = ALLOWED_PHOTO.union(ALLOWED_VIDEO).union({"pdf", "doc", "docx", "xls", "xlsx"})
 
 def allowed_file(filename, kind="photo"):
     if "." not in filename:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
-    return ext in (ALLOWED_PHOTO if kind == "photo" else ALLOWED_VIDEO)
+    if kind == "photo":
+        return ext in ALLOWED_PHOTO
+    if kind == "video":
+        return ext in ALLOWED_VIDEO
+    return ext in ALLOWED_ATTACHMENTS
+
+
+def log_work_event(work_id, action, actor_id=None, from_status=None, to_status=None, details=None):
+    entry = QCWorkLog(
+        work_id=work_id,
+        actor_id=actor_id,
+        action=action,
+        from_status=from_status,
+        to_status=to_status,
+        details_json=json.dumps(details or {}, ensure_ascii=False)
+    )
+    db.session.add(entry)
 
 
 # ---------------------- SAFE DB REPAIR / MIGRATIONS ----------------------
@@ -128,6 +177,14 @@ def ensure_qc_columns():
         cur.execute("ALTER TABLE submission ADD COLUMN work_id INTEGER;")
         added_sub.append("work_id")
 
+    # qc_work
+    cur.execute("PRAGMA table_info(qc_work)")
+    qc_cols = [r[1] for r in cur.fetchall()]
+    added_qc = []
+    if "assigned_to" not in qc_cols:
+        cur.execute("ALTER TABLE qc_work ADD COLUMN assigned_to INTEGER;")
+        added_qc.append("assigned_to")
+
     conn.commit()
     conn.close()
 
@@ -140,6 +197,11 @@ def ensure_qc_columns():
         print(f"✅ Auto-added in submission: {', '.join(added_sub)}")
     else:
         print("✔️ submission OK")
+
+    if added_qc:
+        print(f"✅ Auto-added in qc_work: {', '.join(added_qc)}")
+    else:
+        print("✔️ qc_work OK")
 
 
 def bootstrap_db():
@@ -204,9 +266,24 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    forms = FormSchema.query.all()
-    subs = Submission.query.order_by(Submission.created_at.desc()).limit(10).all()
-    return render_template("dashboard.html", forms=forms, submissions=subs, category_label=None)
+    status_order = case(
+        (QCWork.status == "Open", 0),
+        (QCWork.status == "In Progress", 1),
+        (QCWork.status == "Closed", 2),
+        else_=3
+    )
+    tasks = (
+        QCWork.query
+        .filter(QCWork.assigned_to == current_user.id)
+        .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
+        .all()
+    )
+    open_count = (
+        QCWork.query
+        .filter(QCWork.assigned_to == current_user.id, QCWork.status != "Closed")
+        .count()
+    )
+    return render_template("dashboard.html", tasks=tasks, open_count=open_count, category_label=None)
 
 
 # ---------------------- FORMS (TEMPLATES) ----------------------
@@ -382,16 +459,25 @@ def forms_fill(form_id):
                     f.save(dest)
                     saved_videos.append(dest)
 
+        linked_work_id = request.args.get("work_id", type=int)
         sub = Submission(
             form_id=fs.id,
             submitted_by=current_user.id,
             data_json=json.dumps(values, ensure_ascii=False),
             photos_json=json.dumps(saved_photos, ensure_ascii=False),
             videos_json=json.dumps(saved_videos, ensure_ascii=False),
-            work_id=request.args.get("work_id")  # optional
+            work_id=linked_work_id
         )
         db.session.add(sub)
         db.session.commit()
+        if linked_work_id:
+            log_work_event(
+                linked_work_id,
+                "submission_created",
+                actor_id=current_user.id,
+                details={"submission_id": sub.id}
+            )
+            db.session.commit()
         flash("Submitted successfully!", "success")
         return redirect(url_for("dashboard"))
 
@@ -418,15 +504,35 @@ def submission_view(sub_id):
 @app.route("/qc")
 @login_required
 def qc_home():
-    active_tab = request.args.get("tab", "work")
+    status = request.args.get("status", "all")
+    status_order = case(
+        (QCWork.status == "Open", 0),
+        (QCWork.status == "In Progress", 1),
+        (QCWork.status == "Closed", 2),
+        else_=3
+    )
+    query = QCWork.query.order_by(
+        status_order,
+        QCWork.due_date.asc().nullslast(),
+        QCWork.created_at.desc()
+    )
+    if status == "open":
+        query = query.filter(QCWork.status != "Closed")
+    elif status == "closed":
+        query = query.filter(QCWork.status == "Closed")
+
+    work_items = query.all()
     templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
-    work_items = QCWork.query.order_by(QCWork.created_at.desc()).limit(25).all()
-    return render_template("qc.html",
-                           active_tab=active_tab,
-                           templates=templates,
-                           work_items=work_items,
-                           STAGES=STAGES,
-                           LIFT_TYPES=LIFT_TYPES)
+    users = User.query.order_by(User.username.asc()).all()
+    return render_template(
+        "qc.html",
+        work_items=work_items,
+        templates=templates,
+        users=users,
+        STAGES=STAGES,
+        LIFT_TYPES=LIFT_TYPES,
+        status_filter=status
+    )
 
 
 @app.route("/qc/work/new", methods=["POST"])
@@ -439,10 +545,11 @@ def qc_work_new():
     stage = (request.form.get("stage") or "").strip()
     lift_type = (request.form.get("lift_type") or "").strip()
     due = (request.form.get("due_date") or "").strip()
+    assigned_to = request.form.get("assigned_to", type=int)
 
     if not site_name or not template_id:
         flash("Site name and Template are required.", "error")
-        return redirect(url_for("qc_home", tab="work"))
+        return redirect(url_for("qc_home"))
 
     due_dt = None
     if due:
@@ -450,19 +557,40 @@ def qc_work_new():
             due_dt = datetime.datetime.strptime(due, "%Y-%m-%d")
         except Exception:
             flash("Invalid due date format.", "error")
-            return redirect(url_for("qc_home", tab="work"))
+            return redirect(url_for("qc_home"))
+
+    template = db.session.get(FormSchema, template_id)
 
     work = QCWork(
         site_name=site_name,
         client_name=client_name or None,
         address=address or None,
         template_id=template_id,
-        stage=stage or None,
-        lift_type=lift_type or None,
+        stage=stage or (template.stage if template else None),
+        lift_type=lift_type or (template.lift_type if template else None),
         due_date=due_dt,
-        created_by=current_user.id
+        created_by=current_user.id,
+        assigned_to=assigned_to
     )
     db.session.add(work)
+    db.session.flush()
+    log_work_event(
+        work.id,
+        "created",
+        actor_id=current_user.id,
+        details={
+            "site_name": work.site_name,
+            "assigned_to": assigned_to,
+            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None
+        }
+    )
+    if assigned_to:
+        log_work_event(
+            work.id,
+            "assigned",
+            actor_id=current_user.id,
+            details={"assigned_to": assigned_to}
+        )
     db.session.commit()
     flash("QC work created.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
@@ -473,7 +601,122 @@ def qc_work_new():
 def qc_work_detail(work_id):
     work = QCWork.query.get_or_404(work_id)
     submissions = Submission.query.filter_by(work_id=work_id).order_by(Submission.created_at.desc()).all()
-    return render_template("qc_work_detail.html", work=work, submissions=submissions)
+    for submission in submissions:
+        try:
+            submission.photo_count = len(json.loads(submission.photos_json or "[]"))
+        except Exception:
+            submission.photo_count = 0
+        try:
+            submission.video_count = len(json.loads(submission.videos_json or "[]"))
+        except Exception:
+            submission.video_count = 0
+    users = User.query.order_by(User.username.asc()).all()
+    comments = QCWorkComment.query.filter_by(work_id=work_id).order_by(QCWorkComment.created_at.asc()).all()
+    for comment in comments:
+        try:
+            comment.attachments = json.loads(comment.attachments_json or "[]")
+        except Exception:
+            comment.attachments = []
+    logs = QCWorkLog.query.filter_by(work_id=work_id).order_by(QCWorkLog.created_at.desc()).all()
+    for log in logs:
+        try:
+            log.details = json.loads(log.details_json or "{}")
+        except Exception:
+            log.details = {}
+        if isinstance(log.details, dict):
+            if "assigned_to" in log.details:
+                user_id = log.details.get("assigned_to")
+                if user_id:
+                    user_obj = db.session.get(User, user_id)
+                    log.details["assigned_to"] = user_obj.username if user_obj else user_id
+                else:
+                    log.details["assigned_to"] = "Unassigned"
+            if "from" in log.details:
+                prev_id = log.details.get("from")
+                if prev_id:
+                    user_obj = db.session.get(User, prev_id)
+                    log.details["from"] = user_obj.username if user_obj else prev_id
+                elif prev_id is None:
+                    log.details["from"] = "Unassigned"
+            if "to" in log.details:
+                next_id = log.details.get("to")
+                if next_id:
+                    user_obj = db.session.get(User, next_id)
+                    log.details["to"] = user_obj.username if user_obj else next_id
+                elif next_id is None:
+                    log.details["to"] = "Unassigned"
+    return render_template(
+        "qc_work_detail.html",
+        work=work,
+        submissions=submissions,
+        users=users,
+        comments=comments,
+        logs=logs
+    )
+
+
+@app.route("/qc/work/<int:work_id>/assign", methods=["POST"])
+@login_required
+def qc_work_assign(work_id):
+    work = QCWork.query.get_or_404(work_id)
+    assigned_to = request.form.get("assigned_to", type=int)
+    previous = work.assigned_to
+    work.assigned_to = assigned_to or None
+    if previous != work.assigned_to:
+        db.session.flush()
+        log_work_event(
+            work.id,
+            "assignment_updated",
+            actor_id=current_user.id,
+            details={"from": previous, "to": work.assigned_to}
+        )
+        db.session.commit()
+        flash("Assignment updated.", "success")
+    else:
+        db.session.rollback()
+        flash("Assignment unchanged.", "info")
+    return redirect(url_for("qc_work_detail", work_id=work.id))
+
+
+@app.route("/qc/work/<int:work_id>/comment", methods=["POST"])
+@login_required
+def qc_work_comment(work_id):
+    work = QCWork.query.get_or_404(work_id)
+    body = (request.form.get("body") or "").strip()
+    if not body and not request.files.getlist("attachments"):
+        flash("Add a comment or attachment.", "error")
+        return redirect(url_for("qc_work_detail", work_id=work.id))
+
+    attachments = []
+    for f in request.files.getlist("attachments"):
+        if f and f.filename:
+            if not allowed_file(f.filename, kind="attachment"):
+                flash(f"Unsupported file type for {f.filename}.", "error")
+                return redirect(url_for("qc_work_detail", work_id=work.id))
+            fname = secure_filename(f.filename)
+            dest_name = f"{datetime.datetime.utcnow().timestamp()}_{fname}"
+            dest = os.path.join(app.config["UPLOAD_FOLDER"], dest_name)
+            f.save(dest)
+            rel_path = dest.split("static/", 1)[1] if "static/" in dest else dest
+            attachments.append({"path": dest, "name": fname, "web_path": rel_path})
+
+    comment = QCWorkComment(
+        work_id=work.id,
+        author_id=current_user.id,
+        body=body,
+        attachments_json=json.dumps(attachments, ensure_ascii=False)
+    )
+    db.session.add(comment)
+    db.session.flush()
+    log_work_event(
+        work.id,
+        "comment_added",
+        actor_id=current_user.id,
+        details={"comment_id": comment.id}
+    )
+    db.session.commit()
+    flash("Comment added.", "success")
+    return redirect(url_for("qc_work_detail", work_id=work.id))
 
 
 @app.route("/qc/work/<int:work_id>/status/<string:action>", methods=["POST"])
@@ -497,11 +740,33 @@ def qc_work_status(work_id, action):
         return redirect(url_for("qc_work_detail", work_id=work.id))
 
     work.status = new
+    db.session.flush()
+    log_work_event(
+        work.id,
+        "status_changed",
+        actor_id=current_user.id,
+        from_status=current,
+        to_status=new
+    )
     db.session.commit()
     flash(f"Work status changed to {new}.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
 # ----------------------------------------------------
 
+
+@app.route("/qc/recent-submissions")
+@login_required
+def qc_recent_submissions():
+    submissions = (
+        Submission.query
+        .order_by(Submission.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return render_template(
+        "qc_recent_submissions.html",
+        submissions=submissions
+    )
 
 
 @app.cli.command("initdb")

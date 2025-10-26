@@ -1,172 +1,143 @@
 {% extends "base.html" %}
-{% block title %}Eleva ERP – QC{% endblock %}
+{% block title %}Eleva ERP – QC Tasks{% endblock %}
 
 {% block content %}
-<div class="space-y-5">
-  <!-- Tabs -->
-  <div class="flex items-center gap-2">
-    <a href="{{ url_for('qc_home', tab='work') }}"
-       class="px-4 py-2 rounded-xl border transition
-              {% if active_tab=='work' %}bg-emerald-600 border-emerald-500 text-white{% else %}bg-slate-800/60 border-slate-700 text-slate-200 hover:bg-slate-700/60{% endif %}">
-      Work
-    </a>
-    <a href="{{ url_for('qc_home', tab='templates') }}"
-       class="px-4 py-2 rounded-xl border transition
-              {% if active_tab=='templates' %}bg-emerald-600 border-emerald-500 text-white{% else %}bg-slate-800/60 border-slate-700 text-slate-200 hover:bg-slate-700/60{% endif %}">
-      Form Templates
-    </a>
+<div class="space-y-6">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">QC Taskboard</h2>
+        <p class="text-sm text-slate-400">Create, assign and follow up on QC tasks across sites.</p>
+      </div>
+      <div class="ml-auto flex items-center gap-2 text-xs uppercase tracking-wide">
+        <a href="{{ url_for('qc_home', status='all') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='all' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">All</a>
+        <a href="{{ url_for('qc_home', status='open') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='open' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Open</a>
+        <a href="{{ url_for('qc_home', status='closed') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='closed' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Closed</a>
+      </div>
+    </div>
   </div>
 
-  {% if active_tab == 'templates' %}
-    <!-- Templates Tab -->
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Form Templates</h2>
-        <a href="{{ url_for('forms_new') }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60">
-          + New Form Template
-        </a>
-      </div>
-
-      {% if templates|length == 0 %}
-        <p class="text-slate-400 text-sm">No templates yet. Click “New Form Template” to create one.</p>
+  <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
+      {% if work_items|length == 0 %}
+        <p class="text-slate-400 text-sm">No tasks yet. Use the form on the right to create one.</p>
       {% else %}
-        <div class="overflow-auto">
-          <table class="min-w-[700px] w-full text-sm">
-            <thead class="text-slate-400">
-              <tr>
-                <th class="text-left py-2 pr-3">Name</th>
-                <th class="text-left py-2 pr-3">Stage</th>
-                <th class="text-left py-2 pr-3">Lift Type</th>
-                <th class="text-left py-2 pr-3">Min Photos</th>
-                <th class="text-left py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800">
-              {% for t in templates %}
-              <tr>
-                <td class="py-2 pr-3 font-medium">{{ t.name }}</td>
-                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ t.stage or '—' }}</span></td>
-                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ t.lift_type or '—' }}</span></td>
-                <td class="py-2 pr-3">{{ t.min_photos_if_all_good }}</td>
-                <td class="py-2">
-                  <a href="{{ url_for('forms_edit', form_id=t.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">Edit</a>
-                  <a href="{{ url_for('forms_fill', form_id=t.id) }}" class="ml-2 px-3 py-1.5 rounded-xl bg-emerald-700/60 hover:bg-emerald-600/70 border border-emerald-600/40">Preview</a>
+        <table class="min-w-full text-sm">
+          <thead class="text-slate-400">
+            <tr>
+              <th class="text-left py-2 pr-3">Site / Client</th>
+              <th class="text-left py-2 pr-3">Template</th>
+              <th class="text-left py-2 pr-3">Stage</th>
+              <th class="text-left py-2 pr-3">Assigned</th>
+              <th class="text-left py-2 pr-3">Due</th>
+              <th class="text-left py-2 pr-3">Status</th>
+              <th class="text-left py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            {% for w in work_items %}
+              <tr class="hover:bg-slate-800/40">
+                <td class="py-2 pr-3 align-top">
+                  <div class="font-medium text-slate-100">{{ w.site_name }}</div>
+                  {% if w.client_name %}
+                    <div class="text-xs text-slate-400">{{ w.client_name }}</div>
+                  {% endif %}
+                  {% if w.address %}
+                    <div class="text-xs text-slate-500 max-w-xs truncate">{{ w.address }}</div>
+                  {% endif %}
+                </td>
+                <td class="py-2 pr-3 align-top">
+                  <div class="text-slate-200">{{ w.template.name }}</div>
+                </td>
+                <td class="py-2 pr-3 align-top">
+                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage or (w.template.stage or '—') }}</span>
+                  <div class="mt-1 text-xs text-slate-400">{{ w.lift_type or (w.template.lift_type or '—') }}</div>
+                </td>
+                <td class="py-2 pr-3 align-top text-slate-200">
+                  {{ w.assignee.username if w.assignee else 'Unassigned' }}
+                </td>
+                <td class="py-2 pr-3 align-top text-slate-200">
+                  {{ w.due_date.strftime('%Y-%m-%d') if w.due_date else '—' }}
+                </td>
+                <td class="py-2 pr-3 align-top">
+                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.status }}</span>
+                </td>
+                <td class="py-2 align-top">
+                  <div class="flex flex-col gap-2">
+                    <a href="{{ url_for('qc_work_detail', work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-center">Open</a>
+                    <a href="{{ url_for('forms_fill', form_id=w.template_id, work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 text-center">Submit</a>
+                  </div>
                 </td>
               </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+            {% endfor %}
+          </tbody>
+        </table>
       {% endif %}
     </div>
 
-  {% else %}
-    <!-- Work Tab -->
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-      <h2 class="text-lg font-semibold mb-4">Create New Site QC Work</h2>
-
-      <form method="post" action="{{ url_for('qc_work_new') }}" class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+      <h3 class="text-base font-semibold text-slate-100 mb-3">Create Task</h3>
+      <form method="post" action="{{ url_for('qc_work_new') }}" class="space-y-3">
         <div>
-          <label class="block text-sm text-slate-300 mb-1">Site name</label>
-          <input name="site_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g., Vistara Tower A – Lobby">
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
+          <input name="site_name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site / Building" />
         </div>
         <div>
-          <label class="block text-sm text-slate-300 mb-1">Client</label>
-          <input name="client_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Client / Builder">
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Client</label>
+          <input name="client_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Client / Builder" />
         </div>
-        <div class="md:col-span-2">
-          <label class="block text-sm text-slate-300 mb-1">Address</label>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Address</label>
           <textarea name="address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site address"></textarea>
         </div>
-
         <div>
-          <label class="block text-sm text-slate-300 mb-1">Form Template</label>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Form Template</label>
           <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" selected disabled>Select template</option>
+            <option value="" disabled selected>Select template</option>
             {% for t in templates %}
               <option value="{{ t.id }}">{{ t.name }}</option>
             {% endfor %}
           </select>
         </div>
-
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Due date (optional)</label>
-          <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Due date</label>
+            <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assign to</label>
+            <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+              <option value="" selected>Unassigned</option>
+              {% for u in users %}
+                <option value="{{ u.id }}">{{ u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
-
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Stage (optional)</label>
-          <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" selected>Auto (use template’s stage)</option>
-            {% for s in STAGES %}
-              <option value="{{ s }}">{{ s }}</option>
-            {% endfor %}
-          </select>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stage</label>
+            <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+              <option value="" selected>Auto</option>
+              {% for s in STAGES %}
+                <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
+            <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+              <option value="" selected>Auto</option>
+              {% for lt in LIFT_TYPES %}
+                <option value="{{ lt }}">{{ lt }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
-
-        <div>
-          <label class="block text-sm text-slate-300 mb-1">Lift Type (optional)</label>
-          <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" selected>Auto (use template’s lift type)</option>
-            {% for lt in LIFT_TYPES %}
-              <option value="{{ lt }}">{{ lt }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="md:col-span-2 mt-2">
-          <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60">
-            Create Work & Start QC
-          </button>
-          <a href="{{ url_for('qc_home', tab='templates') }}"
-             class="ml-2 px-5 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">
-            Manage Templates
-          </a>
-        </div>
+        <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create Task</button>
+        <a href="{{ url_for('forms_list') }}" class="block text-center text-xs text-slate-400 hover:text-slate-200">Manage form templates</a>
       </form>
     </div>
-
-    <!-- Recent Work -->
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-      <h3 class="text-base font-semibold mb-3">Recent Work</h3>
-      {% if work_items|length == 0 %}
-        <p class="text-slate-400 text-sm">No work created yet.</p>
-      {% else %}
-        <div class="overflow-auto">
-          <table class="min-w-[900px] w-full text-sm">
-            <thead class="text-slate-400">
-              <tr>
-                <th class="text-left py-2 pr-3">Site</th>
-                <th class="text-left py-2 pr-3">Template</th>
-                <th class="text-left py-2 pr-3">Stage</th>
-                <th class="text-left py-2 pr-3">Lift Type</th>
-                <th class="text-left py-2 pr-3">Due</th>
-                <th class="text-left py-2 pr-3">Status</th>
-                <th class="text-left py-2 pr-3">Created</th>
-                <th class="text-left py-2">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800">
-              {% for w in work_items %}
-              <tr>
-                <td class="py-2 pr-3 font-medium">{{ w.site_name }}{% if w.client_name %} <span class="text-slate-400">— {{ w.client_name }}</span>{% endif %}</td>
-                <td class="py-2 pr-3">{{ w.template.name }}</td>
-                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage or (w.template.stage or '—') }}</span></td>
-                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.lift_type or (w.template.lift_type or '—') }}</span></td>
-                <td class="py-2 pr-3">{{ w.due_date.strftime('%Y-%m-%d') if w.due_date else '—' }}</td>
-                <td class="py-2 pr-3">{{ w.status }}</td>
-                <td class="py-2 pr-3">{{ w.created_at.strftime('%Y-%m-%d') }}</td>
-                <td class="py-2">
-                  <a href="{{ url_for('forms_fill', form_id=w.template_id, work_id=w.id) }}"
-                     class="px-3 py-1.5 rounded-xl bg-emerald-700/60 hover:bg-emerald-600/70 border border-emerald-600/40">Open</a>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endif %}
-    </div>
-  {% endif %}
+  </div>
 </div>
 {% endblock %}
