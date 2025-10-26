@@ -791,6 +791,36 @@ def project_detail(project_id):
     )
 
 
+@app.route("/projects/<int:project_id>/edit", methods=["POST"])
+@login_required
+def project_edit(project_id):
+    project = Project.query.get_or_404(project_id)
+
+    name = (request.form.get("name") or "").strip()
+    site_name = (request.form.get("site_name") or "").strip()
+    site_address = (request.form.get("site_address") or "").strip()
+    customer_name = (request.form.get("customer_name") or "").strip()
+    lift_type = (request.form.get("lift_type") or "").strip()
+
+    if not name:
+        flash("Project name is required.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if lift_type and lift_type not in LIFT_TYPES:
+        flash("Select a valid lift type.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    project.name = name
+    project.site_name = site_name or None
+    project.site_address = site_address or None
+    project.customer_name = customer_name or None
+    project.lift_type = lift_type or None
+
+    db.session.commit()
+    flash("Project updated.", "success")
+    return redirect(url_for("project_detail", project_id=project.id))
+
+
 @app.route("/projects/<int:project_id>/tasks/create", methods=["POST"])
 @login_required
 def project_task_create(project_id):
