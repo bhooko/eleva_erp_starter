@@ -1,39 +1,144 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800">
-  <h2 class="text-xl font-bold mb-4">{{ fs.name }}</h2>
-  <form method="post" enctype="multipart/form-data" class="space-y-4">
-    {% for field in schema %}
-      <div>
-        <label class="block text-sm mb-1">{{ field.label }} {% if field.required %}<span class="text-rose-400">*</span>{% endif %}</label>
-        {% if field.type == 'text' %}
-          <input name="{{ field.label }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}>
-        {% elif field.type == 'textarea' %}
-          <textarea name="{{ field.label }}" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}></textarea>
-        {% elif field.type == 'select' %}
-          <select name="{{ field.label }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" {% if field.required %}required{% endif %}>
-            <option value="">-- Select --</option>
-            {% for opt in field.options %}
-              <option value="{{ opt }}">{{ opt }}</option>
-            {% endfor %}
-          </select>
-        {% endif %}
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+    <div>
+      <h2 class="text-xl font-semibold">{{ fs.name }}</h2>
+      <p class="text-xs text-slate-400">Tap the camera icon for photo evidence and the note icon for quick remarks.</p>
+    </div>
+    <div class="text-xs text-slate-400">
+      Min photos if all good: <span class="text-emerald-400 font-semibold">{{ fs.min_photos_if_all_good }}</span>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6">
+    {% if sections %}
+      <div class="space-y-6">
+        {% for block in sections %}
+          <div class="space-y-4">
+            {% if block.section %}
+              <div class="flex items-center gap-3">
+                <div class="w-1.5 h-6 rounded-full bg-emerald-500/60"></div>
+                <h3 class="text-lg font-semibold text-slate-100">{{ block.section }}</h3>
+              </div>
+            {% endif %}
+
+            <div class="space-y-3">
+              {% for field in block.items %}
+                {% set field_name = 'field__%d__%d' % (loop.parentloop.index0, loop.index0) %}
+                {% set remark_name = 'remark__%d__%d' % (loop.parentloop.index0, loop.index0) %}
+                {% set photo_name = 'photo__%d__%d' % (loop.parentloop.index0, loop.index0) %}
+                {% set remark_block_id = 'remark-block__%d__%d' % (loop.parentloop.index0, loop.index0) %}
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-inner shadow-black/10">
+                  <div class="flex flex-col md:flex-row md:items-center md:gap-4">
+                    <div class="md:w-1/3">
+                      <p class="text-sm font-medium text-slate-100 flex items-center gap-2">
+                        {{ field.label }}
+                        {% if field.required %}<span class="text-rose-400">*</span>{% endif %}
+                      </p>
+                      {% if field.type == 'select' and field.photo_required_if_ng %}
+                        <p class="text-[11px] text-amber-400 mt-1">Photo needed when NG.</p>
+                      {% endif %}
+                    </div>
+                    <div class="flex-1 w-full">
+                      {% if field.type == 'text' %}
+                        <input name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}>
+                      {% elif field.type == 'textarea' %}
+                        <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}></textarea>
+                      {% else %}
+                        <select name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}>
+                          <option value="">-- Select --</option>
+                          {% for opt in field.options %}
+                            <option value="{{ opt }}">{{ opt }}</option>
+                          {% endfor %}
+                        </select>
+                      {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 mt-3 md:mt-0">
+                      {% if field.allow_photo %}
+                        <button type="button" class="photo-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition" data-target="{{ photo_name }}" title="Attach photos">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path d="M5 4h3l1-1h6l1 1h3a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zm7 13a4 4 0 100-8 4 4 0 000 8z" />
+                          </svg>
+                        </button>
+                        <input type="file" name="{{ photo_name }}" id="{{ photo_name }}" class="sr-only" accept="image/*" multiple>
+                      {% endif %}
+                      {% if field.allow_remark %}
+                        <button type="button" class="remark-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition" data-target="{{ remark_block_id }}" title="Add remark">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                            <path d="M4 4h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-4 4v-4H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                          </svg>
+                        </button>
+                      {% endif %}
+                    </div>
+                  </div>
+                  {% if field.allow_remark %}
+                    <div id="{{ remark_block_id }}" class="hidden mt-3">
+                      <label class="block text-xs text-slate-400 mb-1">Remark</label>
+                      <textarea name="{{ remark_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"></textarea>
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
       </div>
-    {% endfor %}
+    {% else %}
+      <p class="text-sm text-slate-400">This form does not have any configured items yet.</p>
+    {% endif %}
 
     <div class="grid md:grid-cols-2 gap-4">
       <div>
-        <label class="block text-sm mb-1">Photos (multiple allowed)</label>
-        <input type="file" name="photos" multiple accept="image/*" class="w-full">
-        <p class="text-xs text-slate-400 mt-1">If any item is NG: at least one photo is required. If all Good: at least {{ fs.min_photos_if_all_good }} photos (cabin, machine room, shaft).</p>
+        <label class="block text-sm mb-1">Additional Photos (optional)</label>
+        <input type="file" name="photos" multiple accept="image/*" class="w-full text-sm">
+        <p class="text-xs text-slate-400 mt-1">Counts toward the minimum photo requirement.</p>
       </div>
       <div>
         <label class="block text-sm mb-1">Videos (optional, multiple)</label>
-        <input type="file" name="videos" multiple accept="video/*" class="w-full">
+        <input type="file" name="videos" multiple accept="video/*" class="w-full text-sm">
       </div>
     </div>
 
-    <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">Submit</button>
+    <div class="flex justify-end">
+      <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">Submit</button>
+    </div>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.photo-trigger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        if (target) {
+          target.click();
+        }
+      });
+    });
+
+    document.querySelectorAll('.remark-trigger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        const isHidden = target.classList.toggle('hidden');
+        btn.classList.toggle('bg-emerald-500/20', !isHidden);
+        btn.classList.toggle('border-emerald-400/70', !isHidden);
+      });
+    });
+
+    document.querySelectorAll('input[type="file"]').forEach(input => {
+      const trigger = document.querySelector(`.photo-trigger[data-target="${input.id}"]`);
+      if (!trigger) return;
+      input.addEventListener('change', () => {
+        const hasFiles = input.files && input.files.length > 0;
+        trigger.classList.toggle('bg-emerald-500/20', hasFiles);
+        trigger.classList.toggle('border-emerald-400/70', hasFiles);
+      });
+    });
+  });
+</script>
 {% endblock %}
