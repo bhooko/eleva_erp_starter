@@ -4,7 +4,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, U
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading
 
-from sqlalchemy import case, inspect, func, or_
+from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -44,18 +44,46 @@ def _normalize_form_schema(schema_raw):
         normalized = dict(item)
         normalized["label"] = str(item.get("label") or f"Item {idx + 1}")
         ftype = (item.get("type") or "select").lower()
-        if ftype not in {"text", "textarea", "select"}:
+        if ftype not in {"text", "textarea", "select", "table"}:
             ftype = "select"
         normalized["type"] = ftype
         normalized["required"] = bool(item.get("required", False))
         if ftype == "select":
             opts = item.get("options") or ["Good", "NG"]
             normalized["options"] = [str(opt) for opt in opts if str(opt).strip()]
-        else:
+            normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False))
+            normalized["allow_photo"] = bool(item.get("allow_photo", normalized["photo_required_if_ng"]))
+            normalized["allow_remark"] = bool(item.get("allow_remark", False))
+            normalized["reference_image"] = None
+            normalized["rows"] = []
+            normalized["columns"] = []
+        elif ftype in {"text", "textarea"}:
             normalized["options"] = []
-        normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False))
-        normalized["allow_photo"] = bool(item.get("allow_photo", normalized["photo_required_if_ng"]))
-        normalized["allow_remark"] = bool(item.get("allow_remark", False))
+            normalized["photo_required_if_ng"] = False
+            normalized["allow_photo"] = bool(item.get("allow_photo", False))
+            normalized["allow_remark"] = bool(item.get("allow_remark", False))
+            normalized["reference_image"] = None
+            normalized["rows"] = []
+            normalized["columns"] = []
+        else:  # table
+            rows = item.get("rows") or []
+            cols = item.get("columns") or []
+            if not isinstance(rows, list):
+                rows = []
+            if not isinstance(cols, list):
+                cols = []
+            normalized["rows"] = [str(r) for r in rows if str(r).strip()]
+            normalized["columns"] = [str(c) for c in cols if str(c).strip()]
+            if not normalized["rows"]:
+                normalized["rows"] = ["Row 1", "Row 2"]
+            if not normalized["columns"]:
+                normalized["columns"] = ["Column 1", "Column 2"]
+            ref_img = item.get("reference_image")
+            normalized["reference_image"] = str(ref_img) if ref_img is not None else ""
+            normalized["options"] = []
+            normalized["photo_required_if_ng"] = False
+            normalized["allow_photo"] = False
+            normalized["allow_remark"] = False
         return normalized
 
     if schema_raw and isinstance(schema_raw[0], dict) and "section" in schema_raw[0]:
@@ -114,7 +142,7 @@ class FormSchema(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False)
     schema_json = db.Column(db.Text, nullable=False, default="[]")
-    min_photos_if_all_good = db.Column(db.Integer, default=3)
+    min_photos_if_all_good = db.Column(db.Integer, default=0)
 
     # NEW
     stage = db.Column(db.String(40), nullable=True)      # e.g., "Stage 1", "Completion", etc.
@@ -364,7 +392,7 @@ def bootstrap_db():
         fs = FormSchema(
             name="QC - New Installation",
             schema_json=json.dumps(sample_schema, ensure_ascii=False),
-            min_photos_if_all_good=3,
+            min_photos_if_all_good=0,
             stage="Template QC",
             lift_type="MRL"
         )
@@ -452,6 +480,7 @@ def dashboard():
         (QCWork.status == "Closed", 2),
         else_=3
     )
+    now = datetime.datetime.utcnow()
     tasks = (
         QCWork.query
         .filter(QCWork.assigned_to == viewing_user.id)
@@ -461,12 +490,13 @@ def dashboard():
     counts = (
         db.session.query(
             func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0),
-            func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0)
+            func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((and_(QCWork.due_date.isnot(None), QCWork.due_date < now, QCWork.status != "Closed"), 1), else_=0)), 0)
         )
         .filter(QCWork.assigned_to == viewing_user.id)
         .one()
     )
-    open_count, in_progress_count = [int(c or 0) for c in counts]
+    open_count, in_progress_count, overdue_count = [int(c or 0) for c in counts]
 
     team_load = []
     if current_user.is_admin:
@@ -475,7 +505,8 @@ def dashboard():
                 User,
                 func.coalesce(func.count(QCWork.id), 0).label("total"),
                 func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0).label("open"),
-                func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0).label("in_progress")
+                func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0).label("in_progress"),
+                func.coalesce(func.sum(case((and_(QCWork.due_date.isnot(None), QCWork.due_date < now, QCWork.status != "Closed"), 1), else_=0)), 0).label("overdue")
             )
             .outerjoin(QCWork, QCWork.assigned_to == User.id)
             .group_by(User.id)
@@ -487,9 +518,10 @@ def dashboard():
                 "user": member,
                 "total": int(total or 0),
                 "open": int(open_tasks or 0),
-                "in_progress": int(progress or 0)
+                "in_progress": int(progress or 0),
+                "overdue": int(overdue or 0)
             }
-            for member, total, open_tasks, progress in rows
+            for member, total, open_tasks, progress, overdue in rows
         ]
 
     return render_template(
@@ -497,6 +529,7 @@ def dashboard():
         tasks=tasks,
         open_count=open_count,
         in_progress_count=in_progress_count,
+        overdue_count=overdue_count,
         viewing_user=viewing_user,
         team_load=team_load,
         category_label=None
@@ -518,7 +551,6 @@ def forms_new():
         name = (request.form.get("name") or "").strip()
         stage = (request.form.get("stage") or "").strip()
         lift_type = (request.form.get("lift_type") or "").strip()
-        min_photos = int(request.form.get("min_photos", 3))
         try:
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
@@ -571,7 +603,7 @@ def forms_new():
         item = FormSchema(
             name=name,
             schema_json=json.dumps(schema, ensure_ascii=False),
-            min_photos_if_all_good=min_photos,
+            min_photos_if_all_good=0,
             stage=stage or None,
             lift_type=lift_type or None
         )
@@ -603,7 +635,6 @@ def forms_edit(form_id):
         name = (request.form.get("name") or "").strip()
         stage = (request.form.get("stage") or "").strip()
         lift_type = (request.form.get("lift_type") or "").strip()
-        min_photos = int(request.form.get("min_photos", 3))
         try:
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
@@ -620,7 +651,6 @@ def forms_edit(form_id):
 
         if name:
             item.name = name
-        item.min_photos_if_all_good = min_photos
         item.schema_json = json.dumps(schema, ensure_ascii=False)
 
         if stage and stage not in STAGES:
@@ -704,6 +734,48 @@ def forms_fill(form_id):
                 remark_name = f"remark__{s_idx}__{f_idx}"
                 photo_name = f"photo__{s_idx}__{f_idx}"
                 options = field.get("options") or []
+
+                if ftype == "table":
+                    rows = field.get("rows") or []
+                    columns = field.get("columns") or []
+                    table_values = []
+                    missing_required = False
+                    for r_idx, _ in enumerate(rows):
+                        row_entries = []
+                        for c_idx, _ in enumerate(columns):
+                            cell_name = f"table__{s_idx}__{f_idx}__{r_idx}__{c_idx}"
+                            cell_val = request.form.get(cell_name, "").strip()
+                            if required and not cell_val:
+                                missing_required = True
+                            row_entries.append(cell_val)
+                        table_values.append(row_entries)
+                    if required and missing_required:
+                        flash(f"'{label}' requires a value in every cell.", "error")
+                        return render_template(
+                            "form_render.html",
+                            fs=fs,
+                            sections=sections,
+                            is_sectioned=is_sectioned,
+                            category_label="Forms",
+                            category_url=url_for('forms_list'),
+                            subcategory_label=fs.name
+                        )
+                    table_payload = {
+                        "type": "table",
+                        "rows": rows,
+                        "columns": columns,
+                        "values": table_values,
+                        "reference_image": field.get("reference_image") or ""
+                    }
+                    if is_sectioned:
+                        section_entries.append({
+                            "label": label,
+                            "type": "table",
+                            "table": table_payload
+                        })
+                    else:
+                        values[label] = table_payload
+                    continue
 
                 if ftype in ["text", "textarea"]:
                     val = request.form.get(field_name, "").strip()
@@ -802,33 +874,17 @@ def forms_fill(form_id):
             if p and p.filename and "." in p.filename and p.filename.rsplit(".", 1)[1].lower() in {"png", "jpg", "jpeg", "webp"}
         ]
 
-        if any_ng:
-            if per_item_photo_count + len(valid_photo_files) == 0:
-                flash("At least one photo is required when any item is marked NG.", "error")
-                return render_template(
-                    "form_render.html",
-                    fs=fs,
-                    sections=sections,
-                    is_sectioned=is_sectioned,
-                    category_label="Forms",
-                    category_url=url_for('forms_list'),
-                    subcategory_label=fs.name
-                )
-        else:
-            if per_item_photo_count + len(valid_photo_files) < fs.min_photos_if_all_good:
-                flash(
-                    f"At least {fs.min_photos_if_all_good} photos are required (cabin, machine room, shaft).",
-                    "error"
-                )
-                return render_template(
-                    "form_render.html",
-                    fs=fs,
-                    sections=sections,
-                    is_sectioned=is_sectioned,
-                    category_label="Forms",
-                    category_url=url_for('forms_list'),
-                    subcategory_label=fs.name
-                )
+        if any_ng and per_item_photo_count + len(valid_photo_files) == 0:
+            flash("At least one photo is required when any item is marked NG.", "error")
+            return render_template(
+                "form_render.html",
+                fs=fs,
+                sections=sections,
+                is_sectioned=is_sectioned,
+                category_label="Forms",
+                category_url=url_for('forms_list'),
+                subcategory_label=fs.name
+            )
 
         for f in valid_photo_files:
             fname = secure_filename(f.filename)

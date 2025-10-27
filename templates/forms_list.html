@@ -18,8 +18,8 @@
         <thead class="text-slate-300 border-b border-slate-800">
           <tr class="text-left">
             <th class="py-2 pr-3">Name</th>
-            <th class="py-2 pr-3">Stage / Lift Type</th>
-            <th class="py-2 pr-3">Min Photos (all Good)</th>
+            <th class="py-2 pr-3">Stage</th>
+            <th class="py-2 pr-3">Lift Type</th>
             <th class="py-2">Actions</th>
           </tr>
         </thead>
@@ -29,20 +29,23 @@
             <!-- Form name -->
             <td class="py-3 pr-3 font-medium text-slate-100">{{ f.name }}</td>
 
-            <!-- Stage & Lift Type badges -->
+            <!-- Stage -->
             <td class="py-3 pr-3">
-              <div class="flex flex-wrap gap-2 text-xs">
-                {% if f.stage %}
-                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ f.stage }}</span>
-                {% endif %}
-                {% if f.lift_type %}
-                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ f.lift_type }}</span>
-                {% endif %}
-              </div>
+              {% if f.stage %}
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">{{ f.stage }}</span>
+              {% else %}
+                <span class="text-slate-500 text-xs">—</span>
+              {% endif %}
             </td>
 
-            <!-- Min Photos -->
-            <td class="py-3 pr-3 text-slate-300">{{ f.min_photos_if_all_good }}</td>
+            <!-- Lift Type -->
+            <td class="py-3 pr-3">
+              {% if f.lift_type %}
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">{{ f.lift_type }}</span>
+              {% else %}
+                <span class="text-slate-500 text-xs">—</span>
+              {% endif %}
+            </td>
 
             <!-- Actions -->
             <td class="py-3">

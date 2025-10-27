@@ -25,16 +25,6 @@
              required>
     </div>
 
-    <!-- Min Photos -->
-    <div>
-      <label class="block text-sm text-slate-300 mb-1">Min photos when all items are Good</label>
-      <input type="number" min="0" name="min_photos"
-             value="{{ item.min_photos_if_all_good if item else 3 }}"
-             class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-             required>
-      <p class="text-xs text-slate-400 mt-1">Require at least this many photos (e.g., cabin, machine room, shaft) when all items are marked <strong>Good</strong>.</p>
-    </div>
-
     <!-- Stage (QC profile) -->
     <div>
       <label class="block text-sm text-slate-300 mb-1">Stage</label>
@@ -136,7 +126,35 @@ document.addEventListener('DOMContentLoaded', () => {
     allow_remark: true
   });
 
+  const makeDefaultTableItem = () => ({
+    label: 'New Table',
+    type: 'table',
+    required: true,
+    rows: ['Row 1', 'Row 2'],
+    columns: ['Column 1', 'Column 2'],
+    reference_image: ''
+  });
+
   const normalizeItem = (item) => {
+    const kind = String(item && item.type ? item.type : '').toLowerCase();
+    if (kind === 'table') {
+      const base = makeDefaultTableItem();
+      if (item && typeof item === 'object') {
+        if (item.label) {
+          base.label = String(item.label);
+        }
+        base.required = Boolean(item.required);
+        const rows = Array.isArray(item.rows) ? item.rows : [];
+        const cols = Array.isArray(item.columns) ? item.columns : [];
+        const normalizedRows = rows.map((row) => String(row).trim()).filter(Boolean);
+        const normalizedCols = cols.map((col) => String(col).trim()).filter(Boolean);
+        base.rows = normalizedRows.length ? normalizedRows : base.rows;
+        base.columns = normalizedCols.length ? normalizedCols : base.columns;
+        base.reference_image = item.reference_image ? String(item.reference_image) : '';
+      }
+      return base;
+    }
+
     const base = makeDefaultItem();
     if (item && typeof item === 'object') {
       if (item.label) {
@@ -246,13 +264,68 @@ document.addEventListener('DOMContentLoaded', () => {
         const removeItemClasses = removeItemDisabled
           ? 'px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed'
           : 'px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition';
-        const disablePhotoRequired = item.type !== 'select' || !item.allow_photo;
+        const isTable = item.type === 'table';
+        const disablePhotoRequired = isTable || item.type !== 'select' || !item.allow_photo;
         const photoRequiredWrapper = disablePhotoRequired ? 'opacity-40' : '';
         const photoRequiredDisabledAttr = disablePhotoRequired ? 'disabled' : '';
-        const optionsBlock = item.type === 'select'
+        const optionsBlock = !isTable && item.type === 'select'
           ? `<div>
               <label class="block text-xs text-slate-400 mb-1">Options <span class="text-slate-500">(one per line)</span></label>
               <textarea rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="options">${escapeHtml(item.options.join('\n'))}</textarea>
+            </div>`
+          : '';
+        const typeSelect = `
+          <select class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="type">
+            <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (Good / NG)</option>
+            <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
+            <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
+            <option value="table" ${item.type === 'table' ? 'selected' : ''}>Table with reference</option>
+          </select>
+        `;
+        const togglesBlock = isTable
+          ? `<div class="flex flex-wrap gap-3 text-xs text-slate-300">
+              <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="required" ${item.required ? 'checked' : ''}>
+                <span>All cells required</span>
+              </label>
+            </div>`
+          : `<div class="flex flex-wrap gap-3 text-xs text-slate-300">
+              <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="required" ${item.required ? 'checked' : ''}>
+                <span>Required</span>
+              </label>
+              <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_photo" ${item.allow_photo ? 'checked' : ''}>
+                <span>Allow photo</span>
+              </label>
+              <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${photoRequiredWrapper}">
+                <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="photo_required_if_ng" ${item.photo_required_if_ng && !disablePhotoRequired ? 'checked' : ''} ${photoRequiredDisabledAttr}>
+                <span>Photo required if NG</span>
+              </label>
+              <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_remark" ${item.allow_remark ? 'checked' : ''}>
+                <span>Allow remark</span>
+              </label>
+            </div>`;
+        const rowsText = Array.isArray(item.rows) ? item.rows.join('\n') : '';
+        const columnsText = Array.isArray(item.columns) ? item.columns.join('\n') : '';
+        const tableExtras = isTable
+          ? `<div class="space-y-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Reference image URL</label>
+                <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(item.reference_image || '')}" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="reference_image" placeholder="https://example.com/reference.jpg">
+                <p class="text-[11px] text-slate-500 mt-1">Shown beside the table for guidance.</p>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Row labels <span class="text-slate-500">(one per line)</span></label>
+                  <textarea rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="rows">${escapeHtml(rowsText)}</textarea>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Column labels <span class="text-slate-500">(one per line)</span></label>
+                  <textarea rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="columns">${escapeHtml(columnsText)}</textarea>
+                </div>
+              </div>
             </div>`
           : '';
         return `
@@ -266,35 +339,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="grid sm:grid-cols-2 gap-3">
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Field type</label>
-                    <select class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="type">
-                      <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (Good / NG)</option>
-                      <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
-                      <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
-                    </select>
+                    ${typeSelect}
                   </div>
                   <div class="sm:text-right flex sm:justify-end items-center">
                     <button type="button" class="${removeItemClasses}" data-action="remove-item" data-section="${sectionIndex}" data-item="${itemIndex}" ${removeItemDisabled ? 'disabled' : ''}>Remove</button>
                   </div>
                 </div>
-                <div class="flex flex-wrap gap-3 text-xs text-slate-300">
-                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
-                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="required" ${item.required ? 'checked' : ''}>
-                    <span>Required</span>
-                  </label>
-                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
-                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_photo" ${item.allow_photo ? 'checked' : ''}>
-                    <span>Allow photo</span>
-                  </label>
-                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${photoRequiredWrapper}">
-                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="photo_required_if_ng" ${item.photo_required_if_ng && !disablePhotoRequired ? 'checked' : ''} ${photoRequiredDisabledAttr}>
-                    <span>Photo required if NG</span>
-                  </label>
-                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
-                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_remark" ${item.allow_remark ? 'checked' : ''}>
-                    <span>Allow remark</span>
-                  </label>
-                </div>
+                ${togglesBlock}
                 ${optionsBlock}
+                ${tableExtras}
               </div>
             </div>
           </div>
@@ -310,6 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="flex items-center gap-2">
               <button type="button" class="px-3 py-2 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-item" data-section="${sectionIndex}">+ Add check</button>
+              <button type="button" class="px-3 py-2 text-xs rounded-xl border border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 transition" data-action="add-table" data-section="${sectionIndex}">+ Add table</button>
               <button type="button" class="${removeSectionClasses}" data-action="remove-section" data-section="${sectionIndex}" ${removeSectionDisabled ? 'disabled' : ''}>Remove section</button>
             </div>
           </div>
@@ -402,6 +456,11 @@ document.addEventListener('DOMContentLoaded', () => {
       schema[sectionIdx].items.push(makeDefaultItem());
       render();
       updateHidden();
+    } else if (action === 'add-table') {
+      const sectionIdx = Number(actionEl.dataset.section || 0);
+      schema[sectionIdx].items.push(makeDefaultTableItem());
+      render();
+      updateHidden();
     } else if (action === 'remove-section') {
       if (schema.length === 1) {
         return;
@@ -445,11 +504,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const itemIdx = Number(event.target.dataset.item || 0);
+    const item = schema[sectionIdx].items[itemIdx];
     if (prop === 'label') {
-      schema[sectionIdx].items[itemIdx].label = event.target.value;
+      item.label = event.target.value;
       updateHidden();
     } else if (prop === 'options') {
-      schema[sectionIdx].items[itemIdx].options = event.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
+      item.options = event.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
+      updateHidden();
+    } else if (prop === 'reference_image') {
+      item.reference_image = event.target.value.trim();
+      updateHidden();
+    } else if (prop === 'rows') {
+      item.rows = event.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
+      updateHidden();
+    } else if (prop === 'columns') {
+      item.columns = event.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
       updateHidden();
     }
   });
@@ -465,14 +534,39 @@ document.addEventListener('DOMContentLoaded', () => {
     let requiresRender = false;
     if (prop === 'type') {
       const newType = event.target.value;
-      item.type = ['select', 'text', 'textarea'].includes(newType) ? newType : 'select';
-      if (item.type === 'select') {
-        if (!item.options || !item.options.length) {
-          item.options = ['Good', 'NG'];
-        }
-      } else {
+      if (newType === 'table') {
+        const defaults = makeDefaultTableItem();
+        item.type = 'table';
         item.options = [];
         item.photo_required_if_ng = false;
+        item.allow_photo = false;
+        item.allow_remark = false;
+        item.rows = Array.isArray(item.rows) && item.rows.length ? item.rows : defaults.rows.slice();
+        item.columns = Array.isArray(item.columns) && item.columns.length ? item.columns : defaults.columns.slice();
+        item.reference_image = item.reference_image ? String(item.reference_image) : '';
+        if (typeof item.required !== 'boolean') {
+          item.required = defaults.required;
+        }
+      } else {
+        const allowed = ['select', 'text', 'textarea'];
+        item.type = allowed.includes(newType) ? newType : 'select';
+        if (item.type === 'select') {
+          if (!item.options || !item.options.length) {
+            item.options = ['Good', 'NG'];
+          }
+          if (typeof item.allow_photo !== 'boolean') {
+            item.allow_photo = true;
+          }
+          if (typeof item.allow_remark !== 'boolean') {
+            item.allow_remark = true;
+          }
+        } else {
+          item.options = [];
+          item.photo_required_if_ng = false;
+        }
+        item.rows = [];
+        item.columns = [];
+        item.reference_image = '';
       }
       requiresRender = true;
     } else if (prop === 'required') {
