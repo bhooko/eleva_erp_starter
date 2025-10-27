@@ -33,6 +33,48 @@ LIFT_TYPES = ["Hydraulic", "MRL", "MR", "Dumbwaiter", "Goods"]
 # -------------------------------------------------------------------------------
 
 
+def _normalize_form_schema(schema_raw):
+    """Return (sections, is_sectioned) for a stored form schema."""
+    if not isinstance(schema_raw, list):
+        return [], False
+
+    def _normalize_item(item, idx):
+        if not isinstance(item, dict):
+            item = {}
+        normalized = dict(item)
+        normalized["label"] = str(item.get("label") or f"Item {idx + 1}")
+        ftype = (item.get("type") or "select").lower()
+        if ftype not in {"text", "textarea", "select"}:
+            ftype = "select"
+        normalized["type"] = ftype
+        normalized["required"] = bool(item.get("required", False))
+        if ftype == "select":
+            opts = item.get("options") or ["Good", "NG"]
+            normalized["options"] = [str(opt) for opt in opts if str(opt).strip()]
+        else:
+            normalized["options"] = []
+        normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False))
+        normalized["allow_photo"] = bool(item.get("allow_photo", normalized["photo_required_if_ng"]))
+        normalized["allow_remark"] = bool(item.get("allow_remark", False))
+        return normalized
+
+    if schema_raw and isinstance(schema_raw[0], dict) and "section" in schema_raw[0]:
+        sections = []
+        for s_idx, section in enumerate(schema_raw):
+            if not isinstance(section, dict):
+                continue
+            items = section.get("items") or []
+            normalized_items = [_normalize_item(it, idx) for idx, it in enumerate(items)]
+            sections.append({
+                "section": section.get("section") or f"Section {s_idx + 1}",
+                "items": normalized_items
+            })
+        return sections, True
+
+    normalized_items = [_normalize_item(it, idx) for idx, it in enumerate(schema_raw)]
+    return [{"section": "", "items": normalized_items}], False
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -481,22 +523,50 @@ def forms_new():
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
             flash("Invalid JSON schema", "error")
-            return render_template("forms_edit.html", item=None, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=None,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=[],
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
 
         if not name:
             flash("Name is required", "error")
-            return render_template("forms_edit.html", item=None, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=None,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
 
         if stage and stage not in STAGES:
             flash("Select a valid Stage.", "error")
-            return render_template("forms_edit.html", item=None, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=None,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
         if lift_type and lift_type not in LIFT_TYPES:
             flash("Select a valid Lift Type.", "error")
-            return render_template("forms_edit.html", item=None, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=None,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
 
         item = FormSchema(
             name=name,
@@ -510,8 +580,15 @@ def forms_new():
         flash("Form created", "success")
         return redirect(url_for("forms_list"))
 
-    return render_template("forms_edit.html", item=None, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                           category_label="Forms", category_url=url_for('forms_list'))
+    return render_template(
+        "forms_edit.html",
+        item=None,
+        STAGES=STAGES,
+        LIFT_TYPES=LIFT_TYPES,
+        initial_schema=[],
+        category_label="Forms",
+        category_url=url_for('forms_list')
+    )
 
 
 @app.route("/forms/<int:form_id>/edit", methods=["GET", "POST"])
@@ -531,8 +608,15 @@ def forms_edit(form_id):
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
             flash("Invalid JSON schema", "error")
-            return render_template("forms_edit.html", item=item, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=item,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=[],
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
 
         if name:
             item.name = name
@@ -541,12 +625,26 @@ def forms_edit(form_id):
 
         if stage and stage not in STAGES:
             flash("Select a valid Stage.", "error")
-            return render_template("forms_edit.html", item=item, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=item,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
         if lift_type and lift_type not in LIFT_TYPES:
             flash("Select a valid Lift Type.", "error")
-            return render_template("forms_edit.html", item=item, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                                   category_label="Forms", category_url=url_for('forms_list'))
+            return render_template(
+                "forms_edit.html",
+                item=item,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
 
         item.stage = stage or None
         item.lift_type = lift_type or None
@@ -555,8 +653,15 @@ def forms_edit(form_id):
         flash("Form updated", "success")
         return redirect(url_for("forms_list"))
 
-    return render_template("forms_edit.html", item=item, STAGES=STAGES, LIFT_TYPES=LIFT_TYPES,
-                           category_label="Forms", category_url=url_for('forms_list'))
+    return render_template(
+        "forms_edit.html",
+        item=item,
+        STAGES=STAGES,
+        LIFT_TYPES=LIFT_TYPES,
+        initial_schema=json.loads(item.schema_json or "[]"),
+        category_label="Forms",
+        category_url=url_for('forms_list')
+    )
 
 
 @app.route("/forms/<int:form_id>/delete", methods=["POST"])
@@ -578,52 +683,158 @@ def forms_fill(form_id):
         flash("Form not found", "error")
         return redirect(url_for("forms_list"))
 
-    schema = json.loads(fs.schema_json)
+    schema_raw = json.loads(fs.schema_json)
+    sections, is_sectioned = _normalize_form_schema(schema_raw)
     if request.method == "POST":
-        values = {}
+        values = {} if is_sectioned else {}
         any_ng = False
-        for field in schema:
-            label = field.get("label")
-            ftype = field.get("type")
-            required = field.get("required", False)
-            if ftype in ["text", "textarea"]:
-                val = request.form.get(label, "").strip()
-                if required and not val:
-                    flash(f"'{label}' is required", "error")
-                    return render_template("form_render.html", fs=fs, schema=schema, category_label="Forms", category_url=url_for('forms_list'), subcategory_label=fs.name)
-                values[label] = val
-            elif ftype == "select":
-                val = request.form.get(label, "")
-                if required and not val:
-                    flash(f"'{label}' is required", "error")
-                    return render_template("form_render.html", fs=fs, schema=schema, category_label="Forms", category_url=url_for('forms_list'), subcategory_label=fs.name)
-                values[label] = val
-                if val == "NG":
-                    any_ng = True
+        saved_photos = []
+        per_item_photo_count = 0
+        for s_idx, section in enumerate(sections):
+            section_label = section.get("section") or f"Section {s_idx + 1}"
+            section_items = section.get("items") or []
+            section_entries = []
+            if is_sectioned:
+                values[section_label] = section_entries
+            for f_idx, field in enumerate(section_items):
+                label = field.get("label") or f"Item {f_idx + 1}"
+                ftype = field.get("type")
+                required = field.get("required", False)
+                field_name = f"field__{s_idx}__{f_idx}"
+                remark_name = f"remark__{s_idx}__{f_idx}"
+                photo_name = f"photo__{s_idx}__{f_idx}"
+                options = field.get("options") or []
+
+                if ftype in ["text", "textarea"]:
+                    val = request.form.get(field_name, "").strip()
+                    if required and not val:
+                        flash(f"'{label}' is required", "error")
+                        return render_template(
+                            "form_render.html",
+                            fs=fs,
+                            sections=sections,
+                            is_sectioned=is_sectioned,
+                            category_label="Forms",
+                            category_url=url_for('forms_list'),
+                            subcategory_label=fs.name
+                        )
+                elif ftype == "select":
+                    val = request.form.get(field_name, "")
+                    if required and not val:
+                        flash(f"'{label}' is required", "error")
+                        return render_template(
+                            "form_render.html",
+                            fs=fs,
+                            sections=sections,
+                            is_sectioned=is_sectioned,
+                            category_label="Forms",
+                            category_url=url_for('forms_list'),
+                            subcategory_label=fs.name
+                        )
+                    if options and val and val not in options:
+                        flash(f"'{label}' has an invalid selection", "error")
+                        return render_template(
+                            "form_render.html",
+                            fs=fs,
+                            sections=sections,
+                            is_sectioned=is_sectioned,
+                            category_label="Forms",
+                            category_url=url_for('forms_list'),
+                            subcategory_label=fs.name
+                        )
+                    if isinstance(val, str) and val.strip().lower() == "ng":
+                        any_ng = True
+                else:
+                    val = request.form.get(field_name, "").strip()
+
+                remark_val = ""
+                if field.get("allow_remark"):
+                    remark_val = request.form.get(remark_name, "").strip()
+
+                item_saved_photos = []
+                valid_item_files = []
+                if field.get("allow_photo"):
+                    upload_list = request.files.getlist(photo_name)
+                    for f in upload_list:
+                        if f and f.filename:
+                            ext = f.filename.rsplit(".", 1)[1].lower() if "." in f.filename else ""
+                            if ext in {"png", "jpg", "jpeg", "webp"}:
+                                valid_item_files.append(f)
+                    if field.get("photo_required_if_ng") and isinstance(val, str) and val.strip().lower() == "ng" and not valid_item_files:
+                        flash(f"Photo evidence is required for '{label}' when marked NG.", "error")
+                        return render_template(
+                            "form_render.html",
+                            fs=fs,
+                            sections=sections,
+                            is_sectioned=is_sectioned,
+                            category_label="Forms",
+                            category_url=url_for('forms_list'),
+                            subcategory_label=fs.name
+                        )
+                    for f in valid_item_files:
+                        fname = secure_filename(f.filename)
+                        dest = os.path.join(app.config["UPLOAD_FOLDER"], f"{datetime.datetime.utcnow().timestamp()}_{fname}")
+                        f.save(dest)
+                        saved_path = dest
+                        item_saved_photos.append(saved_path)
+                        saved_photos.append(saved_path)
+                        per_item_photo_count += 1
+
+                if is_sectioned:
+                    section_entries.append({
+                        "label": label,
+                        "type": ftype,
+                        "value": val,
+                        "remark": remark_val or None,
+                        "photos": item_saved_photos
+                    })
+                else:
+                    values[label] = val
+                    if field.get("allow_remark") and remark_val:
+                        values[f"{label} - Remark"] = remark_val
 
         photo_files = request.files.getlist("photos")
         video_files = request.files.getlist("videos")
-        saved_photos, saved_videos = [], []
+        saved_videos = []
+
+        valid_photo_files = [
+            p for p in photo_files
+            if p and p.filename and "." in p.filename and p.filename.rsplit(".", 1)[1].lower() in {"png", "jpg", "jpeg", "webp"}
+        ]
 
         if any_ng:
-            has_valid_photo = any((p and p.filename and "." in p.filename and p.filename.rsplit(".",1)[1].lower() in {"png","jpg","jpeg","webp"}) for p in photo_files)
-            if not has_valid_photo:
+            if per_item_photo_count + len(valid_photo_files) == 0:
                 flash("At least one photo is required when any item is marked NG.", "error")
-                return render_template("form_render.html", fs=fs, schema=schema, category_label="Forms", category_url=url_for('forms_list'), subcategory_label=fs.name)
+                return render_template(
+                    "form_render.html",
+                    fs=fs,
+                    sections=sections,
+                    is_sectioned=is_sectioned,
+                    category_label="Forms",
+                    category_url=url_for('forms_list'),
+                    subcategory_label=fs.name
+                )
         else:
-            valid_photos = [p for p in photo_files if p and p.filename and "." in p.filename and p.filename.rsplit(".",1)[1].lower() in {"png","jpg","jpeg","webp"}]
-            if len(valid_photos) < fs.min_photos_if_all_good:
-                flash(f"At least {fs.min_photos_if_all_good} photos are required (cabin, machine room, shaft).", "error")
-                return render_template("form_render.html", fs=fs, schema=schema, category_label="Forms", category_url=url_for('forms_list'), subcategory_label=fs.name)
+            if per_item_photo_count + len(valid_photo_files) < fs.min_photos_if_all_good:
+                flash(
+                    f"At least {fs.min_photos_if_all_good} photos are required (cabin, machine room, shaft).",
+                    "error"
+                )
+                return render_template(
+                    "form_render.html",
+                    fs=fs,
+                    sections=sections,
+                    is_sectioned=is_sectioned,
+                    category_label="Forms",
+                    category_url=url_for('forms_list'),
+                    subcategory_label=fs.name
+                )
 
-        for f in photo_files:
-            if f and f.filename:
-                ext = f.filename.rsplit(".",1)[1].lower() if "." in f.filename else ""
-                if ext in {"png","jpg","jpeg","webp"}:
-                    fname = secure_filename(f.filename)
-                    dest = os.path.join(app.config["UPLOAD_FOLDER"], f"{datetime.datetime.utcnow().timestamp()}_{fname}")
-                    f.save(dest)
-                    saved_photos.append(dest)
+        for f in valid_photo_files:
+            fname = secure_filename(f.filename)
+            dest = os.path.join(app.config["UPLOAD_FOLDER"], f"{datetime.datetime.utcnow().timestamp()}_{fname}")
+            f.save(dest)
+            saved_photos.append(dest)
 
         for f in video_files:
             if f and f.filename:
@@ -656,8 +867,15 @@ def forms_fill(form_id):
         flash("Submitted successfully!", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template("form_render.html", fs=fs, schema=schema,
-                           category_label="Forms", category_url=url_for('forms_list'), subcategory_label=fs.name)
+    return render_template(
+        "form_render.html",
+        fs=fs,
+        sections=sections,
+        is_sectioned=is_sectioned,
+        category_label="Forms",
+        category_url=url_for('forms_list'),
+        subcategory_label=fs.name
+    )
 
 
 @app.route("/submissions/<int:sub_id>")
@@ -670,7 +888,12 @@ def submission_view(sub_id):
     data = json.loads(sub.data_json or "{}")
     photos = json.loads(sub.photos_json or "[]")
     videos = json.loads(sub.videos_json or "[]")
+    data_sectioned = any(
+        isinstance(entries, list) and entries and isinstance(entries[0], dict) and "label" in entries[0]
+        for entries in (data.values() if isinstance(data, dict) else [])
+    )
     return render_template("submission_view.html", sub=sub, data=data, photos=photos, videos=videos,
+                           data_sectioned=data_sectioned,
                            category_label="Dashboard", category_url=url_for('dashboard'),
                            subcategory_label=f"Submission #{sub.id}", subcategory_url=None)
 

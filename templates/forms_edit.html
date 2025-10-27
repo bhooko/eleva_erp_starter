@@ -59,16 +59,35 @@
       </select>
     </div>
 
-    <!-- Schema JSON -->
+    <!-- Builder -->
     <div class="md:col-span-2">
-      <label class="block text-sm text-slate-300 mb-1">Schema JSON</label>
-      <textarea name="schema_json" rows="14"
-                class="w-full px-3 py-2 rounded-2xl bg-slate-900/60 border border-slate-800 font-mono text-xs leading-5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                required>{{ item.schema_json if item else '[\n  { "label": "Item 1", "type": "select", "required": true, "options": ["Good","NG"], "photo_required_if_ng": true },\n  { "label": "Remarks", "type": "textarea", "required": false }\n]' }}</textarea>
-      <p class="text-xs text-slate-400 mt-2">
-        Field types: <code>text</code>, <code>textarea</code>, <code>select</code>. For <code>select</code>, provide <code>options</code>.
-        Set <code>photo_required_if_ng: true</code> to require a photo if value is <code>NG</code>.
-      </p>
+      <label class="block text-sm text-slate-300 mb-2">Checklist Builder</label>
+      <div id="schema-builder"
+           data-initial='{{ initial_schema | tojson | safe }}'
+           class="space-y-4">
+        <!-- Builder content rendered via JS -->
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        <span>Drag-free builder for sections & checks. Each check can collect photos and remarks individually.</span>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <button type="button"
+                id="copy-schema"
+                class="px-3 py-1.5 rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 transition">
+          Copy JSON
+        </button>
+        <button type="button"
+                id="download-schema"
+                class="px-3 py-1.5 rounded-xl border border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 transition">
+          Download JSON
+        </button>
+        <span id="schema-feedback" class="text-slate-400"></span>
+      </div>
+      <details class="mt-3 bg-slate-900/50 border border-slate-800 rounded-2xl p-3">
+        <summary class="text-xs text-slate-400 cursor-pointer">Preview JSON</summary>
+        <pre id="schema-preview" class="mt-2 text-[11px] leading-5 text-emerald-100/80 whitespace-pre-wrap"></pre>
+      </details>
+      <textarea id="schema_json" name="schema_json" class="hidden" required></textarea>
     </div>
 
     <!-- Actions -->
@@ -84,4 +103,396 @@
     </div>
   </form>
 </div>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const builderEl = document.getElementById('schema-builder');
+  const hiddenInput = document.getElementById('schema_json');
+  const previewEl = document.getElementById('schema-preview');
+  const copyBtn = document.getElementById('copy-schema');
+  const downloadBtn = document.getElementById('download-schema');
+  const feedbackEl = document.getElementById('schema-feedback');
+  if (!builderEl || !hiddenInput) {
+    return;
+  }
+
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[ch]);
+
+  const makeDefaultItem = () => ({
+    label: 'New Check',
+    type: 'select',
+    required: true,
+    options: ['Good', 'NG'],
+    allow_photo: true,
+    photo_required_if_ng: true,
+    allow_remark: true
+  });
+
+  const normalizeItem = (item) => {
+    const base = makeDefaultItem();
+    if (item && typeof item === 'object') {
+      if (item.label) {
+        base.label = String(item.label);
+      }
+      const t = String(item.type || '').toLowerCase();
+      base.type = ['select', 'text', 'textarea'].includes(t) ? t : 'select';
+      base.required = Boolean(item.required);
+      base.allow_photo = item.allow_photo !== undefined ? Boolean(item.allow_photo) : true;
+      base.allow_remark = Boolean(item.allow_remark);
+      if (base.type === 'select') {
+        const opts = Array.isArray(item.options) ? item.options : base.options;
+        const normalizedOpts = opts.map((opt) => String(opt).trim()).filter(Boolean);
+        base.options = normalizedOpts.length ? normalizedOpts : ['Good', 'NG'];
+      } else {
+        base.options = [];
+      }
+      base.photo_required_if_ng = Boolean(item.photo_required_if_ng) && base.type === 'select' && base.allow_photo;
+    }
+    if (!base.allow_photo) {
+      base.photo_required_if_ng = false;
+    }
+    if (base.type !== 'select') {
+      base.options = [];
+    }
+    return base;
+  };
+
+  let initialData;
+  try {
+    initialData = JSON.parse(builderEl.dataset.initial || '[]');
+  } catch (err) {
+    initialData = [];
+  }
+  if (!Array.isArray(initialData)) {
+    initialData = [];
+  }
+
+  let schema;
+
+  const getSerializedSchema = () => JSON.stringify(schema, null, 2);
+
+  const slugify = (value) => {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+  };
+
+  const showFeedback = (message, tone = 'muted') => {
+    if (!feedbackEl) {
+      return;
+    }
+    feedbackEl.textContent = message;
+    feedbackEl.classList.remove('text-emerald-300', 'text-rose-300', 'text-slate-400');
+    if (tone === 'success') {
+      feedbackEl.classList.add('text-emerald-300');
+    } else if (tone === 'error') {
+      feedbackEl.classList.add('text-rose-300');
+    } else {
+      feedbackEl.classList.add('text-slate-400');
+    }
+    if (message) {
+      setTimeout(() => {
+        if (feedbackEl.textContent === message) {
+          feedbackEl.textContent = '';
+          feedbackEl.classList.remove('text-emerald-300', 'text-rose-300');
+          feedbackEl.classList.add('text-slate-400');
+        }
+      }, 4000);
+    }
+  };
+  if (initialData.length && typeof initialData[0] === 'object' && initialData[0] !== null && Object.prototype.hasOwnProperty.call(initialData[0], 'section')) {
+    schema = initialData.map((section) => ({
+      section: section && section.section ? String(section.section) : '',
+      items: Array.isArray(section && section.items) && section.items.length ? section.items.map(normalizeItem) : [makeDefaultItem()]
+    }));
+  } else if (initialData.length) {
+    schema = [{
+      section: '',
+      items: initialData.map(normalizeItem)
+    }];
+  } else {
+    schema = [{
+      section: 'General',
+      items: [makeDefaultItem()]
+    }];
+  }
+
+  const updateHidden = () => {
+    const serialized = getSerializedSchema();
+    hiddenInput.value = serialized;
+    if (previewEl) {
+      previewEl.textContent = serialized;
+    }
+  };
+
+  const render = () => {
+    const sectionsMarkup = schema.map((section, sectionIndex) => {
+      const removeSectionDisabled = schema.length === 1;
+      const removeSectionClasses = removeSectionDisabled
+        ? 'px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed'
+        : 'px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition';
+      const itemsMarkup = section.items.map((item, itemIndex) => {
+        const removeItemDisabled = section.items.length === 1 && schema.length === 1;
+        const removeItemClasses = removeItemDisabled
+          ? 'px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed'
+          : 'px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition';
+        const disablePhotoRequired = item.type !== 'select' || !item.allow_photo;
+        const photoRequiredWrapper = disablePhotoRequired ? 'opacity-40' : '';
+        const photoRequiredDisabledAttr = disablePhotoRequired ? 'disabled' : '';
+        const optionsBlock = item.type === 'select'
+          ? `<div>
+              <label class="block text-xs text-slate-400 mb-1">Options <span class="text-slate-500">(one per line)</span></label>
+              <textarea rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="options">${escapeHtml(item.options.join('\n'))}</textarea>
+            </div>`
+          : '';
+        return `
+          <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 space-y-3">
+            <div class="grid md:grid-cols-[minmax(0,1fr)_200px] gap-4">
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Check label</label>
+                  <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(item.label)}" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="label" maxlength="120">
+                </div>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Field type</label>
+                    <select class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="type">
+                      <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (Good / NG)</option>
+                      <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
+                      <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
+                    </select>
+                  </div>
+                  <div class="sm:text-right flex sm:justify-end items-center">
+                    <button type="button" class="${removeItemClasses}" data-action="remove-item" data-section="${sectionIndex}" data-item="${itemIndex}" ${removeItemDisabled ? 'disabled' : ''}>Remove</button>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-3 text-xs text-slate-300">
+                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="required" ${item.required ? 'checked' : ''}>
+                    <span>Required</span>
+                  </label>
+                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_photo" ${item.allow_photo ? 'checked' : ''}>
+                    <span>Allow photo</span>
+                  </label>
+                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${photoRequiredWrapper}">
+                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="photo_required_if_ng" ${item.photo_required_if_ng && !disablePhotoRequired ? 'checked' : ''} ${photoRequiredDisabledAttr}>
+                    <span>Photo required if NG</span>
+                  </label>
+                  <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                    <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_remark" ${item.allow_remark ? 'checked' : ''}>
+                    <span>Allow remark</span>
+                  </label>
+                </div>
+                ${optionsBlock}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="flex-1">
+              <label class="block text-xs text-slate-400 mb-1">Section name</label>
+              <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(section.section)}" placeholder="e.g., Machine Room Area" data-section="${sectionIndex}" data-prop="section" maxlength="120">
+              <p class="text-[11px] text-slate-500 mt-1">Leave blank to hide the heading for this section.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" class="px-3 py-2 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-item" data-section="${sectionIndex}">+ Add check</button>
+              <button type="button" class="${removeSectionClasses}" data-action="remove-section" data-section="${sectionIndex}" ${removeSectionDisabled ? 'disabled' : ''}>Remove section</button>
+            </div>
+          </div>
+          <div class="space-y-4">
+            ${itemsMarkup}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    builderEl.innerHTML = `${sectionsMarkup}
+      <div class="pt-2">
+        <button type="button" class="px-4 py-2 text-sm rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-section">+ Add section</button>
+      </div>`;
+  };
+
+  render();
+  updateHidden();
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const payload = getSerializedSchema();
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(payload);
+        } else {
+          throw new Error('Clipboard API unavailable');
+        }
+        showFeedback('Schema copied to clipboard.', 'success');
+      } catch (err) {
+        try {
+          const tempArea = document.createElement('textarea');
+          tempArea.value = payload;
+          tempArea.setAttribute('readonly', '');
+          tempArea.style.position = 'absolute';
+          tempArea.style.left = '-9999px';
+          document.body.appendChild(tempArea);
+          tempArea.select();
+          const copied = document.execCommand('copy');
+          document.body.removeChild(tempArea);
+          if (copied) {
+            showFeedback('Schema copied to clipboard.', 'success');
+            return;
+          }
+          throw err;
+        } catch (fallbackErr) {
+          console.warn('Copy failed', fallbackErr);
+          showFeedback('Copy failed. Use download instead.', 'error');
+        }
+      }
+    });
+  }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      const payload = getSerializedSchema();
+      try {
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const formNameInput = document.querySelector('input[name="name"]');
+        const formName = formNameInput ? formNameInput.value : 'form-schema';
+        const filename = `${slugify(formName) || 'form-schema'}.json`;
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showFeedback('Downloaded schema JSON.', 'success');
+      } catch (err) {
+        console.error('Download failed', err);
+        showFeedback('Download failed. Please try again.', 'error');
+      }
+    });
+  }
+
+  builderEl.addEventListener('click', (event) => {
+    const actionEl = event.target.closest('[data-action]');
+    if (!actionEl) {
+      return;
+    }
+    const action = actionEl.dataset.action;
+    if (action === 'add-section') {
+      schema.push({ section: '', items: [makeDefaultItem()] });
+      render();
+      updateHidden();
+    } else if (action === 'add-item') {
+      const sectionIdx = Number(actionEl.dataset.section || 0);
+      schema[sectionIdx].items.push(makeDefaultItem());
+      render();
+      updateHidden();
+    } else if (action === 'remove-section') {
+      if (schema.length === 1) {
+        return;
+      }
+      const sectionIdx = Number(actionEl.dataset.section || 0);
+      schema.splice(sectionIdx, 1);
+      if (!schema.length) {
+        schema.push({ section: '', items: [makeDefaultItem()] });
+      }
+      render();
+      updateHidden();
+    } else if (action === 'remove-item') {
+      const sectionIdx = Number(actionEl.dataset.section || 0);
+      const itemIdx = Number(actionEl.dataset.item || 0);
+      const items = schema[sectionIdx].items;
+      if (items.length === 1) {
+        if (schema.length === 1) {
+          return;
+        }
+        items.splice(itemIdx, 1);
+        if (!items.length) {
+          items.push(makeDefaultItem());
+        }
+      } else {
+        items.splice(itemIdx, 1);
+      }
+      render();
+      updateHidden();
+    }
+  });
+
+  builderEl.addEventListener('input', (event) => {
+    const prop = event.target.dataset.prop;
+    if (!prop) {
+      return;
+    }
+    const sectionIdx = Number(event.target.dataset.section || 0);
+    if (prop === 'section') {
+      schema[sectionIdx].section = event.target.value;
+      updateHidden();
+      return;
+    }
+    const itemIdx = Number(event.target.dataset.item || 0);
+    if (prop === 'label') {
+      schema[sectionIdx].items[itemIdx].label = event.target.value;
+      updateHidden();
+    } else if (prop === 'options') {
+      schema[sectionIdx].items[itemIdx].options = event.target.value.split('\n').map((v) => v.trim()).filter(Boolean);
+      updateHidden();
+    }
+  });
+
+  builderEl.addEventListener('change', (event) => {
+    const prop = event.target.dataset.prop;
+    if (!prop || prop === 'section' || prop === 'label' || prop === 'options') {
+      return;
+    }
+    const sectionIdx = Number(event.target.dataset.section || 0);
+    const itemIdx = Number(event.target.dataset.item || 0);
+    const item = schema[sectionIdx].items[itemIdx];
+    let requiresRender = false;
+    if (prop === 'type') {
+      const newType = event.target.value;
+      item.type = ['select', 'text', 'textarea'].includes(newType) ? newType : 'select';
+      if (item.type === 'select') {
+        if (!item.options || !item.options.length) {
+          item.options = ['Good', 'NG'];
+        }
+      } else {
+        item.options = [];
+        item.photo_required_if_ng = false;
+      }
+      requiresRender = true;
+    } else if (prop === 'required') {
+      item.required = event.target.checked;
+    } else if (prop === 'allow_photo') {
+      item.allow_photo = event.target.checked;
+      if (!item.allow_photo) {
+        item.photo_required_if_ng = false;
+      }
+      requiresRender = true;
+    } else if (prop === 'photo_required_if_ng') {
+      item.photo_required_if_ng = event.target.checked;
+    } else if (prop === 'allow_remark') {
+      item.allow_remark = event.target.checked;
+    }
+    if (requiresRender) {
+      render();
+    }
+    updateHidden();
+  });
+});
+</script>
 {% endblock %}
