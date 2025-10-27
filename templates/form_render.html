@@ -15,6 +15,7 @@
     {% if sections %}
       <div class="space-y-6">
         {% for block in sections %}
+          {% set outer_index = loop.index0 %}
           <div class="space-y-4">
             {% if block.section %}
               <div class="flex items-center gap-3">
@@ -24,11 +25,12 @@
             {% endif %}
 
             <div class="space-y-3">
-              {% for field in block.items %}
-                {% set field_name = 'field__%d__%d' % (loop.parentloop.index0, loop.index0) %}
-                {% set remark_name = 'remark__%d__%d' % (loop.parentloop.index0, loop.index0) %}
-                {% set photo_name = 'photo__%d__%d' % (loop.parentloop.index0, loop.index0) %}
-                {% set remark_block_id = 'remark-block__%d__%d' % (loop.parentloop.index0, loop.index0) %}
+              {% for field in block.get("items", []) %}
+                {% set inner_index = loop.index0 %}
+                {% set field_name = 'field__%d__%d' % (outer_index, inner_index) %}
+                {% set remark_name = 'remark__%d__%d' % (outer_index, inner_index) %}
+                {% set photo_name = 'photo__%d__%d' % (outer_index, inner_index) %}
+                {% set remark_block_id = 'remark-block__%d__%d' % (outer_index, inner_index) %}
                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-inner shadow-black/10">
                   <div class="flex flex-col md:flex-row md:items-center md:gap-4">
                     <div class="md:w-1/3">
