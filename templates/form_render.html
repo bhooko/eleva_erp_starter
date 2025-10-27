@@ -15,6 +15,7 @@
     {% if sections %}
       <div class="space-y-6">
         {% for block in sections %}
+          {% set outer_index = loop.index0 %}
           <div class="space-y-4">
             {% if block.section %}
               <div class="flex items-center gap-3">
