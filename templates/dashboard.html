@@ -20,6 +20,10 @@
         <div class="text-4xl font-bold text-sky-400">{{ in_progress_count }}</div>
         <div class="text-xs uppercase tracking-wide text-slate-400">In Progress</div>
       </div>
+      <div class="text-center">
+        <div class="text-4xl font-bold text-rose-400">{{ overdue_count }}</div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Overdue</div>
+      </div>
     </div>
   </div>
 
@@ -91,6 +95,7 @@
             </div>
             <div class="flex items-center gap-4 text-xs uppercase tracking-wide">
               <div class="text-emerald-300">Open <span class="ml-1 text-base font-semibold text-emerald-400">{{ member.open }}</span></div>
+              <div class="text-rose-300">Overdue <span class="ml-1 text-base font-semibold text-rose-400">{{ member.overdue }}</span></div>
               <div class="text-sky-300">In Progress <span class="ml-1 text-base font-semibold text-sky-400">{{ member.in_progress }}</span></div>
               <div class="text-slate-300">Total <span class="ml-1 text-base font-semibold text-slate-100">{{ member.total }}</span></div>
             </div>
