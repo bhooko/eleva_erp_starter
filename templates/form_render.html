@@ -24,7 +24,7 @@
             {% endif %}
 
             <div class="space-y-3">
-              {% for field in block.items %}
+              {% for field in block.get("items", []) %}
                 {% set field_name = 'field__%d__%d' % (loop.parentloop.index0, loop.index0) %}
                 {% set remark_name = 'remark__%d__%d' % (loop.parentloop.index0, loop.index0) %}
                 {% set photo_name = 'photo__%d__%d' % (loop.parentloop.index0, loop.index0) %}
