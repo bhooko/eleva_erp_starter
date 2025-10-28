@@ -46,6 +46,7 @@
                   <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-2">
                     {% if w.stage %}<span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage }}</span>{% endif %}
                     {% if w.dependency %}<span class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-100">Waiting for {{ w.dependency.display_title }}</span>{% endif %}
+                    {% if w.milestone %}<span class="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-200">Milestone: {{ w.milestone }}</span>{% endif %}
                   </div>
                 </td>
                 <td class="py-2 pr-3 align-top">
@@ -56,7 +57,22 @@
                 </td>
                 <td class="py-2 pr-3 align-top">
                   <div class="text-slate-200">{{ w.assignee.display_name if w.assignee else 'Unassigned' }}</div>
-                  <div class="text-xs text-slate-400">Due {{ w.due_date.strftime('%Y-%m-%d') if w.due_date else 'No due date' }}</div>
+                  {% if w.planned_start_date or w.planned_duration_days is not none %}
+                    <div class="text-xs text-slate-400">
+                      {% if w.planned_start_date %}Start {{ w.planned_start_date.strftime('%Y-%m-%d') }}{% endif %}
+                      {% if w.planned_start_date and w.planned_duration_days is not none %}&nbsp;•&nbsp;{% endif %}
+                      {% if w.planned_duration_days is not none %}{{ w.planned_duration_days }} day{% if w.planned_duration_days != 1 %}s{% endif %}{% endif %}
+                    </div>
+                  {% endif %}
+                  <div class="text-xs text-slate-400">Due
+                    {% if w.due_date %}
+                      {{ w.due_date.strftime('%Y-%m-%d') }}
+                    {% elif w.planned_due_date %}
+                      {{ w.planned_due_date.strftime('%Y-%m-%d') }}
+                    {% else %}
+                      No due date
+                    {% endif %}
+                  </div>
                 </td>
                 <td class="py-2 pr-3 align-top text-slate-200">
                   {% if w.project %}
@@ -147,6 +163,16 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned start</label>
+            <input type="date" name="planned_start_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned duration (days)</label>
+            <input type="number" name="planned_duration_days" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. 5" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
             <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stage</label>
             <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
               <option value="" selected>Auto</option>
@@ -164,6 +190,15 @@
               {% endfor %}
             </select>
           </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Milestone</label>
+          <input name="milestone" list="qc-milestone-options" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. Production Milestone" />
+          <datalist id="qc-milestone-options">
+            {% for option in TASK_MILESTONES %}
+              <option value="{{ option }}"></option>
+            {% endfor %}
+          </datalist>
         </div>
         <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create Task</button>
         <a href="{{ url_for('forms_list') }}" class="block text-center text-xs text-slate-400 hover:text-slate-200">Manage form templates</a>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
@@ -30,6 +30,64 @@ STAGES = [
 ]
 LIFT_TYPES = ["Hydraulic", "MRL", "MR", "Dumbwaiter", "Goods"]
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
+TASK_MILESTONES = [
+    "Order Milestone",
+    "Design Milestone",
+    "Production Milestone",
+    "Installation Stage 1",
+    "Installation Stage 2",
+    "Commissioning",
+]
+
+
+def _extract_task_timing(form):
+    start_mode = (form.get("start_mode") or "immediate").strip().lower()
+    if start_mode not in {"immediate", "scheduled"}:
+        start_mode = "immediate"
+
+    start_date_value = None
+    start_date_raw = (form.get("start_date") or "").strip()
+    if start_mode == "scheduled":
+        if not start_date_raw:
+            return None, None, None, None, "Provide a start date for scheduled tasks."
+        try:
+            start_date_value = datetime.datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None, None, None, None, "Start date must be a valid YYYY-MM-DD date."
+    elif start_date_raw:
+        # Allow optionally overriding the start date even if immediate was chosen.
+        try:
+            start_date_value = datetime.datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None, None, None, None, "Start date must be a valid YYYY-MM-DD date."
+
+    duration_raw = (form.get("duration_days") or "").strip()
+    duration_value = None
+    if duration_raw:
+        try:
+            duration_value = int(duration_raw)
+        except ValueError:
+            return None, None, None, None, "Duration must be a whole number of days."
+        if duration_value < 0:
+            return None, None, None, None, "Duration must be zero or a positive number of days."
+
+    milestone_value = (form.get("milestone") or "").strip() or None
+
+    # If mode is immediate we ignore scheduled date (unless user typed one to override).
+    if start_mode == "immediate" and start_date_raw == "":
+        start_date_value = None
+
+    return start_mode, start_date_value, duration_value, milestone_value, None
+
+
+def normalize_template_task_order(template_id):
+    tasks = ProjectTemplateTask.query.filter_by(template_id=template_id).order_by(
+        ProjectTemplateTask.order_index.asc(),
+        ProjectTemplateTask.id.asc()
+    ).all()
+    for idx, task in enumerate(tasks, start=1):
+        task.order_index = idx
+    return tasks
 # -------------------------------------------------------------------------------
 
 
@@ -187,11 +245,21 @@ class ProjectTemplateTask(db.Model):
     depends_on_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=True)
     default_assignee_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     form_template_id = db.Column(db.Integer, db.ForeignKey("form_schema.id"), nullable=True)
+    start_mode = db.Column(db.String(20), default="immediate")
+    planned_start_date = db.Column(db.Date, nullable=True)
+    duration_days = db.Column(db.Integer, nullable=True)
+    milestone = db.Column(db.String(120), nullable=True)
 
     template = db.relationship("ProjectTemplate", backref=db.backref("tasks", cascade="all, delete-orphan", order_by="ProjectTemplateTask.order_index"))
     depends_on = db.relationship("ProjectTemplateTask", remote_side=[id], backref=db.backref("dependents", cascade="all"))
     default_assignee = db.relationship("User", foreign_keys=[default_assignee_id])
     form_template = db.relationship("FormSchema")
+
+    @property
+    def planned_due_date(self):
+        if self.planned_start_date and self.duration_days:
+            return self.planned_start_date + datetime.timedelta(days=self.duration_days)
+        return None
 
 
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
@@ -216,6 +284,9 @@ class QCWork(db.Model):
 
     status = db.Column(db.String(40), default="Open")  # Open / In Progress / Closed
     due_date = db.Column(db.DateTime, nullable=True)
+    planned_start_date = db.Column(db.Date, nullable=True)
+    planned_duration_days = db.Column(db.Integer, nullable=True)
+    milestone = db.Column(db.String(120), nullable=True)
 
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -245,6 +316,12 @@ class QCWork(db.Model):
     @property
     def is_blocked(self):
         return not self.dependency_satisfied
+
+    @property
+    def planned_due_date(self):
+        if self.planned_start_date and self.planned_duration_days:
+            return self.planned_start_date + datetime.timedelta(days=self.planned_duration_days)
+        return None
 
 
 class QCWorkComment(db.Model):
@@ -421,6 +498,35 @@ def ensure_qc_columns():
         if "depends_on_id" not in qc_cols:
             cur.execute("ALTER TABLE qc_work ADD COLUMN depends_on_id INTEGER;")
             added_qc.append("depends_on_id")
+        if "planned_start_date" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN planned_start_date TEXT;")
+            added_qc.append("planned_start_date")
+        if "planned_duration_days" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN planned_duration_days INTEGER;")
+            added_qc.append("planned_duration_days")
+        if "milestone" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN milestone TEXT;")
+            added_qc.append("milestone")
+
+    # project_template_task additions
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project_template_task'")
+    template_task_exists = cur.fetchone() is not None
+    added_template_cols = []
+    if template_task_exists:
+        cur.execute("PRAGMA table_info(project_template_task)")
+        template_cols = [r[1] for r in cur.fetchall()]
+        if "start_mode" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN start_mode TEXT DEFAULT 'immediate';")
+            added_template_cols.append("start_mode")
+        if "planned_start_date" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN planned_start_date TEXT;")
+            added_template_cols.append("planned_start_date")
+        if "duration_days" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN duration_days INTEGER;")
+            added_template_cols.append("duration_days")
+        if "milestone" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN milestone TEXT;")
+            added_template_cols.append("milestone")
 
     conn.commit()
     conn.close()
@@ -447,6 +553,12 @@ def ensure_qc_columns():
             print("✔️ qc_work OK")
     else:
         print("ℹ️ qc_work table did not exist prior to ensure_qc_columns")
+
+    if template_task_exists:
+        if added_template_cols:
+            print(f"✅ Auto-added in project_template_task: {', '.join(added_template_cols)}")
+        else:
+            print("✔️ project_template_task OK")
 
 
 def ensure_tables():
@@ -529,7 +641,10 @@ def bootstrap_db():
             description="Confirm site readiness and collect base documentation.",
             order_index=1,
             form_template_id=sample_form.id if sample_form else None,
-            default_assignee_id=admin_user.id if admin_user else None
+            default_assignee_id=admin_user.id if admin_user else None,
+            start_mode="immediate",
+            duration_days=3,
+            milestone="Order Milestone"
         )
         db.session.add(stage_task)
         db.session.flush()
@@ -541,7 +656,11 @@ def bootstrap_db():
             order_index=2,
             depends_on_id=stage_task.id,
             form_template_id=sample_form.id if sample_form else None,
-            default_assignee_id=admin_user.id if admin_user else None
+            default_assignee_id=admin_user.id if admin_user else None,
+            start_mode="scheduled",
+            planned_start_date=datetime.date.today() + datetime.timedelta(days=7),
+            duration_days=2,
+            milestone="Commissioning"
         )
         db.session.add(follow_up)
 
@@ -1191,7 +1310,8 @@ def project_detail(project_id):
         users=users,
         LIFT_TYPES=LIFT_TYPES,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
-        STAGES=STAGES
+        STAGES=STAGES,
+        TASK_MILESTONES=TASK_MILESTONES
     )
 
 
@@ -1274,6 +1394,18 @@ def project_apply_template(project_id):
         if dependency_task and (dependency_task.status or "").lower() != "closed":
             status = "Blocked"
 
+        planned_start = template_task.planned_start_date
+        planned_duration = template_task.duration_days
+        due_date = None
+        if planned_start and planned_duration:
+            due_date = datetime.datetime.combine(planned_start, datetime.time.min) + datetime.timedelta(days=planned_duration)
+        elif planned_duration:
+            due_date = datetime.datetime.utcnow() + datetime.timedelta(days=planned_duration)
+        elif template_task.planned_due_date:
+            due_date = datetime.datetime.combine(template_task.planned_due_date, datetime.time.min)
+
+        milestone_value = template_task.milestone or None
+
         new_task = QCWork(
             site_name=project.site_name or project.name,
             client_name=project.customer_name,
@@ -1288,7 +1420,11 @@ def project_apply_template(project_id):
             description=template_task.description,
             template_task_id=template_task.id,
             depends_on_id=dependency_task.id if dependency_task else None,
-            status=status
+            status=status,
+            due_date=due_date,
+            planned_start_date=planned_start,
+            planned_duration_days=planned_duration,
+            milestone=milestone_value
         )
         db.session.add(new_task)
         db.session.flush()
@@ -1303,7 +1439,11 @@ def project_apply_template(project_id):
             details={
                 "project_id": project.id,
                 "template": template.name,
-                "template_task": template_task.name
+                "template_task": template_task.name,
+                "planned_start_date": planned_start.strftime("%Y-%m-%d") if planned_start else None,
+                "planned_duration_days": planned_duration,
+                "milestone": milestone_value,
+                "due_date": due_date.strftime("%Y-%m-%d") if due_date else None
             }
         )
         if template_task.default_assignee_id:
@@ -1341,6 +1481,9 @@ def project_task_create(project_id):
     due = (request.form.get("due_date") or "").strip()
     depends_on_id = request.form.get("depends_on_id", type=int)
     stage = (request.form.get("stage") or "").strip()
+    planned_start = (request.form.get("planned_start_date") or "").strip()
+    duration_raw = (request.form.get("planned_duration_days") or "").strip()
+    milestone_value = (request.form.get("milestone") or "").strip()
 
     if not name:
         flash("Provide a task name.", "error")
@@ -1360,6 +1503,31 @@ def project_task_create(project_id):
         except Exception:
             flash("Invalid due date format.", "error")
             return redirect(url_for("project_detail", project_id=project.id))
+
+    planned_start_date = None
+    if planned_start:
+        try:
+            planned_start_date = datetime.datetime.strptime(planned_start, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Invalid planned start date format.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    duration_days = None
+    if duration_raw:
+        try:
+            duration_days = int(duration_raw)
+        except ValueError:
+            flash("Duration must be a whole number of days.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+        if duration_days < 0:
+            flash("Duration must be zero or positive.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    if due_dt is None:
+        if planned_start_date and duration_days is not None:
+            due_dt = datetime.datetime.combine(planned_start_date, datetime.time.min) + datetime.timedelta(days=duration_days)
+        elif duration_days is not None:
+            due_dt = datetime.datetime.utcnow() + datetime.timedelta(days=duration_days)
 
     dependency = None
     if depends_on_id:
@@ -1390,7 +1558,10 @@ def project_task_create(project_id):
         name=name,
         description=description or None,
         depends_on_id=dependency.id if dependency else None,
-        status=status
+        status=status,
+        planned_start_date=planned_start_date,
+        planned_duration_days=duration_days,
+        milestone=milestone_value or None
     )
     db.session.add(work)
     db.session.flush()
@@ -1403,7 +1574,10 @@ def project_task_create(project_id):
             "stage": stage or None,
             "assigned_to": assigned_to,
             "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
-            "dependency": dependency.id if dependency else None
+            "dependency": dependency.id if dependency else None,
+            "planned_start_date": planned_start_date.strftime("%Y-%m-%d") if planned_start_date else None,
+            "planned_duration_days": duration_days,
+            "milestone": work.milestone
         }
     )
     if assigned_to:
@@ -1467,7 +1641,7 @@ def project_template_detail(template_id):
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         description = (request.form.get("description") or "").strip()
-        order_index = request.form.get("order_index", type=int) or 0
+        requested_order = request.form.get("order_index", type=int)
         depends_on_id = request.form.get("depends_on_id", type=int)
         default_assignee_id = request.form.get("default_assignee_id", type=int)
         form_template_id = request.form.get("form_template_id", type=int)
@@ -1491,18 +1665,48 @@ def project_template_detail(template_id):
             flash("Choose a valid form template.", "error")
             return redirect(url_for("project_template_detail", template_id=template.id))
 
+        start_mode, planned_start_date, duration_value, milestone_value, timing_error = _extract_task_timing(request.form)
+        if timing_error:
+            flash(timing_error, "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+        existing_tasks = ProjectTemplateTask.query.filter_by(template_id=template.id).order_by(
+            ProjectTemplateTask.order_index.asc(),
+            ProjectTemplateTask.id.asc()
+        ).all()
+        max_position = len(existing_tasks) + 1
+        if not requested_order or requested_order < 1:
+            requested_order = max_position
+        else:
+            requested_order = min(requested_order, max_position)
+
+        shifts = False
+        for idx, existing in enumerate(existing_tasks, start=1):
+            new_index = idx if idx < requested_order else idx + 1
+            if existing.order_index != new_index:
+                shifts = True
+            existing.order_index = new_index
+
         task = ProjectTemplateTask(
             template_id=template.id,
             name=name,
             description=description or None,
-            order_index=order_index,
+            order_index=requested_order,
             depends_on_id=dependency.id if dependency else None,
             default_assignee_id=default_assignee_id,
-            form_template_id=form_template_id
+            form_template_id=form_template_id,
+            start_mode=start_mode,
+            planned_start_date=planned_start_date,
+            duration_days=duration_value,
+            milestone=milestone_value
         )
         db.session.add(task)
+        normalize_template_task_order(template.id)
         db.session.commit()
-        flash("Template task added.", "success")
+        message = "Template task added."
+        if shifts:
+            message = "Template task added. Existing tasks were re-ordered automatically."
+        flash(message, "success")
         return redirect(url_for("project_template_detail", template_id=template.id))
 
     tasks = ProjectTemplateTask.query.filter_by(template_id=template.id).order_by(
@@ -1515,8 +1719,120 @@ def project_template_detail(template_id):
         tasks=tasks,
         users=users,
         forms=forms,
-        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME
+        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
+        TASK_MILESTONES=TASK_MILESTONES
     )
+
+
+# ---- Template task management helpers ----
+@app.route("/project-templates/<int:template_id>/tasks/<int:task_id>/edit", methods=["POST"])
+@login_required
+def project_template_task_edit(template_id, task_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    task = ProjectTemplateTask.query.filter_by(id=task_id, template_id=template.id).first()
+    if not task:
+        flash("Task not found for this template.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    requested_order = request.form.get("order_index", type=int)
+    depends_on_id = request.form.get("depends_on_id", type=int)
+    default_assignee_id = request.form.get("default_assignee_id", type=int)
+    form_template_id = request.form.get("form_template_id", type=int)
+
+    if not name:
+        flash("Task name is required.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    dependency = None
+    if depends_on_id:
+        if depends_on_id == task.id:
+            flash("A task cannot depend on itself.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+        dependency = ProjectTemplateTask.query.filter_by(id=depends_on_id, template_id=template.id).first()
+        if not dependency:
+            flash("Select a dependency from the same template.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+    if default_assignee_id and not db.session.get(User, default_assignee_id):
+        flash("Choose a valid default assignee.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    if form_template_id and not db.session.get(FormSchema, form_template_id):
+        flash("Choose a valid form template.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    start_mode, planned_start_date, duration_value, milestone_value, timing_error = _extract_task_timing(request.form)
+    if timing_error:
+        flash(timing_error, "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    existing_tasks = ProjectTemplateTask.query.filter_by(template_id=template.id).order_by(
+        ProjectTemplateTask.order_index.asc(),
+        ProjectTemplateTask.id.asc()
+    ).all()
+    others = [t for t in existing_tasks if t.id != task.id]
+    max_position = len(others) + 1
+    if not requested_order or requested_order < 1:
+        requested_order = max_position if task.order_index is None else min(task.order_index, max_position)
+    else:
+        requested_order = min(requested_order, max_position)
+
+    for idx, existing in enumerate(others, start=1):
+        new_index = idx if idx < requested_order else idx + 1
+        existing.order_index = new_index
+
+    task.name = name
+    task.description = description or None
+    task.order_index = requested_order
+    task.depends_on_id = dependency.id if dependency else None
+    task.default_assignee_id = default_assignee_id
+    task.form_template_id = form_template_id
+    task.start_mode = start_mode
+    task.planned_start_date = planned_start_date
+    task.duration_days = duration_value
+    task.milestone = milestone_value
+
+    normalize_template_task_order(template.id)
+    db.session.commit()
+    flash("Template task updated.", "success")
+    return redirect(url_for("project_template_detail", template_id=template.id))
+
+
+@app.route("/project-templates/<int:template_id>/tasks/reorder", methods=["POST"])
+@login_required
+def project_template_task_reorder(template_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    payload = request.get_json(silent=True) or {}
+    ordered_ids = payload.get("ordered_ids")
+    if not isinstance(ordered_ids, list) or not ordered_ids:
+        return jsonify({"ok": False, "message": "No ordering received."}), 400
+
+    try:
+        ordered_ids = [int(task_id) for task_id in ordered_ids]
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "message": "Invalid task identifiers."}), 400
+
+    template_task_ids = {task.id for task in template.tasks}
+    if set(ordered_ids) != template_task_ids:
+        return jsonify({"ok": False, "message": "Ordering must include all template tasks."}), 400
+
+    tasks = {
+        task.id: task for task in ProjectTemplateTask.query.filter(
+            ProjectTemplateTask.template_id == template.id,
+            ProjectTemplateTask.id.in_(ordered_ids)
+        ).all()
+    }
+
+    if len(tasks) != len(ordered_ids):
+        return jsonify({"ok": False, "message": "One or more tasks were not found."}), 400
+
+    for idx, task_id in enumerate(ordered_ids, start=1):
+        tasks[task_id].order_index = idx
+
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ---------------------- QC TABS ----------------------
@@ -1553,7 +1869,8 @@ def qc_home():
         projects=projects,
         STAGES=STAGES,
         LIFT_TYPES=LIFT_TYPES,
-        status_filter=status
+        status_filter=status,
+        TASK_MILESTONES=TASK_MILESTONES
     )
 
 
@@ -1569,6 +1886,9 @@ def qc_work_new():
     due = (request.form.get("due_date") or "").strip()
     assigned_to = request.form.get("assigned_to", type=int)
     project_id = request.form.get("project_id", type=int)
+    planned_start = (request.form.get("planned_start_date") or "").strip()
+    duration_raw = (request.form.get("planned_duration_days") or "").strip()
+    milestone_value = (request.form.get("milestone") or "").strip()
 
     project = db.session.get(Project, project_id) if project_id else None
     if project:
@@ -1589,6 +1909,31 @@ def qc_work_new():
             flash("Invalid due date format.", "error")
             return redirect(url_for("qc_home"))
 
+    planned_start_date = None
+    if planned_start:
+        try:
+            planned_start_date = datetime.datetime.strptime(planned_start, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Invalid planned start date format.", "error")
+            return redirect(url_for("qc_home"))
+
+    duration_days = None
+    if duration_raw:
+        try:
+            duration_days = int(duration_raw)
+        except ValueError:
+            flash("Duration must be a whole number of days.", "error")
+            return redirect(url_for("qc_home"))
+        if duration_days < 0:
+            flash("Duration must be zero or positive.", "error")
+            return redirect(url_for("qc_home"))
+
+    if due_dt is None:
+        if planned_start_date and duration_days is not None:
+            due_dt = datetime.datetime.combine(planned_start_date, datetime.time.min) + datetime.timedelta(days=duration_days)
+        elif duration_days is not None:
+            due_dt = datetime.datetime.utcnow() + datetime.timedelta(days=duration_days)
+
     template = db.session.get(FormSchema, template_id)
 
     work = QCWork(
@@ -1602,7 +1947,10 @@ def qc_work_new():
         due_date=due_dt,
         created_by=current_user.id,
         assigned_to=assigned_to,
-        name=site_name
+        name=site_name,
+        planned_start_date=planned_start_date,
+        planned_duration_days=duration_days,
+        milestone=milestone_value or None
     )
     db.session.add(work)
     db.session.flush()
@@ -1614,7 +1962,10 @@ def qc_work_new():
             "site_name": work.site_name,
             "assigned_to": assigned_to,
             "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
-            "project_id": work.project_id
+            "project_id": work.project_id,
+            "planned_start_date": planned_start_date.strftime("%Y-%m-%d") if planned_start_date else None,
+            "planned_duration_days": duration_days,
+            "milestone": work.milestone
         }
     )
     if assigned_to:
