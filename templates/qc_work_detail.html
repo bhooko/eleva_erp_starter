@@ -37,6 +37,7 @@
         <p class="text-slate-300"><span class="text-slate-400">Address:</span> {{ work.address or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Stage:</span> {{ work.stage or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Template step:</span> {{ work.template_task.name if work.template_task else '—' }}</p>
+        <p class="text-slate-300"><span class="text-slate-400">Milestone:</span> {{ work.milestone or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Project:</span>
           {% if work.project %}
             <a href="{{ url_for('project_detail', project_id=work.project.id) }}" class="text-emerald-300 hover:text-emerald-200">
@@ -56,7 +57,23 @@
       </div>
       <div class="space-y-1">
         <p class="text-slate-300"><span class="text-slate-400">Status:</span> {{ work.status }}</p>
-        <p class="text-slate-300"><span class="text-slate-400">Due:</span> {{ work.due_date.strftime('%Y-%m-%d') if work.due_date else '—' }}</p>
+        <p class="text-slate-300"><span class="text-slate-400">Planned start:</span> {{ work.planned_start_date.strftime('%Y-%m-%d') if work.planned_start_date else '—' }}</p>
+        <p class="text-slate-300"><span class="text-slate-400">Planned duration:</span>
+          {% if work.planned_duration_days is not none %}
+            {{ work.planned_duration_days }} day{{ '' if work.planned_duration_days == 1 else 's' }}
+          {% else %}
+            —
+          {% endif %}
+        </p>
+        <p class="text-slate-300"><span class="text-slate-400">Due:</span>
+          {% if work.due_date %}
+            {{ work.due_date.strftime('%Y-%m-%d') }}
+          {% elif work.planned_due_date %}
+            {{ work.planned_due_date.strftime('%Y-%m-%d') }}
+          {% else %}
+            —
+          {% endif %}
+        </p>
         <p class="text-slate-300"><span class="text-slate-400">Assigned to:</span> {{ work.assignee.display_name if work.assignee else 'Unassigned' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Created:</span> {{ work.created_at.strftime('%Y-%m-%d') }}</p>
       </div>
