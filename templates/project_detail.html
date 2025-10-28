@@ -10,7 +10,7 @@
             aria-expanded="false"
             title="Edit project details">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.76.76-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.802a4.5 4.5 0 01-1.897 1.13l-2.685.76.76-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" />
       </svg>
       <span class="sr-only">Edit project</span>
     </button>
@@ -71,113 +71,163 @@
     </div>
   </div>
 
-  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold text-slate-100">Core QC Stages</h3>
-      <p class="text-xs text-slate-400">Each stage links to a dedicated QC task.</p>
-    </div>
-    {% set status_labels = {'empty': 'Not created', 'active': 'In progress', 'completed': 'Completed'} %}
-    {% for chunk in stage_cards|batch(3, fill_with=None) %}
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-4 last:mb-0">
-        {% for card in chunk if card %}
-          {% set bg_class = {
-            'empty': 'border-slate-800 bg-slate-950/40',
-            'active': 'border-amber-400/60 bg-amber-500/10',
-            'completed': 'border-emerald-400/60 bg-emerald-500/10'
-          }[card.status] %}
-          {% set badge_class = {
-            'empty': 'bg-slate-800 text-slate-300',
-            'active': 'bg-amber-400/20 text-amber-200',
-            'completed': 'bg-emerald-400/20 text-emerald-200'
-          }[card.status] %}
-          <div class="rounded-2xl border p-4 space-y-4 {{ bg_class }}">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="text-sm font-semibold text-slate-100">{{ card.name }}</div>
-                <div class="text-xs text-slate-300">{{ card.tasks|length }} task{{ '' if card.tasks|length == 1 else 's' }}</div>
-              </div>
-              <span class="px-2 py-0.5 rounded-lg text-xs uppercase tracking-wide {{ badge_class }}">{{ status_labels[card.status] }}</span>
-            </div>
-
-            {% if card.tasks %}
-              <div class="space-y-2">
-                {% for task in card.tasks %}
-                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}"
-                     class="block px-3 py-2 rounded-xl border border-slate-800/50 bg-slate-900/60 hover:bg-slate-900/80 transition">
-                    <div class="flex items-center justify-between text-sm">
-                      <span class="text-slate-100">#{{ task.id }} – {{ task.status }}</span>
-                      <span class="text-xs text-slate-400">{{ task.due_date.strftime('%Y-%m-%d') if task.due_date else 'No due' }}</span>
-                    </div>
-                    <div class="text-xs text-slate-400 mt-1">Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
-                  </a>
-                {% endfor %}
-              </div>
-            {% else %}
-              <p class="text-xs text-slate-300">No QC task has been created for this stage yet.</p>
-            {% endif %}
-
-            <form method="post" action="{{ url_for('project_task_create', project_id=project.id) }}" class="space-y-2">
-              <input type="hidden" name="stage" value="{{ card.name }}">
-              <div>
-                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Template</label>
-                {% set stage_templates = templates_by_stage.get(card.name, []) %}
-                <select name="template_id" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700" required>
-                  {% if stage_templates %}
-                    <option value="" selected disabled>Select template</option>
-                    {% for tpl in stage_templates %}
-                      <option value="{{ tpl.id }}">{{ tpl.name }}</option>
-                    {% endfor %}
-                  {% else %}
-                    <option value="" selected disabled>No tagged templates – choose any</option>
-                    {% for tpl in templates %}
-                      <option value="{{ tpl.id }}">{{ tpl.name }} ({{ tpl.stage or 'No stage' }})</option>
-                    {% endfor %}
+  <div class="grid lg:grid-cols-[3fr_2fr] gap-6">
+    <div class="space-y-6">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-100">Active Tasks</h3>
+          <span class="text-xs text-slate-400 uppercase tracking-wide">{{ active_tasks|length }} item{{ '' if active_tasks|length == 1 else 's' }}</span>
+        </div>
+        {% if active_tasks %}
+          <div class="space-y-3">
+            {% for task in active_tasks %}
+              <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="text-sm font-semibold text-emerald-300 hover:text-emerald-200">{{ task.display_title }}</a>
+                    {% if task.description %}
+                      <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
+                    {% endif %}
+                  </div>
+                  <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-200 uppercase tracking-wide">{{ task.status }}</span>
+                </div>
+                <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
+                  <div>Due {{ task.due_date.strftime('%Y-%m-%d') if task.due_date else 'No due date' }}</div>
+                  {% if task.dependency %}
+                    <div class="sm:col-span-2 text-amber-200">Depends on <a href="{{ url_for('qc_work_detail', work_id=task.dependency.id) }}" class="underline hover:text-amber-50">{{ task.dependency.display_title }}</a></div>
                   {% endif %}
-                </select>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assign to</label>
-                  <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700">
-                    <option value="" selected>Unassigned</option>
-                    {% for member in users %}
-                      <option value="{{ member.id }}">{{ member.display_name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Due date</label>
-                  <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700">
+                  {% if task.template_task %}
+                    <div class="sm:col-span-2">Template step: {{ task.template_task.name }}</div>
+                  {% endif %}
                 </div>
               </div>
-              <button class="w-full px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create stage task</button>
-            </form>
+            {% endfor %}
           </div>
-        {% endfor %}
+        {% else %}
+          <p class="text-sm text-slate-400">No active tasks. Apply a template or create a task to get started.</p>
+        {% endif %}
       </div>
-    {% endfor %}
-  </div>
 
-  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold text-slate-100">Additional Project Tasks</h3>
-      <span class="text-xs text-slate-400 uppercase tracking-wide">{{ other_tasks|length }} item{{ '' if other_tasks|length == 1 else 's' }}</span>
-    </div>
-    {% if other_tasks|length == 0 %}
-      <p class="text-sm text-slate-400">No other QC tasks linked to this project.</p>
-    {% else %}
-      <div class="space-y-3">
-        {% for task in other_tasks %}
-          <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="block px-4 py-3 rounded-2xl border border-slate-800 bg-slate-950/40 hover:bg-slate-900/60 transition">
-            <div class="flex flex-wrap items-center gap-3 justify-between text-sm">
-              <div class="font-medium text-slate-100">#{{ task.id }} – {{ task.stage or 'No stage' }}</div>
-              <div class="text-xs text-slate-400">Status: {{ task.status }}</div>
-            </div>
-            <div class="text-xs text-slate-400 mt-1">{{ task.site_name }} &bull; {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
-          </a>
-        {% endfor %}
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-100">Waiting on Dependencies</h3>
+          <span class="text-xs text-slate-400 uppercase tracking-wide">{{ waiting_tasks|length }}</span>
+        </div>
+        {% if waiting_tasks %}
+          <div class="space-y-3">
+            {% for task in waiting_tasks %}
+              <div class="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-semibold text-amber-100">{{ task.display_title }}</div>
+                  <span class="px-3 py-1 rounded-xl bg-amber-500/20 text-xs text-amber-100 uppercase tracking-wide">{{ task.status }}</span>
+                </div>
+                <div class="mt-2 text-xs text-amber-100">
+                  Awaiting completion of <a href="{{ url_for('qc_work_detail', work_id=task.dependency.id) }}" class="underline hover:text-amber-50">{{ task.dependency.display_title }}</a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-400">No tasks are currently blocked.</p>
+        {% endif %}
       </div>
-    {% endif %}
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-100">Completed Tasks</h3>
+          <span class="text-xs text-slate-400 uppercase tracking-wide">{{ closed_tasks|length }}</span>
+        </div>
+        {% if closed_tasks %}
+          <div class="space-y-2">
+            {% for task in closed_tasks %}
+              <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-slate-800/60 bg-slate-950/30 hover:bg-slate-900/50 transition text-sm">
+                <span class="text-slate-100">{{ task.display_title }}</span>
+                <span class="text-xs text-slate-400">Closed {{ task.created_at.strftime('%Y-%m-%d') }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-400">No tasks have been completed yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+        <h3 class="text-lg font-semibold text-slate-100 mb-4">Apply Template</h3>
+        <form method="post" action="{{ url_for('project_apply_template', project_id=project.id) }}" class="space-y-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Project template</label>
+            <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" disabled selected>Select template</option>
+              {% for tpl in templates %}
+                <option value="{{ tpl.id }}">{{ tpl.name }} ({{ tpl.tasks|length }} tasks)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Add tasks from template</button>
+        </form>
+        <p class="mt-3 text-xs text-slate-500">Applying a template creates tasks immediately. Dependent tasks only appear once prerequisites close.</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+        <h3 class="text-lg font-semibold text-slate-100 mb-4">Create Task</h3>
+        <form method="post" action="{{ url_for('project_task_create', project_id=project.id) }}" class="space-y-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
+            <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. Commissioning QC" />
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+            <textarea name="description" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Optional details or expectations"></textarea>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Assign to</label>
+              <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="">Unassigned</option>
+                {% for member in users %}
+                  <option value="{{ member.id }}">{{ member.display_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Due date</label>
+              <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Dependency</label>
+            <select name="depends_on_id" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="">No dependency</option>
+              {% for task in all_tasks %}
+                <option value="{{ task.id }}">{{ task.display_title }} ({{ task.status }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Stage label</label>
+            <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="">No stage</option>
+              {% for s in STAGES %}
+                <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Form template</label>
+            <select name="form_template_id" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="">Use {{ DEFAULT_TASK_FORM_NAME }}</option>
+              {% for form in form_templates %}
+                <option value="{{ form.id }}">{{ form.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Create task</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -207,9 +257,7 @@
       });
 
       if (cancel) {
-        cancel.addEventListener('click', () => {
-          closeForm();
-        });
+        cancel.addEventListener('click', closeForm);
       }
     })();
   </script>

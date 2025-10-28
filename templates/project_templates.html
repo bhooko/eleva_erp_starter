@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Project Templates{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Project Templates</h2>
+        <p class="text-sm text-slate-400">Assemble reusable task blueprints and apply them to projects in one click.</p>
+      </div>
+      <div class="ml-auto text-xs text-slate-400">
+        Default task form: <span class="text-emerald-300">{{ DEFAULT_TASK_FORM_NAME }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+      {% if templates %}
+        <div class="space-y-4">
+          {% for template in templates %}
+            <a href="{{ url_for('project_template_detail', template_id=template.id) }}"
+               class="block rounded-2xl border border-slate-800/60 bg-slate-950/40 hover:bg-slate-900/60 transition p-4">
+              <div class="flex flex-wrap items-start gap-3 justify-between">
+                <div>
+                  <h3 class="text-base font-semibold text-slate-100">{{ template.name }}</h3>
+                  {% if template.description %}
+                    <p class="text-sm text-slate-400 mt-1">{{ template.description }}</p>
+                  {% endif %}
+                </div>
+                <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 uppercase tracking-wide">
+                  {{ template_counts[template.id] }} task{{ '' if template_counts[template.id] == 1 else 's' }}
+                </span>
+              </div>
+              <div class="mt-3 text-xs text-slate-500 flex items-center gap-2">
+                <span>Created {{ template.created_at.strftime('%Y-%m-%d') }}</span>
+                {% if template.creator %}
+                  <span>&middot;</span>
+                  <span>by {{ template.creator.display_name }}</span>
+                {% endif %}
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-400">No templates defined yet. Use the form on the right to create one.</p>
+      {% endif %}
+    </div>
+
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+      <h3 class="text-base font-semibold text-slate-100 mb-4">Create Template</h3>
+      <form method="post" class="space-y-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+          <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. NI Project" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+          <textarea name="description" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Summarise when to use this template"></textarea>
+        </div>
+        <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Create template</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

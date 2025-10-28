@@ -28,8 +28,8 @@ STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
     "Completion", "Completion QC", "Structure", "Cladding", "Service", "Repair", "Material"
 ]
-PROJECT_CORE_STAGES = ["Template QC", "Stage 1", "Stage 2", "Stage 3", "Completion QC"]
 LIFT_TYPES = ["Hydraulic", "MRL", "MR", "Dumbwaiter", "Goods"]
+DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
 # -------------------------------------------------------------------------------
 
 
@@ -166,6 +166,34 @@ class Submission(db.Model):
     user = db.relationship("User")
 
 
+class ProjectTemplate(db.Model):
+    __tablename__ = "project_template"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    creator = db.relationship("User")
+
+
+class ProjectTemplateTask(db.Model):
+    __tablename__ = "project_template_task"
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("project_template.id"), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    order_index = db.Column(db.Integer, default=0)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=True)
+    default_assignee_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    form_template_id = db.Column(db.Integer, db.ForeignKey("form_schema.id"), nullable=True)
+
+    template = db.relationship("ProjectTemplate", backref=db.backref("tasks", cascade="all, delete-orphan", order_by="ProjectTemplateTask.order_index"))
+    depends_on = db.relationship("ProjectTemplateTask", remote_side=[id], backref=db.backref("dependents", cascade="all"))
+    default_assignee = db.relationship("User", foreign_keys=[default_assignee_id])
+    form_template = db.relationship("FormSchema")
+
+
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
 class QCWork(db.Model):
     __tablename__ = "qc_work"
@@ -174,11 +202,17 @@ class QCWork(db.Model):
     client_name = db.Column(db.String(200), nullable=True)
     address = db.Column(db.Text, nullable=True)
 
+    name = db.Column(db.String(200), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+
     template_id = db.Column(db.Integer, db.ForeignKey("form_schema.id"), nullable=False)
     stage = db.Column(db.String(40), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
 
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+
+    template_task_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=True)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=True)
 
     status = db.Column(db.String(40), default="Open")  # Open / In Progress / Closed
     due_date = db.Column(db.DateTime, nullable=True)
@@ -191,6 +225,26 @@ class QCWork(db.Model):
     creator = db.relationship("User", foreign_keys=[created_by])
     assignee = db.relationship("User", foreign_keys=[assigned_to])
     project = db.relationship("Project", backref=db.backref("tasks", lazy="dynamic"))
+    template_task = db.relationship("ProjectTemplateTask", backref=db.backref("project_tasks", lazy="dynamic"))
+    dependency = db.relationship("QCWork", remote_side=[id], backref=db.backref("dependents", cascade="all"), foreign_keys=[depends_on_id])
+
+    @property
+    def display_title(self):
+        if self.name:
+            return self.name
+        if self.site_name:
+            return self.site_name
+        return f"Task #{self.id}"
+
+    @property
+    def dependency_satisfied(self):
+        if not self.dependency:
+            return True
+        return (self.dependency.status or "").lower() == "closed"
+
+    @property
+    def is_blocked(self):
+        return not self.dependency_satisfied
 
 
 class QCWorkComment(db.Model):
@@ -253,6 +307,50 @@ def log_work_event(work_id, action, actor_id=None, from_status=None, to_status=N
     db.session.add(entry)
 
 
+def get_or_create_default_task_form():
+    form = FormSchema.query.filter_by(name=DEFAULT_TASK_FORM_NAME).first()
+    if form:
+        return form
+    fallback_schema = [
+        {"label": "Summary", "type": "textarea", "required": False, "allow_remark": False},
+        {"label": "Status", "type": "select", "required": True, "options": ["Not Started", "In Progress", "Completed"]}
+    ]
+    form = FormSchema(
+        name=DEFAULT_TASK_FORM_NAME,
+        schema_json=json.dumps(fallback_schema, ensure_ascii=False),
+        min_photos_if_all_good=0
+    )
+    db.session.add(form)
+    db.session.flush()
+    return form
+
+
+def release_dependent_tasks(work, actor_id=None):
+    for dependent in work.dependents:
+        if dependent.status == "Blocked" and dependent.dependency_satisfied:
+            dependent.status = "Open"
+            db.session.flush()
+            log_work_event(
+                dependent.id,
+                "dependency_released",
+                actor_id=actor_id,
+                details={"dependency": work.id}
+            )
+
+
+def block_child_tasks(work, actor_id=None):
+    for dependent in work.dependents:
+        if dependent.status != "Closed" and dependent.depends_on_id == work.id:
+            dependent.status = "Blocked"
+            db.session.flush()
+            log_work_event(
+                dependent.id,
+                "dependency_reinstated",
+                actor_id=actor_id,
+                details={"dependency": work.id}
+            )
+
+
 # ---------------------- SAFE DB REPAIR / MIGRATIONS ----------------------
 def ensure_qc_columns():
     """Check and auto-add 'stage' and 'lift_type' in form_schema, and 'work_id' in submission."""
@@ -311,6 +409,18 @@ def ensure_qc_columns():
         if "project_id" not in qc_cols:
             cur.execute("ALTER TABLE qc_work ADD COLUMN project_id INTEGER;")
             added_qc.append("project_id")
+        if "name" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN name TEXT;")
+            added_qc.append("name")
+        if "description" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN description TEXT;")
+            added_qc.append("description")
+        if "template_task_id" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN template_task_id INTEGER;")
+            added_qc.append("template_task_id")
+        if "depends_on_id" not in qc_cols:
+            cur.execute("ALTER TABLE qc_work ADD COLUMN depends_on_id INTEGER;")
+            added_qc.append("depends_on_id")
 
     conn.commit()
     conn.close()
@@ -355,6 +465,8 @@ def ensure_tables():
         Project.__table__,
         FormSchema.__table__,
         Submission.__table__,
+        ProjectTemplate.__table__,
+        ProjectTemplateTask.__table__,
         QCWork.__table__,
         QCWorkComment.__table__,
         QCWorkLog.__table__,
@@ -382,6 +494,8 @@ def bootstrap_db():
     if admin_user and not admin_user.role:
         admin_user.role = "Admin"
 
+    get_or_create_default_task_form()
+
     if not FormSchema.query.filter_by(name="QC - New Installation").first():
         sample_schema = [
             {"label": "Lift Cabin Condition", "type": "select", "required": True, "options": ["Good", "NG"], "photo_required_if_ng": True},
@@ -397,6 +511,39 @@ def bootstrap_db():
             lift_type="MRL"
         )
         db.session.add(fs)
+
+    if not ProjectTemplate.query.filter_by(name="NI Project").first():
+        ni_template = ProjectTemplate(
+            name="NI Project",
+            description="Baseline new installation delivery with sequential QC checks.",
+            created_by=admin_user.id if admin_user else None
+        )
+        db.session.add(ni_template)
+        db.session.flush()
+
+        sample_form = FormSchema.query.filter_by(name="QC - New Installation").first()
+
+        stage_task = ProjectTemplateTask(
+            template_id=ni_template.id,
+            name="Initial Site Handover",
+            description="Confirm site readiness and collect base documentation.",
+            order_index=1,
+            form_template_id=sample_form.id if sample_form else None,
+            default_assignee_id=admin_user.id if admin_user else None
+        )
+        db.session.add(stage_task)
+        db.session.flush()
+
+        follow_up = ProjectTemplateTask(
+            template_id=ni_template.id,
+            name="Final Commissioning QC",
+            description="Run through final QC checklist before handover.",
+            order_index=2,
+            depends_on_id=stage_task.id,
+            form_template_id=sample_form.id if sample_form else None,
+            default_assignee_id=admin_user.id if admin_user else None
+        )
+        db.session.add(follow_up)
 
     db.session.commit()
 # -----------------------------------------------------------------------
@@ -475,10 +622,11 @@ def dashboard():
             viewing_user = candidate
 
     status_order = case(
-        (QCWork.status == "Open", 0),
-        (QCWork.status == "In Progress", 1),
-        (QCWork.status == "Closed", 2),
-        else_=3
+        (QCWork.status == "In Progress", 0),
+        (QCWork.status == "Open", 1),
+        (QCWork.status == "Blocked", 2),
+        (QCWork.status == "Closed", 3),
+        else_=4
     )
     now = datetime.datetime.utcnow()
     tasks = (
@@ -487,44 +635,39 @@ def dashboard():
         .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
         .all()
     )
-    open_tasks = [task for task in tasks if task.status != "Closed"]
+    actionable_tasks = [task for task in tasks if task.dependency_satisfied]
+    blocked_tasks = [task for task in tasks if not task.dependency_satisfied and task.status != "Closed"]
+    open_tasks = [task for task in actionable_tasks if task.status != "Closed"]
     closed_tasks = [task for task in tasks if task.status == "Closed"]
-    counts = (
-        db.session.query(
-            func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0),
-            func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0),
-            func.coalesce(func.sum(case((and_(QCWork.due_date.isnot(None), QCWork.due_date < now, QCWork.status != "Closed"), 1), else_=0)), 0)
-        )
-        .filter(QCWork.assigned_to == viewing_user.id)
-        .one()
+
+    open_count = sum(1 for task in open_tasks if (task.status or "").lower() in {"open", "blocked"})
+    in_progress_count = sum(1 for task in open_tasks if (task.status or "").lower() == "in progress")
+    overdue_count = sum(
+        1
+        for task in open_tasks
+        if task.due_date and task.due_date < now and (task.status or "").lower() != "closed"
     )
-    open_count, in_progress_count, overdue_count = [int(c or 0) for c in counts]
 
     team_load = []
     if current_user.is_admin:
-        rows = (
-            db.session.query(
-                User,
-                func.coalesce(func.count(QCWork.id), 0).label("total"),
-                func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0).label("open"),
-                func.coalesce(func.sum(case((QCWork.status == "In Progress", 1), else_=0)), 0).label("in_progress"),
-                func.coalesce(func.sum(case((and_(QCWork.due_date.isnot(None), QCWork.due_date < now, QCWork.status != "Closed"), 1), else_=0)), 0).label("overdue")
-            )
-            .outerjoin(QCWork, QCWork.assigned_to == User.id)
-            .group_by(User.id)
-            .order_by(User.username.asc())
-            .all()
-        )
-        team_load = [
-            {
+        users = User.query.order_by(User.username.asc()).all()
+        assignments = {user.id: [] for user in users}
+        for task in QCWork.query.filter(QCWork.assigned_to.isnot(None)).all():
+            assignments.setdefault(task.assigned_to, []).append(task)
+
+        for member in users:
+            member_tasks = assignments.get(member.id, [])
+            actionable = [task for task in member_tasks if task.dependency_satisfied]
+            open_items = [task for task in actionable if task.status != "Closed"]
+            team_load.append({
                 "user": member,
-                "total": int(total or 0),
-                "open": int(open_total or 0),
-                "in_progress": int(progress or 0),
-                "overdue": int(overdue or 0)
-            }
-            for member, total, open_total, progress, overdue in rows
-        ]
+                "total": len(actionable),
+                "open": sum(1 for task in open_items if (task.status or "").lower() in {"open", "blocked"}),
+                "in_progress": sum(1 for task in open_items if (task.status or "").lower() == "in progress"),
+                "overdue": sum(
+                    1 for task in open_items if task.due_date and task.due_date < now
+                )
+            })
 
     return render_template(
         "dashboard.html",
@@ -534,6 +677,7 @@ def dashboard():
         in_progress_count=in_progress_count,
         overdue_count=overdue_count,
         viewing_user=viewing_user,
+        blocked_tasks=blocked_tasks,
         team_load=team_load,
         category_label=None
     )
@@ -1022,54 +1166,32 @@ def projects_list():
 @login_required
 def project_detail(project_id):
     project = Project.query.get_or_404(project_id)
-    tasks_by_stage = {}
-    for stage in PROJECT_CORE_STAGES:
-        tasks_by_stage[stage] = (
-            QCWork.query
-            .filter(QCWork.project_id == project.id, QCWork.stage == stage)
-            .order_by(QCWork.created_at.desc())
-            .all()
-        )
-
-    stage_cards = []
-    for stage in PROJECT_CORE_STAGES:
-        stage_tasks = tasks_by_stage.get(stage, [])
-        if not stage_tasks:
-            status = "empty"
-        else:
-            unfinished = [t for t in stage_tasks if t.status != "Closed"]
-            status = "completed" if not unfinished else "active"
-        stage_cards.append({
-            "name": stage,
-            "tasks": stage_tasks,
-            "status": status
-        })
-
-    other_tasks = (
+    project_tasks = (
         QCWork.query
         .filter(QCWork.project_id == project.id)
-        .filter(or_(QCWork.stage.is_(None), ~QCWork.stage.in_(PROJECT_CORE_STAGES)))
-        .order_by(QCWork.created_at.desc())
+        .order_by(QCWork.created_at.asc())
         .all()
     )
-    templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
-    templates_by_stage = {
-        stage: [t for t in templates if t.stage == stage]
-        for stage in PROJECT_CORE_STAGES
-    }
+    active_tasks = [task for task in project_tasks if task.status != "Closed" and task.dependency_satisfied]
+    waiting_tasks = [task for task in project_tasks if task.status != "Closed" and not task.dependency_satisfied]
+    closed_tasks = [task for task in project_tasks if task.status == "Closed"]
+
+    templates = ProjectTemplate.query.order_by(ProjectTemplate.name.asc()).all()
+    form_templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
     users = User.query.order_by(User.username.asc()).all()
     return render_template(
         "project_detail.html",
         project=project,
-        tasks_by_stage=tasks_by_stage,
-        stage_cards=stage_cards,
-        other_tasks=other_tasks,
+        active_tasks=active_tasks,
+        waiting_tasks=waiting_tasks,
+        closed_tasks=closed_tasks,
+        all_tasks=project_tasks,
         templates=templates,
-        templates_by_stage=templates_by_stage,
+        form_templates=form_templates,
         users=users,
-        PROJECT_CORE_STAGES=PROJECT_CORE_STAGES,
-        STAGES=STAGES,
-        LIFT_TYPES=LIFT_TYPES
+        LIFT_TYPES=LIFT_TYPES,
+        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
+        STAGES=STAGES
     )
 
 
@@ -1103,29 +1225,132 @@ def project_edit(project_id):
     return redirect(url_for("project_detail", project_id=project.id))
 
 
+@app.route("/projects/<int:project_id>/apply-template", methods=["POST"])
+@login_required
+def project_apply_template(project_id):
+    project = Project.query.get_or_404(project_id)
+    template_id = request.form.get("template_id", type=int)
+    if not template_id:
+        flash("Select a template to apply.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    template = ProjectTemplate.query.get(template_id)
+    if not template:
+        flash("Template not found.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    fallback_form = get_or_create_default_task_form()
+    existing_template_task_ids = {
+        task.template_task_id
+        for task in QCWork.query.filter(
+            QCWork.project_id == project.id,
+            QCWork.template_task_id.isnot(None)
+        ).all()
+        if task.template_task_id is not None
+    }
+
+    created = []
+    task_lookup = {}
+    ordered_template_tasks = sorted(template.tasks, key=lambda t: ((t.order_index or 0), t.id))
+
+    for template_task in ordered_template_tasks:
+        if template_task.id in existing_template_task_ids:
+            continue
+
+        dependency_task = None
+        if template_task.depends_on_id:
+            dependency_task = task_lookup.get(template_task.depends_on_id)
+            if not dependency_task:
+                dependency_task = QCWork.query.filter_by(
+                    project_id=project.id,
+                    template_task_id=template_task.depends_on_id
+                ).first()
+
+        form_template = template_task.form_template or fallback_form
+        if not form_template:
+            continue
+
+        status = "Open"
+        if dependency_task and (dependency_task.status or "").lower() != "closed":
+            status = "Blocked"
+
+        new_task = QCWork(
+            site_name=project.site_name or project.name,
+            client_name=project.customer_name,
+            address=project.site_address,
+            template_id=form_template.id,
+            stage=template_task.template.name,
+            lift_type=project.lift_type or form_template.lift_type,
+            project_id=project.id,
+            created_by=current_user.id,
+            assigned_to=template_task.default_assignee_id,
+            name=template_task.name,
+            description=template_task.description,
+            template_task_id=template_task.id,
+            depends_on_id=dependency_task.id if dependency_task else None,
+            status=status
+        )
+        db.session.add(new_task)
+        db.session.flush()
+
+        task_lookup[template_task.id] = new_task
+        created.append(new_task)
+
+        log_work_event(
+            new_task.id,
+            "created_from_project_template",
+            actor_id=current_user.id,
+            details={
+                "project_id": project.id,
+                "template": template.name,
+                "template_task": template_task.name
+            }
+        )
+        if template_task.default_assignee_id:
+            log_work_event(
+                new_task.id,
+                "assigned",
+                actor_id=current_user.id,
+                details={"assigned_to": template_task.default_assignee_id}
+            )
+        if status == "Blocked" and dependency_task:
+            log_work_event(
+                new_task.id,
+                "waiting_on_dependency",
+                actor_id=current_user.id,
+                details={"depends_on": dependency_task.id}
+            )
+
+    if not created:
+        flash("No new tasks were created – they may already exist for this project.", "info")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    db.session.commit()
+    flash(f"Added {len(created)} tasks from template {template.name}.", "success")
+    return redirect(url_for("project_detail", project_id=project.id))
+
+
 @app.route("/projects/<int:project_id>/tasks/create", methods=["POST"])
 @login_required
 def project_task_create(project_id):
     project = Project.query.get_or_404(project_id)
-    stage = (request.form.get("stage") or "").strip()
-    template_id = request.form.get("template_id", type=int)
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    form_template_id = request.form.get("form_template_id", type=int)
     assigned_to = request.form.get("assigned_to", type=int)
     due = (request.form.get("due_date") or "").strip()
+    depends_on_id = request.form.get("depends_on_id", type=int)
+    stage = (request.form.get("stage") or "").strip()
 
-    if stage not in PROJECT_CORE_STAGES:
-        flash("Select one of the core project stages.", "error")
+    if not name:
+        flash("Provide a task name.", "error")
         return redirect(url_for("project_detail", project_id=project.id))
 
-    template = db.session.get(FormSchema, template_id) if template_id else None
-    if not template:
-        template = (
-            FormSchema.query
-            .filter_by(stage=stage)
-            .order_by(FormSchema.name.asc())
-            .first()
-        )
-    if not template:
-        flash("Choose a template for this stage.", "error")
+    form_template = db.session.get(FormSchema, form_template_id) if form_template_id else None
+    if not form_template:
+        form_template = get_or_create_default_task_form()
+    if not form_template:
+        flash("Set up a form template before creating tasks.", "error")
         return redirect(url_for("project_detail", project_id=project.id))
 
     due_dt = None
@@ -1136,17 +1361,36 @@ def project_task_create(project_id):
             flash("Invalid due date format.", "error")
             return redirect(url_for("project_detail", project_id=project.id))
 
+    dependency = None
+    if depends_on_id:
+        dependency = (
+            QCWork.query
+            .filter(QCWork.project_id == project.id, QCWork.id == depends_on_id)
+            .first()
+        )
+        if not dependency:
+            flash("Choose a dependency from the same project.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    status = "Open"
+    if dependency and (dependency.status or "").lower() != "closed":
+        status = "Blocked"
+
     work = QCWork(
         site_name=project.site_name or project.name,
         client_name=project.customer_name,
         address=project.site_address,
-        template_id=template.id,
-        stage=stage,
-        lift_type=project.lift_type or template.lift_type,
+        template_id=form_template.id,
+        stage=stage or None,
+        lift_type=project.lift_type or form_template.lift_type,
         project_id=project.id,
         due_date=due_dt,
         created_by=current_user.id,
-        assigned_to=assigned_to
+        assigned_to=assigned_to,
+        name=name,
+        description=description or None,
+        depends_on_id=dependency.id if dependency else None,
+        status=status
     )
     db.session.add(work)
     db.session.flush()
@@ -1156,9 +1400,10 @@ def project_task_create(project_id):
         actor_id=current_user.id,
         details={
             "project_id": project.id,
-            "stage": stage,
+            "stage": stage or None,
             "assigned_to": assigned_to,
-            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None
+            "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
+            "dependency": dependency.id if dependency else None
         }
     )
     if assigned_to:
@@ -1168,9 +1413,110 @@ def project_task_create(project_id):
             actor_id=current_user.id,
             details={"assigned_to": assigned_to}
         )
+    if status == "Blocked" and dependency:
+        log_work_event(
+            work.id,
+            "waiting_on_dependency",
+            actor_id=current_user.id,
+            details={"depends_on": dependency.id}
+        )
     db.session.commit()
-    flash("QC task created for the project.", "success")
+    flash("Project task created.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
+
+
+@app.route("/project-templates", methods=["GET", "POST"])
+@login_required
+def project_templates():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        if not name:
+            flash("Template name is required.", "error")
+        else:
+            template = ProjectTemplate(
+                name=name,
+                description=description or None,
+                created_by=current_user.id
+            )
+            db.session.add(template)
+            db.session.commit()
+            flash("Project template created.", "success")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+    templates = ProjectTemplate.query.order_by(ProjectTemplate.name.asc()).all()
+    template_counts = {
+        tpl.id: len(tpl.tasks)
+        for tpl in templates
+    }
+    return render_template(
+        "project_templates.html",
+        templates=templates,
+        template_counts=template_counts,
+        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME
+    )
+
+
+@app.route("/project-templates/<int:template_id>", methods=["GET", "POST"])
+@login_required
+def project_template_detail(template_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    users = User.query.order_by(User.username.asc()).all()
+    forms = FormSchema.query.order_by(FormSchema.name.asc()).all()
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        order_index = request.form.get("order_index", type=int) or 0
+        depends_on_id = request.form.get("depends_on_id", type=int)
+        default_assignee_id = request.form.get("default_assignee_id", type=int)
+        form_template_id = request.form.get("form_template_id", type=int)
+
+        if not name:
+            flash("Task name is required.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+        dependency = None
+        if depends_on_id:
+            dependency = ProjectTemplateTask.query.filter_by(id=depends_on_id, template_id=template.id).first()
+            if not dependency:
+                flash("Select a dependency from the same template.", "error")
+                return redirect(url_for("project_template_detail", template_id=template.id))
+
+        if default_assignee_id and not db.session.get(User, default_assignee_id):
+            flash("Choose a valid default assignee.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+        if form_template_id and not db.session.get(FormSchema, form_template_id):
+            flash("Choose a valid form template.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
+
+        task = ProjectTemplateTask(
+            template_id=template.id,
+            name=name,
+            description=description or None,
+            order_index=order_index,
+            depends_on_id=dependency.id if dependency else None,
+            default_assignee_id=default_assignee_id,
+            form_template_id=form_template_id
+        )
+        db.session.add(task)
+        db.session.commit()
+        flash("Template task added.", "success")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    tasks = ProjectTemplateTask.query.filter_by(template_id=template.id).order_by(
+        ProjectTemplateTask.order_index.asc(),
+        ProjectTemplateTask.id.asc()
+    ).all()
+    return render_template(
+        "project_template_detail.html",
+        template=template,
+        tasks=tasks,
+        users=users,
+        forms=forms,
+        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME
+    )
 
 
 # ---------------------- QC TABS ----------------------
@@ -1179,10 +1525,11 @@ def project_task_create(project_id):
 def qc_home():
     status = request.args.get("status", "all")
     status_order = case(
-        (QCWork.status == "Open", 0),
-        (QCWork.status == "In Progress", 1),
-        (QCWork.status == "Closed", 2),
-        else_=3
+        (QCWork.status == "In Progress", 0),
+        (QCWork.status == "Open", 1),
+        (QCWork.status == "Blocked", 2),
+        (QCWork.status == "Closed", 3),
+        else_=4
     )
     query = QCWork.query.order_by(
         status_order,
@@ -1254,7 +1601,8 @@ def qc_work_new():
         project_id=project.id if project else None,
         due_date=due_dt,
         created_by=current_user.id,
-        assigned_to=assigned_to
+        assigned_to=assigned_to,
+        name=site_name
     )
     db.session.add(work)
     db.session.flush()
@@ -1409,32 +1757,55 @@ def qc_work_comment(work_id):
 def qc_work_status(work_id, action):
     """Progress status for work: open -> in_progress -> closed."""
     work = QCWork.query.get_or_404(work_id)
-    valid_transitions = {
-        "start": ("Open", "In Progress"),
-        "close": ("In Progress", "Closed"),
-        "reopen": ("Closed", "In Progress")
-    }
-
-    if action not in valid_transitions:
+    if action not in {"start", "close", "reopen"}:
         flash("Invalid action.", "error")
         return redirect(url_for("qc_work_detail", work_id=work.id))
 
-    current, new = valid_transitions[action]
-    if work.status != current:
-        flash(f"Cannot {action}: current status is {work.status}.", "error")
-        return redirect(url_for("qc_work_detail", work_id=work.id))
+    from_status = work.status or "Open"
+    if action == "start":
+        if from_status == "Blocked" and not work.dependency_satisfied:
+            flash("This task is waiting for its dependency to complete.", "error")
+            return redirect(url_for("qc_work_detail", work_id=work.id))
+        if from_status == "Blocked" and work.dependency_satisfied:
+            work.status = "Open"
+            db.session.flush()
+            log_work_event(
+                work.id,
+                "dependency_released",
+                actor_id=current_user.id,
+                details={"dependency": work.depends_on_id}
+            )
+            from_status = work.status
+        if from_status != "Open":
+            flash(f"Cannot start: current status is {work.status}.", "error")
+            return redirect(url_for("qc_work_detail", work_id=work.id))
+        new_status = "In Progress"
+    elif action == "close":
+        if from_status != "In Progress":
+            flash(f"Cannot close: current status is {work.status}.", "error")
+            return redirect(url_for("qc_work_detail", work_id=work.id))
+        new_status = "Closed"
+    else:  # reopen
+        if from_status != "Closed":
+            flash(f"Cannot reopen: current status is {work.status}.", "error")
+            return redirect(url_for("qc_work_detail", work_id=work.id))
+        new_status = "In Progress"
 
-    work.status = new
+    work.status = new_status
     db.session.flush()
     log_work_event(
         work.id,
         "status_changed",
         actor_id=current_user.id,
-        from_status=current,
-        to_status=new
+        from_status=from_status,
+        to_status=new_status
     )
+    if new_status == "Closed":
+        release_dependent_tasks(work, actor_id=current_user.id)
+    elif action == "reopen":
+        block_child_tasks(work, actor_id=current_user.id)
     db.session.commit()
-    flash(f"Work status changed to {new}.", "success")
+    flash(f"Work status changed to {new_status}.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
 # ----------------------------------------------------
 
