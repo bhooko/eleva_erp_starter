@@ -25,11 +25,10 @@
         <table class="min-w-full text-sm">
           <thead class="text-slate-400">
             <tr>
-              <th class="text-left py-2 pr-3">Site / Client</th>
-              <th class="text-left py-2 pr-3">Template</th>
-              <th class="text-left py-2 pr-3">Stage</th>
-              <th class="text-left py-2 pr-3">Assigned</th>
-              <th class="text-left py-2 pr-3">Due</th>
+              <th class="text-left py-2 pr-3">Task</th>
+              <th class="text-left py-2 pr-3">Form</th>
+              <th class="text-left py-2 pr-3">Assignment</th>
+              <th class="text-left py-2 pr-3">Project</th>
               <th class="text-left py-2 pr-3">Status</th>
               <th class="text-left py-2">Actions</th>
             </tr>
@@ -38,26 +37,33 @@
             {% for w in work_items %}
               <tr class="hover:bg-slate-800/40">
                 <td class="py-2 pr-3 align-top">
-                  <div class="font-medium text-slate-100">{{ w.site_name }}</div>
-                  {% if w.client_name %}
-                    <div class="text-xs text-slate-400">{{ w.client_name }}</div>
-                  {% endif %}
-                  {% if w.address %}
+                  <div class="font-medium text-slate-100">{{ w.display_title }}</div>
+                  {% if w.description %}
+                    <div class="text-xs text-slate-400 max-w-xs truncate">{{ w.description }}</div>
+                  {% elif w.address %}
                     <div class="text-xs text-slate-500 max-w-xs truncate">{{ w.address }}</div>
                   {% endif %}
+                  <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-2">
+                    {% if w.stage %}<span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage }}</span>{% endif %}
+                    {% if w.dependency %}<span class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-100">Waiting for {{ w.dependency.display_title }}</span>{% endif %}
+                  </div>
                 </td>
                 <td class="py-2 pr-3 align-top">
-                  <div class="text-slate-200">{{ w.template.name }}</div>
+                  <div class="text-slate-200">{{ w.template.name if w.template else '—' }}</div>
+                  {% if w.template_task %}
+                    <div class="text-xs text-slate-400">Template step: {{ w.template_task.name }}</div>
+                  {% endif %}
                 </td>
                 <td class="py-2 pr-3 align-top">
-                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage or (w.template.stage or '—') }}</span>
-                  <div class="mt-1 text-xs text-slate-400">{{ w.lift_type or (w.template.lift_type or '—') }}</div>
+                  <div class="text-slate-200">{{ w.assignee.display_name if w.assignee else 'Unassigned' }}</div>
+                  <div class="text-xs text-slate-400">Due {{ w.due_date.strftime('%Y-%m-%d') if w.due_date else 'No due date' }}</div>
                 </td>
                 <td class="py-2 pr-3 align-top text-slate-200">
-                  {{ w.assignee.username if w.assignee else 'Unassigned' }}
-                </td>
-                <td class="py-2 pr-3 align-top text-slate-200">
-                  {{ w.due_date.strftime('%Y-%m-%d') if w.due_date else '—' }}
+                  {% if w.project %}
+                    <a href="{{ url_for('project_detail', project_id=w.project.id) }}" class="text-emerald-300 hover:underline">{{ w.project.name }}</a>
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
                 <td class="py-2 pr-3 align-top">
                   <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.status }}</span>
@@ -65,7 +71,9 @@
                 <td class="py-2 align-top">
                   <div class="flex flex-col gap-2">
                     <a href="{{ url_for('qc_work_detail', work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-center">Open</a>
-                    <a href="{{ url_for('forms_fill', form_id=w.template_id, work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 text-center">Submit</a>
+                    {% if w.template_id %}
+                      <a href="{{ url_for('forms_fill', form_id=w.template_id, work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 text-center">Submit</a>
+                    {% endif %}
                   </div>
                 </td>
               </tr>
