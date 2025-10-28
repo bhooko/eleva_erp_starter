@@ -45,7 +45,12 @@
                   {% endif %}
                   <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-2">
                     {% if w.stage %}<span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.stage }}</span>{% endif %}
-                    {% if w.dependency %}<span class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-100">Waiting for {{ w.dependency.display_title }}</span>{% endif %}
+                    {% set waiting_dependencies = w.dependencies %}
+                    {% if waiting_dependencies %}
+                      {% for dependency in waiting_dependencies %}
+                        <span class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-100">Waiting for {{ dependency.display_title }}</span>
+                      {% endfor %}
+                    {% endif %}
                     {% if w.milestone %}<span class="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-200">Milestone: {{ w.milestone }}</span>{% endif %}
                   </div>
                 </td>

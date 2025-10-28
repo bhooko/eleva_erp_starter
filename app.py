@@ -42,7 +42,7 @@ TASK_MILESTONES = [
 
 def _extract_task_timing(form):
     start_mode = (form.get("start_mode") or "immediate").strip().lower()
-    if start_mode not in {"immediate", "scheduled"}:
+    if start_mode not in {"immediate", "scheduled", "after_previous"}:
         start_mode = "immediate"
 
     start_date_value = None
@@ -54,6 +54,9 @@ def _extract_task_timing(form):
             start_date_value = datetime.datetime.strptime(start_date_raw, "%Y-%m-%d").date()
         except ValueError:
             return None, None, None, None, "Start date must be a valid YYYY-MM-DD date."
+    elif start_mode == "after_previous":
+        # Ignore any manually provided start date when using sequential scheduling.
+        start_date_value = None
     elif start_date_raw:
         # Allow optionally overriding the start date even if immediate was chosen.
         try:
@@ -88,6 +91,150 @@ def normalize_template_task_order(template_id):
     for idx, task in enumerate(tasks, start=1):
         task.order_index = idx
     return tasks
+
+
+def set_template_task_dependencies(task, dependency_ids):
+    if not task:
+        return
+    cleaned = []
+    for dep_id in dependency_ids or []:
+        if not dep_id:
+            continue
+        if dep_id == task.id:
+            continue
+        if dep_id not in cleaned:
+            cleaned.append(dep_id)
+    task.depends_on_id = cleaned[0] if cleaned else None
+    existing = {link.depends_on_id: link for link in getattr(task, "dependency_links", [])}
+    for dep_id, link in list(existing.items()):
+        if dep_id not in cleaned:
+            db.session.delete(link)
+    for dep_id in cleaned:
+        if dep_id not in existing:
+            db.session.add(ProjectTemplateTaskDependency(task_id=task.id, depends_on_id=dep_id))
+
+
+def set_qc_work_dependencies(work, dependency_ids):
+    if not work:
+        return
+    cleaned = []
+    for dep_id in dependency_ids or []:
+        if not dep_id:
+            continue
+        if dep_id == work.id:
+            continue
+        if dep_id not in cleaned:
+            cleaned.append(dep_id)
+    work.depends_on_id = cleaned[0] if cleaned else None
+    existing = {link.depends_on_id: link for link in getattr(work, "dependency_links", [])}
+    for dep_id, link in list(existing.items()):
+        if dep_id not in cleaned:
+            db.session.delete(link)
+    for dep_id in cleaned:
+        if dep_id not in existing:
+            db.session.add(QCWorkDependency(task_id=work.id, depends_on_id=dep_id))
+
+
+def synchronize_dependency_links():
+    try:
+        template_tasks = ProjectTemplateTask.query.filter(ProjectTemplateTask.depends_on_id.isnot(None)).all()
+        for task in template_tasks:
+            existing = {link.depends_on_id for link in getattr(task, "dependency_links", [])}
+            if task.depends_on_id and task.depends_on_id not in existing:
+                db.session.add(ProjectTemplateTaskDependency(task_id=task.id, depends_on_id=task.depends_on_id))
+
+        qc_tasks = QCWork.query.filter(QCWork.depends_on_id.isnot(None)).all()
+        for work in qc_tasks:
+            existing = {link.depends_on_id for link in getattr(work, "dependency_links", [])}
+            if work.depends_on_id and work.depends_on_id not in existing:
+                db.session.add(QCWorkDependency(task_id=work.id, depends_on_id=work.depends_on_id))
+
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        print(f"⚠️ Unable to synchronize dependency links automatically: {exc}")
+
+
+def build_task_template_blueprint(template):
+    tasks = sorted(template.tasks, key=lambda t: ((t.order_index or 0), t.id))
+    id_to_index = {task.id: idx for idx, task in enumerate(tasks)}
+    blueprint = []
+    for idx, task in enumerate(tasks):
+        dependency_indexes = []
+        for dep in task.dependencies:
+            dep_index = id_to_index.get(dep.id)
+            if dep_index is not None:
+                dependency_indexes.append(dep_index)
+        blueprint.append({
+            "name": task.name,
+            "description": task.description,
+            "order_index": task.order_index or (idx + 1),
+            "default_assignee_id": task.default_assignee_id,
+            "form_template_id": task.form_template_id,
+            "start_mode": task.start_mode or "immediate",
+            "planned_start_date": task.planned_start_date.isoformat() if task.planned_start_date else None,
+            "duration_days": task.duration_days,
+            "milestone": task.milestone,
+            "dependency_indexes": dependency_indexes,
+        })
+    return blueprint
+
+
+def apply_blueprint_to_template(template, blueprint):
+    if not isinstance(blueprint, list):
+        return []
+    created = []
+    for idx, entry in enumerate(blueprint):
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or f"Task {idx + 1}").strip()
+        description = (entry.get("description") or None)
+        order_index = entry.get("order_index") or (idx + 1)
+        default_assignee_id = entry.get("default_assignee_id")
+        form_template_id = entry.get("form_template_id")
+        start_mode = (entry.get("start_mode") or "immediate").lower()
+        if start_mode not in {"immediate", "scheduled", "after_previous"}:
+            start_mode = "immediate"
+        planned_start = entry.get("planned_start_date")
+        planned_start_date = None
+        if planned_start:
+            try:
+                planned_start_date = datetime.datetime.strptime(planned_start, "%Y-%m-%d").date()
+            except ValueError:
+                planned_start_date = None
+        duration_days = entry.get("duration_days")
+        if isinstance(duration_days, str) and duration_days.isdigit():
+            duration_days = int(duration_days)
+        elif not isinstance(duration_days, int):
+            duration_days = None
+        milestone = entry.get("milestone") or None
+
+        task = ProjectTemplateTask(
+            template_id=template.id,
+            name=name,
+            description=description,
+            order_index=order_index,
+            default_assignee_id=default_assignee_id,
+            form_template_id=form_template_id,
+            start_mode=start_mode,
+            planned_start_date=planned_start_date,
+            duration_days=duration_days,
+            milestone=milestone
+        )
+        db.session.add(task)
+        db.session.flush()
+        created.append((task, entry))
+
+    for task, entry in created:
+        dependency_indexes = entry.get("dependency_indexes") or []
+        dependency_ids = []
+        for dep_idx in dependency_indexes:
+            if isinstance(dep_idx, int) and 0 <= dep_idx < len(created):
+                dependency_ids.append(created[dep_idx][0].id)
+        set_template_task_dependencies(task, dependency_ids)
+
+    normalize_template_task_order(template.id)
+    return [task for task, _ in created]
 # -------------------------------------------------------------------------------
 
 
@@ -251,15 +398,90 @@ class ProjectTemplateTask(db.Model):
     milestone = db.Column(db.String(120), nullable=True)
 
     template = db.relationship("ProjectTemplate", backref=db.backref("tasks", cascade="all, delete-orphan", order_by="ProjectTemplateTask.order_index"))
-    depends_on = db.relationship("ProjectTemplateTask", remote_side=[id], backref=db.backref("dependents", cascade="all"))
+    depends_on = db.relationship("ProjectTemplateTask", remote_side=[id], backref=db.backref("primary_dependents", cascade="all"))
     default_assignee = db.relationship("User", foreign_keys=[default_assignee_id])
     form_template = db.relationship("FormSchema")
+    dependency_links = db.relationship(
+        "ProjectTemplateTaskDependency",
+        foreign_keys="ProjectTemplateTaskDependency.task_id",
+        cascade="all, delete-orphan",
+        back_populates="task"
+    )
 
     @property
     def planned_due_date(self):
         if self.planned_start_date and self.duration_days:
             return self.planned_start_date + datetime.timedelta(days=self.duration_days)
         return None
+
+    @property
+    def dependency_ids(self):
+        ids = []
+        if self.depends_on_id:
+            ids.append(self.depends_on_id)
+        for link in getattr(self, "dependency_links", []):
+            if link.depends_on_id and link.depends_on_id not in ids:
+                ids.append(link.depends_on_id)
+        return ids
+
+    @property
+    def dependencies(self):
+        seen = set()
+        ordered = []
+        if self.depends_on and self.depends_on.id not in seen:
+            ordered.append(self.depends_on)
+            seen.add(self.depends_on.id)
+        for link in getattr(self, "dependency_links", []):
+            if link.dependency and link.dependency.id not in seen:
+                ordered.append(link.dependency)
+                seen.add(link.dependency.id)
+        return ordered
+
+
+class ProjectTemplateTaskDependency(db.Model):
+    __tablename__ = "project_template_task_dependency"
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=False)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("task_id", "depends_on_id", name="uq_template_task_dependency"),
+    )
+
+    task = db.relationship(
+        "ProjectTemplateTask",
+        foreign_keys=[task_id],
+        back_populates="dependency_links"
+    )
+    dependency = db.relationship(
+        "ProjectTemplateTask",
+        foreign_keys=[depends_on_id],
+        backref=db.backref("dependent_links", cascade="all, delete-orphan")
+    )
+
+
+class TaskTemplate(db.Model):
+    __tablename__ = "task_template"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    blueprint_json = db.Column(db.Text, nullable=False)
+    created_from_template_id = db.Column(db.Integer, db.ForeignKey("project_template.id"), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    creator = db.relationship("User")
+    source_template = db.relationship("ProjectTemplate")
+
+    @property
+    def task_count(self):
+        try:
+            data = json.loads(self.blueprint_json or "[]")
+        except json.JSONDecodeError:
+            return 0
+        if isinstance(data, list):
+            return len(data)
+        return 0
 
 
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
@@ -297,7 +519,18 @@ class QCWork(db.Model):
     assignee = db.relationship("User", foreign_keys=[assigned_to])
     project = db.relationship("Project", backref=db.backref("tasks", lazy="dynamic"))
     template_task = db.relationship("ProjectTemplateTask", backref=db.backref("project_tasks", lazy="dynamic"))
-    dependency = db.relationship("QCWork", remote_side=[id], backref=db.backref("dependents", cascade="all"), foreign_keys=[depends_on_id])
+    primary_dependency = db.relationship(
+        "QCWork",
+        remote_side=[id],
+        backref=db.backref("primary_dependents", cascade="all"),
+        foreign_keys=[depends_on_id]
+    )
+    dependency_links = db.relationship(
+        "QCWorkDependency",
+        foreign_keys="QCWorkDependency.task_id",
+        cascade="all, delete-orphan",
+        back_populates="task"
+    )
 
     @property
     def display_title(self):
@@ -309,19 +542,78 @@ class QCWork(db.Model):
 
     @property
     def dependency_satisfied(self):
-        if not self.dependency:
-            return True
-        return (self.dependency.status or "").lower() == "closed"
+        for dependency in self.dependencies:
+            if (dependency.status or "").lower() != "closed":
+                return False
+        return True
 
     @property
     def is_blocked(self):
         return not self.dependency_satisfied
 
     @property
+    def dependencies(self):
+        seen = set()
+        ordered = []
+        if self.primary_dependency and self.primary_dependency.id not in seen:
+            ordered.append(self.primary_dependency)
+            seen.add(self.primary_dependency.id)
+        for link in getattr(self, "dependency_links", []):
+            if link.dependency and link.dependency.id not in seen:
+                ordered.append(link.dependency)
+                seen.add(link.dependency.id)
+        return ordered
+
+    @property
+    def dependency(self):
+        deps = self.dependencies
+        return deps[0] if deps else None
+
+    @property
+    def dependency_ids(self):
+        return [dep.id for dep in self.dependencies]
+
+    @property
+    def all_dependents(self):
+        dependents = []
+        seen = set()
+        for dependent in getattr(self, "primary_dependents", []):
+            if dependent.id not in seen:
+                dependents.append(dependent)
+                seen.add(dependent.id)
+        for link in getattr(self, "dependent_links", []):
+            if link.task and link.task.id not in seen:
+                dependents.append(link.task)
+                seen.add(link.task.id)
+        return dependents
+
+    @property
     def planned_due_date(self):
         if self.planned_start_date and self.planned_duration_days:
             return self.planned_start_date + datetime.timedelta(days=self.planned_duration_days)
         return None
+
+
+class QCWorkDependency(db.Model):
+    __tablename__ = "qc_work_dependency"
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=False)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("task_id", "depends_on_id", name="uq_qc_work_dependency"),
+    )
+
+    task = db.relationship(
+        "QCWork",
+        foreign_keys=[task_id],
+        back_populates="dependency_links"
+    )
+    dependency = db.relationship(
+        "QCWork",
+        foreign_keys=[depends_on_id],
+        backref=db.backref("dependent_links", cascade="all, delete-orphan")
+    )
 
 
 class QCWorkComment(db.Model):
@@ -403,7 +695,7 @@ def get_or_create_default_task_form():
 
 
 def release_dependent_tasks(work, actor_id=None):
-    for dependent in work.dependents:
+    for dependent in work.all_dependents:
         if dependent.status == "Blocked" and dependent.dependency_satisfied:
             dependent.status = "Open"
             db.session.flush()
@@ -416,8 +708,8 @@ def release_dependent_tasks(work, actor_id=None):
 
 
 def block_child_tasks(work, actor_id=None):
-    for dependent in work.dependents:
-        if dependent.status != "Closed" and dependent.depends_on_id == work.id:
+    for dependent in work.all_dependents:
+        if dependent.status != "Closed" and work.id in dependent.dependency_ids:
             dependent.status = "Blocked"
             db.session.flush()
             log_work_event(
@@ -579,7 +871,10 @@ def ensure_tables():
         Submission.__table__,
         ProjectTemplate.__table__,
         ProjectTemplateTask.__table__,
+        ProjectTemplateTaskDependency.__table__,
+        TaskTemplate.__table__,
         QCWork.__table__,
+        QCWorkDependency.__table__,
         QCWorkComment.__table__,
         QCWorkLog.__table__,
     ]
@@ -654,7 +949,6 @@ def bootstrap_db():
             name="Final Commissioning QC",
             description="Run through final QC checklist before handover.",
             order_index=2,
-            depends_on_id=stage_task.id,
             form_template_id=sample_form.id if sample_form else None,
             default_assignee_id=admin_user.id if admin_user else None,
             start_mode="scheduled",
@@ -663,8 +957,11 @@ def bootstrap_db():
             milestone="Commissioning"
         )
         db.session.add(follow_up)
+        db.session.flush()
+        set_template_task_dependencies(follow_up, [stage_task.id])
 
     db.session.commit()
+    synchronize_dependency_links()
 # -----------------------------------------------------------------------
 
 
@@ -1377,21 +1674,23 @@ def project_apply_template(project_id):
         if template_task.id in existing_template_task_ids:
             continue
 
-        dependency_task = None
-        if template_task.depends_on_id:
-            dependency_task = task_lookup.get(template_task.depends_on_id)
-            if not dependency_task:
-                dependency_task = QCWork.query.filter_by(
+        dependency_tasks = []
+        for dep_id in template_task.dependency_ids:
+            dependency = task_lookup.get(dep_id)
+            if not dependency:
+                dependency = QCWork.query.filter_by(
                     project_id=project.id,
-                    template_task_id=template_task.depends_on_id
+                    template_task_id=dep_id
                 ).first()
+            if dependency:
+                dependency_tasks.append(dependency)
 
         form_template = template_task.form_template or fallback_form
         if not form_template:
             continue
 
         status = "Open"
-        if dependency_task and (dependency_task.status or "").lower() != "closed":
+        if any((dep.status or "").lower() != "closed" for dep in dependency_tasks):
             status = "Blocked"
 
         planned_start = template_task.planned_start_date
@@ -1399,7 +1698,7 @@ def project_apply_template(project_id):
         due_date = None
         if planned_start and planned_duration:
             due_date = datetime.datetime.combine(planned_start, datetime.time.min) + datetime.timedelta(days=planned_duration)
-        elif planned_duration:
+        elif planned_duration and (template_task.start_mode or "immediate") != "after_previous":
             due_date = datetime.datetime.utcnow() + datetime.timedelta(days=planned_duration)
         elif template_task.planned_due_date:
             due_date = datetime.datetime.combine(template_task.planned_due_date, datetime.time.min)
@@ -1419,7 +1718,6 @@ def project_apply_template(project_id):
             name=template_task.name,
             description=template_task.description,
             template_task_id=template_task.id,
-            depends_on_id=dependency_task.id if dependency_task else None,
             status=status,
             due_date=due_date,
             planned_start_date=planned_start,
@@ -1428,6 +1726,7 @@ def project_apply_template(project_id):
         )
         db.session.add(new_task)
         db.session.flush()
+        set_qc_work_dependencies(new_task, [dep.id for dep in dependency_tasks])
 
         task_lookup[template_task.id] = new_task
         created.append(new_task)
@@ -1453,12 +1752,12 @@ def project_apply_template(project_id):
                 actor_id=current_user.id,
                 details={"assigned_to": template_task.default_assignee_id}
             )
-        if status == "Blocked" and dependency_task:
+        if status == "Blocked" and dependency_tasks:
             log_work_event(
                 new_task.id,
                 "waiting_on_dependency",
                 actor_id=current_user.id,
-                details={"depends_on": dependency_task.id}
+                details={"depends_on": [dep.id for dep in dependency_tasks]}
             )
 
     if not created:
@@ -1479,7 +1778,14 @@ def project_task_create(project_id):
     form_template_id = request.form.get("form_template_id", type=int)
     assigned_to = request.form.get("assigned_to", type=int)
     due = (request.form.get("due_date") or "").strip()
-    depends_on_id = request.form.get("depends_on_id", type=int)
+    depends_on_ids = []
+    for raw in request.form.getlist("depends_on_ids"):
+        try:
+            dep_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if dep_id not in depends_on_ids:
+            depends_on_ids.append(dep_id)
     stage = (request.form.get("stage") or "").strip()
     planned_start = (request.form.get("planned_start_date") or "").strip()
     duration_raw = (request.form.get("planned_duration_days") or "").strip()
@@ -1529,19 +1835,23 @@ def project_task_create(project_id):
         elif duration_days is not None:
             due_dt = datetime.datetime.utcnow() + datetime.timedelta(days=duration_days)
 
-    dependency = None
-    if depends_on_id:
-        dependency = (
+    dependency_tasks = []
+    if depends_on_ids:
+        dependencies = (
             QCWork.query
-            .filter(QCWork.project_id == project.id, QCWork.id == depends_on_id)
-            .first()
+            .filter(QCWork.project_id == project.id, QCWork.id.in_(depends_on_ids))
+            .all()
         )
-        if not dependency:
-            flash("Choose a dependency from the same project.", "error")
+        found_ids = {dep.id for dep in dependencies}
+        missing = [dep_id for dep_id in depends_on_ids if dep_id not in found_ids]
+        if missing:
+            flash("Choose dependencies from the same project.", "error")
             return redirect(url_for("project_detail", project_id=project.id))
+        id_map = {dep.id: dep for dep in dependencies}
+        dependency_tasks = [id_map[dep_id] for dep_id in depends_on_ids if dep_id in id_map]
 
     status = "Open"
-    if dependency and (dependency.status or "").lower() != "closed":
+    if any((dep.status or "").lower() != "closed" for dep in dependency_tasks):
         status = "Blocked"
 
     work = QCWork(
@@ -1557,7 +1867,6 @@ def project_task_create(project_id):
         assigned_to=assigned_to,
         name=name,
         description=description or None,
-        depends_on_id=dependency.id if dependency else None,
         status=status,
         planned_start_date=planned_start_date,
         planned_duration_days=duration_days,
@@ -1565,6 +1874,7 @@ def project_task_create(project_id):
     )
     db.session.add(work)
     db.session.flush()
+    set_qc_work_dependencies(work, [dep.id for dep in dependency_tasks])
     log_work_event(
         work.id,
         "created_from_project",
@@ -1574,7 +1884,7 @@ def project_task_create(project_id):
             "stage": stage or None,
             "assigned_to": assigned_to,
             "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
-            "dependency": dependency.id if dependency else None,
+            "dependencies": [dep.id for dep in dependency_tasks],
             "planned_start_date": planned_start_date.strftime("%Y-%m-%d") if planned_start_date else None,
             "planned_duration_days": duration_days,
             "milestone": work.milestone
@@ -1587,12 +1897,12 @@ def project_task_create(project_id):
             actor_id=current_user.id,
             details={"assigned_to": assigned_to}
         )
-    if status == "Blocked" and dependency:
+    if status == "Blocked" and dependency_tasks:
         log_work_event(
             work.id,
             "waiting_on_dependency",
             actor_id=current_user.id,
-            details={"depends_on": dependency.id}
+            details={"depends_on": [dep.id for dep in dependency_tasks]}
         )
     db.session.commit()
     flash("Project task created.", "success")
@@ -1623,10 +1933,12 @@ def project_templates():
         tpl.id: len(tpl.tasks)
         for tpl in templates
     }
+    task_templates = TaskTemplate.query.order_by(TaskTemplate.created_at.desc()).all()
     return render_template(
         "project_templates.html",
         templates=templates,
         template_counts=template_counts,
+        task_templates=task_templates,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME
     )
 
@@ -1642,7 +1954,14 @@ def project_template_detail(template_id):
         name = (request.form.get("name") or "").strip()
         description = (request.form.get("description") or "").strip()
         requested_order = request.form.get("order_index", type=int)
-        depends_on_id = request.form.get("depends_on_id", type=int)
+        depends_on_ids = []
+        for raw in request.form.getlist("depends_on_ids"):
+            try:
+                dep_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if dep_id not in depends_on_ids:
+                depends_on_ids.append(dep_id)
         default_assignee_id = request.form.get("default_assignee_id", type=int)
         form_template_id = request.form.get("form_template_id", type=int)
 
@@ -1650,11 +1969,13 @@ def project_template_detail(template_id):
             flash("Task name is required.", "error")
             return redirect(url_for("project_template_detail", template_id=template.id))
 
-        dependency = None
-        if depends_on_id:
-            dependency = ProjectTemplateTask.query.filter_by(id=depends_on_id, template_id=template.id).first()
-            if not dependency:
-                flash("Select a dependency from the same template.", "error")
+        if depends_on_ids:
+            dependencies = ProjectTemplateTask.query.filter(
+                ProjectTemplateTask.template_id == template.id,
+                ProjectTemplateTask.id.in_(depends_on_ids)
+            ).all()
+            if len(dependencies) != len(depends_on_ids):
+                flash("Select dependencies from the same template.", "error")
                 return redirect(url_for("project_template_detail", template_id=template.id))
 
         if default_assignee_id and not db.session.get(User, default_assignee_id):
@@ -1692,7 +2013,6 @@ def project_template_detail(template_id):
             name=name,
             description=description or None,
             order_index=requested_order,
-            depends_on_id=dependency.id if dependency else None,
             default_assignee_id=default_assignee_id,
             form_template_id=form_template_id,
             start_mode=start_mode,
@@ -1701,6 +2021,8 @@ def project_template_detail(template_id):
             milestone=milestone_value
         )
         db.session.add(task)
+        db.session.flush()
+        set_template_task_dependencies(task, depends_on_ids)
         normalize_template_task_order(template.id)
         db.session.commit()
         message = "Template task added."
@@ -1724,6 +2046,81 @@ def project_template_detail(template_id):
     )
 
 
+@app.route("/project-templates/<int:template_id>/update", methods=["POST"])
+@login_required
+def project_template_update(template_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    name = (request.form.get("template_name") or request.form.get("name") or "").strip()
+    description = (request.form.get("template_description") or request.form.get("description") or "").strip()
+    if not name:
+        flash("Template name is required.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    template.name = name
+    template.description = description or None
+    db.session.commit()
+    flash("Template details saved.", "success")
+    return redirect(url_for("project_template_detail", template_id=template.id))
+
+
+@app.route("/project-templates/<int:template_id>/save-as-task-template", methods=["POST"])
+@login_required
+def project_template_save_as_task_template(template_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    name = (request.form.get("task_template_name") or "").strip()
+    description = (request.form.get("task_template_description") or "").strip()
+    if not name:
+        flash("Provide a name for the task template.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    existing = TaskTemplate.query.filter(func.lower(TaskTemplate.name) == name.lower()).first()
+    if existing:
+        flash("A task template with that name already exists.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    blueprint = build_task_template_blueprint(template)
+    task_template = TaskTemplate(
+        name=name,
+        description=description or None,
+        blueprint_json=json.dumps(blueprint, ensure_ascii=False),
+        created_from_template_id=template.id,
+        created_by=current_user.id
+    )
+    db.session.add(task_template)
+    db.session.commit()
+    flash("Task template saved for future reuse.", "success")
+    return redirect(url_for("project_template_detail", template_id=template.id))
+
+
+@app.route("/task-templates/<int:task_template_id>/create-project-template", methods=["POST"])
+@login_required
+def create_project_template_from_task_template(task_template_id):
+    task_template = TaskTemplate.query.get_or_404(task_template_id)
+    name = (request.form.get("name") or task_template.name or "").strip()
+    description = (request.form.get("description") or task_template.description or "").strip()
+    if not name:
+        flash("Template name is required.", "error")
+        return redirect(url_for("project_templates"))
+
+    new_template = ProjectTemplate(
+        name=name,
+        description=description or None,
+        created_by=current_user.id
+    )
+    db.session.add(new_template)
+    db.session.flush()
+
+    try:
+        blueprint = json.loads(task_template.blueprint_json or "[]")
+    except json.JSONDecodeError:
+        blueprint = []
+
+    apply_blueprint_to_template(new_template, blueprint)
+    db.session.commit()
+    flash(f"Project template '{name}' created from task template.", "success")
+    return redirect(url_for("project_template_detail", template_id=new_template.id))
+
+
 # ---- Template task management helpers ----
 @app.route("/project-templates/<int:template_id>/tasks/<int:task_id>/edit", methods=["POST"])
 @login_required
@@ -1737,7 +2134,14 @@ def project_template_task_edit(template_id, task_id):
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
     requested_order = request.form.get("order_index", type=int)
-    depends_on_id = request.form.get("depends_on_id", type=int)
+    depends_on_ids = []
+    for raw in request.form.getlist("depends_on_ids"):
+        try:
+            dep_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if dep_id not in depends_on_ids:
+            depends_on_ids.append(dep_id)
     default_assignee_id = request.form.get("default_assignee_id", type=int)
     form_template_id = request.form.get("form_template_id", type=int)
 
@@ -1745,14 +2149,16 @@ def project_template_task_edit(template_id, task_id):
         flash("Task name is required.", "error")
         return redirect(url_for("project_template_detail", template_id=template.id))
 
-    dependency = None
-    if depends_on_id:
-        if depends_on_id == task.id:
+    if depends_on_ids:
+        if task.id in depends_on_ids:
             flash("A task cannot depend on itself.", "error")
             return redirect(url_for("project_template_detail", template_id=template.id))
-        dependency = ProjectTemplateTask.query.filter_by(id=depends_on_id, template_id=template.id).first()
-        if not dependency:
-            flash("Select a dependency from the same template.", "error")
+        dependencies = ProjectTemplateTask.query.filter(
+            ProjectTemplateTask.template_id == template.id,
+            ProjectTemplateTask.id.in_(depends_on_ids)
+        ).all()
+        if len(dependencies) != len(depends_on_ids):
+            flash("Select dependencies from the same template.", "error")
             return redirect(url_for("project_template_detail", template_id=template.id))
 
     if default_assignee_id and not db.session.get(User, default_assignee_id):
@@ -1786,13 +2192,14 @@ def project_template_task_edit(template_id, task_id):
     task.name = name
     task.description = description or None
     task.order_index = requested_order
-    task.depends_on_id = dependency.id if dependency else None
     task.default_assignee_id = default_assignee_id
     task.form_template_id = form_template_id
     task.start_mode = start_mode
     task.planned_start_date = planned_start_date
     task.duration_days = duration_value
     task.milestone = milestone_value
+
+    set_template_task_dependencies(task, depends_on_ids)
 
     normalize_template_task_order(template.id)
     db.session.commit()
