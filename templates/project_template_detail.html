@@ -3,21 +3,95 @@
 
 {% block content %}
 <div class="space-y-6">
+  <style>
+    .task-dragging {
+      transform: scale(1.02) translateY(-2px);
+      box-shadow: 0 22px 45px -18px rgba(16, 185, 129, 0.45);
+      border-color: rgba(16, 185, 129, 0.6);
+      background: rgba(15, 23, 42, 0.85);
+    }
+
+    .task-dragging * {
+      pointer-events: none !important;
+    }
+
+    .task-drop-target {
+      outline: 2px dashed rgba(148, 163, 184, 0.35);
+      outline-offset: 8px;
+    }
+  </style>
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-    <div class="flex flex-wrap items-start gap-4 justify-between">
-      <div>
-        <h2 class="text-lg font-semibold text-slate-100">{{ template.name }}</h2>
-        {% if template.description %}
-          <p class="text-sm text-slate-400 mt-1">{{ template.description }}</p>
-        {% else %}
-          <p class="text-sm text-slate-500 mt-1">No description yet. Add one by editing this template in the database.</p>
-        {% endif %}
-        <p class="text-xs text-slate-500 mt-2">Created {{ template.created_at.strftime('%Y-%m-%d %H:%M') }}{% if template.creator %} by {{ template.creator.display_name }}{% endif %}</p>
+    <div class="flex flex-wrap items-start gap-6 justify-between">
+      <form id="template-meta-form"
+            method="post"
+            action="{{ url_for('project_template_update', template_id=template.id) }}"
+            data-original-name="{{ template.name }}"
+            data-original-description="{{ template.description or '' }}"
+            class="flex-1 min-w-[260px] space-y-3">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+          <input name="template_name"
+                 value="{{ template.name }}"
+                 required
+                 class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+          <textarea name="template_description"
+                    rows="3"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none"
+                    placeholder="Add helpful context for this template">{{ template.description or '' }}</textarea>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white" data-skip-warning="true">Save template</button>
+          <button type="button" id="template-meta-cancel" class="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700/60 text-sm text-slate-200 hover:bg-slate-700/60" data-skip-warning="true">Reset</button>
+        </div>
+      </form>
+      <div class="flex flex-col items-end gap-3 text-xs text-slate-400 min-w-[220px]">
+        <div class="text-right">
+          <div class="text-sm font-semibold text-slate-100">Template info</div>
+          <div class="mt-1">Default task form: <span class="text-emerald-300">{{ DEFAULT_TASK_FORM_NAME }}</span></div>
+          <div class="mt-1">Created {{ template.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+          {% if template.creator %}
+            <div class="mt-1">By {{ template.creator.display_name }}</div>
+          {% endif %}
+          <div class="mt-2">Assign this template from a project detail page.</div>
+        </div>
+        <button type="button"
+                data-save-task-template
+                data-skip-warning="true"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-800/60 text-[11px] uppercase tracking-wide text-slate-200 hover:bg-slate-700/60">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm0 2.5L19.5 8H17V5.5zM5 19V5h10v5h4v9H5z" />
+          </svg>
+          <span>Save as Task Template</span>
+        </button>
       </div>
-      <div class="text-right text-xs text-slate-400">
-        <div>Default task form: <span class="text-emerald-300">{{ DEFAULT_TASK_FORM_NAME }}</span></div>
-        <div class="mt-1">Assign this template from a project detail page.</div>
-      </div>
+    </div>
+  </div>
+
+  <div id="task-template-modal" class="fixed inset-0 hidden z-40 items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div class="relative w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
+      <button type="button" class="absolute top-4 right-4 text-slate-400 hover:text-slate-100" data-close-task-template data-skip-warning="true" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.3 5.71L12 12l6.3 6.29-1.41 1.42L10.59 13.4l-6.3 6.3-1.42-1.42L9.17 12 2.87 5.71 4.29 4.3l6.3 6.29 6.29-6.3z" />
+        </svg>
+      </button>
+      <h3 class="text-base font-semibold text-slate-100 mb-4">Save as Task Template</h3>
+      <form method="post" action="{{ url_for('project_template_save_as_task_template', template_id=template.id) }}" class="space-y-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task template name</label>
+          <input name="task_template_name" value="{{ template.name }}" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+          <textarea name="task_template_description" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes for when to use this task template">{{ template.description or '' }}</textarea>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="flex-1 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white" data-skip-warning="true">Save task template</button>
+          <button type="button" class="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700/60 text-sm text-slate-200 hover:bg-slate-700/60" data-close-task-template data-skip-warning="true">Cancel</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -38,7 +112,7 @@
               'name': task.name,
               'description': task.description or '',
               'order_index': task.order_index,
-              'depends_on_id': task.depends_on_id,
+              'dependency_ids': task.dependency_ids,
               'default_assignee_id': task.default_assignee_id,
               'form_template_id': task.form_template_id,
               'start_mode': task.start_mode or 'immediate',
@@ -75,13 +149,18 @@
                         {% endif %}
                       </div>
                       <div class="flex flex-wrap items-center gap-2">
-                        {% if task.depends_on %}
-                          <span class="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-200">Depends on {{ task.depends_on.name }}</span>
+                        {% set dependencies = task.dependencies %}
+                        {% if dependencies %}
+                          {% for dependency in dependencies %}
+                            <span class="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-200">Depends on {{ dependency.name }}</span>
+                          {% endfor %}
                         {% else %}
                           <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-400/40 text-emerald-200">Independent</span>
                         {% endif %}
                         {% if task.start_mode == 'scheduled' or task.planned_start_date %}
                           <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-200">Starts {{ task.planned_start_date.strftime('%Y-%m-%d') if task.planned_start_date else 'when scheduled' }}</span>
+                        {% elif task.start_mode == 'after_previous' %}
+                          <span class="px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-100">Starts after previous step</span>
                         {% else %}
                           <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-400/40 text-emerald-200">Starts immediately</span>
                         {% endif %}
@@ -138,13 +217,13 @@
             <input type="number" name="order_index" value="{{ tasks|length + 1 }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
           </div>
           <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Depends on</label>
-            <select name="depends_on_id" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-              <option value="">Independent</option>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Dependencies</label>
+            <select name="depends_on_ids" multiple size="4" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none min-h-[120px]">
               {% for task in tasks %}
                 <option value="{{ task.id }}">{{ task.name }}</option>
               {% endfor %}
             </select>
+            <p class="mt-1 text-[11px] text-slate-500">Leave unselected if the task is independent. Hold Ctrl/Cmd to pick multiple dependencies.</p>
           </div>
         </div>
         <div>
@@ -157,6 +236,10 @@
             <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
               <input type="radio" name="start_mode" value="scheduled" class="accent-emerald-500">
               <span>Scheduled start</span>
+            </label>
+            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
+              <input type="radio" name="start_mode" value="after_previous" class="accent-emerald-500">
+              <span>Start after previous step</span>
             </label>
           </div>
         </div>
@@ -213,7 +296,17 @@
     (function () {
       const list = document.getElementById('task-blueprint-list');
       const feedback = document.getElementById('task-reorder-feedback');
+      const metaForm = document.getElementById('template-meta-form');
+      const openModalButton = document.querySelector('[data-save-task-template]');
+      const modal = document.getElementById('task-template-modal');
+      const closeModalButtons = document.querySelectorAll('[data-close-task-template]');
       let draggingItem = null;
+      let metaDirty = false;
+      let taskDirty = false;
+
+      function hasUnsavedChanges() {
+        return metaDirty || taskDirty;
+      }
 
       function showFeedback(message, type) {
         if (!feedback) return;
@@ -264,35 +357,121 @@
         }
       }
 
+      window.addEventListener('beforeunload', (event) => {
+        if (hasUnsavedChanges()) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      });
+
+      document.querySelectorAll('a[href]').forEach((link) => {
+        if (link.dataset.skipWarning === 'true') return;
+        link.addEventListener('click', (event) => {
+          if (!hasUnsavedChanges()) return;
+          if (!confirm('You have unsaved changes. Leave without saving?')) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      if (openModalButton && modal) {
+        const openModal = () => {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          document.body.classList.add('overflow-hidden');
+        };
+        const closeModal = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          document.body.classList.remove('overflow-hidden');
+        };
+        openModalButton.addEventListener('click', openModal);
+        closeModalButtons.forEach((button) => {
+          button.addEventListener('click', closeModal);
+        });
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+      }
+
+      if (metaForm) {
+        const nameInput = metaForm.querySelector('input[name="template_name"]');
+        const descriptionInput = metaForm.querySelector('textarea[name="template_description"]');
+        const originalValues = {
+          name: (metaForm.dataset.originalName || '').trim(),
+          description: (metaForm.dataset.originalDescription || '').trim()
+        };
+
+        function evaluateMetaDirty() {
+          const currentName = nameInput ? nameInput.value.trim() : '';
+          const currentDescription = descriptionInput ? descriptionInput.value.trim() : '';
+          metaDirty = currentName !== originalValues.name || currentDescription !== originalValues.description;
+        }
+
+        if (nameInput) {
+          nameInput.addEventListener('input', evaluateMetaDirty);
+        }
+        if (descriptionInput) {
+          descriptionInput.addEventListener('input', evaluateMetaDirty);
+        }
+        evaluateMetaDirty();
+
+        metaForm.addEventListener('submit', () => {
+          metaDirty = false;
+          if (nameInput) {
+            originalValues.name = nameInput.value.trim();
+          }
+          if (descriptionInput) {
+            originalValues.description = descriptionInput.value.trim();
+          }
+        });
+
+        const metaReset = document.getElementById('template-meta-cancel');
+        if (metaReset) {
+          metaReset.addEventListener('click', () => {
+            if (nameInput) nameInput.value = originalValues.name;
+            if (descriptionInput) descriptionInput.value = originalValues.description;
+            metaDirty = false;
+          });
+        }
+      }
+
       if (list) {
         list.addEventListener('dragstart', (event) => {
           const item = event.target.closest('[data-task-item]');
           if (!item) return;
           draggingItem = item;
-          item.classList.add('opacity-70');
+          item.classList.add('task-dragging');
+          item.classList.add('opacity-90');
           event.dataTransfer.effectAllowed = 'move';
         });
 
         list.addEventListener('dragend', () => {
           if (draggingItem) {
-            draggingItem.classList.remove('opacity-70');
+            draggingItem.classList.remove('task-dragging', 'opacity-90');
             draggingItem = null;
           }
+          list.querySelectorAll('.task-drop-target').forEach((el) => el.classList.remove('task-drop-target'));
         });
 
         list.addEventListener('dragover', (event) => {
           if (!draggingItem) return;
           event.preventDefault();
-          const afterElement = event.target.closest('[data-task-item]');
-          if (!afterElement || afterElement === draggingItem) {
+          const target = event.target.closest('[data-task-item]');
+          if (!target || target === draggingItem) {
+            list.querySelectorAll('.task-drop-target').forEach((el) => el.classList.remove('task-drop-target'));
             return;
           }
-          const rect = afterElement.getBoundingClientRect();
+          list.querySelectorAll('.task-drop-target').forEach((el) => el.classList.remove('task-drop-target'));
+          target.classList.add('task-drop-target');
+          const rect = target.getBoundingClientRect();
           const offset = event.clientY - rect.top;
           if (offset > rect.height / 2) {
-            afterElement.after(draggingItem);
+            target.after(draggingItem);
           } else {
-            afterElement.before(draggingItem);
+            target.before(draggingItem);
           }
           syncOrderLabels(list);
         });
@@ -300,8 +479,9 @@
         list.addEventListener('drop', (event) => {
           if (!draggingItem) return;
           event.preventDefault();
-          draggingItem.classList.remove('opacity-70');
+          draggingItem.classList.remove('task-dragging', 'opacity-90');
           draggingItem = null;
+          list.querySelectorAll('.task-drop-target').forEach((el) => el.classList.remove('task-drop-target'));
           syncOrderLabels(list);
           persistOrder(list);
         });
@@ -317,21 +497,20 @@
       const createAction = form.dataset.createAction;
       const editTemplate = form.dataset.editUrlTemplate;
       const defaultOrder = form.dataset.defaultOrder;
+      const dependencySelect = form.querySelector('select[name="depends_on_ids"]');
       let editingTaskId = null;
 
       function updateScheduledVisibility() {
         const selected = form.querySelector('input[name="start_mode"]:checked');
         if (!selected || !scheduledWrapper) return;
+        const startDateField = form.querySelector('input[name="start_date"]');
         if (selected.value === 'scheduled') {
-          scheduledWrapper.classList.remove('opacity-60');
-          scheduledWrapper.classList.remove('pointer-events-none');
+          scheduledWrapper.classList.remove('opacity-60', 'pointer-events-none');
         } else {
-          const startDateField = form.querySelector('input[name="start_date"]');
           if (startDateField) {
             startDateField.value = '';
           }
-          scheduledWrapper.classList.add('opacity-60');
-          scheduledWrapper.classList.add('pointer-events-none');
+          scheduledWrapper.classList.add('opacity-60', 'pointer-events-none');
         }
       }
 
@@ -339,6 +518,13 @@
         radio.addEventListener('change', updateScheduledVisibility);
       });
       updateScheduledVisibility();
+
+      function clearDependencySelection() {
+        if (!dependencySelect) return;
+        Array.from(dependencySelect.options).forEach((option) => {
+          option.selected = false;
+        });
+      }
 
       function resetForm() {
         form.reset();
@@ -354,20 +540,30 @@
           orderInput.value = defaultOrder || orderInput.getAttribute('value') || '';
         }
         if (scheduledWrapper) {
-          scheduledWrapper.classList.add('opacity-60');
-          scheduledWrapper.classList.add('pointer-events-none');
+          scheduledWrapper.classList.add('opacity-60', 'pointer-events-none');
         }
         if (list && editingTaskId) {
           const previouslyEditing = list.querySelector('[data-task-item].ring-emerald-400');
           if (previouslyEditing) previouslyEditing.classList.remove('ring-emerald-400', 'ring-2');
         }
+        if (dependencySelect) {
+          clearDependencySelection();
+        }
         editingTaskId = null;
+        taskDirty = false;
         updateScheduledVisibility();
       }
 
       if (cancelButton) {
         cancelButton.addEventListener('click', resetForm);
       }
+
+      form.addEventListener('input', () => {
+        taskDirty = true;
+      });
+      form.addEventListener('change', () => {
+        taskDirty = true;
+      });
 
       if (list) {
         list.addEventListener('click', (event) => {
@@ -388,8 +584,13 @@
             const orderInput = form.querySelector('input[name="order_index"]');
             if (orderInput) orderInput.value = data.order_index || '';
 
-            const dependsSelect = form.querySelector('select[name="depends_on_id"]');
-            if (dependsSelect) dependsSelect.value = data.depends_on_id ? String(data.depends_on_id) : '';
+            if (dependencySelect) {
+              const selectedDependencies = Array.isArray(data.dependency_ids) ? data.dependency_ids.map(Number) : [];
+              const selectedSet = new Set(selectedDependencies);
+              Array.from(dependencySelect.options).forEach((option) => {
+                option.selected = selectedSet.has(Number(option.value));
+              });
+            }
             const assigneeSelect = form.querySelector('select[name="default_assignee_id"]');
             if (assigneeSelect) assigneeSelect.value = data.default_assignee_id ? String(data.default_assignee_id) : '';
             const formSelect = form.querySelector('select[name="form_template_id"]');
@@ -407,6 +608,7 @@
             if (milestoneField) milestoneField.value = data.milestone || '';
 
             updateScheduledVisibility();
+            taskDirty = false;
 
             if (list) {
               list.querySelectorAll('[data-task-item]').forEach((item) => {
@@ -428,6 +630,7 @@
           submitButton.disabled = true;
           submitButton.textContent = form.action === createAction ? 'Adding…' : 'Saving…';
         }
+        taskDirty = false;
       });
     })();
   </script>

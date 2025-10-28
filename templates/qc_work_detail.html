@@ -47,9 +47,12 @@
             —
           {% endif %}
         </p>
-        <p class="text-slate-300"><span class="text-slate-400">Dependency:</span>
-          {% if work.dependency %}
-            <a href="{{ url_for('qc_work_detail', work_id=work.dependency.id) }}" class="text-amber-300 hover:text-amber-200">{{ work.dependency.display_title }}</a>
+        <p class="text-slate-300"><span class="text-slate-400">Dependencies:</span>
+          {% set dependencies = work.dependencies %}
+          {% if dependencies %}
+            {% for dependency in dependencies %}
+              <a href="{{ url_for('qc_work_detail', work_id=dependency.id) }}" class="text-amber-300 hover:text-amber-200">{{ dependency.display_title }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
           {% else %}
             None
           {% endif %}
