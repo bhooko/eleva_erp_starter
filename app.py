@@ -39,6 +39,10 @@ TASK_MILESTONES = [
     "Commissioning",
 ]
 
+PROJECT_PRIORITIES = ["Immediate", "Urgent", "Normal"]
+PROJECT_OPENING_TYPES = ["Single", "Adjacent", "Opposite Opening"]
+PROJECT_LOCATIONS = ["Internal", "External"]
+
 
 def _extract_task_timing(form):
     start_mode = (form.get("start_mode") or "immediate").strip().lower()
@@ -339,6 +343,12 @@ class Project(db.Model):
     site_address = db.Column(db.Text, nullable=True)
     customer_name = db.Column(db.String(200), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
+    floors = db.Column(db.Integer, nullable=True)
+    stops = db.Column(db.Integer, nullable=True)
+    opening_type = db.Column(db.String(40), nullable=True)
+    location = db.Column(db.String(40), nullable=True)
+    handover_date = db.Column(db.Date, nullable=True)
+    priority = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
@@ -820,6 +830,26 @@ def ensure_qc_columns():
             cur.execute("ALTER TABLE project_template_task ADD COLUMN milestone TEXT;")
             added_template_cols.append("milestone")
 
+    # project additions
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project'")
+    project_exists = cur.fetchone() is not None
+    added_project_cols = []
+    if project_exists:
+        cur.execute("PRAGMA table_info(project)")
+        project_cols = [r[1] for r in cur.fetchall()]
+        project_column_defs = {
+            "floors": "INTEGER",
+            "stops": "INTEGER",
+            "opening_type": "TEXT",
+            "location": "TEXT",
+            "handover_date": "TEXT",
+            "priority": "TEXT",
+        }
+        for col, col_type in project_column_defs.items():
+            if col not in project_cols:
+                cur.execute(f"ALTER TABLE project ADD COLUMN {col} {col_type};")
+                added_project_cols.append(col)
+
     conn.commit()
     conn.close()
 
@@ -851,6 +881,11 @@ def ensure_qc_columns():
             print(f"✅ Auto-added in project_template_task: {', '.join(added_template_cols)}")
         else:
             print("✔️ project_template_task OK")
+
+    if added_project_cols:
+        print(f"✅ Auto-added in project: {', '.join(added_project_cols)}")
+    else:
+        print("✔️ project OK")
 
 
 def ensure_tables():
@@ -1527,6 +1562,12 @@ def projects_list():
         site_address = (request.form.get("site_address") or "").strip()
         customer_name = (request.form.get("customer_name") or "").strip()
         lift_type = (request.form.get("lift_type") or "").strip()
+        floors_raw = (request.form.get("floors") or "").strip()
+        stops_raw = (request.form.get("stops") or "").strip()
+        opening_type = (request.form.get("opening_type") or "").strip()
+        location = (request.form.get("location") or "").strip()
+        handover_raw = (request.form.get("handover_date") or "").strip()
+        priority = (request.form.get("priority") or "").strip()
 
         if not name:
             flash("Project name is required.", "error")
@@ -1536,12 +1577,58 @@ def projects_list():
             flash("Select a valid lift type.", "error")
             return redirect(url_for("projects_list"))
 
+        floors = None
+        if floors_raw:
+            try:
+                floors = int(floors_raw)
+                if floors < 0:
+                    raise ValueError
+            except ValueError:
+                flash("Number of floors must be a positive whole number.", "error")
+                return redirect(url_for("projects_list"))
+
+        stops = None
+        if stops_raw:
+            try:
+                stops = int(stops_raw)
+                if stops < 0:
+                    raise ValueError
+            except ValueError:
+                flash("Number of stops must be a positive whole number.", "error")
+                return redirect(url_for("projects_list"))
+
+        if opening_type and opening_type not in PROJECT_OPENING_TYPES:
+            flash("Choose a valid opening type.", "error")
+            return redirect(url_for("projects_list"))
+
+        if location and location not in PROJECT_LOCATIONS:
+            flash("Choose a valid location.", "error")
+            return redirect(url_for("projects_list"))
+
+        if priority and priority not in PROJECT_PRIORITIES:
+            flash("Choose a valid project priority.", "error")
+            return redirect(url_for("projects_list"))
+
+        handover_date = None
+        if handover_raw:
+            try:
+                handover_date = datetime.datetime.strptime(handover_raw, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Provide a valid handover date (YYYY-MM-DD).", "error")
+                return redirect(url_for("projects_list"))
+
         project = Project(
             name=name,
             site_name=site_name or None,
             site_address=site_address or None,
             customer_name=customer_name or None,
-            lift_type=lift_type or None
+            lift_type=lift_type or None,
+            floors=floors,
+            stops=stops,
+            opening_type=opening_type or None,
+            location=location or None,
+            handover_date=handover_date,
+            priority=priority or None,
         )
         db.session.add(project)
         db.session.commit()
@@ -1574,7 +1661,10 @@ def projects_list():
         "projects.html",
         projects=projects,
         stats_map=stats_map,
-        LIFT_TYPES=LIFT_TYPES
+        LIFT_TYPES=LIFT_TYPES,
+        PROJECT_PRIORITIES=PROJECT_PRIORITIES,
+        PROJECT_OPENING_TYPES=PROJECT_OPENING_TYPES,
+        PROJECT_LOCATIONS=PROJECT_LOCATIONS,
     )
 
 
@@ -1608,7 +1698,10 @@ def project_detail(project_id):
         LIFT_TYPES=LIFT_TYPES,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
         STAGES=STAGES,
-        TASK_MILESTONES=TASK_MILESTONES
+        TASK_MILESTONES=TASK_MILESTONES,
+        PROJECT_PRIORITIES=PROJECT_PRIORITIES,
+        PROJECT_OPENING_TYPES=PROJECT_OPENING_TYPES,
+        PROJECT_LOCATIONS=PROJECT_LOCATIONS,
     )
 
 
@@ -1622,6 +1715,12 @@ def project_edit(project_id):
     site_address = (request.form.get("site_address") or "").strip()
     customer_name = (request.form.get("customer_name") or "").strip()
     lift_type = (request.form.get("lift_type") or "").strip()
+    floors_raw = (request.form.get("floors") or "").strip()
+    stops_raw = (request.form.get("stops") or "").strip()
+    opening_type = (request.form.get("opening_type") or "").strip()
+    location = (request.form.get("location") or "").strip()
+    handover_raw = (request.form.get("handover_date") or "").strip()
+    priority = (request.form.get("priority") or "").strip()
 
     if not name:
         flash("Project name is required.", "error")
@@ -1631,11 +1730,57 @@ def project_edit(project_id):
         flash("Select a valid lift type.", "error")
         return redirect(url_for("project_detail", project_id=project.id))
 
+    floors = None
+    if floors_raw:
+        try:
+            floors = int(floors_raw)
+            if floors < 0:
+                raise ValueError
+        except ValueError:
+            flash("Number of floors must be a positive whole number.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    stops = None
+    if stops_raw:
+        try:
+            stops = int(stops_raw)
+            if stops < 0:
+                raise ValueError
+        except ValueError:
+            flash("Number of stops must be a positive whole number.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
+    if opening_type and opening_type not in PROJECT_OPENING_TYPES:
+        flash("Choose a valid opening type.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if location and location not in PROJECT_LOCATIONS:
+        flash("Choose a valid location.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if priority and priority not in PROJECT_PRIORITIES:
+        flash("Choose a valid project priority.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    handover_date = None
+    if handover_raw:
+        try:
+            handover_date = datetime.datetime.strptime(handover_raw, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Provide a valid handover date (YYYY-MM-DD).", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
+
     project.name = name
     project.site_name = site_name or None
     project.site_address = site_address or None
     project.customer_name = customer_name or None
     project.lift_type = lift_type or None
+    project.floors = floors
+    project.stops = stops
+    project.opening_type = opening_type or None
+    project.location = location or None
+    project.handover_date = handover_date
+    project.priority = priority or None
 
     db.session.commit()
     flash("Project updated.", "success")
@@ -2402,12 +2547,18 @@ def qc_work_detail(work_id):
         except Exception:
             submission.video_count = 0
     users = User.query.order_by(User.username.asc()).all()
-    comments = QCWorkComment.query.filter_by(work_id=work_id).order_by(QCWorkComment.created_at.asc()).all()
+    comments = (
+        QCWorkComment.query
+        .filter_by(work_id=work_id)
+        .order_by(QCWorkComment.created_at.desc())
+        .all()
+    )
     for comment in comments:
         try:
             comment.attachments = json.loads(comment.attachments_json or "[]")
         except Exception:
             comment.attachments = []
+        comment.has_attachments = bool(comment.attachments)
     logs = QCWorkLog.query.filter_by(work_id=work_id).order_by(QCWorkLog.created_at.desc()).all()
     for log in logs:
         try:
@@ -2436,13 +2587,32 @@ def qc_work_detail(work_id):
                     log.details["to"] = user_obj.username if user_obj else next_id
                 elif next_id is None:
                     log.details["to"] = "Unassigned"
+    attachment_entries = []
+    for comment in comments:
+        for item in getattr(comment, "attachments", []) or []:
+            web_path = item.get("web_path") or (
+                item.get("path", "").split("static/", 1)[1]
+                if "path" in item and "static/" in item.get("path", "")
+                else item.get("path")
+            )
+            attachment_entries.append({
+                "name": item.get("name") or "Attachment",
+                "web_path": web_path,
+                "comment_id": comment.id,
+                "author": comment.author.username if comment.author else "Unknown",
+                "created_at": comment.created_at,
+                "body": (comment.body[:160] + ("…" if len(comment.body) > 160 else "")) if comment.body else None,
+            })
+
+    attachment_entries.sort(key=lambda entry: entry["created_at"], reverse=True)
     return render_template(
         "qc_work_detail.html",
         work=work,
         submissions=submissions,
         users=users,
         comments=comments,
-        logs=logs
+        logs=logs,
+        attachments=attachment_entries
     )
 
 
@@ -2499,11 +2669,17 @@ def qc_work_comment(work_id):
     )
     db.session.add(comment)
     db.session.flush()
+    log_details = {"comment_id": comment.id}
+    if body:
+        snippet = body if len(body) <= 160 else body[:157] + "…"
+        log_details["body"] = snippet
+    if attachments:
+        log_details["attachments"] = [item.get("name") for item in attachments if item.get("name")]
     log_work_event(
         work.id,
         "comment_added",
         actor_id=current_user.id,
-        details={"comment_id": comment.id}
+        details=log_details
     )
     db.session.commit()
     flash("Comment added.", "success")

@@ -40,9 +40,7 @@
         <p class="text-slate-300"><span class="text-slate-400">Milestone:</span> {{ work.milestone or '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Project:</span>
           {% if work.project %}
-            <a href="{{ url_for('project_detail', project_id=work.project.id) }}" class="text-emerald-300 hover:text-emerald-200">
-              {{ work.project.name }}
-            </a>
+            <a href="{{ url_for('project_detail', project_id=work.project.id) }}" class="text-emerald-300 hover:text-emerald-200">{{ work.project.name }}</a>
           {% else %}
             —
           {% endif %}
@@ -94,15 +92,21 @@
     </form>
   </div>
 
-  <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
-    <div class="space-y-6">
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-base font-semibold text-slate-100">Discussion</h3>
-          <span class="text-xs text-slate-400">{{ comments|length }} entries</span>
-        </div>
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Task collaboration tabs">
+        <button type="button" class="px-3 py-1.5 rounded-xl border border-emerald-500/60 bg-emerald-500/10 text-xs text-emerald-200" data-tab-button data-tab="discussion">Discussion ({{ comments|length }})</button>
+        <button type="button" class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:text-emerald-200" data-tab-button data-tab="attachments">Attachments ({{ attachments|length }})</button>
+        <button type="button" class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:text-emerald-200" data-tab-button data-tab="submissions">Submissions ({{ submissions|length }})</button>
+        <button type="button" class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:text-emerald-200" data-tab-button data-tab="activity">Activity ({{ logs|length }})</button>
+      </div>
+      <a href="{{ url_for('forms_fill', form_id=work.template_id, work_id=work.id) }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm" data-tab-action="submissions">+ New Submission</a>
+    </div>
+
+    <div class="mt-6 space-y-6">
+      <div data-tab-panel="discussion">
         <form method="post" action="{{ url_for('qc_work_comment', work_id=work.id) }}" enctype="multipart/form-data" class="space-y-3">
-          <textarea name="body" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Add an update, note or instruction..."></textarea>
+          <textarea name="body" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Add an update, note or instruction..."></textarea>
           <div class="flex flex-wrap items-center gap-3 text-sm">
             <input type="file" name="attachments" multiple class="text-xs text-slate-400" />
             <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">Post update</button>
@@ -125,8 +129,7 @@
                   <div class="flex flex-wrap gap-2">
                     {% for attachment in c.attachments %}
                       {% set rel = attachment.web_path if attachment.web_path is defined else (attachment.path.split('static/', 1)[1] if 'static/' in attachment.path else attachment.path) %}
-                      <a href="{{ url_for('static', filename=rel) }}" target="_blank"
-                         class="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs text-slate-200 hover:bg-slate-700/60">
+                      <a href="{{ url_for('static', filename=rel) }}" target="_blank" class="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs text-slate-200 hover:bg-slate-700/60">
                         {{ attachment.name }}
                       </a>
                     {% endfor %}
@@ -140,67 +143,141 @@
         </div>
       </div>
 
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-base font-semibold text-slate-100">Submissions</h3>
-          <a href="{{ url_for('forms_fill', form_id=work.template_id, work_id=work.id) }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">+ New Submission</a>
-        </div>
+      <div data-tab-panel="attachments" class="hidden">
+        {% if attachments %}
+          <ul class="space-y-3">
+            {% for item in attachments %}
+              <li class="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                <div class="space-y-1">
+                  <div class="text-sm font-semibold text-slate-100">{{ item.name }}</div>
+                  <div class="text-xs text-slate-400">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }} · {{ item.author }}</div>
+                  {% if item.body %}
+                    <p class="text-xs text-slate-300">{{ item.body }}</p>
+                  {% endif %}
+                </div>
+                {% if item.web_path %}
+                  <a href="{{ url_for('static', filename=item.web_path) }}" target="_blank" class="px-3 py-1.5 rounded-xl border border-slate-700 text-xs text-slate-200 hover:bg-slate-800/60">Open</a>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-sm text-slate-400">No attachments have been shared yet.</p>
+        {% endif %}
+      </div>
+
+      <div data-tab-panel="submissions" class="hidden">
         {% if submissions|length == 0 %}
           <p class="text-slate-400 text-sm">No submissions yet.</p>
         {% else %}
-          <table class="w-full text-sm">
-            <thead class="text-slate-400">
-              <tr>
-                <th class="text-left py-2 pr-3">Submitted by</th>
-                <th class="text-left py-2 pr-3">Date</th>
-                <th class="text-left py-2 pr-3">Attachments</th>
-                <th class="text-left py-2">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800">
-              {% for s in submissions %}
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="text-slate-400">
                 <tr>
-                  <td class="py-2 pr-3">{{ s.user.username if s.user else '—' }}</td>
-                  <td class="py-2 pr-3">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                  <td class="py-2 pr-3">{{ s.photo_count }} photos / {{ s.video_count }} videos</td>
-                  <td class="py-2">
-                    <a href="{{ url_for('submission_view', sub_id=s.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">View</a>
-                  </td>
+                  <th class="text-left py-2 pr-3">Submitted by</th>
+                  <th class="text-left py-2 pr-3">Date</th>
+                  <th class="text-left py-2 pr-3">Attachments</th>
+                  <th class="text-left py-2">Action</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody class="divide-y divide-slate-800">
+                {% for s in submissions %}
+                  <tr>
+                    <td class="py-2 pr-3">{{ s.user.username if s.user else '—' }}</td>
+                    <td class="py-2 pr-3">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="py-2 pr-3">{{ s.photo_count }} photos / {{ s.video_count }} videos</td>
+                    <td class="py-2">
+                      <a href="{{ url_for('submission_view', sub_id=s.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">View</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+
+      <div data-tab-panel="activity" class="hidden">
+        {% if logs|length == 0 %}
+          <p class="text-slate-400 text-sm">No activity recorded yet.</p>
+        {% else %}
+          <ul class="space-y-4 text-sm">
+            {% for log in logs %}
+              <li class="border border-slate-800 rounded-2xl p-4 bg-slate-950/40">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
+                  <span class="text-xs text-slate-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-1">{% if log.actor %}by {{ log.actor.username }}{% else %}system{% endif %}</div>
+                {% if log.action == 'comment_added' %}
+                  {% if log.details.body %}
+                    <p class="mt-2 text-sm text-slate-200 whitespace-pre-line">{{ log.details.body }}</p>
+                  {% endif %}
+                  {% if log.details.attachments %}
+                    <p class="mt-2 text-xs text-slate-400">Attachments: {{ log.details.attachments|join(', ') }}</p>
+                  {% endif %}
+                {% elif log.details %}
+                  <ul class="mt-2 space-y-1 text-xs text-slate-300">
+                    {% for key, value in log.details.items() %}
+                      <li><span class="text-slate-500 uppercase tracking-wide">{{ key }}:</span> {{ value }}</li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
         {% endif %}
       </div>
     </div>
-
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-      <h3 class="text-base font-semibold text-slate-100 mb-4">Activity Log</h3>
-      {% if logs|length == 0 %}
-        <p class="text-slate-400 text-sm">No activity recorded yet.</p>
-      {% else %}
-        <ul class="space-y-4 text-sm">
-          {% for log in logs %}
-            <li class="border border-slate-800 rounded-xl p-3 bg-slate-950/40">
-              <div class="flex items-center justify-between">
-                <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
-                <span class="text-xs text-slate-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-              </div>
-              <div class="text-xs text-slate-400 mt-1">
-                {% if log.actor %}by {{ log.actor.username }}{% else %}system{% endif %}
-              </div>
-              {% if log.details %}
-                <ul class="mt-2 space-y-1 text-xs text-slate-300">
-                  {% for key, value in log.details.items() %}
-                    <li><span class="text-slate-500 uppercase tracking-wide">{{ key }}:</span> {{ value }}</li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      const tabButtons = document.querySelectorAll('[data-tab-button]');
+      const tabPanels = document.querySelectorAll('[data-tab-panel]');
+      const submissionShortcut = document.querySelector('[data-tab-action="submissions"]');
+
+      const activateTab = (target) => {
+        tabButtons.forEach((btn) => {
+          const isActive = btn.getAttribute('data-tab') === target;
+          btn.classList.toggle('border-emerald-500/60', isActive);
+          btn.classList.toggle('bg-emerald-500/10', isActive);
+          btn.classList.toggle('text-emerald-200', isActive);
+          btn.classList.toggle('border-slate-700', !isActive);
+          btn.classList.toggle('bg-slate-900/70', !isActive);
+          btn.classList.toggle('text-slate-200', !isActive);
+        });
+        tabPanels.forEach((panel) => {
+          panel.classList.toggle('hidden', panel.getAttribute('data-tab-panel') !== target);
+        });
+      };
+
+      tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          activateTab(btn.getAttribute('data-tab'));
+        });
+      });
+
+      if (submissionShortcut) {
+        submissionShortcut.addEventListener('click', (event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+          }
+          event.preventDefault();
+          activateTab('submissions');
+          const href = submissionShortcut.getAttribute('href');
+          if (href) {
+            window.location.href = href;
+          }
+        });
+      }
+
+      // Default to discussion tab on load.
+      activateTab('discussion');
+    })();
+  </script>
 {% endblock %}

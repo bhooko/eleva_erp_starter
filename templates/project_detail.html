@@ -15,103 +15,177 @@
       <span class="sr-only">Edit project</span>
     </button>
     <div class="flex flex-wrap items-start gap-6">
-      <div class="flex-1 min-w-[240px]">
-        <h2 class="text-xl font-semibold text-slate-100">{{ project.name }}</h2>
-        <p class="text-sm text-slate-400 mt-1">Lift type: {{ project.lift_type or 'Not specified' }}</p>
-        <p class="text-xs text-slate-500 mt-2">Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-      </div>
-      <div class="grid sm:grid-cols-2 gap-4 min-w-[260px]">
-        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-          <div class="text-xs uppercase text-slate-400">Site</div>
-          <div class="text-sm text-slate-100">{{ project.site_name or '—' }}</div>
-          <div class="text-xs text-slate-500 mt-1 leading-relaxed">{{ project.site_address or 'No address recorded yet.' }}</div>
+      <div class="flex-1 min-w-[260px] space-y-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-xl font-semibold text-slate-100">{{ project.name }}</h2>
+          {% if project.priority %}
+            <span class="px-3 py-1 rounded-xl bg-slate-800/70 text-xs text-slate-100 uppercase tracking-wide">{{ project.priority }}</span>
+          {% endif %}
         </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-          <div class="text-xs uppercase text-slate-400">Customer</div>
-          <div class="text-sm text-slate-100">{{ project.customer_name or '—' }}</div>
-        </div>
-      </div>
-      <div id="projectEditForm" class="mt-6 w-full hidden">
-        <form method="post" action="{{ url_for('project_edit', project_id=project.id) }}" class="space-y-4">
-          <div class="grid md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectName">Project name</label>
-              <input id="projectName" name="name" required value="{{ project.name }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLiftType">Lift type</label>
-              <select id="projectLiftType" name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" {% if not project.lift_type %}selected{% endif %}>Not specified</option>
-                {% for lt in LIFT_TYPES %}
-                  <option value="{{ lt }}" {% if project.lift_type == lt %}selected{% endif %}>{{ lt }}</option>
-                {% endfor %}
-              </select>
-            </div>
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          <div class="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-1 text-amber-100 border border-amber-400/30">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Handover {{ project.handover_date.strftime('%Y-%m-%d') if project.handover_date else 'Not scheduled' }}</span>
           </div>
-          <div class="grid md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectSiteName">Site name</label>
-              <input id="projectSiteName" name="site_name" value="{{ project.site_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectCustomer">Customer</label>
-              <input id="projectCustomer" name="customer_name" value="{{ project.customer_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
-            </div>
+          <span class="text-xs text-slate-500">Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        <p class="text-sm text-slate-400">Lift type: {{ project.lift_type or 'Not specified' }}</p>
+      </div>
+    </div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+        <div class="text-xs uppercase text-slate-400">Site</div>
+        <div class="text-sm text-slate-100">{{ project.site_name or '—' }}</div>
+        <div class="text-xs text-slate-500 mt-1 leading-relaxed">{{ project.site_address or 'No address recorded yet.' }}</div>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+        <div class="text-xs uppercase text-slate-400">Customer</div>
+        <div class="text-sm text-slate-100">{{ project.customer_name or '—' }}</div>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+        <div class="text-xs uppercase text-slate-400">Structure</div>
+        <dl class="mt-1 space-y-1 text-xs text-slate-300">
+          <div class="flex justify-between"><dt class="text-slate-500">Floors</dt><dd>{{ project.floors if project.floors is not none else '—' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Stops</dt><dd>{{ project.stops if project.stops is not none else '—' }}</dd></div>
+        </dl>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+        <div class="text-xs uppercase text-slate-400">Configuration</div>
+        <div class="text-xs text-slate-300 mt-1 space-y-1">
+          <div><span class="text-slate-500">Opening:</span> {{ project.opening_type or '—' }}</div>
+          <div><span class="text-slate-500">Location:</span> {{ project.location or '—' }}</div>
+        </div>
+      </div>
+    </div>
+    <div id="projectEditForm" class="mt-6 w-full hidden">
+      <form method="post" action="{{ url_for('project_edit', project_id=project.id) }}" class="space-y-4">
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectName">Project name</label>
+            <input id="projectName" name="name" required value="{{ project.name }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectAddress">Site address</label>
-            <textarea id="projectAddress" name="site_address" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">{{ project.site_address or '' }}</textarea>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectPriority">Priority</label>
+            <select id="projectPriority" name="priority" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.priority %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_PRIORITIES %}
+                <option value="{{ option }}" {% if project.priority == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
           </div>
-          <div class="flex items-center gap-3 justify-end">
-            <button type="button" id="projectEditCancel" class="px-4 py-2 rounded-xl border border-slate-700 text-sm text-slate-300 hover:border-slate-500">Cancel</button>
-            <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Save changes</button>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLiftType">Lift type</label>
+            <select id="projectLiftType" name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.lift_type %}selected{% endif %}>Not specified</option>
+              {% for lt in LIFT_TYPES %}
+                <option value="{{ lt }}" {% if project.lift_type == lt %}selected{% endif %}>{{ lt }}</option>
+              {% endfor %}
+            </select>
           </div>
-        </form>
-      </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectFloors">No. of floors</label>
+            <input id="projectFloors" name="floors" type="number" min="0" value="{{ project.floors if project.floors is not none else '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectStops">No. of stops</label>
+            <input id="projectStops" name="stops" type="number" min="0" value="{{ project.stops if project.stops is not none else '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectOpening">Opening type</label>
+            <select id="projectOpening" name="opening_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.opening_type %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_OPENING_TYPES %}
+                <option value="{{ option }}" {% if project.opening_type == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLocation">Location</label>
+            <select id="projectLocation" name="location" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.location %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_LOCATIONS %}
+                <option value="{{ option }}" {% if project.location == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectHandover">Handover date</label>
+            <input id="projectHandover" name="handover_date" type="date" value="{{ project.handover_date.strftime('%Y-%m-%d') if project.handover_date else '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectSiteName">Site name</label>
+            <input id="projectSiteName" name="site_name" value="{{ project.site_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectCustomer">Customer</label>
+            <input id="projectCustomer" name="customer_name" value="{{ project.customer_name or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectAddress">Site address</label>
+          <textarea id="projectAddress" name="site_address" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">{{ project.site_address or '' }}</textarea>
+        </div>
+        <div class="flex items-center gap-3 justify-end">
+          <button type="button" id="projectEditCancel" class="px-4 py-2 rounded-xl border border-slate-700 text-sm text-slate-300 hover:border-slate-500">Cancel</button>
+          <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Save changes</button>
+        </div>
+      </form>
     </div>
   </div>
 
   <div class="grid lg:grid-cols-[3fr_2fr] gap-6">
     <div class="space-y-6">
       <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-slate-100">Active Tasks</h3>
-          <span class="text-xs text-slate-400 uppercase tracking-wide">{{ active_tasks|length }} item{{ '' if active_tasks|length == 1 else 's' }}</span>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-100">Active Tasks</h3>
+            <p class="text-xs text-slate-500">Tasks ready to work on now.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400 uppercase tracking-wide">{{ active_tasks|length }} item{{ '' if active_tasks|length == 1 else 's' }}</span>
+            <div class="relative">
+              <button type="button" id="taskAddMenuToggle" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300">Add
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              <div id="taskAddMenu" class="hidden absolute right-0 mt-2 w-48 rounded-xl border border-slate-700 bg-slate-900/95 shadow-lg shadow-black/40">
+                <button type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60 first:rounded-t-xl" data-panel-target="createTaskPanel">Add task</button>
+                <button type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60 last:rounded-b-xl" data-panel-target="applyTemplatePanel">Add tasks from template</button>
+              </div>
+            </div>
+          </div>
         </div>
         {% if active_tasks %}
-          <div class="space-y-3">
+          <div class="space-y-2">
             {% for task in active_tasks %}
               <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div class="space-y-1">
                     <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="text-sm font-semibold text-emerald-300 hover:text-emerald-200">{{ task.display_title }}</a>
                     {% if task.description %}
-                      <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
+                      <p class="text-xs text-slate-400">{{ task.description }}</p>
                     {% endif %}
                   </div>
                   <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-200 uppercase tracking-wide">{{ task.status }}</span>
                 </div>
-                <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-slate-400">
+                <div class="mt-3 grid md:grid-cols-3 gap-2 text-xs text-slate-400">
                   <div>Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
-                  <div>Due
-                    {% if task.due_date %}
-                      {{ task.due_date.strftime('%Y-%m-%d') }}
-                    {% elif task.planned_due_date %}
-                      {{ task.planned_due_date.strftime('%Y-%m-%d') }}
-                    {% else %}
-                      No due date
-                    {% endif %}
-                  </div>
+                  <div>Due {% if task.due_date %}{{ task.due_date.strftime('%Y-%m-%d') }}{% elif task.planned_due_date %}{{ task.planned_due_date.strftime('%Y-%m-%d') }}{% else %}No due date{% endif %}</div>
                   {% if task.planned_start_date or task.planned_duration_days is not none %}
-                    <div>Schedule:
-                      {% if task.planned_start_date %} starts {{ task.planned_start_date.strftime('%Y-%m-%d') }}{% endif %}
-                      {% if task.planned_start_date and task.planned_duration_days is not none %};{% endif %}
-                      {% if task.planned_duration_days is not none %} duration {{ task.planned_duration_days }} day{% if task.planned_duration_days != 1 %}s{% endif %}{% endif %}
-                    </div>
+                    <div>Schedule {% if task.planned_start_date %}starts {{ task.planned_start_date.strftime('%Y-%m-%d') }}{% endif %}{% if task.planned_start_date and task.planned_duration_days is not none %}; {% endif %}{% if task.planned_duration_days is not none %}{{ task.planned_duration_days }} day{% if task.planned_duration_days != 1 %}s{% endif %}{% endif %}</div>
                   {% endif %}
                   {% set dependencies = task.dependencies %}
                   {% if dependencies %}
-                    <div class="sm:col-span-2 text-amber-200">
+                    <div class="md:col-span-3 text-amber-200">
                       Depends on
                       {% for dependency in dependencies %}
                         <a href="{{ url_for('qc_work_detail', work_id=dependency.id) }}" class="underline hover:text-amber-50">{{ dependency.display_title }}</a>{% if not loop.last %}, {% endif %}
@@ -119,17 +193,20 @@
                     </div>
                   {% endif %}
                   {% if task.template_task %}
-                    <div class="sm:col-span-2">Template step: {{ task.template_task.name }}</div>
+                    <div class="md:col-span-3">Template step: {{ task.template_task.name }}</div>
                   {% endif %}
                   {% if task.milestone %}
-                    <div class="sm:col-span-2">Milestone: {{ task.milestone }}</div>
+                    <div class="md:col-span-3">Milestone: {{ task.milestone }}</div>
                   {% endif %}
+                </div>
+                <div class="mt-3 flex justify-end">
+                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center px-3 py-1.5 rounded-xl border border-emerald-500/40 text-xs text-emerald-200 hover:bg-emerald-500/10">Open</a>
                 </div>
               </div>
             {% endfor %}
           </div>
         {% else %}
-          <p class="text-sm text-slate-400">No active tasks. Apply a template or create a task to get started.</p>
+          <p class="text-sm text-slate-400">No active tasks. Use the Add menu to create work or apply a template.</p>
         {% endif %}
       </div>
 
@@ -181,9 +258,12 @@
       </div>
     </div>
 
-    <div class="space-y-6">
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-        <h3 class="text-lg font-semibold text-slate-100 mb-4">Apply Template</h3>
+    <div class="space-y-6" id="projectActionPanels">
+      <div id="applyTemplatePanel" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-100">Apply Template</h3>
+          <button type="button" class="text-xs text-slate-400 hover:text-emerald-300" data-close-panel>Close</button>
+        </div>
         <form method="post" action="{{ url_for('project_apply_template', project_id=project.id) }}" class="space-y-4">
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Project template</label>
@@ -199,8 +279,11 @@
         <p class="mt-3 text-xs text-slate-500">Applying a template creates tasks immediately. Dependent tasks only appear once prerequisites close.</p>
       </div>
 
-      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-        <h3 class="text-lg font-semibold text-slate-100 mb-4">Create Task</h3>
+      <div id="createTaskPanel" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-100">Create Task</h3>
+          <button type="button" class="text-xs text-slate-400 hover:text-emerald-300" data-close-panel>Close</button>
+        </div>
         <form method="post" action="{{ url_for('project_task_create', project_id=project.id) }}" class="space-y-4">
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
@@ -286,26 +369,82 @@
       const toggle = document.getElementById('projectEditToggle');
       const form = document.getElementById('projectEditForm');
       const cancel = document.getElementById('projectEditCancel');
-      if (!toggle || !form) return;
+      if (toggle && form) {
+        const closeForm = () => {
+          form.classList.add('hidden');
+          toggle.setAttribute('aria-expanded', 'false');
+        };
+        toggle.addEventListener('click', () => {
+          const isHidden = form.classList.contains('hidden');
+          if (isHidden) {
+            form.classList.remove('hidden');
+            toggle.setAttribute('aria-expanded', 'true');
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            closeForm();
+          }
+        });
+        if (cancel) {
+          cancel.addEventListener('click', closeForm);
+        }
+      }
 
-      const closeForm = () => {
-        form.classList.add('hidden');
-        toggle.setAttribute('aria-expanded', 'false');
+      const addToggle = document.getElementById('taskAddMenuToggle');
+      const addMenu = document.getElementById('taskAddMenu');
+      const panelTargets = document.querySelectorAll('[data-panel-target]');
+      const closeButtons = document.querySelectorAll('[data-close-panel]');
+      const panels = {
+        applyTemplatePanel: document.getElementById('applyTemplatePanel'),
+        createTaskPanel: document.getElementById('createTaskPanel'),
       };
 
-      toggle.addEventListener('click', () => {
-        const isHidden = form.classList.contains('hidden');
-        if (isHidden) {
-          form.classList.remove('hidden');
-          toggle.setAttribute('aria-expanded', 'true');
-        } else {
-          closeForm();
+      const hideMenu = () => {
+        if (addMenu) {
+          addMenu.classList.add('hidden');
         }
-      });
+      };
 
-      if (cancel) {
-        cancel.addEventListener('click', closeForm);
+      const showPanel = (panelId) => {
+        Object.values(panels).forEach(panel => {
+          if (!panel) return;
+          if (panel.id === panelId) {
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            panel.classList.add('hidden');
+          }
+        });
+      };
+
+      if (addToggle && addMenu) {
+        addToggle.addEventListener('click', (event) => {
+          event.stopPropagation();
+          addMenu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (event) => {
+          if (!addMenu.classList.contains('hidden') && !addMenu.contains(event.target) && !addToggle.contains(event.target)) {
+            hideMenu();
+          }
+        });
+        panelTargets.forEach((button) => {
+          button.addEventListener('click', () => {
+            const panelId = button.getAttribute('data-panel-target');
+            if (panelId) {
+              showPanel(panelId);
+            }
+            hideMenu();
+          });
+        });
       }
+
+      closeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const container = button.closest('.rounded-2xl');
+          if (container) {
+            container.classList.add('hidden');
+          }
+        });
+      });
     })();
   </script>
 {% endblock %}

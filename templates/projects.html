@@ -16,7 +16,7 @@
   </div>
 
   <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-inner shadow-black/20 overflow-auto">
       {% if projects|length == 0 %}
         <p class="text-slate-400 text-sm">No projects yet. Use the form on the right to add one.</p>
       {% else %}
@@ -25,7 +25,8 @@
             <tr>
               <th class="text-left py-2 pr-3">Project</th>
               <th class="text-left py-2 pr-3">Site / Customer</th>
-              <th class="text-left py-2 pr-3">Lift Type</th>
+              <th class="text-left py-2 pr-3">Lift</th>
+              <th class="text-left py-2 pr-3">Priority / Handover</th>
               <th class="text-left py-2 pr-3">Task Load</th>
               <th class="text-left py-2">Actions</th>
             </tr>
@@ -46,6 +47,26 @@
                   {{ project.lift_type or '—' }}
                 </td>
                 <td class="py-2 pr-3 align-top">
+                  <div class="flex flex-col gap-1 text-xs text-slate-300">
+                    <div>
+                      <span class="uppercase tracking-wide text-slate-500 mr-1">Priority:</span>
+                      {% if project.priority %}
+                        <span class="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-100">{{ project.priority }}</span>
+                      {% else %}
+                        <span class="text-slate-500">—</span>
+                      {% endif %}
+                    </div>
+                    <div>
+                      <span class="uppercase tracking-wide text-slate-500 mr-1">Handover:</span>
+                      {% if project.handover_date %}
+                        {{ project.handover_date.strftime('%Y-%m-%d') }}
+                      {% else %}
+                        <span class="text-slate-500">—</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </td>
+                <td class="py-2 pr-3 align-top">
                   <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wide">
                     <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300">Open {{ stats.open }}</span>
                     <span class="px-2 py-0.5 rounded-lg bg-sky-500/10 text-sky-300">In Progress {{ stats.in_progress }}</span>
@@ -53,7 +74,7 @@
                   </div>
                 </td>
                 <td class="py-2 align-top">
-                  <a href="{{ url_for('project_detail', project_id=project.id) }}" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs">Open</a>
+                  <a href="{{ url_for('project_detail', project_id=project.id) }}" class="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs">Open</a>
                 </td>
               </tr>
             {% endfor %}
@@ -64,31 +85,82 @@
 
     <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
       <h3 class="text-base font-semibold text-slate-100 mb-3">Create Project</h3>
-      <form method="post" class="space-y-3">
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>
-          <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Project title" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
-          <input name="site_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Building or campus" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site address</label>
-          <textarea name="site_address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Street, city"></textarea>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Customer name</label>
-          <input name="customer_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Customer / Builder" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
-          <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" selected>Not specified</option>
-            {% for lt in LIFT_TYPES %}
-              <option value="{{ lt }}">{{ lt }}</option>
-            {% endfor %}
-          </select>
+      <form method="post" class="space-y-4">
+        <div class="grid gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>
+            <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Project title" />
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
+              <input name="site_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Building or campus" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Customer name</label>
+              <input name="customer_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Customer / Builder" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site address</label>
+            <textarea name="site_address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Street, city"></textarea>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
+              <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="" selected>Not specified</option>
+                {% for lt in LIFT_TYPES %}
+                  <option value="{{ lt }}">{{ lt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Floors</label>
+                <input name="floors" type="number" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. 10" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stops</label>
+                <input name="stops" type="number" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. 8" />
+              </div>
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Opening type</label>
+              <select name="opening_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="" selected>Not specified</option>
+                {% for option in PROJECT_OPENING_TYPES %}
+                  <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Location</label>
+              <select name="location" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="" selected>Not specified</option>
+                {% for option in PROJECT_LOCATIONS %}
+                  <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Handover date</label>
+              <input name="handover_date" type="date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Priority</label>
+              <select name="priority" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+                <option value="" selected>Not specified</option>
+                {% for option in PROJECT_PRIORITIES %}
+                  <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
         </div>
         <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create project</button>
       </form>
