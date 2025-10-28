@@ -487,6 +487,8 @@ def dashboard():
         .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
         .all()
     )
+    open_tasks = [task for task in tasks if task.status != "Closed"]
+    closed_tasks = [task for task in tasks if task.status == "Closed"]
     counts = (
         db.session.query(
             func.coalesce(func.sum(case((QCWork.status == "Open", 1), else_=0)), 0),
@@ -517,16 +519,17 @@ def dashboard():
             {
                 "user": member,
                 "total": int(total or 0),
-                "open": int(open_tasks or 0),
+                "open": int(open_total or 0),
                 "in_progress": int(progress or 0),
                 "overdue": int(overdue or 0)
             }
-            for member, total, open_tasks, progress, overdue in rows
+            for member, total, open_total, progress, overdue in rows
         ]
 
     return render_template(
         "dashboard.html",
-        tasks=tasks,
+        open_tasks=open_tasks,
+        closed_tasks=closed_tasks,
         open_count=open_count,
         in_progress_count=in_progress_count,
         overdue_count=overdue_count,
