@@ -47,15 +47,20 @@
       <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
         <div class="text-xs uppercase text-slate-400">Structure</div>
         <dl class="mt-1 space-y-1 text-xs text-slate-300">
-          <div class="flex justify-between"><dt class="text-slate-500">Floors</dt><dd>{{ project.floors if project.floors is not none else '—' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Floors</dt><dd>{{ project.floors or '—' }}</dd></div>
           <div class="flex justify-between"><dt class="text-slate-500">Stops</dt><dd>{{ project.stops if project.stops is not none else '—' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Structure type</dt><dd>{{ project.structure_type or '—' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Cladding</dt><dd>{{ project.cladding_type or '—' }}</dd></div>
         </dl>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
         <div class="text-xs uppercase text-slate-400">Configuration</div>
         <div class="text-xs text-slate-300 mt-1 space-y-1">
           <div><span class="text-slate-500">Opening:</span> {{ project.opening_type or '—' }}</div>
-          <div><span class="text-slate-500">Location:</span> {{ project.location or '—' }}</div>
+          <div><span class="text-slate-500">Lift location:</span> {{ project.location or '—' }}</div>
+          <div><span class="text-slate-500">Cabin finish:</span> {{ project.cabin_finish or '—' }}</div>
+          <div><span class="text-slate-500">Door operation:</span> {{ project.door_operation_type or '—' }}</div>
+          <div><span class="text-slate-500">Door finish:</span> {{ project.door_finish or '—' }}</div>
         </div>
       </div>
     </div>
@@ -87,8 +92,8 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectFloors">No. of floors</label>
-            <input id="projectFloors" name="floors" type="number" min="0" value="{{ project.floors if project.floors is not none else '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectFloors">Floors (G+ format)</label>
+            <input id="projectFloors" name="floors" type="text" data-floor-format="gplus" value="{{ project.floors or '' }}" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectStops">No. of stops</label>
@@ -106,11 +111,60 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLocation">Location</label>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectLocation">Lift location</label>
             <select id="projectLocation" name="location" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
               <option value="" {% if not project.location %}selected{% endif %}>Not specified</option>
               {% for option in PROJECT_LOCATIONS %}
                 <option value="{{ option }}" {% if project.location == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectStructure">Structure type</label>
+            <select id="projectStructure" name="structure_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.structure_type %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_STRUCTURE_TYPES %}
+                <option value="{{ option }}" {% if project.structure_type == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectCladding">Cladding type</label>
+            <select id="projectCladding" name="cladding_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.cladding_type %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_CLADDING_TYPES %}
+                <option value="{{ option }}" {% if project.cladding_type == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectCabinFinish">Cabin finish</label>
+            <select id="projectCabinFinish" name="cabin_finish" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.cabin_finish %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_CABIN_FINISHES %}
+                <option value="{{ option }}" {% if project.cabin_finish == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectDoorOperation">Door operation</label>
+            <select id="projectDoorOperation" name="door_operation_type" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.door_operation_type %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_DOOR_OPERATION_TYPES %}
+                <option value="{{ option }}" {% if project.door_operation_type == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectDoorFinish">Door finish</label>
+            <select id="projectDoorFinish" name="door_finish" class="w-full px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" {% if not project.door_finish %}selected{% endif %}>Not specified</option>
+              {% for option in PROJECT_DOOR_FINISHES %}
+                <option value="{{ option }}" {% if project.door_finish == option %}selected{% endif %}>{{ option }}</option>
               {% endfor %}
             </select>
           </div>
@@ -442,6 +496,46 @@
           const container = button.closest('.rounded-2xl');
           if (container) {
             container.classList.add('hidden');
+          }
+        });
+      });
+
+      const floorInputs = document.querySelectorAll('[data-floor-format="gplus"]');
+      floorInputs.forEach((input) => {
+        const normalize = () => {
+          const raw = (input.value || '').trim();
+          if (!raw) {
+            input.value = '';
+            return;
+          }
+          const compact = raw.replace(/\s+/g, '').toUpperCase();
+          if (compact === 'G' || compact === 'G+') {
+            input.value = '';
+            return;
+          }
+          if (/^\d+$/.test(compact)) {
+            input.value = `G+${compact}`;
+            return;
+          }
+          if (compact.startsWith('G') && !compact.startsWith('G+')) {
+            input.value = `G+${compact.substring(1)}`;
+            return;
+          }
+          if (compact.startsWith('G+')) {
+            const suffix = compact.substring(2).replace(/^\++/, '');
+            input.value = suffix ? `G+${suffix}` : '';
+            return;
+          }
+          input.value = compact;
+        };
+
+        input.addEventListener('blur', normalize);
+        input.addEventListener('change', normalize);
+        input.addEventListener('focus', () => {
+          if (!input.value.trim()) {
+            input.value = 'G+';
+            const length = input.value.length;
+            setTimeout(() => input.setSelectionRange(length, length), 0);
           }
         });
       });
