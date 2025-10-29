@@ -57,6 +57,7 @@ PROJECT_CLADDING_TYPES = ["ACP", "Glass", "Hybrid", "Clients Scope", "Other"]
 PROJECT_CABIN_FINISHES = ["SS", "MS", "Glass", "SS+Glass", "Designer", "Cage", "Half Cabin", "Other"]
 PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
 PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
+DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
 
 def normalize_floor_label(raw_value):
@@ -361,6 +362,7 @@ class Department(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False)
+    branch = db.Column(db.String(50), nullable=False, default=DEPARTMENT_BRANCHES[0])
     description = db.Column(db.Text, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=True)
     active = db.Column(db.Boolean, default=True)
@@ -948,6 +950,18 @@ def ensure_qc_columns():
             cur.execute(f"ALTER TABLE user ADD COLUMN {col} {col_type};")
             added_user.append(col)
 
+    # department additions
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='department'")
+    department_exists = cur.fetchone() is not None
+    added_department_cols = []
+    if department_exists:
+        cur.execute("PRAGMA table_info(department)")
+        department_cols = [r[1] for r in cur.fetchall()]
+        if "branch" not in department_cols:
+            cur.execute("ALTER TABLE department ADD COLUMN branch TEXT DEFAULT 'Goa';")
+            cur.execute("UPDATE department SET branch = COALESCE(branch, 'Goa');")
+            added_department_cols.append("branch")
+
     # qc_work (only attempt to alter when table exists)
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='qc_work'")
     qc_exists = cur.fetchone() is not None
@@ -1063,6 +1077,12 @@ def ensure_qc_columns():
             print("✔️ qc_work OK")
     else:
         print("ℹ️ qc_work table did not exist prior to ensure_qc_columns")
+
+    if department_exists:
+        if added_department_cols:
+            print(f"✅ Auto-added in department: {', '.join(added_department_cols)}")
+        else:
+            print("✔️ department OK")
 
     if template_task_exists:
         if added_template_cols:
@@ -1319,6 +1339,7 @@ def admin_users():
         users=users,
         departments=departments,
         department_options=department_options,
+        department_branches=DEPARTMENT_BRANCHES,
         positions=positions,
         position_options=position_options,
         category_label="Admin",
@@ -1482,6 +1503,7 @@ def admin_departments_create():
     _require_admin()
 
     name = (request.form.get("name") or "").strip()
+    branch = (request.form.get("branch") or "").strip()
     description = (request.form.get("description") or "").strip()
     parent_id_raw = request.form.get("parent_id")
     active_flag = _form_truthy(request.form.get("active", "1"))
@@ -1489,6 +1511,9 @@ def admin_departments_create():
     if not name:
         flash("Department name is required.", "error")
         return redirect(url_for("admin_users") + "#departments")
+
+    if branch not in DEPARTMENT_BRANCHES:
+        branch = DEPARTMENT_BRANCHES[0]
 
     existing = Department.query.filter(func.lower(Department.name) == name.lower()).first()
     if existing:
@@ -1504,6 +1529,7 @@ def admin_departments_create():
 
     department = Department(
         name=name,
+        branch=branch,
         description=description or None,
         active=active_flag,
     )
@@ -1528,6 +1554,7 @@ def admin_departments_update(department_id):
         return redirect(url_for("admin_users") + "#departments")
 
     name = (request.form.get("name") or "").strip()
+    branch = (request.form.get("branch") or "").strip()
     description = (request.form.get("description") or "").strip()
     parent_id_raw = request.form.get("parent_id")
     active_flag = _form_truthy(request.form.get("active"))
@@ -1535,6 +1562,9 @@ def admin_departments_update(department_id):
     if not name:
         flash("Department name is required.", "error")
         return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+    if branch not in DEPARTMENT_BRANCHES:
+        branch = DEPARTMENT_BRANCHES[0]
 
     if name.lower() != department.name.lower():
         existing = Department.query.filter(
@@ -1556,6 +1586,7 @@ def admin_departments_update(department_id):
         return redirect(url_for("admin_users") + f"#department-{department.id}")
 
     department.name = name
+    department.branch = branch
     department.description = description or None
     department.active = active_flag
     department.parent = parent
@@ -1563,6 +1594,28 @@ def admin_departments_update(department_id):
     db.session.commit()
     flash(f"Department '{department.full_name}' updated.", "success")
     return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+
+@app.route("/admin/departments/<int:department_id>/delete", methods=["POST"])
+@login_required
+def admin_departments_delete(department_id):
+    _require_admin()
+
+    department = db.session.get(Department, department_id)
+    if not department:
+        flash("Department not found.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    for child in list(department.children or []):
+        child.parent = None
+    for position in list(department.positions or []):
+        position.department = None
+
+    db.session.delete(department)
+    db.session.commit()
+
+    flash(f"Department '{department.name}' deleted.", "success")
+    return redirect(url_for("admin_users") + "#departments")
 
 
 @app.route("/admin/positions/create", methods=["POST"])
@@ -1651,6 +1704,26 @@ def admin_positions_update(position_id):
     db.session.commit()
     flash(f"Position '{position.display_label}' updated.", "success")
     return redirect(url_for("admin_users") + f"#position-{position.id}")
+
+
+@app.route("/admin/positions/<int:position_id>/delete", methods=["POST"])
+@login_required
+def admin_positions_delete(position_id):
+    _require_admin()
+
+    position = db.session.get(Position, position_id)
+    if not position:
+        flash("Position not found.", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    for report in list(position.direct_reports or []):
+        report.reports_to = None
+
+    db.session.delete(position)
+    db.session.commit()
+
+    flash(f"Position '{position.title}' deleted.", "success")
+    return redirect(url_for("admin_users") + "#positions")
 
 
 @app.route("/dashboard")
