@@ -1,8 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    abort,
+    session,
+)
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re
+import os, json, datetime, sqlite3, threading, re, uuid
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
@@ -346,6 +356,71 @@ def _normalize_form_schema(schema_raw):
     return [{"section": "", "items": normalized_items}], False
 
 
+class Department(db.Model):
+    __tablename__ = "department"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=True)
+    active = db.Column(db.Boolean, default=True)
+
+    children = db.relationship(
+        "Department",
+        backref=db.backref("parent", remote_side=[id]),
+    )
+    positions = db.relationship(
+        "Position",
+        back_populates="department",
+    )
+
+    @property
+    def full_name(self):
+        parts = [self.name]
+        parent = getattr(self, "parent", None)
+        while parent:
+            parts.append(parent.name)
+            parent = getattr(parent, "parent", None)
+        return " / ".join(reversed([p for p in parts if p]))
+
+
+class Position(db.Model):
+    __tablename__ = "position"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=True)
+    reports_to_id = db.Column(db.Integer, db.ForeignKey("position.id"), nullable=True)
+    active = db.Column(db.Boolean, default=True)
+
+    department = db.relationship("Department", back_populates="positions")
+    reports_to = db.relationship(
+        "Position",
+        remote_side=[id],
+        backref=db.backref("direct_reports"),
+    )
+    users = db.relationship("User", back_populates="position")
+
+    @property
+    def hierarchy_label(self):
+        parts = [self.title]
+        parent = getattr(self, "reports_to", None)
+        visited = {self.id}
+        while parent and getattr(parent, "id", None) not in visited:
+            parts.append(parent.title)
+            visited.add(parent.id)
+            parent = getattr(parent, "reports_to", None)
+        return " / ".join(reversed([p for p in parts if p]))
+
+    @property
+    def display_label(self):
+        dept_label = self.department.full_name if self.department else None
+        hierarchy = self.hierarchy_label
+        if dept_label:
+            return f"{dept_label} · {hierarchy}"
+        return hierarchy
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -357,6 +432,15 @@ class User(UserMixin, db.Model):
     mobile_number = db.Column(db.String(40), nullable=True)
     email = db.Column(db.String(120), nullable=True)
     display_picture = db.Column(db.String(255), nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    session_token = db.Column(
+        db.String(36),
+        nullable=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    position_id = db.Column(db.Integer, db.ForeignKey("position.id"), nullable=True)
+
+    position = db.relationship("Position", back_populates="users")
 
     @property
     def display_name(self):
@@ -364,9 +448,17 @@ class User(UserMixin, db.Model):
         return " ".join(parts) if parts else self.username
 
     @property
+    def is_active(self):
+        return bool(self.active)
+
+    @property
     def is_admin(self):
         role = (self.role or "").strip().lower()
         return role == "admin" or self.username.lower() == "admin"
+
+    def issue_session_token(self):
+        self.session_token = str(uuid.uuid4())
+        return self.session_token
 
 
 class Project(db.Model):
@@ -695,7 +787,13 @@ class QCWorkLog(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return db.session.get(User, int(user_id))
+    try:
+        user_obj = db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        return None
+    if user_obj and not user_obj.is_active:
+        return None
+    return user_obj
 
 
 ALLOWED_PHOTO = {"png", "jpg", "jpeg", "webp"}
@@ -711,6 +809,30 @@ def allowed_file(filename, kind="photo"):
     if kind == "video":
         return ext in ALLOWED_VIDEO
     return ext in ALLOWED_ATTACHMENTS
+
+
+@app.before_request
+def enforce_user_session():
+    if not current_user.is_authenticated:
+        return
+
+    if not current_user.is_active:
+        session.pop("session_token", None)
+        logout_user()
+        flash("Your account has been deactivated.", "error")
+        return
+
+    if not current_user.session_token:
+        current_user.issue_session_token()
+        db.session.commit()
+
+    token = session.get("session_token")
+    if token and token == current_user.session_token:
+        return
+
+    session.pop("session_token", None)
+    logout_user()
+    flash("You have been signed out. Please log in again.", "info")
 
 
 def log_work_event(work_id, action, actor_id=None, from_status=None, to_status=None, details=None):
@@ -807,7 +929,10 @@ def ensure_qc_columns():
         "role": "TEXT",
         "mobile_number": "TEXT",
         "email": "TEXT",
-        "display_picture": "TEXT"
+        "display_picture": "TEXT",
+        "active": "INTEGER DEFAULT 1",
+        "session_token": "TEXT",
+        "position_id": "INTEGER"
     }
     for col, col_type in user_column_defs.items():
         if col not in user_cols:
@@ -954,6 +1079,8 @@ def ensure_tables():
         existing_tables = set(inspect(db.engine).get_table_names())
 
     models = [
+        Department.__table__,
+        Position.__table__,
         User.__table__,
         Project.__table__,
         FormSchema.__table__,
@@ -984,11 +1111,19 @@ def bootstrap_db():
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
     for u, p in default_users:
         if not User.query.filter_by(username=u).first():
-            db.session.add(User(username=u, password=p))
+            new_user = User(username=u, password=p)
+            new_user.issue_session_token()
+            db.session.add(new_user)
 
     admin_user = User.query.filter_by(username="admin").first()
     if admin_user and not admin_user.role:
         admin_user.role = "Admin"
+
+    # Ensure legacy accounts have activation flag and session tokens
+    for user in User.query.filter(or_(User.session_token.is_(None), User.session_token == "")).all():
+        user.issue_session_token()
+    for user in User.query.filter(User.active.is_(None)).all():
+        user.active = True
 
     get_or_create_default_task_form()
 
@@ -1068,9 +1203,15 @@ def login():
         password = request.form.get("password", "").strip()
         user = User.query.filter_by(username=username).first()
         if user and user.password == password:
-            login_user(user)
-            flash("Welcome back!", "success")
-            return redirect(url_for("dashboard"))
+            if not user.is_active:
+                flash("Your account is deactivated. Please contact an administrator.", "error")
+            else:
+                user.issue_session_token()
+                db.session.commit()
+                login_user(user)
+                session["session_token"] = user.session_token
+                flash("Welcome back!", "success")
+                return redirect(url_for("dashboard"))
         else:
             flash("Invalid credentials", "error")
     return render_template("login.html", category_label=None)
@@ -1080,6 +1221,7 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.pop("session_token", None)
     flash("Logged out", "info")
     return redirect(url_for("index"))
 
@@ -1114,6 +1256,392 @@ def profile():
         return redirect(url_for("profile"))
 
     return render_template("profile.html")
+
+
+def _require_admin():
+    if not current_user.is_admin:
+        abort(403)
+
+
+def _form_truthy(value):
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _department_cycle(department, candidate_parent):
+    current = candidate_parent
+    while current is not None:
+        if current.id == department.id:
+            return True
+        current = current.parent
+    return False
+
+
+def _position_cycle(position, candidate_manager):
+    current = candidate_manager
+    while current is not None:
+        if current.id == position.id:
+            return True
+        current = current.reports_to
+    return False
+
+
+# ---------------------- ADMINISTRATION ----------------------
+@app.route("/admin/users")
+@login_required
+def admin_users():
+    _require_admin()
+
+    departments = sorted(
+        Department.query.order_by(Department.name.asc()).all(),
+        key=lambda d: (d.full_name or "").lower(),
+    )
+    positions = sorted(
+        Position.query.order_by(Position.title.asc()).all(),
+        key=lambda p: (p.display_label or "").lower(),
+    )
+    department_options = departments
+    position_options = positions
+    users = User.query.order_by(User.username.asc()).all()
+
+    return render_template(
+        "admin_users.html",
+        users=users,
+        departments=departments,
+        department_options=department_options,
+        positions=positions,
+        position_options=position_options,
+        category_label="Admin",
+        category_url=url_for("admin_users"),
+    )
+
+
+@app.route("/admin/users/create", methods=["POST"])
+@login_required
+def admin_users_create():
+    _require_admin()
+
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    first_name = (request.form.get("first_name") or "").strip()
+    last_name = (request.form.get("last_name") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    mobile_number = (request.form.get("mobile_number") or "").strip()
+    role = (request.form.get("role") or "").strip()
+    department_id_raw = request.form.get("department_id")
+    position_id_raw = request.form.get("position_id")
+    active_flag = _form_truthy(request.form.get("active", "1"))
+
+    if not username or not password:
+        flash("Username and password are required to create a user.", "error")
+        return redirect(url_for("admin_users"))
+
+    existing = (
+        User.query.filter(func.lower(User.username) == username.lower()).first()
+        if username
+        else None
+    )
+    if existing:
+        flash("A user with that username already exists.", "error")
+        return redirect(url_for("admin_users"))
+
+    department = None
+    if department_id_raw:
+        try:
+            department = db.session.get(Department, int(department_id_raw))
+        except (TypeError, ValueError):
+            department = None
+
+    position = None
+    if position_id_raw:
+        try:
+            position = db.session.get(Position, int(position_id_raw))
+        except (TypeError, ValueError):
+            position = None
+
+    user = User(
+        username=username,
+        password=password,
+        first_name=first_name or None,
+        last_name=last_name or None,
+        email=email or None,
+        mobile_number=mobile_number or None,
+        role=role or None,
+        department=department.name if department else None,
+        active=active_flag,
+    )
+    if position:
+        user.position = position
+        if not user.department and position.department:
+            user.department = position.department.name
+
+    user.issue_session_token()
+    db.session.add(user)
+    db.session.commit()
+
+    flash(f"User '{username}' created successfully.", "success")
+    return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+
+@app.route("/admin/users/<int:user_id>/update", methods=["POST"])
+@login_required
+def admin_users_update(user_id):
+    _require_admin()
+
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("User not found.", "error")
+        return redirect(url_for("admin_users"))
+
+    action = request.form.get("action") or "update"
+    if action == "reset_sessions":
+        user.issue_session_token()
+        db.session.commit()
+        flash(f"All active sessions for '{user.username}' have been revoked.", "success")
+        if user.id == current_user.id:
+            session.pop("session_token", None)
+            logout_user()
+            flash("You signed yourself out of all sessions.", "info")
+            return redirect(url_for("login"))
+        return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+    username = (request.form.get("username") or "").strip()
+    first_name = (request.form.get("first_name") or "").strip()
+    last_name = (request.form.get("last_name") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    mobile_number = (request.form.get("mobile_number") or "").strip()
+    role = (request.form.get("role") or "").strip()
+    department_id_raw = request.form.get("department_id")
+    position_id_raw = request.form.get("position_id")
+    active_flag = _form_truthy(request.form.get("active"))
+    password = (request.form.get("password") or "").strip()
+
+    if not username:
+        flash("Username is required.", "error")
+        return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+    if username.lower() != user.username.lower():
+        existing = (
+            User.query.filter(func.lower(User.username) == username.lower(), User.id != user.id).first()
+        )
+        if existing:
+            flash("Another user already uses that username.", "error")
+            return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+    department = None
+    if department_id_raw:
+        try:
+            department = db.session.get(Department, int(department_id_raw))
+        except (TypeError, ValueError):
+            department = None
+
+    position = None
+    if position_id_raw:
+        try:
+            position = db.session.get(Position, int(position_id_raw))
+        except (TypeError, ValueError):
+            position = None
+
+    if user.id == current_user.id and not active_flag:
+        flash("You cannot deactivate your own account while logged in.", "error")
+        return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+    user.username = username
+    user.first_name = first_name or None
+    user.last_name = last_name or None
+    user.email = email or None
+    user.mobile_number = mobile_number or None
+    user.role = role or None
+    user.department = department.name if department else None
+    user.active = active_flag
+    user.position = position
+    if not user.department and position and position.department:
+        user.department = position.department.name
+
+    if password:
+        user.password = password
+
+    db.session.commit()
+    flash(f"User '{user.username}' updated.", "success")
+    return redirect(url_for("admin_users") + f"#user-{user.id}")
+
+
+@app.route("/admin/departments/create", methods=["POST"])
+@login_required
+def admin_departments_create():
+    _require_admin()
+
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    parent_id_raw = request.form.get("parent_id")
+    active_flag = _form_truthy(request.form.get("active", "1"))
+
+    if not name:
+        flash("Department name is required.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    existing = Department.query.filter(func.lower(Department.name) == name.lower()).first()
+    if existing:
+        flash("A department with that name already exists.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    parent = None
+    if parent_id_raw:
+        try:
+            parent = db.session.get(Department, int(parent_id_raw))
+        except (TypeError, ValueError):
+            parent = None
+
+    department = Department(
+        name=name,
+        description=description or None,
+        active=active_flag,
+    )
+    if parent:
+        department.parent = parent
+
+    db.session.add(department)
+    db.session.commit()
+
+    flash(f"Department '{department.full_name}' created.", "success")
+    return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+
+@app.route("/admin/departments/<int:department_id>/update", methods=["POST"])
+@login_required
+def admin_departments_update(department_id):
+    _require_admin()
+
+    department = db.session.get(Department, department_id)
+    if not department:
+        flash("Department not found.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    parent_id_raw = request.form.get("parent_id")
+    active_flag = _form_truthy(request.form.get("active"))
+
+    if not name:
+        flash("Department name is required.", "error")
+        return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+    if name.lower() != department.name.lower():
+        existing = Department.query.filter(
+            func.lower(Department.name) == name.lower(),
+            Department.id != department.id,
+        ).first()
+        if existing:
+            flash("Another department already uses that name.", "error")
+            return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+    parent = None
+    if parent_id_raw:
+        try:
+            parent = db.session.get(Department, int(parent_id_raw))
+        except (TypeError, ValueError):
+            parent = None
+    if parent and _department_cycle(department, parent):
+        flash("Cannot assign a department to one of its descendants.", "error")
+        return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+    department.name = name
+    department.description = description or None
+    department.active = active_flag
+    department.parent = parent
+
+    db.session.commit()
+    flash(f"Department '{department.full_name}' updated.", "success")
+    return redirect(url_for("admin_users") + f"#department-{department.id}")
+
+
+@app.route("/admin/positions/create", methods=["POST"])
+@login_required
+def admin_positions_create():
+    _require_admin()
+
+    title = (request.form.get("title") or "").strip()
+    department_id_raw = request.form.get("department_id")
+    reports_to_id_raw = request.form.get("reports_to_id")
+    active_flag = _form_truthy(request.form.get("active", "1"))
+
+    if not title:
+        flash("Position title is required.", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    department = None
+    if department_id_raw:
+        try:
+            department = db.session.get(Department, int(department_id_raw))
+        except (TypeError, ValueError):
+            department = None
+
+    manager = None
+    if reports_to_id_raw:
+        try:
+            manager = db.session.get(Position, int(reports_to_id_raw))
+        except (TypeError, ValueError):
+            manager = None
+
+    position = Position(
+        title=title,
+        department=department,
+        reports_to=manager,
+        active=active_flag,
+    )
+    db.session.add(position)
+    db.session.commit()
+
+    flash(f"Position '{position.display_label}' created.", "success")
+    return redirect(url_for("admin_users") + f"#position-{position.id}")
+
+
+@app.route("/admin/positions/<int:position_id>/update", methods=["POST"])
+@login_required
+def admin_positions_update(position_id):
+    _require_admin()
+
+    position = db.session.get(Position, position_id)
+    if not position:
+        flash("Position not found.", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    title = (request.form.get("title") or "").strip()
+    department_id_raw = request.form.get("department_id")
+    reports_to_id_raw = request.form.get("reports_to_id")
+    active_flag = _form_truthy(request.form.get("active"))
+
+    if not title:
+        flash("Position title is required.", "error")
+        return redirect(url_for("admin_users") + f"#position-{position.id}")
+
+    department = None
+    if department_id_raw:
+        try:
+            department = db.session.get(Department, int(department_id_raw))
+        except (TypeError, ValueError):
+            department = None
+
+    manager = None
+    if reports_to_id_raw:
+        try:
+            manager = db.session.get(Position, int(reports_to_id_raw))
+        except (TypeError, ValueError):
+            manager = None
+
+    if manager and _position_cycle(position, manager):
+        flash("Cannot assign a position to report to itself or its descendants.", "error")
+        return redirect(url_for("admin_users") + f"#position-{position.id}")
+
+    position.title = title
+    position.department = department
+    position.reports_to = manager
+    position.active = active_flag
+
+    db.session.commit()
+    flash(f"Position '{position.display_label}' updated.", "success")
+    return redirect(url_for("admin_users") + f"#position-{position.id}")
 
 
 @app.route("/dashboard")

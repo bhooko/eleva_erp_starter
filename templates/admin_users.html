@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6">
+    <header class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-semibold text-slate-100">Create User</h2>
+        <p class="text-sm text-slate-400">Provision a new account and optionally assign a department, position, and role.</p>
+      </div>
+    </header>
+    <form method="post" action="{{ url_for('admin_users_create') }}" class="grid gap-4 md:grid-cols-2">
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-username">Username</label>
+        <input id="create-username" name="username" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="jane.doe" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-password">Password</label>
+        <input id="create-password" name="password" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Temporary password" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-first-name">First name</label>
+        <input id="create-first-name" name="first_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-last-name">Last name</label>
+        <input id="create-last-name" name="last_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-email">Email</label>
+        <input id="create-email" name="email" type="email" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-mobile">Mobile number</label>
+        <input id="create-mobile" name="mobile_number" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-role">Role</label>
+        <input id="create-role" name="role" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Admin / Supervisor / ..." />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300" for="create-department">Department</label>
+        <select id="create-department" name="department_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <option value="">No department</option>
+          {% for dept in department_options %}
+            <option value="{{ dept.id }}">{{ dept.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="space-y-1 md:col-span-2">
+        <label class="text-sm text-slate-300" for="create-position">Position</label>
+        <select id="create-position" name="position_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <option value="">No position</option>
+          {% for pos in position_options %}
+            <option value="{{ pos.id }}">{{ pos.display_label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="md:col-span-2 flex items-center justify-between">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
+          Active immediately
+        </label>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Create user</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="space-y-4" id="users">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-slate-100">Existing Users</h2>
+        <p class="text-sm text-slate-400">Update profile information, reset credentials, or deactivate accounts.</p>
+      </div>
+      <span class="text-xs text-slate-500 uppercase tracking-wide">{{ users|length }} users</span>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      {% for user in users %}
+        <form id="user-{{ user.id }}" method="post" action="{{ url_for('admin_users_update', user_id=user.id) }}" class="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-4 shadow-inner shadow-black/20">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-100">{{ user.display_name or user.username }}</h3>
+              <p class="text-xs text-slate-400">Username: {{ user.username }}</p>
+              {% if user.position %}
+                <p class="text-xs text-slate-400">Position: {{ user.position.display_label }}</p>
+              {% endif %}
+            </div>
+            <span class="px-2 py-1 text-xs rounded-lg {{ 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40' if user.is_active else 'bg-rose-500/20 text-rose-100 border border-rose-400/40' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Username</label>
+              <input name="username" type="text" value="{{ user.username }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">New password</label>
+              <input name="password" type="text" placeholder="Leave blank to keep current" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">First name</label>
+              <input name="first_name" type="text" value="{{ user.first_name or '' }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Last name</label>
+              <input name="last_name" type="text" value="{{ user.last_name or '' }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Email</label>
+              <input name="email" type="email" value="{{ user.email or '' }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Mobile number</label>
+              <input name="mobile_number" type="text" value="{{ user.mobile_number or '' }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Role</label>
+              <input name="role" type="text" value="{{ user.role or '' }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Department</label>
+              <select name="department_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No department</option>
+                {% for dept in department_options %}
+                  <option value="{{ dept.id }}" {% if dept.id == (user.position.department.id if user.position and user.position.department else None) or dept.name == user.department %}selected{% endif %}>{{ dept.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2 space-y-1">
+              <label class="text-xs text-slate-400">Position</label>
+              <select name="position_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No position</option>
+                {% for pos in position_options %}
+                  <option value="{{ pos.id }}" {% if user.position_id == pos.id %}selected{% endif %}>{{ pos.display_label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if user.is_active %}checked{% endif %} />
+              Active
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save changes</button>
+              <button type="submit" name="action" value="reset_sessions" formnovalidate class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/80">Sign out all devices</button>
+            </div>
+          </div>
+        </form>
+      {% else %}
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No users found.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6" id="departments">
+    <header class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-slate-100">Departments</h2>
+        <p class="text-sm text-slate-400">Outline the structure of your organisation and nest departments as needed.</p>
+      </div>
+    </header>
+    <form method="post" action="{{ url_for('admin_departments_create') }}" class="grid gap-4 md:grid-cols-2">
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300">Name</label>
+        <input name="name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Manufacturing" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300">Parent department</label>
+        <select name="parent_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <option value="">Top level</option>
+          {% for dept in department_options %}
+            <option value="{{ dept.id }}">{{ dept.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="md:col-span-2 space-y-1">
+        <label class="text-sm text-slate-300">Description</label>
+        <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2"></textarea>
+      </div>
+      <div class="md:col-span-2 flex items-center justify-between">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
+          Active
+        </label>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Add department</button>
+      </div>
+    </form>
+    <div class="grid gap-4">
+      {% for dept in departments %}
+        <form id="department-{{ dept.id }}" method="post" action="{{ url_for('admin_departments_update', department_id=dept.id) }}" class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-100">{{ dept.full_name }}</h3>
+              {% if dept.description %}
+                <p class="text-xs text-slate-400">{{ dept.description }}</p>
+              {% endif %}
+            </div>
+            <span class="px-2 py-1 text-xs rounded-lg {{ 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40' if dept.active else 'bg-rose-500/20 text-rose-100 border border-rose-400/40' }}">{{ 'Active' if dept.active else 'Inactive' }}</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Name</label>
+              <input name="name" type="text" value="{{ dept.name }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Parent</label>
+              <select name="parent_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">Top level</option>
+                {% for option in department_options %}
+                  {% if option.id != dept.id %}
+                    <option value="{{ option.id }}" {% if option.id == (dept.parent.id if dept.parent else None) %}selected{% endif %}>{{ option.full_name }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2 space-y-1">
+              <label class="text-xs text-slate-400">Description</label>
+              <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">{{ dept.description or '' }}</textarea>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if dept.active %}checked{% endif %} />
+              Active
+            </label>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save department</button>
+          </div>
+        </form>
+      {% else %}
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No departments defined yet.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6" id="positions">
+    <header class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-slate-100">Positions</h2>
+        <p class="text-sm text-slate-400">Define roles within departments and connect reporting lines.</p>
+      </div>
+    </header>
+    <form method="post" action="{{ url_for('admin_positions_create') }}" class="grid gap-4 md:grid-cols-2">
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300">Title</label>
+        <input name="title" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Installation Manager" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-sm text-slate-300">Department</label>
+        <select name="department_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <option value="">No department</option>
+          {% for dept in department_options %}
+            <option value="{{ dept.id }}">{{ dept.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="md:col-span-2 space-y-1">
+        <label class="text-sm text-slate-300">Reports to</label>
+        <select name="reports_to_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+          <option value="">No direct manager</option>
+          {% for pos in position_options %}
+            <option value="{{ pos.id }}">{{ pos.display_label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="md:col-span-2 flex items-center justify-between">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
+          Active
+        </label>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Add position</button>
+      </div>
+    </form>
+    <div class="grid gap-4">
+      {% for pos in positions %}
+        <form id="position-{{ pos.id }}" method="post" action="{{ url_for('admin_positions_update', position_id=pos.id) }}" class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-100">{{ pos.display_label }}</h3>
+              {% if pos.reports_to %}
+                <p class="text-xs text-slate-400">Reports to: {{ pos.reports_to.display_label }}</p>
+              {% endif %}
+            </div>
+            <span class="px-2 py-1 text-xs rounded-lg {{ 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40' if pos.active else 'bg-rose-500/20 text-rose-100 border border-rose-400/40' }}">{{ 'Active' if pos.active else 'Inactive' }}</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Title</label>
+              <input name="title" type="text" value="{{ pos.title }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Department</label>
+              <select name="department_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No department</option>
+                {% for dept in department_options %}
+                  <option value="{{ dept.id }}" {% if pos.department_id == dept.id %}selected{% endif %}>{{ dept.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2 space-y-1">
+              <label class="text-xs text-slate-400">Reports to</label>
+              <select name="reports_to_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No direct manager</option>
+                {% for option in position_options %}
+                  {% if option.id != pos.id %}
+                    <option value="{{ option.id }}" {% if pos.reports_to_id == option.id %}selected{% endif %}>{{ option.display_label }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if pos.active %}checked{% endif %} />
+              Active
+            </label>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save position</button>
+          </div>
+        </form>
+      {% else %}
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No positions defined yet.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
