@@ -295,6 +295,53 @@
         localStorage.setItem('eleva.sidebar', collapsed ? 'collapsed' : 'expanded');
       });
     })();
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggles = document.querySelectorAll('[data-form-toggle]');
+      toggles.forEach((button) => {
+        const targetId = button.getAttribute('data-target');
+        const content = targetId ? document.getElementById(targetId) : null;
+        if (!content) {
+          return;
+        }
+
+        const labelEl = button.querySelector('[data-toggle-label]');
+        const iconEl = button.querySelector('[data-toggle-icon]');
+        const openLabel = button.dataset.openLabel || 'Open form';
+        const closeLabel = button.dataset.closeLabel || 'Hide form';
+        const initialOpen = button.dataset.initialState === 'open';
+
+        const setState = (open) => {
+          if (open) {
+            content.classList.remove('hidden');
+          } else {
+            content.classList.add('hidden');
+          }
+          button.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (labelEl) {
+            labelEl.textContent = open ? closeLabel : openLabel;
+          } else {
+            button.textContent = open ? closeLabel : openLabel;
+          }
+          if (iconEl) {
+            iconEl.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+          }
+        };
+
+        setState(initialOpen);
+
+        button.addEventListener('click', () => {
+          const isOpen = content.classList.contains('hidden');
+          setState(isOpen);
+          if (isOpen) {
+            const focusable = content.querySelector('input, select, textarea, button');
+            if (focusable) {
+              focusable.focus({ preventScroll: false });
+            }
+          }
+        });
+      });
+    });
   </script>
   {% block scripts %}{% endblock %}
 </body>
