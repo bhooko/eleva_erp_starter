@@ -84,8 +84,24 @@
     </div>
 
     <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-      <h3 class="text-base font-semibold text-slate-100 mb-3">Create Project</h3>
-      <form method="post" class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-base font-semibold text-slate-100">Create Project</h3>
+        <button type="button"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
+                data-form-toggle
+                data-target="project-create-panel"
+                data-open-label="+ Create project"
+                data-close-label="Hide form"
+                aria-controls="project-create-panel"
+                aria-expanded="false">
+          <span data-toggle-label>+ Create project</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      </div>
+      <div id="project-create-panel" class="hidden mt-4">
+        <form method="post" class="space-y-4">
         <div class="grid gap-3">
           <div>
             <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>
@@ -213,8 +229,9 @@
             </div>
           </div>
         </div>
-        <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create project</button>
-      </form>
+          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create project</button>
+        </form>
+      </div>
     </div>
   </div>
 </div>
