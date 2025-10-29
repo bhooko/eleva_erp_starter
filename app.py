@@ -787,6 +787,15 @@ class QCWorkLog(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
+    # Ensure that any pending bootstrap/migration tasks run before we try to
+    # query the database. When the application starts for the very first time
+    # Flask-Login may attempt to load the user (via `current_user`) before our
+    # `@app.before_request` hook that calls `ensure_bootstrap()` executes. In
+    # that scenario the legacy SQLite schema might still be missing newer
+    # columns such as `user.active`, resulting in an OperationalError during the
+    # initial SELECT. Proactively invoking `ensure_bootstrap()` here guarantees
+    # the schema has been patched before any queries are issued.
+    ensure_bootstrap()
     try:
         user_obj = db.session.get(User, int(user_id))
     except (TypeError, ValueError):
