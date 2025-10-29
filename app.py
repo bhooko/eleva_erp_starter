@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading
+import os, json, datetime, sqlite3, threading, re
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
@@ -42,6 +42,40 @@ TASK_MILESTONES = [
 PROJECT_PRIORITIES = ["Immediate", "Urgent", "Normal"]
 PROJECT_OPENING_TYPES = ["Single", "Adjacent", "Opposite Opening"]
 PROJECT_LOCATIONS = ["Internal", "External"]
+PROJECT_STRUCTURE_TYPES = ["NA", "RCC", "MS", "GI"]
+PROJECT_CLADDING_TYPES = ["ACP", "Glass", "Hybrid", "Clients Scope", "Other"]
+PROJECT_CABIN_FINISHES = ["SS", "MS", "Glass", "SS+Glass", "Designer", "Cage", "Half Cabin", "Other"]
+PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
+PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
+
+
+def normalize_floor_label(raw_value):
+    value = (raw_value or "").strip()
+    if not value:
+        return None
+
+    compact = re.sub(r"\s+", "", value.upper())
+    if compact in {"G", "G+"}:
+        return None
+
+    # If the value is purely numeric, prefix it with G+ for consistency.
+    if re.fullmatch(r"\d+", compact):
+        return f"G+{compact}"
+
+    # Normalize leading G without a plus sign (e.g., G10 -> G+10).
+    if compact.startswith("G") and not compact.startswith("G+"):
+        compact = f"G+{compact[1:]}"
+
+    # Ensure there is only a single + immediately after G when present.
+    if compact.startswith("G+"):
+        suffix = compact[2:]
+        suffix = suffix.lstrip("+")
+        compact = f"G+{suffix}" if suffix else "G+"
+
+    if compact in {"", "G+"}:
+        return None
+
+    return compact
 
 
 def _extract_task_timing(form):
@@ -343,10 +377,15 @@ class Project(db.Model):
     site_address = db.Column(db.Text, nullable=True)
     customer_name = db.Column(db.String(200), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
-    floors = db.Column(db.Integer, nullable=True)
+    floors = db.Column(db.String(40), nullable=True)
     stops = db.Column(db.Integer, nullable=True)
     opening_type = db.Column(db.String(40), nullable=True)
     location = db.Column(db.String(40), nullable=True)
+    structure_type = db.Column(db.String(40), nullable=True)
+    cladding_type = db.Column(db.String(40), nullable=True)
+    cabin_finish = db.Column(db.String(40), nullable=True)
+    door_operation_type = db.Column(db.String(40), nullable=True)
+    door_finish = db.Column(db.String(40), nullable=True)
     handover_date = db.Column(db.Date, nullable=True)
     priority = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
@@ -836,19 +875,34 @@ def ensure_qc_columns():
     added_project_cols = []
     if project_exists:
         cur.execute("PRAGMA table_info(project)")
-        project_cols = [r[1] for r in cur.fetchall()]
+        project_cols = {row[1]: (row[2] or "").upper() for row in cur.execute("PRAGMA table_info(project)")}
+
+        if "floors" in project_cols and project_cols["floors"] not in {"TEXT", "VARCHAR", "NVARCHAR"}:
+            cur.execute("ALTER TABLE project RENAME COLUMN floors TO floors_numeric;")
+            project_cols = {row[1]: (row[2] or "").upper() for row in cur.execute("PRAGMA table_info(project)")}
+
         project_column_defs = {
-            "floors": "INTEGER",
+            "floors": "TEXT",
             "stops": "INTEGER",
             "opening_type": "TEXT",
             "location": "TEXT",
             "handover_date": "TEXT",
             "priority": "TEXT",
+            "structure_type": "TEXT",
+            "cladding_type": "TEXT",
+            "cabin_finish": "TEXT",
+            "door_operation_type": "TEXT",
+            "door_finish": "TEXT",
         }
         for col, col_type in project_column_defs.items():
             if col not in project_cols:
                 cur.execute(f"ALTER TABLE project ADD COLUMN {col} {col_type};")
                 added_project_cols.append(col)
+
+        if "floors_numeric" in project_cols and "floors" in project_column_defs:
+            cur.execute(
+                "UPDATE project SET floors = CASE WHEN floors IS NULL OR floors = '' THEN CAST(floors_numeric AS TEXT) ELSE floors END WHERE floors_numeric IS NOT NULL;"
+            )
 
     conn.commit()
     conn.close()
@@ -1568,6 +1622,11 @@ def projects_list():
         location = (request.form.get("location") or "").strip()
         handover_raw = (request.form.get("handover_date") or "").strip()
         priority = (request.form.get("priority") or "").strip()
+        structure_type = (request.form.get("structure_type") or "").strip()
+        cladding_type = (request.form.get("cladding_type") or "").strip()
+        cabin_finish = (request.form.get("cabin_finish") or "").strip()
+        door_operation_type = (request.form.get("door_operation_type") or "").strip()
+        door_finish = (request.form.get("door_finish") or "").strip()
 
         if not name:
             flash("Project name is required.", "error")
@@ -1577,15 +1636,7 @@ def projects_list():
             flash("Select a valid lift type.", "error")
             return redirect(url_for("projects_list"))
 
-        floors = None
-        if floors_raw:
-            try:
-                floors = int(floors_raw)
-                if floors < 0:
-                    raise ValueError
-            except ValueError:
-                flash("Number of floors must be a positive whole number.", "error")
-                return redirect(url_for("projects_list"))
+        floors = normalize_floor_label(floors_raw)
 
         stops = None
         if stops_raw:
@@ -1603,6 +1654,26 @@ def projects_list():
 
         if location and location not in PROJECT_LOCATIONS:
             flash("Choose a valid location.", "error")
+            return redirect(url_for("projects_list"))
+
+        if structure_type and structure_type not in PROJECT_STRUCTURE_TYPES:
+            flash("Choose a valid structure type.", "error")
+            return redirect(url_for("projects_list"))
+
+        if cladding_type and cladding_type not in PROJECT_CLADDING_TYPES:
+            flash("Choose a valid cladding type.", "error")
+            return redirect(url_for("projects_list"))
+
+        if cabin_finish and cabin_finish not in PROJECT_CABIN_FINISHES:
+            flash("Choose a valid cabin finish.", "error")
+            return redirect(url_for("projects_list"))
+
+        if door_operation_type and door_operation_type not in PROJECT_DOOR_OPERATION_TYPES:
+            flash("Choose a valid door operation type.", "error")
+            return redirect(url_for("projects_list"))
+
+        if door_finish and door_finish not in PROJECT_DOOR_FINISHES:
+            flash("Choose a valid door finish.", "error")
             return redirect(url_for("projects_list"))
 
         if priority and priority not in PROJECT_PRIORITIES:
@@ -1629,6 +1700,11 @@ def projects_list():
             location=location or None,
             handover_date=handover_date,
             priority=priority or None,
+            structure_type=structure_type or None,
+            cladding_type=cladding_type or None,
+            cabin_finish=cabin_finish or None,
+            door_operation_type=door_operation_type or None,
+            door_finish=door_finish or None,
         )
         db.session.add(project)
         db.session.commit()
@@ -1665,6 +1741,11 @@ def projects_list():
         PROJECT_PRIORITIES=PROJECT_PRIORITIES,
         PROJECT_OPENING_TYPES=PROJECT_OPENING_TYPES,
         PROJECT_LOCATIONS=PROJECT_LOCATIONS,
+        PROJECT_STRUCTURE_TYPES=PROJECT_STRUCTURE_TYPES,
+        PROJECT_CLADDING_TYPES=PROJECT_CLADDING_TYPES,
+        PROJECT_CABIN_FINISHES=PROJECT_CABIN_FINISHES,
+        PROJECT_DOOR_OPERATION_TYPES=PROJECT_DOOR_OPERATION_TYPES,
+        PROJECT_DOOR_FINISHES=PROJECT_DOOR_FINISHES,
     )
 
 
@@ -1702,6 +1783,11 @@ def project_detail(project_id):
         PROJECT_PRIORITIES=PROJECT_PRIORITIES,
         PROJECT_OPENING_TYPES=PROJECT_OPENING_TYPES,
         PROJECT_LOCATIONS=PROJECT_LOCATIONS,
+        PROJECT_STRUCTURE_TYPES=PROJECT_STRUCTURE_TYPES,
+        PROJECT_CLADDING_TYPES=PROJECT_CLADDING_TYPES,
+        PROJECT_CABIN_FINISHES=PROJECT_CABIN_FINISHES,
+        PROJECT_DOOR_OPERATION_TYPES=PROJECT_DOOR_OPERATION_TYPES,
+        PROJECT_DOOR_FINISHES=PROJECT_DOOR_FINISHES,
     )
 
 
@@ -1721,6 +1807,11 @@ def project_edit(project_id):
     location = (request.form.get("location") or "").strip()
     handover_raw = (request.form.get("handover_date") or "").strip()
     priority = (request.form.get("priority") or "").strip()
+    structure_type = (request.form.get("structure_type") or "").strip()
+    cladding_type = (request.form.get("cladding_type") or "").strip()
+    cabin_finish = (request.form.get("cabin_finish") or "").strip()
+    door_operation_type = (request.form.get("door_operation_type") or "").strip()
+    door_finish = (request.form.get("door_finish") or "").strip()
 
     if not name:
         flash("Project name is required.", "error")
@@ -1730,15 +1821,7 @@ def project_edit(project_id):
         flash("Select a valid lift type.", "error")
         return redirect(url_for("project_detail", project_id=project.id))
 
-    floors = None
-    if floors_raw:
-        try:
-            floors = int(floors_raw)
-            if floors < 0:
-                raise ValueError
-        except ValueError:
-            flash("Number of floors must be a positive whole number.", "error")
-            return redirect(url_for("project_detail", project_id=project.id))
+    floors = normalize_floor_label(floors_raw)
 
     stops = None
     if stops_raw:
@@ -1756,6 +1839,26 @@ def project_edit(project_id):
 
     if location and location not in PROJECT_LOCATIONS:
         flash("Choose a valid location.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if structure_type and structure_type not in PROJECT_STRUCTURE_TYPES:
+        flash("Choose a valid structure type.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if cladding_type and cladding_type not in PROJECT_CLADDING_TYPES:
+        flash("Choose a valid cladding type.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if cabin_finish and cabin_finish not in PROJECT_CABIN_FINISHES:
+        flash("Choose a valid cabin finish.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if door_operation_type and door_operation_type not in PROJECT_DOOR_OPERATION_TYPES:
+        flash("Choose a valid door operation type.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    if door_finish and door_finish not in PROJECT_DOOR_FINISHES:
+        flash("Choose a valid door finish.", "error")
         return redirect(url_for("project_detail", project_id=project.id))
 
     if priority and priority not in PROJECT_PRIORITIES:
@@ -1781,6 +1884,11 @@ def project_edit(project_id):
     project.location = location or None
     project.handover_date = handover_date
     project.priority = priority or None
+    project.structure_type = structure_type or None
+    project.cladding_type = cladding_type or None
+    project.cabin_finish = cabin_finish or None
+    project.door_operation_type = door_operation_type or None
+    project.door_finish = door_finish or None
 
     db.session.commit()
     flash("Project updated.", "success")
