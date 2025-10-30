@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Sales · Clients{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <p class="text-sm text-slate-400">Sales Workspace</p>
+    <h2 class="text-3xl font-semibold tracking-tight">Clients</h2>
+  </div>
+  <a href="#new-client" class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30">Add Client</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
+  <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
+      <h3 class="text-lg font-semibold">All Clients</h3>
+      <span class="text-xs text-slate-400">{{ clients|length }} records</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800/80">
+        <thead class="bg-slate-900/70">
+          <tr class="text-left text-xs uppercase tracking-wide text-slate-400">
+            <th class="px-6 py-3">Name</th>
+            <th class="px-6 py-3">Company</th>
+            <th class="px-6 py-3">Email</th>
+            <th class="px-6 py-3">Owner</th>
+            <th class="px-6 py-3">Tag</th>
+            <th class="px-6 py-3">Phone</th>
+            <th class="px-6 py-3 text-center">Open Pipelines</th>
+            <th class="px-6 py-3">Created</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 text-sm">
+          {% for client in clients %}
+          <tr class="hover:bg-slate-800/60">
+            <td class="px-6 py-4">
+              <a href="{{ url_for('sales_client_detail', client_id=client.id) }}" class="font-semibold text-emerald-200 hover:underline">
+                {{ client.display_name }}
+              </a>
+              <div class="text-xs text-slate-400">{{ client.category or 'Individual' }}</div>
+            </td>
+            <td class="px-6 py-4">{{ client.company_name or '—' }}</td>
+            <td class="px-6 py-4">{{ client.email or '—' }}</td>
+            <td class="px-6 py-4">{{ client.owner.display_name if client.owner else 'Unassigned' }}</td>
+            <td class="px-6 py-4">
+              {% if client.tag %}
+              <span class="inline-flex items-center px-2 py-1 text-xs rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200">{{ client.tag }}</span>
+              {% else %}
+              <span class="text-xs text-slate-500">None</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">{{ client.phone or '—' }}</td>
+            <td class="px-6 py-4 text-center font-semibold">{{ client.open_opportunity_count }}</td>
+            <td class="px-6 py-4 text-xs text-slate-400">{{ client.created_at.strftime('%b %d, %Y') }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="px-6 py-16 text-center text-slate-500">No clients yet. Add one using the form.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="new-client" class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+    <div class="px-6 py-4 border-b border-slate-800/80">
+      <h3 class="text-lg font-semibold">Create New Client</h3>
+      <p class="text-xs text-slate-400">Capture new contacts for your pipelines.</p>
+    </div>
+    <form method="post" action="{{ url_for('sales_clients_create') }}" class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client Name <span class="text-rose-400">*</span></label>
+        <input type="text" name="display_name" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Company</label>
+        <input type="text" name="company_name" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Email</label>
+          <input type="email" name="email" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Phone</label>
+          <input type="text" name="phone" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
+          <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            <option value="">Unassigned</option>
+            {% for owner in owners %}
+            <option value="{{ owner.id }}">{{ owner.display_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Tag</label>
+          <input type="text" name="tag" placeholder="HOT / Warm" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Category</label>
+          <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            <option value="Individual">Individual</option>
+            <option value="Company">Company</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
+          <input type="text" name="lifecycle_stage" placeholder="Prospect" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
+        <textarea name="description" rows="3" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2"></textarea>
+      </div>
+      <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">
+        Save Client
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Sales · Opportunity · {{ opportunity.title }}{% endblock %}
+{% block content %}
+<div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+  <div>
+    <p class="text-sm text-slate-400">Opportunity · {{ pipeline_config.label if pipeline_config else pipeline_key|capitalize }}</p>
+    <h2 class="text-3xl font-semibold tracking-tight">{{ opportunity.title }}</h2>
+    <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+      <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> {{ opportunity.display_amount }}</span>
+      <span>Stage: {{ opportunity.stage }}</span>
+      {% if opportunity.temperature %}
+        {% set label, badge = opportunity.badge_variant %}
+        <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ badge }}">{{ label or opportunity.temperature|capitalize }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="flex items-center gap-3">
+    <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key=pipeline_key) }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-800/80 bg-slate-900/70 text-sm text-slate-200 hover:bg-slate-800/80">Back to Pipeline</a>
+  </div>
+</div>
+
+<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl">
+  <div class="text-xs uppercase tracking-wide text-slate-500 mb-3">Stage Progress</div>
+  <div class="flex items-center gap-4 overflow-x-auto pb-2">
+    {% for stage_option in stages %}
+    {% set is_current = stage_option == opportunity.stage %}
+    <div class="flex items-center gap-4">
+      <div class="flex flex-col items-center text-center">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center border-2 {{ 'border-emerald-400 bg-emerald-500/20 text-emerald-100' if is_current else 'border-slate-700 text-slate-300 bg-slate-900' }} font-semibold">{{ loop.index }}</div>
+        <span class="mt-2 text-xs {{ 'text-emerald-200 font-semibold' if is_current else 'text-slate-400' }}">{{ stage_option }}</span>
+      </div>
+      {% if not loop.last %}
+      <div class="h-0.5 w-16 {{ 'bg-emerald-400/60' if loop.index0 < current_stage_index else 'bg-slate-700' }}"></div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+  <div class="space-y-6">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+      <div class="px-6 py-4 border-b border-slate-800/80">
+        <h3 class="text-lg font-semibold">Deal Notes</h3>
+      </div>
+      <div class="px-6 py-6">
+        <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
+          <input type="hidden" name="form_action" value="add_note">
+          <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+            <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 text-sm font-semibold hover:bg-emerald-500/30">Add Note</button>
+          </div>
+          <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
+        </form>
+        {% if activities %}
+        <ol class="relative border-l border-slate-800/80 space-y-6 ml-3">
+          {% for activity in activities %}
+          <li class="ml-6">
+            <span class="absolute -left-3 w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 flex items-center justify-center text-xs font-semibold">•</span>
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between text-sm">
+                <p class="font-semibold text-slate-100">{{ activity.title }}</p>
+                <span class="text-xs text-slate-500">{{ activity.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+              </div>
+              {% if activity.notes %}
+              <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
+              {% endif %}
+              {% if activity.actor %}
+              <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">{{ activity.actor.display_name }}</p>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <div class="text-center py-16 text-slate-500">No updates yet. Start logging interactions.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+      <div class="px-6 py-4 border-b border-slate-800/80">
+        <h3 class="text-lg font-semibold">Opportunity Details</h3>
+      </div>
+      <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="px-6 py-5 space-y-4">
+        <input type="hidden" name="form_action" value="update">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title</label>
+          <input type="text" name="title" value="{{ opportunity.title }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" required>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Stage</label>
+            <select name="stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              {% for stage_option in stages %}
+              <option value="{{ stage_option }}" {% if stage_option == opportunity.stage %}selected{% endif %}>{{ stage_option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Temperature</label>
+            <select name="temperature" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">None</option>
+              {% for value, label in temperature_choices %}
+              <option value="{{ value }}" {% if opportunity.temperature == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Amount</label>
+            <input type="text" name="amount" value="{{ opportunity.amount if opportunity.amount is not none else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Probability (%)</label>
+            <input type="number" name="probability" value="{{ opportunity.probability if opportunity.probability is not none else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" min="0" max="100">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Expected Close Date</label>
+            <input type="date" name="expected_close_date" value="{{ opportunity.expected_close_date.isoformat() if opportunity.expected_close_date else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Related Project</label>
+            <input type="text" name="related_project" value="{{ opportunity.related_project or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Project / Site">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
+            <select name="client_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">Select client</option>
+              {% for client in clients %}
+              <option value="{{ client.id }}" {% if opportunity.client and opportunity.client.id == client.id %}selected{% endif %}>{{ client.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
+            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">Unassigned</option>
+              {% for owner in owners %}
+              <option value="{{ owner.id }}" {% if opportunity.owner and opportunity.owner.id == owner.id %}selected{% endif %}>{{ owner.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
+          <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">{{ opportunity.description or '' }}</textarea>
+        </div>
+        <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Opportunity</button>
+      </form>
+    </div>
+
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+      <div class="px-6 py-4 border-b border-slate-800/80">
+        <h3 class="text-lg font-semibold">Snapshot</h3>
+      </div>
+      <dl class="px-6 py-5 grid grid-cols-1 gap-4 text-sm text-slate-300">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
+          <dd>{{ opportunity.client.display_name if opportunity.client else 'Unassigned' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Owner</dt>
+          <dd>{{ opportunity.owner.display_name if opportunity.owner else 'Unassigned' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Expected Close</dt>
+          <dd>{{ opportunity.expected_close_date.strftime('%d %b %Y') if opportunity.expected_close_date else 'Not set' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Probability</dt>
+          <dd>{{ opportunity.probability if opportunity.probability is not none else '—' }}%</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
+          <dd>{{ opportunity.updated_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %}

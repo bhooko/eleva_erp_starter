@@ -202,6 +202,48 @@
             </a>
           </div>
         </div>
+
+        {% set sales_endpoints = [
+          'sales_home','sales_clients','sales_clients_create','sales_client_detail',
+          'sales_opportunities_pipeline','sales_opportunities_create','sales_opportunity_detail','sales_opportunity_stage'
+        ] %}
+        {% set sales_parent_active = request.endpoint in sales_endpoints %}
+        <div class="space-y-1">
+          <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if sales_parent_active else '' }}">
+            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 4h16v2H4zm1 4h14v2H5zm-1 4h16v6H4zm2 2v2h12v-2z"/>
+              </svg>
+            </span>
+            <span class="label text-[15px] flex-1">Sales</span>
+          </div>
+          <div class="pl-12 space-y-1">
+            <a href="{{ url_for('sales_clients') }}"
+               class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_clients','sales_client_detail'] else '' }}">
+              <span class="label">Clients</span>
+            </a>
+            <div class="space-y-1">
+              <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_opportunities_pipeline','sales_opportunity_detail'] else '' }}">
+                <span class="label">Opportunities</span>
+              </a>
+              <div class="pl-8 space-y-1">
+                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
+                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'lift' else '' }}">
+                  <span class="label">Lift</span>
+                </a>
+                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='amc') }}"
+                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'amc' else '' }}">
+                  <span class="label">AMC</span>
+                </a>
+                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='parking') }}"
+                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'parking' else '' }}">
+                  <span class="label">Parking System</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </nav>
 
       {% if current_user.is_authenticated and current_user.is_admin %}
@@ -265,6 +307,8 @@
           {% set section_title = 'QC' %}
         {% elif endpoint in ['forms_new','form_new','forms_create','form_render'] %}
           {% set section_title = 'QC - New form' %}
+        {% elif endpoint in ['sales_home','sales_clients','sales_client_detail','sales_opportunities_pipeline','sales_opportunity_detail'] %}
+          {% set section_title = 'Sales' %}
         {% elif endpoint in ['admin_users'] %}
           {% set section_title = 'Admin' %}
         {% else %}
