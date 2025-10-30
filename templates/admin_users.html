@@ -250,13 +250,24 @@
         </div>
       </div>
     {% endfor %}
-  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6" id="departments">
+  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6" id="departments">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Departments</h2>
         <p class="text-sm text-slate-400">Outline the structure of your organisation and nest departments as needed.</p>
       </div>
+      <button type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              data-section-toggle
+              data-section-target="departments-content"
+              data-label-expanded="Collapse"
+              data-label-collapsed="Expand"
+              aria-controls="departments-content"
+              aria-expanded="true">
+        Collapse
+      </button>
     </header>
+    <div id="departments-content" class="mt-6 space-y-6" data-section-content>
     <form method="post" action="{{ url_for('admin_departments_create') }}" class="grid gap-4 md:grid-cols-2">
       <div class="space-y-1">
         <label class="text-sm text-slate-300">Name</label>
@@ -321,7 +332,7 @@
                   </td>
                   <td class="px-4 py-3 text-right">
                     <div class="flex justify-end gap-2">
-                      <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-modal-target="department-modal-{{ dept.id }}">View</button>
+                      <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-panel-target="department-panel-{{ dept.id }}" aria-controls="department-panel-{{ dept.id }}" aria-expanded="false">View</button>
                       <button type="submit" form="delete-department-{{ dept.id }}" class="inline-flex items-center rounded-lg border border-rose-500/60 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">Delete</button>
                     </div>
                   </td>
@@ -340,82 +351,94 @@
     {% endfor %}
 
     {% for dept in departments %}
-      <div id="department-modal-{{ dept.id }}" class="fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm md:px-0" data-modal aria-hidden="true">
-        <div class="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40">
-          <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-            <div>
-              <h3 class="text-lg font-semibold text-slate-100">{{ dept.full_name }}</h3>
-              <p class="text-xs text-slate-400">Branch: {{ dept.branch }}</p>
-            </div>
-            <button type="button" class="rounded-full border border-slate-700 bg-slate-800/60 px-2 py-1 text-lg leading-none text-slate-300 hover:bg-slate-700" data-modal-close aria-label="Close department details">&times;</button>
+      <div id="department-panel-{{ dept.id }}" class="hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-6 shadow-inner shadow-black/10" data-panel data-panel-group="departments">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-100">{{ dept.full_name }}</h3>
+            <p class="text-xs text-slate-400">Branch: {{ dept.branch }}</p>
           </div>
-          <div class="px-6 py-5 space-y-5">
-            <div class="grid gap-3 text-sm text-slate-200 md:grid-cols-2">
-              <div>
-                <h4 class="text-xs uppercase tracking-wide text-slate-400">Parent</h4>
-                <p>{{ dept.parent.full_name if dept.parent else 'Top level' }}</p>
-              </div>
-              <div>
-                <h4 class="text-xs uppercase tracking-wide text-slate-400">Status</h4>
-                <p>{{ 'Active' if dept.active else 'Inactive' }}</p>
-              </div>
+          <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-panel-close="department-panel-{{ dept.id }}">Close</button>
+        </div>
+        <div class="mt-4 space-y-4 text-sm text-slate-200">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <h4 class="text-xs uppercase tracking-wide text-slate-400">Parent</h4>
+              <p>{{ dept.parent.full_name if dept.parent else 'Top level' }}</p>
+            </div>
+            <div>
+              <h4 class="text-xs uppercase tracking-wide text-slate-400">Status</h4>
+              <p>{{ 'Active' if dept.active else 'Inactive' }}</p>
+            </div>
+            {% if dept.description %}
               <div class="md:col-span-2">
                 <h4 class="text-xs uppercase tracking-wide text-slate-400">Description</h4>
-                <p class="text-sm text-slate-300">{{ dept.description or 'No description provided.' }}</p>
+                <p>{{ dept.description }}</p>
+              </div>
+            {% endif %}
+          </div>
+          <form id="department-{{ dept.id }}" method="post" action="{{ url_for('admin_departments_update', department_id=dept.id) }}" class="space-y-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="space-y-1">
+                <label class="text-xs text-slate-400">Name</label>
+                <input name="name" type="text" value="{{ dept.name }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" data-panel-autofocus />
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs text-slate-400">Branch</label>
+                <select name="branch" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                  {% for branch in department_branches %}
+                    <option value="{{ branch }}" {% if branch == dept.branch %}selected{% endif %}>{{ branch }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs text-slate-400">Parent</label>
+                <select name="parent_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                  <option value="">Top level</option>
+                  {% for option in department_options %}
+                    {% if option.id != dept.id %}
+                      <option value="{{ option.id }}" {% if option.id == (dept.parent.id if dept.parent else None) %}selected{% endif %}>{{ option.full_name }}</option>
+                    {% endif %}
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="md:col-span-2 space-y-1">
+                <label class="text-xs text-slate-400">Description</label>
+                <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">{{ dept.description or '' }}</textarea>
               </div>
             </div>
-            <form id="department-{{ dept.id }}" method="post" action="{{ url_for('admin_departments_update', department_id=dept.id) }}" class="space-y-4">
-              <div class="grid gap-3 md:grid-cols-2">
-                <div class="space-y-1">
-                  <label class="text-xs text-slate-400">Name</label>
-                  <input name="name" type="text" value="{{ dept.name }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" />
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs text-slate-400">Branch</label>
-                  <select name="branch" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
-                    {% for branch in department_branches %}
-                      <option value="{{ branch }}" {% if branch == dept.branch %}selected{% endif %}>{{ branch }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs text-slate-400">Parent</label>
-                  <select name="parent_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
-                    <option value="">Top level</option>
-                    {% for option in department_options %}
-                      {% if option.id != dept.id %}
-                        <option value="{{ option.id }}" {% if option.id == (dept.parent.id if dept.parent else None) %}selected{% endif %}>{{ option.full_name }}</option>
-                      {% endif %}
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="md:col-span-2 space-y-1">
-                  <label class="text-xs text-slate-400">Description</label>
-                  <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">{{ dept.description or '' }}</textarea>
-                </div>
-              </div>
-              <div class="flex items-center justify-between">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if dept.active %}checked{% endif %} />
-                  Active
-                </label>
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500">Save changes</button>
-              </div>
-            </form>
-          </div>
+            <div class="flex items-center justify-between">
+              <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+                <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if dept.active %}checked{% endif %} />
+                Active
+              </label>
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500">Save changes</button>
+            </div>
+          </form>
         </div>
       </div>
     {% endfor %}
+    </div>
   </section>
 
 
-  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6" id="positions">
+  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6" id="positions">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Positions</h2>
         <p class="text-sm text-slate-400">Define roles within departments and connect reporting lines.</p>
       </div>
+      <button type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+              data-section-toggle
+              data-section-target="positions-content"
+              data-label-expanded="Collapse"
+              data-label-collapsed="Expand"
+              aria-controls="positions-content"
+              aria-expanded="true">
+        Collapse
+      </button>
     </header>
+    <div id="positions-content" class="mt-6 space-y-6" data-section-content>
     <form method="post" action="{{ url_for('admin_positions_create') }}" class="grid gap-4 md:grid-cols-2">
       <div class="space-y-1">
         <label class="text-sm text-slate-300">Title</label>
@@ -438,6 +461,7 @@
             <option value="{{ pos.id }}">{{ pos.display_label }}</option>
           {% endfor %}
         </select>
+        <p class="text-xs text-slate-500">Tip: Department heads should report to the Management team.</p>
       </div>
       <div class="md:col-span-2 flex items-center justify-between">
         <label class="inline-flex items-center gap-2 text-sm text-slate-200">
@@ -483,7 +507,7 @@
                   </td>
                   <td class="px-4 py-3 text-right">
                     <div class="flex justify-end gap-2">
-                      <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-modal-target="position-modal-{{ pos.id }}">View</button>
+                      <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-panel-target="position-panel-{{ pos.id }}" aria-controls="position-panel-{{ pos.id }}" aria-expanded="false">View</button>
                       <button type="submit" form="delete-position-{{ pos.id }}" class="inline-flex items-center rounded-lg border border-rose-500/60 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">Delete</button>
                     </div>
                   </td>
@@ -502,57 +526,57 @@
     {% endfor %}
 
     {% for pos in positions %}
-      <div id="position-modal-{{ pos.id }}" class="fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm md:px-0" data-modal aria-hidden="true">
-        <div class="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40">
-          <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-            <div>
-              <h3 class="text-lg font-semibold text-slate-100">{{ pos.display_label }}</h3>
-              {% if pos.reports_to %}
-                <p class="text-xs text-slate-400">Reports to: {{ pos.reports_to.display_label }}</p>
-              {% endif %}
-            </div>
-            <button type="button" class="rounded-full border border-slate-700 bg-slate-800/60 px-2 py-1 text-lg leading-none text-slate-300 hover:bg-slate-700" data-modal-close aria-label="Close position details">&times;</button>
+      <div id="position-panel-{{ pos.id }}" class="hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-6 shadow-inner shadow-black/10" data-panel data-panel-group="positions">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-100">{{ pos.display_label }}</h3>
+            {% if pos.reports_to %}
+              <p class="text-xs text-slate-400">Reports to: {{ pos.reports_to.display_label }}</p>
+            {% else %}
+              <p class="text-xs text-slate-400">No direct manager</p>
+            {% endif %}
           </div>
-          <div class="px-6 py-5 space-y-4">
-            <form id="position-{{ pos.id }}" method="post" action="{{ url_for('admin_positions_update', position_id=pos.id) }}" class="space-y-4">
-              <div class="grid gap-3 md:grid-cols-2">
-                <div class="space-y-1">
-                  <label class="text-xs text-slate-400">Title</label>
-                  <input name="title" type="text" value="{{ pos.title }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" data-modal-autofocus />
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs text-slate-400">Department</label>
-                  <select name="department_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
-                    <option value="">No department</option>
-                    {% for dept in department_options %}
-                      <option value="{{ dept.id }}" {% if pos.department_id == dept.id %}selected{% endif %}>{{ dept.full_name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="md:col-span-2 space-y-1">
-                  <label class="text-xs text-slate-400">Reports to</label>
-                  <select name="reports_to_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
-                    <option value="">No direct manager</option>
-                    {% for option in position_options %}
-                      {% if option.id != pos.id %}
-                        <option value="{{ option.id }}" {% if pos.reports_to_id == option.id %}selected{% endif %}>{{ option.display_label }}</option>
-                      {% endif %}
-                    {% endfor %}
-                  </select>
-                </div>
-              </div>
-              <div class="flex items-center justify-between">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if pos.active %}checked{% endif %} />
-                  Active
-                </label>
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save position</button>
-              </div>
-            </form>
-          </div>
+          <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800" data-panel-close="position-panel-{{ pos.id }}">Close</button>
         </div>
+        <form id="position-{{ pos.id }}" method="post" action="{{ url_for('admin_positions_update', position_id=pos.id) }}" class="mt-4 space-y-4">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Title</label>
+              <input name="title" type="text" value="{{ pos.title }}" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm" data-panel-autofocus />
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs text-slate-400">Department</label>
+              <select name="department_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No department</option>
+                {% for dept in department_options %}
+                  <option value="{{ dept.id }}" {% if pos.department_id == dept.id %}selected{% endif %}>{{ dept.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="md:col-span-2 space-y-1">
+              <label class="text-xs text-slate-400">Reports to</label>
+              <select name="reports_to_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                <option value="">No direct manager</option>
+                {% for option in position_options %}
+                  {% if option.id != pos.id %}
+                    <option value="{{ option.id }}" {% if pos.reports_to_id == option.id %}selected{% endif %}>{{ option.display_label }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <p class="text-xs text-slate-500">Tip: Department heads should report to the Management team.</p>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if pos.active %}checked{% endif %} />
+              Active
+            </label>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save position</button>
+          </div>
+        </form>
       </div>
     {% endfor %}
+    </div>
   </section>
 
 
@@ -607,13 +631,154 @@
         });
       });
 
-      let lastActiveElement = null;
+      const updateSectionVisibility = (button, target, expanded) => {
+        if (!button || !target) {
+          return;
+        }
 
-      const focusModal = (modal) => {
+        if (expanded) {
+          target.classList.remove('hidden');
+        } else {
+          target.classList.add('hidden');
+        }
+
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const expandedLabel = button.getAttribute('data-label-expanded') || button.dataset.labelOriginal || button.textContent;
+        const collapsedLabel = button.getAttribute('data-label-collapsed') || button.dataset.labelOriginal || button.textContent;
+        button.textContent = expanded ? expandedLabel : collapsedLabel;
+      };
+
+      document.querySelectorAll('[data-section-toggle]').forEach((button) => {
+        const targetId = button.getAttribute('data-section-target');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) {
+          button.setAttribute('disabled', 'disabled');
+          return;
+        }
+
+        button.dataset.labelOriginal = button.textContent.trim();
+        updateSectionVisibility(button, target, !target.classList.contains('hidden'));
+
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const shouldExpand = target.classList.contains('hidden');
+          updateSectionVisibility(button, target, shouldExpand);
+          if (shouldExpand && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+
+      const focusPanel = (panel) => {
+        if (!panel) {
+          return;
+        }
+        const autofocus = panel.querySelector('[data-panel-autofocus]') || panel.querySelector('input, select, textarea, button');
+        if (autofocus && typeof autofocus.focus === 'function') {
+          try {
+            autofocus.focus({ preventScroll: true });
+          } catch (error) {
+            autofocus.focus();
+          }
+        }
+      };
+
+      const setTriggerState = (panelId, expanded) => {
+        document.querySelectorAll(`[data-panel-target="${panelId}"]`).forEach((trigger) => {
+          trigger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        });
+      };
+
+      const closePanel = (panel, { returnFocus = true } = {}) => {
+        if (!panel) {
+          return;
+        }
+        panel.classList.add('hidden');
+        panel.removeAttribute('data-panel-open');
+        if (panel.id) {
+          setTriggerState(panel.id, false);
+          if (returnFocus) {
+            const trigger = document.querySelector(`[data-panel-target="${panel.id}"]`);
+            if (trigger && typeof trigger.focus === 'function') {
+              try {
+                trigger.focus({ preventScroll: true });
+              } catch (error) {
+                trigger.focus();
+              }
+            }
+          }
+        }
+      };
+
+      const ensureSectionExpanded = (panel) => {
+        const container = panel ? panel.closest('[data-section-content]') : null;
+        if (!container) {
+          return;
+        }
+        const toggle = document.querySelector(`[data-section-target="${container.id}"]`);
+        if (toggle && container.classList.contains('hidden')) {
+          updateSectionVisibility(toggle, container, true);
+        }
+      };
+
+      const openPanel = (panel, { scroll = true } = {}) => {
+        if (!panel) {
+          return;
+        }
+        ensureSectionExpanded(panel);
+        const group = panel.getAttribute('data-panel-group');
+        if (group) {
+          document.querySelectorAll(`[data-panel][data-panel-group="${group}"][data-panel-open]`).forEach((other) => {
+            if (other !== panel) {
+              closePanel(other, { returnFocus: false });
+            }
+          });
+        }
+
+        panel.classList.remove('hidden');
+        panel.setAttribute('data-panel-open', 'true');
+        if (panel.id) {
+          setTriggerState(panel.id, true);
+        }
+        if (scroll && typeof panel.scrollIntoView === 'function') {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        focusPanel(panel);
+      };
+
+      document.querySelectorAll('[data-panel-target]').forEach((trigger) => {
+        const panelId = trigger.getAttribute('data-panel-target');
+        const panel = panelId ? document.getElementById(panelId) : null;
+        if (!panel) {
+          trigger.setAttribute('disabled', 'disabled');
+          return;
+        }
+
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (panel.classList.contains('hidden')) {
+            openPanel(panel);
+          } else {
+            closePanel(panel);
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-panel-close]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const panelId = button.getAttribute('data-panel-close');
+          const panel = panelId ? document.getElementById(panelId) : button.closest('[data-panel]');
+          closePanel(panel);
+        });
+      });
+
+      let lastModalTrigger = null;
+
+      const focusModalElement = (modal) => {
         if (!modal) {
           return;
         }
-        lastActiveElement = document.activeElement;
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
         const autofocus = modal.querySelector('[data-modal-autofocus]') || modal.querySelector('input, select, textarea, button');
@@ -626,14 +791,14 @@
         }
       };
 
-      const closeModal = (modal) => {
+      const closeModalElement = (modal) => {
         if (!modal) {
           return;
         }
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
-        const focusTarget = lastActiveElement;
-        lastActiveElement = null;
+        const focusTarget = lastModalTrigger;
+        lastModalTrigger = null;
         if (focusTarget && typeof focusTarget.focus === 'function') {
           try {
             focusTarget.focus({ preventScroll: true });
@@ -643,56 +808,94 @@
         }
       };
 
-      const openModal = (modalId) => {
+      const openModalById = (modalId, trigger = null) => {
         if (!modalId) {
           return;
         }
         const modal = document.getElementById(modalId);
-        if (modal) {
-          focusModal(modal);
+        if (!modal) {
+          return;
         }
+        lastModalTrigger = trigger || document.querySelector(`[data-modal-target="${modalId}"]`) || document.activeElement;
+        ensureSectionExpanded(modal);
+        focusModalElement(modal);
       };
 
       document.querySelectorAll('[data-modal-target]').forEach((trigger) => {
-        trigger.addEventListener('click', () => {
-          openModal(trigger.getAttribute('data-modal-target'));
+        const modalId = trigger.getAttribute('data-modal-target');
+        const modal = modalId ? document.getElementById(modalId) : null;
+        if (!modal) {
+          trigger.setAttribute('disabled', 'disabled');
+          return;
+        }
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          openModalById(modalId, trigger);
         });
       });
 
       document.querySelectorAll('[data-modal-close]').forEach((button) => {
-        button.addEventListener('click', () => {
-          closeModal(button.closest('[data-modal]'));
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeModalElement(button.closest('[data-modal]'));
         });
       });
 
       document.querySelectorAll('[data-modal]').forEach((modal) => {
         modal.addEventListener('click', (event) => {
           if (event.target === modal) {
-            closeModal(modal);
+            closeModalElement(modal);
           }
         });
       });
 
+      const handleHashTarget = (hash, { scroll = true } = {}) => {
+        if (!hash || hash === '#create-user-section') {
+          return;
+        }
+        const target = document.querySelector(hash);
+        if (!target) {
+          return;
+        }
+        const modal = target.closest('[data-modal]');
+        if (modal) {
+          openModalById(modal.id);
+          return;
+        }
+        const panel = target.closest('[data-panel]');
+        if (panel) {
+          openPanel(panel, { scroll });
+          return;
+        }
+        const sectionContent = target.closest('[data-section-content]');
+        if (sectionContent) {
+          const toggle = document.querySelector(`[data-section-target="${sectionContent.id}"]`);
+          if (toggle && sectionContent.classList.contains('hidden')) {
+            updateSectionVisibility(toggle, sectionContent, true);
+          }
+        }
+        if (scroll && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      };
+
+      handleHashTarget(window.location.hash || '', { scroll: false });
+      window.addEventListener('hashchange', () => {
+        handleHashTarget(window.location.hash || '');
+      });
+
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
+          document.querySelectorAll('[data-panel][data-panel-open]').forEach((panel) => {
+            closePanel(panel);
+          });
           document.querySelectorAll('[data-modal]').forEach((modal) => {
             if (!modal.classList.contains('hidden')) {
-              closeModal(modal);
+              closeModalElement(modal);
             }
           });
         }
       });
-
-      const hash = window.location.hash;
-      if (hash && hash !== '#create-user-section') {
-        const target = document.querySelector(hash);
-        if (target) {
-          const modal = target.closest('[data-modal]');
-          if (modal) {
-            focusModal(modal);
-          }
-        }
-      }
 
       document.querySelectorAll('form[data-confirm]').forEach((form) => {
         form.addEventListener('submit', (event) => {
