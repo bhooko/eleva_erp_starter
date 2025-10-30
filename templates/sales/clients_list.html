@@ -7,7 +7,9 @@
     <h2 class="text-3xl font-semibold tracking-tight">Clients</h2>
   </div>
   <div class="flex items-center gap-3">
-    {% include "sales/_opportunity_quick_create.html" with default_pipeline_key='lift' opportunity_clients=clients opportunity_owners=owners %}
+    {% with default_pipeline_key='lift', opportunity_clients=clients, opportunity_owners=owners %}
+      {% include "sales/_opportunity_quick_create.html" %}
+    {% endwith %}
     <a href="#new-client" class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30">Add Client</a>
   </div>
 </div>

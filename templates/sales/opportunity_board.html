@@ -43,11 +43,11 @@
             {% for opp in grouped.get(stage, []) %}
             <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 space-y-3 cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}">
               <div class="flex items-start justify-between gap-2.5">
-                <div>
-                  <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="text-sm font-semibold text-emerald-200 hover:underline">{{ opp.title }}</a>
+                <div class="flex-1 min-w-0">
+                  <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="block text-sm font-semibold text-emerald-200 hover:underline break-words">{{ opp.title }}</a>
                   <div class="mt-1 text-xs text-slate-400 flex flex-col gap-1">
                     {% if opp.client %}
-                    <span>{{ opp.client.display_name }}</span>
+                    <span class="break-words">{{ opp.client.display_name }}</span>
                     {% endif %}
                     <span>{{ opp.display_amount }}</span>
                   </div>
