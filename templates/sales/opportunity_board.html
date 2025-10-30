@@ -1,27 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Sales · Opportunities · {{ pipeline_config.label }}{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <p class="text-sm text-slate-400">Sales Pipeline</p>
-  <div class="flex flex-wrap items-center gap-3">
-    <h2 class="text-3xl font-semibold tracking-tight">{{ pipeline_config.label }} Opportunities</h2>
-    <span class="text-xs text-slate-500 border border-slate-800/80 rounded-lg px-3 py-1">{{ stages|length }} stages</span>
+<div class="mb-6 space-y-4">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-sm text-slate-400">Sales Pipeline</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <h2 class="text-3xl font-semibold tracking-tight">{{ pipeline_config.label }} Opportunities</h2>
+        <span class="text-xs text-slate-500 border border-slate-800/80 rounded-lg px-3 py-1">{{ stages|length }} stages</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      {% include "sales/_opportunity_quick_create.html" with default_pipeline_key=pipeline_key opportunity_clients=clients opportunity_owners=owners %}
+    </div>
   </div>
-  <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+  <div class="flex flex-wrap items-center gap-2 text-sm">
     {% for key, cfg in pipeline_map.items() %}
     <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key=key) }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' if key==pipeline_key else 'border-slate-800/80 bg-slate-900/70 text-slate-300 hover:bg-slate-800/70' }}">{{ cfg.label }}</a>
     {% endfor %}
   </div>
 </div>
 
-<div class="grid gap-6 xl:grid-cols-[1fr_320px]">
-  <div class="bg-slate-900/40 rounded-2xl border border-slate-800/80 shadow-xl overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
-      <h3 class="text-lg font-semibold">Pipeline View</h3>
-      <span class="text-xs text-slate-400">{{ total_opportunities }} deals</span>
-    </div>
-    <div class="overflow-x-auto">
-      <div class="min-w-max grid gap-4 px-6 py-6" style="grid-template-columns: repeat({{ stages|length }}, minmax(240px, 1fr));">
+<div class="bg-slate-900/40 rounded-2xl border border-slate-800/80 shadow-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
+    <h3 class="text-lg font-semibold">Pipeline View</h3>
+    <span class="text-xs text-slate-400">{{ total_opportunities }} deals</span>
+  </div>
+  <div class="overflow-x-auto">
+    <div class="min-w-max grid gap-4 px-6 py-6" style="grid-template-columns: repeat({{ stages|length }}, minmax(240px, 1fr));">
         {% for stage in stages %}
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl flex flex-col">
           <div class="px-4 py-3 border-b border-slate-800/80 flex items-center justify-between">
@@ -72,83 +78,20 @@
       </div>
     </div>
   </div>
+</div>
 
-  <div class="space-y-6">
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-5 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Create Opportunity</h3>
-        <p class="text-xs text-slate-400">Log a new deal into the {{ pipeline_config.label }} pipeline.</p>
-      </div>
-      <form method="post" action="{{ url_for('sales_opportunities_create') }}" class="px-5 py-5 space-y-4">
-        <input type="hidden" name="pipeline" value="{{ pipeline_key }}">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title <span class="text-rose-400">*</span></label>
-          <input type="text" name="title" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Stage</label>
-          <select name="stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-            {% for stage_option in stages %}
-            <option value="{{ stage_option }}">{{ stage_option }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
-            <select name="client_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Select client</option>
-              {% for client in clients %}
-              <option value="{{ client.id }}">{{ client.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
-            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Unassigned</option>
-              {% for owner in owners %}
-              <option value="{{ owner.id }}">{{ owner.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Amount</label>
-            <input type="text" name="amount" placeholder="0.00" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Temperature</label>
-            <select name="temperature" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">None</option>
-              {% for value, label in temperature_choices %}
-              <option value="{{ value }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
-          <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2"></textarea>
-        </div>
-        <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Add Opportunity</button>
-      </form>
-    </div>
-
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-5 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Pipeline Summary</h3>
-      </div>
-      <ul class="px-5 py-4 space-y-3 text-sm text-slate-300">
-        {% for stage in stages %}
-        <li class="flex items-center justify-between">
-          <span>{{ stage }}</span>
-          <span class="text-xs text-slate-500">{{ grouped.get(stage, [])|length }} deals</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
+<div class="mt-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+  <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+    <h3 class="text-lg font-semibold">Pipeline Summary</h3>
+    <span class="text-xs text-slate-400">Updated live from pipeline view</span>
   </div>
+  <ul class="px-5 py-4 space-y-3 text-sm text-slate-300">
+    {% for stage in stages %}
+    <li class="flex items-center justify-between">
+      <span>{{ stage }}</span>
+      <span class="text-xs text-slate-500">{{ grouped.get(stage, [])|length }} deals</span>
+    </li>
+    {% endfor %}
+  </ul>
 </div>
 {% endblock %}

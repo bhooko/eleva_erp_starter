@@ -12,7 +12,7 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re, uuid
+import os, json, datetime, sqlite3, threading, re, uuid, random, string
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
@@ -109,6 +109,25 @@ def get_pipeline_config(pipeline_key):
 
 def get_pipeline_stages(pipeline_key):
     return get_pipeline_config(pipeline_key)["stages"]
+
+
+def _random_digits(length=10):
+    return "".join(random.choice(string.digits) for _ in range(length))
+
+
+def generate_random_phone(country_code="+91"):
+    return f"{country_code}-{_random_digits(10)}"
+
+
+def generate_random_email(domains=None):
+    domain_pool = domains or [
+        "example.com",
+        "maildrop.cc",
+        "inbound.test",
+        "demo.local",
+    ]
+    local_part = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    return f"{local_part}@{random.choice(domain_pool)}"
 
 
 def log_sales_activity(parent_type, parent_id, title, notes=None, actor=None):
@@ -1380,8 +1399,8 @@ def bootstrap_db():
             SalesClient(
                 display_name="Ted Watson",
                 company_name="Watson Professional Services",
-                email="support@bigin.com",
-                phone="+91-8080808080",
+                email=generate_random_email(),
+                phone=generate_random_phone(),
                 tag="Priority",
                 category="Company",
                 owner=owner,
@@ -1391,8 +1410,8 @@ def bootstrap_db():
             SalesClient(
                 display_name="Mrs. Vanmsee Krishna Naidu",
                 company_name="Individual",
-                email="naidu@example.com",
-                phone="+91-9922334455",
+                email=generate_random_email(),
+                phone=generate_random_phone(),
                 tag="HOT",
                 category="Individual",
                 owner=owner,
@@ -1401,8 +1420,8 @@ def bootstrap_db():
             SalesClient(
                 display_name="Fortuna Building",
                 company_name="Fortuna Holdings",
-                email="info@fortuna.in",
-                phone="+91-8899776655",
+                email=generate_random_email(),
+                phone=generate_random_phone(),
                 tag="",
                 category="Company",
                 owner=owner,
@@ -1569,6 +1588,7 @@ def sales_clients():
         clients=clients,
         owners=owners,
         pipeline_map=SALES_PIPELINES,
+        temperature_choices=SALES_TEMPERATURES,
     )
 
 
@@ -1656,6 +1676,7 @@ def sales_client_detail(client_id):
     )
     owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
     open_opportunities = [opp for opp in client.opportunities if not opp.is_closed]
+    all_clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
     return render_template(
         "sales/client_detail.html",
         client=client,
@@ -1663,6 +1684,8 @@ def sales_client_detail(client_id):
         activities=activities,
         open_opportunities=open_opportunities,
         pipeline_map=SALES_PIPELINES,
+        opportunity_clients=all_clients,
+        temperature_choices=SALES_TEMPERATURES,
     )
 
 
@@ -1863,6 +1886,7 @@ def sales_opportunity_detail(opportunity_id):
         clients=clients,
         activities=activities,
         temperature_choices=SALES_TEMPERATURES,
+        pipeline_map=SALES_PIPELINES,
     )
 
 
