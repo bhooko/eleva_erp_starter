@@ -59,6 +59,69 @@ PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
 PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
 DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
+SALES_PIPELINES = {
+    "lift": {
+        "label": "Lift",
+        "stages": [
+            "New Enquiry",
+            "Site Visit",
+            "Quote Submission",
+            "Negotiation",
+            "Closed Won",
+            "Closed Lost",
+        ],
+    },
+    "amc": {
+        "label": "AMC",
+        "stages": [
+            "New AMC Enquiry",
+            "Technician Visit",
+            "Quote Submission",
+            "Negotiation",
+            "Closed Won",
+            "Closed Lost",
+        ],
+    },
+    "parking": {
+        "label": "Parking System",
+        "stages": [
+            "New Parking Enquiry",
+            "Site Assessment",
+            "Proposal Shared",
+            "Negotiation",
+            "Closed Won",
+            "Closed Lost",
+        ],
+    },
+}
+
+SALES_TEMPERATURES = [
+    ("cold", "Cold"),
+    ("warm", "Warm"),
+    ("hot", "Hot"),
+]
+
+
+def get_pipeline_config(pipeline_key):
+    key = (pipeline_key or "lift").lower()
+    return SALES_PIPELINES.get(key, SALES_PIPELINES["lift"])
+
+
+def get_pipeline_stages(pipeline_key):
+    return get_pipeline_config(pipeline_key)["stages"]
+
+
+def log_sales_activity(parent_type, parent_id, title, notes=None, actor=None):
+    entry = SalesActivity(
+        parent_type=parent_type,
+        parent_id=parent_id,
+        actor=actor or (current_user if current_user.is_authenticated else None),
+        title=title,
+        notes=notes,
+    )
+    db.session.add(entry)
+    return entry
+
 
 def normalize_floor_label(raw_value):
     value = (raw_value or "").strip()
@@ -627,6 +690,101 @@ class TaskTemplate(db.Model):
         return 0
 
 
+class SalesClient(db.Model):
+    __tablename__ = "sales_client"
+
+    id = db.Column(db.Integer, primary_key=True)
+    display_name = db.Column(db.String(150), nullable=False)
+    company_name = db.Column(db.String(200), nullable=True)
+    email = db.Column(db.String(200), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    tag = db.Column(db.String(60), nullable=True)
+    category = db.Column(db.String(60), default="Individual")
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    lifecycle_stage = db.Column(db.String(120), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    owner = db.relationship("User")
+    opportunities = db.relationship(
+        "SalesOpportunity",
+        back_populates="client",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def open_opportunity_count(self):
+        return sum(1 for opp in self.opportunities if (opp.status or "").lower() != "closed")
+
+
+class SalesOpportunity(db.Model):
+    __tablename__ = "sales_opportunity"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    pipeline = db.Column(db.String(40), nullable=False, default="lift")
+    stage = db.Column(db.String(120), nullable=False)
+    status = db.Column(db.String(40), default="Open")
+    temperature = db.Column(db.String(20), nullable=True)
+    amount = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(8), default="₹")
+    expected_close_date = db.Column(db.Date, nullable=True)
+    probability = db.Column(db.Integer, nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
+    related_project = db.Column(db.String(200), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    owner = db.relationship("User")
+    client = db.relationship("SalesClient", back_populates="opportunities")
+
+    @property
+    def display_amount(self):
+        if self.amount is None:
+            return "—"
+        return f"{self.currency or '₹'}{self.amount:,.2f}"
+
+    @property
+    def is_closed(self):
+        status = (self.status or "").lower()
+        return status == "closed" or self.stage.lower().startswith("closed")
+
+    @property
+    def badge_variant(self):
+        mapping = {
+            "hot": ("Hot", "bg-rose-500/20 text-rose-300 border border-rose-500/40"),
+            "warm": ("Warm", "bg-amber-500/20 text-amber-200 border border-amber-500/40"),
+            "cold": ("Cold", "bg-sky-500/20 text-sky-200 border border-sky-500/40"),
+        }
+        key = (self.temperature or "").strip().lower()
+        return mapping.get(key, (None, "bg-slate-800/60 text-slate-300 border border-slate-700/60"))
+
+
+class SalesActivity(db.Model):
+    __tablename__ = "sales_activity"
+
+    id = db.Column(db.Integer, primary_key=True)
+    parent_type = db.Column(db.String(30), nullable=False)
+    parent_id = db.Column(db.Integer, nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    actor = db.relationship("User")
+
+
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
 class QCWork(db.Model):
     __tablename__ = "qc_work"
@@ -1118,6 +1276,9 @@ def ensure_tables():
         ProjectTemplateTask.__table__,
         ProjectTemplateTaskDependency.__table__,
         TaskTemplate.__table__,
+        SalesClient.__table__,
+        SalesOpportunity.__table__,
+        SalesActivity.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -1213,6 +1374,107 @@ def bootstrap_db():
         db.session.flush()
         set_template_task_dependencies(follow_up, [stage_task.id])
 
+    if SalesClient.query.count() == 0:
+        owner = admin_user or User.query.first()
+        client_entries = [
+            SalesClient(
+                display_name="Ted Watson",
+                company_name="Watson Professional Services",
+                email="support@bigin.com",
+                phone="+91-8080808080",
+                tag="Priority",
+                category="Company",
+                owner=owner,
+                lifecycle_stage="Prospect",
+                description="Key account for premium installations.",
+            ),
+            SalesClient(
+                display_name="Mrs. Vanmsee Krishna Naidu",
+                company_name="Individual",
+                email="naidu@example.com",
+                phone="+91-9922334455",
+                tag="HOT",
+                category="Individual",
+                owner=owner,
+                lifecycle_stage="Negotiation",
+            ),
+            SalesClient(
+                display_name="Fortuna Building",
+                company_name="Fortuna Holdings",
+                email="info@fortuna.in",
+                phone="+91-8899776655",
+                tag="",
+                category="Company",
+                owner=owner,
+                lifecycle_stage="Customer",
+            ),
+        ]
+        db.session.add_all(client_entries)
+        db.session.flush()
+
+        lift_stages = get_pipeline_stages("lift")
+        amc_stages = get_pipeline_stages("amc")
+        parking_stages = get_pipeline_stages("parking")
+
+        opportunity_entries = [
+            SalesOpportunity(
+                title="Lotus Avenue Site - 2 Cars",
+                pipeline="lift",
+                stage=lift_stages[0],
+                temperature="cold",
+                amount=1250000,
+                owner=owner,
+                client=client_entries[0],
+                description="New enquiry for twin passenger lifts.",
+            ),
+            SalesOpportunity(
+                title="Greenridge Heights Modernization",
+                pipeline="lift",
+                stage=lift_stages[2],
+                temperature="warm",
+                amount=980000,
+                owner=owner,
+                client=client_entries[1],
+                description="Quote shared for modernization package.",
+            ),
+            SalesOpportunity(
+                title="Metro Arcade AMC Renewal",
+                pipeline="amc",
+                stage=amc_stages[1],
+                temperature="warm",
+                amount=185000,
+                owner=owner,
+                client=client_entries[2],
+            ),
+            SalesOpportunity(
+                title="Skyline Parking System Phase 2",
+                pipeline="parking",
+                stage=parking_stages[0],
+                temperature="hot",
+                amount=2250000,
+                owner=owner,
+                client=client_entries[0],
+            ),
+        ]
+        db.session.add_all(opportunity_entries)
+        db.session.flush()
+
+        for entity in client_entries + opportunity_entries:
+            db.session.add(SalesActivity(
+                parent_type="client" if isinstance(entity, SalesClient) else "opportunity",
+                parent_id=entity.id,
+                actor=owner,
+                title="Record created",
+                notes="Automatically generated sample record to showcase the Sales workspace.",
+            ))
+            db.session.add(SalesActivity(
+                parent_type="client" if isinstance(entity, SalesClient) else "opportunity",
+                parent_id=entity.id,
+                actor=owner,
+                title="Intro note",
+                notes="Add your updates here to keep the timeline current.",
+            ))
+
     db.session.commit()
     synchronize_dependency_links()
 # -----------------------------------------------------------------------
@@ -1286,6 +1548,344 @@ def profile():
 
     return render_template("profile.html")
 
+
+@app.route("/sales")
+@login_required
+def sales_home():
+    return redirect(url_for("sales_clients"))
+
+
+@app.route("/sales/clients")
+@login_required
+def sales_clients():
+    clients = (
+        SalesClient.query
+        .order_by(SalesClient.display_name.asc())
+        .all()
+    )
+    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    return render_template(
+        "sales/clients_list.html",
+        clients=clients,
+        owners=owners,
+        pipeline_map=SALES_PIPELINES,
+    )
+
+
+@app.route("/sales/clients/create", methods=["POST"])
+@login_required
+def sales_clients_create():
+    name = (request.form.get("display_name") or "").strip()
+    if not name:
+        flash("Client name is required.", "error")
+        return redirect(url_for("sales_clients"))
+
+    client = SalesClient(
+        display_name=name,
+        company_name=(request.form.get("company_name") or "").strip() or None,
+        email=(request.form.get("email") or "").strip() or None,
+        phone=(request.form.get("phone") or "").strip() or None,
+        tag=(request.form.get("tag") or "").strip() or None,
+        category=(request.form.get("category") or "Individual").strip() or "Individual",
+        lifecycle_stage=(request.form.get("lifecycle_stage") or "").strip() or None,
+        description=(request.form.get("description") or "").strip() or None,
+    )
+
+    owner_id_raw = request.form.get("owner_id")
+    if owner_id_raw:
+        try:
+            client.owner = db.session.get(User, int(owner_id_raw))
+        except (TypeError, ValueError):
+            client.owner = None
+
+    db.session.add(client)
+    db.session.flush()
+    log_sales_activity("client", client.id, "Client created")
+    db.session.commit()
+    flash(f"Client '{client.display_name}' created.", "success")
+    return redirect(url_for("sales_client_detail", client_id=client.id))
+
+
+@app.route("/sales/clients/<int:client_id>", methods=["GET", "POST"])
+@login_required
+def sales_client_detail(client_id):
+    client = db.session.get(SalesClient, client_id)
+    if not client:
+        flash("Client not found.", "error")
+        return redirect(url_for("sales_clients"))
+
+    if request.method == "POST":
+        action = request.form.get("form_action") or "update"
+        if action == "update":
+            client.display_name = (request.form.get("display_name") or "").strip() or client.display_name
+            client.company_name = (request.form.get("company_name") or "").strip() or None
+            client.email = (request.form.get("email") or "").strip() or None
+            client.phone = (request.form.get("phone") or "").strip() or None
+            client.tag = (request.form.get("tag") or "").strip() or None
+            client.category = (request.form.get("category") or "").strip() or "Individual"
+            client.lifecycle_stage = (request.form.get("lifecycle_stage") or "").strip() or None
+            client.description = (request.form.get("description") or "").strip() or None
+
+            owner_id_raw = request.form.get("owner_id")
+            if owner_id_raw:
+                try:
+                    client.owner = db.session.get(User, int(owner_id_raw))
+                except (TypeError, ValueError):
+                    client.owner = None
+            else:
+                client.owner = None
+
+            log_sales_activity("client", client.id, "Client updated", actor=current_user)
+            db.session.commit()
+            flash("Client details updated.", "success")
+            return redirect(url_for("sales_client_detail", client_id=client.id))
+
+        elif action == "add_note":
+            note_title = (request.form.get("note_title") or "").strip() or "Timeline update"
+            note_body = (request.form.get("note_body") or "").strip() or None
+            log_sales_activity("client", client.id, note_title, notes=note_body)
+            db.session.commit()
+            flash("Timeline note added.", "success")
+            return redirect(url_for("sales_client_detail", client_id=client.id))
+
+    activities = (
+        SalesActivity.query
+        .filter_by(parent_type="client", parent_id=client.id)
+        .order_by(SalesActivity.created_at.desc())
+        .all()
+    )
+    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    open_opportunities = [opp for opp in client.opportunities if not opp.is_closed]
+    return render_template(
+        "sales/client_detail.html",
+        client=client,
+        owners=owners,
+        activities=activities,
+        open_opportunities=open_opportunities,
+        pipeline_map=SALES_PIPELINES,
+    )
+
+
+@app.route("/sales/opportunities/<pipeline_key>")
+@login_required
+def sales_opportunities_pipeline(pipeline_key):
+    pipeline_key = (pipeline_key or "lift").lower()
+    config = get_pipeline_config(pipeline_key)
+    stages = list(config["stages"])
+    opportunities = (
+        SalesOpportunity.query
+        .filter(SalesOpportunity.pipeline == pipeline_key)
+        .order_by(SalesOpportunity.stage.asc(), SalesOpportunity.updated_at.desc())
+        .all()
+    )
+
+    grouped = {stage: [] for stage in stages}
+    for opp in opportunities:
+        grouped.setdefault(opp.stage, []).append(opp)
+
+    for stage_list in grouped.values():
+        stage_list.sort(key=lambda o: o.updated_at or o.created_at, reverse=True)
+
+    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
+    temperature_choices = SALES_TEMPERATURES
+    total_opportunities = sum(len(items) for items in grouped.values())
+
+    return render_template(
+        "sales/opportunity_board.html",
+        pipeline_key=pipeline_key,
+        pipeline_config=config,
+        stages=stages,
+        grouped=grouped,
+        owners=owners,
+        clients=clients,
+        temperature_choices=temperature_choices,
+        pipeline_map=SALES_PIPELINES,
+        total_opportunities=total_opportunities,
+    )
+
+
+@app.route("/sales/opportunities/create", methods=["POST"])
+@login_required
+def sales_opportunities_create():
+    title = (request.form.get("title") or "").strip()
+    pipeline_key = (request.form.get("pipeline") or "lift").lower()
+    config = get_pipeline_config(pipeline_key)
+
+    if not title:
+        flash("Opportunity title is required.", "error")
+        return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
+
+    stage_value = (request.form.get("stage") or config["stages"][0]).strip()
+    if stage_value not in config["stages"]:
+        stage_value = config["stages"][0]
+
+    amount_raw = (request.form.get("amount") or "").strip()
+    amount_value = None
+    if amount_raw:
+        try:
+            amount_value = float(amount_raw)
+        except ValueError:
+            flash("Amount must be a valid number.", "error")
+            return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
+
+    opportunity = SalesOpportunity(
+        title=title,
+        pipeline=pipeline_key,
+        stage=stage_value,
+        temperature=(request.form.get("temperature") or "").strip() or None,
+        amount=amount_value,
+        description=(request.form.get("description") or "").strip() or None,
+    )
+
+    client_id_raw = request.form.get("client_id")
+    if client_id_raw:
+        try:
+            opportunity.client = db.session.get(SalesClient, int(client_id_raw))
+        except (TypeError, ValueError):
+            opportunity.client = None
+
+    owner_id_raw = request.form.get("owner_id")
+    if owner_id_raw:
+        try:
+            opportunity.owner = db.session.get(User, int(owner_id_raw))
+        except (TypeError, ValueError):
+            opportunity.owner = None
+
+    db.session.add(opportunity)
+    db.session.flush()
+    log_sales_activity("opportunity", opportunity.id, "Opportunity created")
+    db.session.commit()
+    flash("Opportunity created.", "success")
+    return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
+
+
+@app.route("/sales/opportunities/<int:opportunity_id>", methods=["GET", "POST"])
+@login_required
+def sales_opportunity_detail(opportunity_id):
+    opportunity = db.session.get(SalesOpportunity, opportunity_id)
+    if not opportunity:
+        flash("Opportunity not found.", "error")
+        return redirect(url_for("sales_opportunities_pipeline", pipeline_key="lift"))
+
+    pipeline_key = opportunity.pipeline
+    stages = get_pipeline_stages(pipeline_key)
+    pipeline_config = get_pipeline_config(pipeline_key)
+    current_stage_index = stages.index(opportunity.stage) if opportunity.stage in stages else 0
+
+    if request.method == "POST":
+        action = request.form.get("form_action") or "update"
+        if action == "update":
+            opportunity.title = (request.form.get("title") or "").strip() or opportunity.title
+            stage_value = (request.form.get("stage") or stages[0]).strip()
+            if stage_value not in stages:
+                stage_value = stages[0]
+            opportunity.stage = stage_value
+            opportunity.temperature = (request.form.get("temperature") or "").strip() or None
+            amount_raw = (request.form.get("amount") or "").strip()
+            if amount_raw:
+                try:
+                    opportunity.amount = float(amount_raw)
+                except ValueError:
+                    flash("Amount must be a valid number.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            else:
+                opportunity.amount = None
+            probability_raw = (request.form.get("probability") or "").strip()
+            if probability_raw:
+                try:
+                    opportunity.probability = int(probability_raw)
+                except ValueError:
+                    flash("Probability must be a whole number.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            else:
+                opportunity.probability = None
+            expected_close_raw = (request.form.get("expected_close_date") or "").strip()
+            if expected_close_raw:
+                try:
+                    opportunity.expected_close_date = datetime.datetime.strptime(expected_close_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    flash("Expected close date must be YYYY-MM-DD.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            else:
+                opportunity.expected_close_date = None
+            opportunity.related_project = (request.form.get("related_project") or "").strip() or None
+            opportunity.description = (request.form.get("description") or "").strip() or None
+
+            client_id_raw = request.form.get("client_id")
+            if client_id_raw:
+                try:
+                    opportunity.client = db.session.get(SalesClient, int(client_id_raw))
+                except (TypeError, ValueError):
+                    opportunity.client = None
+            else:
+                opportunity.client = None
+
+            owner_id_raw = request.form.get("owner_id")
+            if owner_id_raw:
+                try:
+                    opportunity.owner = db.session.get(User, int(owner_id_raw))
+                except (TypeError, ValueError):
+                    opportunity.owner = None
+            else:
+                opportunity.owner = None
+
+            log_sales_activity("opportunity", opportunity.id, "Opportunity updated", actor=current_user)
+            db.session.commit()
+            flash("Opportunity updated.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "add_note":
+            note_title = (request.form.get("note_title") or "").strip() or "Timeline update"
+            note_body = (request.form.get("note_body") or "").strip() or None
+            log_sales_activity("opportunity", opportunity.id, note_title, notes=note_body)
+            db.session.commit()
+            flash("Timeline note added.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    activities = (
+        SalesActivity.query
+        .filter_by(parent_type="opportunity", parent_id=opportunity.id)
+        .order_by(SalesActivity.created_at.desc())
+        .all()
+    )
+    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
+
+    return render_template(
+        "sales/opportunity_detail.html",
+        opportunity=opportunity,
+        pipeline_key=pipeline_key,
+        pipeline_config=pipeline_config,
+        stages=stages,
+        current_stage_index=current_stage_index,
+        owners=owners,
+        clients=clients,
+        activities=activities,
+        temperature_choices=SALES_TEMPERATURES,
+    )
+
+
+@app.route("/sales/opportunities/<int:opportunity_id>/stage", methods=["POST"])
+@login_required
+def sales_opportunity_stage(opportunity_id):
+    opportunity = db.session.get(SalesOpportunity, opportunity_id)
+    if not opportunity:
+        flash("Opportunity not found.", "error")
+        return redirect(url_for("sales_opportunities_pipeline", pipeline_key="lift"))
+
+    pipeline_key = opportunity.pipeline
+    stage = (request.form.get("stage") or "").strip()
+    stages = get_pipeline_stages(pipeline_key)
+    if stage not in stages:
+        flash("Invalid stage selected.", "error")
+    else:
+        opportunity.stage = stage
+        log_sales_activity("opportunity", opportunity.id, f"Stage moved to {stage}")
+        db.session.commit()
+        flash("Opportunity stage updated.", "success")
+
+    return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
 
 def _require_admin():
     if not current_user.is_admin:
