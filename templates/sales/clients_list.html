@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Sales · Clients{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
   <div>
     <p class="text-sm text-slate-400">Sales Workspace</p>
     <h2 class="text-3xl font-semibold tracking-tight">Clients</h2>
   </div>
-  <a href="#new-client" class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30">Add Client</a>
+  <div class="flex items-center gap-3">
+    {% include "sales/_opportunity_quick_create.html" with default_pipeline_key='lift' opportunity_clients=clients opportunity_owners=owners %}
+    <a href="#new-client" class="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 hover:bg-emerald-500/30">Add Client</a>
+  </div>
 </div>
 
 <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">

@@ -1,0 +1,165 @@
+{% set modal_id = 'opportunityModal' %}
+{% set modal_clients = opportunity_clients if opportunity_clients is defined else clients %}
+{% set modal_owners = opportunity_owners if opportunity_owners is defined else owners %}
+{% set modal_pipeline_key = default_pipeline_key if default_pipeline_key is defined else (pipeline_key if pipeline_key is defined else 'lift') %}
+{% set modal_temperature_choices = temperature_choices if temperature_choices is defined else [] %}
+{% set modal_default_client = default_client_id if default_client_id is defined else None %}
+
+<button type="button"
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 text-sm font-semibold hover:bg-emerald-500/30"
+        data-default-pipeline="{{ modal_pipeline_key }}"
+        {% if modal_default_client %}data-default-client="{{ modal_default_client }}"{% endif %}
+        onclick="window.showOpportunityModal && window.showOpportunityModal(this)">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+  <span class="hidden sm:inline">New Opportunity</span>
+</button>
+
+<div id="{{ modal_id }}" class="fixed inset-0 z-50 hidden">
+  <div id="{{ modal_id }}Overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onclick="window.closeOpportunityModal && window.closeOpportunityModal()"></div>
+  <div class="relative mx-auto mt-16 w-full max-w-2xl px-4">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800/80">
+        <div>
+          <h3 class="text-lg font-semibold">Create Opportunity</h3>
+          <p class="text-xs text-slate-400">Log a new deal into the pipeline.</p>
+        </div>
+        <button type="button" class="text-slate-400 hover:text-slate-200" onclick="window.closeOpportunityModal && window.closeOpportunityModal()">&times;</button>
+      </div>
+      <form method="post" action="{{ url_for('sales_opportunities_create') }}" class="px-6 py-5 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Pipeline</label>
+            <select name="pipeline" id="{{ modal_id }}Pipeline" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              {% for key, cfg in pipeline_map.items() %}
+              <option value="{{ key }}" {% if key == modal_pipeline_key %}selected{% endif %}>{{ cfg.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Stage</label>
+            <select name="stage" id="{{ modal_id }}Stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2"></select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title <span class="text-rose-400">*</span></label>
+          <input type="text" name="title" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
+            <select name="client_id" id="{{ modal_id }}Client" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">Select client</option>
+              {% for client_option in modal_clients %}
+              <option value="{{ client_option.id }}">{{ client_option.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
+            <select name="owner_id" id="{{ modal_id }}Owner" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">Unassigned</option>
+              {% for owner_option in modal_owners %}
+              <option value="{{ owner_option.id }}">{{ owner_option.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Amount</label>
+            <input type="text" name="amount" placeholder="0.00" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Temperature</label>
+            <select name="temperature" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">None</option>
+              {% for value, label in modal_temperature_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
+          <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2"></textarea>
+        </div>
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" class="px-4 py-2 rounded-xl border border-slate-800/80 text-slate-300 hover:text-white" onclick="window.closeOpportunityModal && window.closeOpportunityModal()">Cancel</button>
+          <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Opportunity</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    if (window.__opportunityModalInitialized) { return; }
+    window.__opportunityModalInitialized = true;
+
+    const modalId = '{{ modal_id }}';
+    const modal = document.getElementById(modalId);
+    const pipelineSelect = document.getElementById(modalId + 'Pipeline');
+    const stageSelect = document.getElementById(modalId + 'Stage');
+    const clientSelect = document.getElementById(modalId + 'Client');
+    const pipelineStages = {{ pipeline_map|tojson }};
+
+    function updateStageOptions(pipelineKey, selectedStage) {
+      const stages = (pipelineStages[pipelineKey] && pipelineStages[pipelineKey].stages) || [];
+      stageSelect.innerHTML = '';
+      stages.forEach(function(stage) {
+        const option = document.createElement('option');
+        option.value = stage;
+        option.textContent = stage;
+        if (selectedStage && selectedStage === stage) {
+          option.selected = true;
+        }
+        stageSelect.appendChild(option);
+      });
+      if (!stageSelect.value && stageSelect.options.length) {
+        stageSelect.options[0].selected = true;
+      }
+    }
+
+    function trapFocus(event) {
+      if (!modal.classList.contains('hidden') && !modal.contains(event.target)) {
+        event.stopPropagation();
+        pipelineSelect.focus();
+      }
+    }
+
+    pipelineSelect.addEventListener('change', function() {
+      updateStageOptions(this.value);
+    });
+
+    document.addEventListener('focus', trapFocus, true);
+
+    window.showOpportunityModal = function(trigger) {
+      const defaults = trigger && trigger.dataset ? trigger.dataset : {};
+      const pipelineKey = defaults.defaultPipeline || pipelineSelect.value || '{{ modal_pipeline_key }}';
+      pipelineSelect.value = pipelineKey;
+      updateStageOptions(pipelineKey, defaults.defaultStage);
+
+      if (clientSelect && clientSelect.options.length) {
+        if (defaults.defaultClient) {
+          clientSelect.value = defaults.defaultClient;
+        } else {
+          clientSelect.selectedIndex = 0;
+        }
+      }
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      pipelineSelect.focus();
+    };
+
+    window.closeOpportunityModal = function() {
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    };
+
+    updateStageOptions(pipelineSelect.value || '{{ modal_pipeline_key }}');
+  })();
+</script>
