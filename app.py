@@ -1894,7 +1894,11 @@ def sales_opportunity_detail(opportunity_id):
 @login_required
 def sales_opportunity_stage(opportunity_id):
     opportunity = db.session.get(SalesOpportunity, opportunity_id)
+    accepts = request.accept_mimetypes.best
+    wants_json = request.headers.get("X-Requested-With") == "XMLHttpRequest" or accepts == "application/json"
     if not opportunity:
+        if wants_json:
+            return jsonify({"success": False, "message": "Opportunity not found."}), 404
         flash("Opportunity not found.", "error")
         return redirect(url_for("sales_opportunities_pipeline", pipeline_key="lift"))
 
@@ -1902,13 +1906,19 @@ def sales_opportunity_stage(opportunity_id):
     stage = (request.form.get("stage") or "").strip()
     stages = get_pipeline_stages(pipeline_key)
     if stage not in stages:
+        if wants_json:
+            return jsonify({"success": False, "message": "Invalid stage selected."}), 400
         flash("Invalid stage selected.", "error")
-    else:
-        opportunity.stage = stage
-        log_sales_activity("opportunity", opportunity.id, f"Stage moved to {stage}")
-        db.session.commit()
-        flash("Opportunity stage updated.", "success")
+        return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
 
+    opportunity.stage = stage
+    log_sales_activity("opportunity", opportunity.id, f"Stage moved to {stage}", actor=current_user)
+    db.session.commit()
+
+    if wants_json:
+        return jsonify({"success": True, "stage": stage, "pipeline": pipeline_key})
+
+    flash("Opportunity stage updated.", "success")
     return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
 
 def _require_admin():
