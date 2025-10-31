@@ -42,9 +42,9 @@
               </div>
             </div>
           </div>
-          <div class="p-3 space-y-3 overflow-y-auto min-h-[120px]" style="max-height: 60vh;" data-stage-cards>
+          <div class="p-3 space-y-3 min-h-[120px]" data-stage-cards>
             {% for opp in grouped.get(stage, []) %}
-            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 flex flex-col gap-1 h-full cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}" data-amount="{{ '%.2f' % opp.amount if opp.amount is not none else '0' }}" data-currency="{{ opp.currency or '₹' }}">
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 flex flex-col gap-1 cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}" data-amount="{{ '%.2f' % opp.amount if opp.amount is not none else '0' }}" data-currency="{{ opp.currency or '₹' }}">
               <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="block text-sm font-semibold text-emerald-200 hover:underline truncate" title="{{ opp.title }}">{{ opp.title }}</a>
               <span class="text-xs text-slate-400 truncate" title="{{ opp.client.display_name if opp.client else 'No client' }}">{{ opp.client.display_name if opp.client else 'No client' }}</span>
               <span class="text-xs text-slate-300">{{ opp.display_amount }}</span>
