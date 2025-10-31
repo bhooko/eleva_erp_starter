@@ -32,7 +32,7 @@
 
     <div class="space-y-8 p-6">
       <section id="settings-panel-admin"
-               class="{{ '' if active == 'admin' else 'hidden' }} space-y-5"
+               class="motion-panel space-y-5 {{ 'is-active' if active == 'admin' else 'hidden' }}"
                role="tabpanel"
                aria-labelledby="settings-tab-admin"
                data-tab-panel="admin">
@@ -54,7 +54,7 @@
       
 
       <section id="settings-panel-account"
-               class="{{ '' if active == 'account' else 'hidden' }} space-y-5"
+               class="motion-panel space-y-5 {{ 'is-active' if active == 'account' else 'hidden' }}"
                role="tabpanel"
                aria-labelledby="settings-tab-account"
                data-tab-panel="account">
@@ -68,7 +68,7 @@
       </section>
 
       <section id="settings-panel-display"
-                     class="{{ '' if active == 'display' else 'hidden' }} space-y-5"
+                     class="motion-panel space-y-5 {{ 'is-active' if active == 'display' else 'hidden' }}"
                      role="tabpanel"
                      aria-labelledby="settings-tab-display"
                      data-tab-panel="display">
@@ -192,6 +192,7 @@
     document.addEventListener('DOMContentLoaded', function () {
       const buttons = Array.from(document.querySelectorAll('[data-tab-button]'));
       const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+      const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!buttons.length) {
         return;
       }
@@ -208,7 +209,31 @@
 
         panels.forEach((panel) => {
           const isActive = panel.dataset.tabPanel === id;
-          panel.classList.toggle('hidden', !isActive);
+          if (isActive) {
+            panel.classList.remove('hidden');
+            requestAnimationFrame(() => {
+              panel.classList.add('is-active');
+            });
+          } else {
+            panel.classList.remove('is-active');
+            if (panel.classList.contains('hidden')) {
+              return;
+            }
+            if (prefersReducedMotion) {
+              panel.classList.add('hidden');
+              return;
+            }
+            const handleTransition = (event) => {
+              if (event.target !== panel || event.propertyName !== 'opacity') {
+                return;
+              }
+              if (panel.classList.contains('is-active')) {
+                return;
+              }
+              panel.classList.add('hidden');
+            };
+            panel.addEventListener('transitionend', handleTransition, { once: true });
+          }
         });
 
         try {
