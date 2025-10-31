@@ -1746,33 +1746,63 @@ def sales_home():
     month_start = today.replace(day=1)
     next_month_start = (month_start + datetime.timedelta(days=32)).replace(day=1)
 
+    duration = request.args.get("duration", "month")
+    period_label = {
+        "month": "This Month",
+        "quarter": "This Quarter",
+        "ytd": "Year to Date",
+    }.get(duration, "This Month")
+    period_descriptions = {
+        "month": "Current month snapshot",
+        "quarter": "Performance for the current quarter",
+        "ytd": "Year-to-date performance overview",
+    }
+
+    if duration == "quarter":
+        quarter_index = (today.month - 1) // 3
+        start_month = quarter_index * 3 + 1
+        period_start = today.replace(month=start_month, day=1)
+        next_quarter_month = start_month + 3
+        if next_quarter_month > 12:
+            period_end = today.replace(year=today.year + 1, month=1, day=1)
+        else:
+            period_end = today.replace(month=next_quarter_month, day=1)
+    elif duration == "ytd":
+        period_start = today.replace(month=1, day=1)
+        period_end = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        duration = "month"
+        period_start = month_start
+        period_end = next_month_start
+    period_description = period_descriptions.get(duration, period_descriptions["month"])
+
     closed_won_clause = func.lower(SalesOpportunity.stage).like("closed won%")
-    month_filters = [
+    period_filters = [
         closed_won_clause,
-        SalesOpportunity.updated_at >= month_start,
-        SalesOpportunity.updated_at < next_month_start,
+        SalesOpportunity.updated_at >= period_start,
+        SalesOpportunity.updated_at < period_end,
     ]
 
-    month_won_count = SalesOpportunity.query.filter(*month_filters).count()
-    month_won_value = (
+    won_count = SalesOpportunity.query.filter(*period_filters).count()
+    won_value = (
         db.session.query(func.coalesce(func.sum(SalesOpportunity.amount), 0.0))
-        .filter(*month_filters)
+        .filter(*period_filters)
         .scalar()
         or 0.0
     )
 
     closed_lost_clause = func.lower(SalesOpportunity.stage).like("closed lost%")
-    month_closed_total = (
+    period_closed_total = (
         SalesOpportunity.query
         .filter(
             or_(closed_won_clause, closed_lost_clause),
-            SalesOpportunity.updated_at >= month_start,
-            SalesOpportunity.updated_at < next_month_start,
+            SalesOpportunity.updated_at >= period_start,
+            SalesOpportunity.updated_at < period_end,
         )
         .count()
     )
-    month_win_rate = (month_won_count / month_closed_total * 100) if month_closed_total else 0.0
-    average_deal_value = (month_won_value / month_won_count) if month_won_count else 0.0
+    win_rate = (won_count / period_closed_total * 100) if period_closed_total else 0.0
+    average_deal_value = (won_value / won_count) if won_count else 0.0
 
     open_pipeline_clause = ~func.lower(SalesOpportunity.stage).like("closed%")
     open_deals_count = SalesOpportunity.query.filter(open_pipeline_clause).count()
@@ -1831,7 +1861,7 @@ def sales_home():
             func.count(SalesOpportunity.id),
             func.coalesce(func.sum(SalesOpportunity.amount), 0.0),
         )
-        .filter(*month_filters)
+        .filter(*period_filters)
         .group_by(SalesOpportunity.owner_id)
         .all()
     )
@@ -1870,9 +1900,9 @@ def sales_home():
 
     return render_template(
         "sales/dashboard.html",
-        month_won_count=month_won_count,
-        month_won_value=month_won_value,
-        month_win_rate=month_win_rate,
+        won_count=won_count,
+        won_value=won_value,
+        win_rate=win_rate,
         average_deal_value=average_deal_value,
         open_deals_count=open_deals_count,
         open_pipeline_value=open_pipeline_value,
@@ -1881,6 +1911,9 @@ def sales_home():
         team_breakdown=team_breakdown,
         due_activities=due_activities,
         format_currency=format_currency,
+        selected_duration=duration,
+        period_label=period_label,
+        period_description=period_description,
     )
 
 
