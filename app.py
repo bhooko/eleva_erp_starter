@@ -1730,6 +1730,15 @@ def profile():
     return render_template("profile.html")
 
 
+@app.route("/settings")
+@login_required
+def settings():
+    tab = (request.args.get("tab") or "admin").lower()
+    allowed_tabs = {"admin", "account"}
+    active_tab = tab if tab in allowed_tabs else "admin"
+    return render_template("settings.html", active_tab=active_tab, allowed_tabs=sorted(allowed_tabs))
+
+
 @app.route("/sales")
 @login_required
 def sales_home():
