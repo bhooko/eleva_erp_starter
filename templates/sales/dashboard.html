@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Sales · Overview{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-2">
+    <p class="text-sm text-slate-400">Sales</p>
+    <div class="flex flex-wrap items-center gap-3">
+      <h1 class="text-3xl font-semibold tracking-tight">Sales Performance Overview</h1>
+      <span class="text-xs text-slate-500 border border-slate-800/80 rounded-lg px-3 py-1">Current month snapshot</span>
+    </div>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Closed Won Deals</p>
+      <p class="mt-2 text-3xl font-semibold text-emerald-300">{{ month_won_count }}</p>
+      <p class="mt-1 text-xs text-slate-500">Deals won this month</p>
+    </div>
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Closed Won Value</p>
+      <p class="mt-2 text-3xl font-semibold text-emerald-300">{{ format_currency(month_won_value) }}</p>
+      <p class="mt-1 text-xs text-slate-500">Total value won this month</p>
+    </div>
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Average Deal Size</p>
+      <p class="mt-2 text-3xl font-semibold text-sky-300">{{ format_currency(average_deal_value) }}</p>
+      <p class="mt-1 text-xs text-slate-500">Average value of wins this month</p>
+    </div>
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Win Rate</p>
+      <p class="mt-2 text-3xl font-semibold text-amber-300">{{ '{:.1f}%'.format(month_win_rate) }}</p>
+      <p class="mt-1 text-xs text-slate-500">Wins vs all closed deals</p>
+    </div>
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Open Opportunities</p>
+      <p class="mt-2 text-3xl font-semibold text-slate-100">{{ open_deals_count }}</p>
+      <p class="mt-1 text-xs text-slate-500">Currently in pipeline</p>
+    </div>
+    <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl px-5 py-4 shadow-lg">
+      <p class="text-sm text-slate-400">Open Pipeline Value</p>
+      <p class="mt-2 text-3xl font-semibold text-slate-100">{{ format_currency(open_pipeline_value) }}</p>
+      <p class="mt-1 text-xs text-slate-500">Value still in play</p>
+    </div>
+  </div>
+
+  <div class="grid gap-5 xl:grid-cols-5">
+    <div class="xl:col-span-3 bg-slate-950/60 border border-slate-800/80 rounded-2xl shadow-lg">
+      <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">Last 3 Months Won Value</h2>
+          <p class="text-xs text-slate-500">Closed won totals for previous months</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <canvas id="salesValueChart" class="w-full"></canvas>
+      </div>
+    </div>
+    <div class="xl:col-span-2 bg-slate-950/60 border border-slate-800/80 rounded-2xl shadow-lg">
+      <div class="px-6 py-5 border-b border-slate-800/80">
+        <h2 class="text-lg font-semibold">Pipeline Stage Distribution</h2>
+        <p class="text-xs text-slate-500">Deal count and value by stage</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        {% if stage_distribution %}
+          {% for item in stage_distribution %}
+            <div class="flex items-center justify-between text-sm">
+              <div>
+                <p class="font-medium text-slate-200">{{ item.stage }}</p>
+                <p class="text-xs text-slate-500">{{ item.count }} deals</p>
+              </div>
+              <span class="text-xs font-semibold text-emerald-200">{{ format_currency(item.value) }}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-sm text-slate-400">No pipeline data available.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-5 xl:grid-cols-5">
+    <div class="xl:col-span-3 bg-slate-950/60 border border-slate-800/80 rounded-2xl shadow-lg">
+      <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">Team Performance</h2>
+          <p class="text-xs text-slate-500">Closed won deals by owner (current month)</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        {% if team_breakdown %}
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="text-xs uppercase text-slate-400">
+                <tr>
+                  <th class="pb-2 pr-4 text-left">Owner</th>
+                  <th class="pb-2 px-4 text-right">Deals</th>
+                  <th class="pb-2 pl-4 text-right">Won Value</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                {% for row in team_breakdown %}
+                  <tr class="text-slate-200">
+                    <td class="py-2 pr-4">{{ row.owner }}</td>
+                    <td class="py-2 px-4 text-right">{{ row.deals }}</td>
+                    <td class="py-2 pl-4 text-right">{{ format_currency(row.value) }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-400">No wins recorded this month yet.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="xl:col-span-2 bg-slate-950/60 border border-slate-800/80 rounded-2xl shadow-lg">
+      <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">Due Activities</h2>
+          <p class="text-xs text-slate-500">Activities with past due dates</p>
+        </div>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        {% if due_activities %}
+          {% for activity in due_activities %}
+            <div class="border border-rose-500/30 bg-rose-500/10 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between text-sm">
+                <span class="font-semibold text-rose-100">{{ activity.display_activity_type }}</span>
+                <span class="text-xs text-rose-200">{{ activity.display_schedule }}</span>
+              </div>
+              <div class="mt-2 text-xs text-slate-200">
+                {% if activity.opportunity %}
+                  <a href="{{ url_for('sales_opportunity_detail', opportunity_id=activity.opportunity.id) }}" class="font-medium text-emerald-200 hover:underline">{{ activity.opportunity.title }}</a>
+                {% else %}
+                  <span class="font-medium">Opportunity unavailable</span>
+                {% endif %}
+              </div>
+              {% if activity.notes %}
+                <p class="mt-1 text-xs text-slate-400">{{ activity.notes }}</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-sm text-slate-400">No due activities. Great job staying ahead!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const chartElement = document.getElementById('salesValueChart');
+    if (chartElement) {
+      const chartData = {{ previous_months | tojson }};
+      const labels = chartData.map(item => item.label);
+      const values = chartData.map(item => item.total);
+      const ctx = chartElement.getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Closed Won Value',
+            data: values,
+            fill: false,
+            borderColor: 'rgba(16, 185, 129, 0.8)',
+            backgroundColor: 'rgba(16, 185, 129, 0.4)',
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: 'rgba(16, 185, 129, 1)'
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value)
+              },
+              grid: {
+                color: 'rgba(148, 163, 184, 0.15)'
+              }
+            },
+            x: {
+              grid: {
+                color: 'rgba(148, 163, 184, 0.1)'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(ctx.parsed.y)
+              }
+            }
+          }
+        }
+      });
+    }
+  </script>
+{% endblock %}

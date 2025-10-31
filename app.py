@@ -1742,7 +1742,146 @@ def settings():
 @app.route("/sales")
 @login_required
 def sales_home():
-    return redirect(url_for("sales_clients"))
+    today = datetime.date.today()
+    month_start = today.replace(day=1)
+    next_month_start = (month_start + datetime.timedelta(days=32)).replace(day=1)
+
+    closed_won_clause = func.lower(SalesOpportunity.stage).like("closed won%")
+    month_filters = [
+        closed_won_clause,
+        SalesOpportunity.updated_at >= month_start,
+        SalesOpportunity.updated_at < next_month_start,
+    ]
+
+    month_won_count = SalesOpportunity.query.filter(*month_filters).count()
+    month_won_value = (
+        db.session.query(func.coalesce(func.sum(SalesOpportunity.amount), 0.0))
+        .filter(*month_filters)
+        .scalar()
+        or 0.0
+    )
+
+    closed_lost_clause = func.lower(SalesOpportunity.stage).like("closed lost%")
+    month_closed_total = (
+        SalesOpportunity.query
+        .filter(
+            or_(closed_won_clause, closed_lost_clause),
+            SalesOpportunity.updated_at >= month_start,
+            SalesOpportunity.updated_at < next_month_start,
+        )
+        .count()
+    )
+    month_win_rate = (month_won_count / month_closed_total * 100) if month_closed_total else 0.0
+    average_deal_value = (month_won_value / month_won_count) if month_won_count else 0.0
+
+    open_pipeline_clause = ~func.lower(SalesOpportunity.stage).like("closed%")
+    open_deals_count = SalesOpportunity.query.filter(open_pipeline_clause).count()
+    open_pipeline_value = (
+        db.session.query(func.coalesce(func.sum(SalesOpportunity.amount), 0.0))
+        .filter(open_pipeline_clause)
+        .scalar()
+        or 0.0
+    )
+
+    stage_rows = (
+        db.session.query(
+            SalesOpportunity.stage,
+            func.count(SalesOpportunity.id),
+            func.coalesce(func.sum(SalesOpportunity.amount), 0.0),
+        )
+        .group_by(SalesOpportunity.stage)
+        .order_by(func.count(SalesOpportunity.id).desc())
+        .all()
+    )
+    stage_distribution = [
+        {
+            "stage": stage or "(No Stage)",
+            "count": count,
+            "value": float(total or 0.0),
+        }
+        for stage, count, total in stage_rows
+    ]
+
+    previous_months = []
+    cursor = month_start
+    for _ in range(3):
+        cursor = (cursor - datetime.timedelta(days=1)).replace(day=1)
+        next_cursor = (cursor + datetime.timedelta(days=32)).replace(day=1)
+        total_value = (
+            db.session.query(func.coalesce(func.sum(SalesOpportunity.amount), 0.0))
+            .filter(
+                closed_won_clause,
+                SalesOpportunity.updated_at >= cursor,
+                SalesOpportunity.updated_at < next_cursor,
+            )
+            .scalar()
+            or 0.0
+        )
+        previous_months.append(
+            {
+                "label": cursor.strftime("%b %Y"),
+                "total": float(total_value or 0.0),
+            }
+        )
+    previous_months.reverse()
+
+    team_rows = (
+        db.session.query(
+            SalesOpportunity.owner_id,
+            func.count(SalesOpportunity.id),
+            func.coalesce(func.sum(SalesOpportunity.amount), 0.0),
+        )
+        .filter(*month_filters)
+        .group_by(SalesOpportunity.owner_id)
+        .all()
+    )
+
+    team_breakdown = []
+    owner_cache = {}
+    for owner_id, deal_count, total_value in team_rows:
+        if owner_id:
+            owner = owner_cache.get(owner_id)
+            if owner is None:
+                owner = db.session.get(User, owner_id)
+                owner_cache[owner_id] = owner
+            owner_name = owner.display_name if owner else "Unknown"
+        else:
+            owner_name = "Unassigned"
+        team_breakdown.append(
+            {
+                "owner": owner_name,
+                "deals": deal_count,
+                "value": float(total_value or 0.0),
+            }
+        )
+    team_breakdown.sort(key=lambda row: row["value"], reverse=True)
+
+    now = datetime.datetime.utcnow()
+    due_activities = (
+        SalesOpportunityEngagement.query
+        .filter(
+            SalesOpportunityEngagement.scheduled_for.isnot(None),
+            SalesOpportunityEngagement.scheduled_for <= now,
+        )
+        .order_by(SalesOpportunityEngagement.scheduled_for.asc())
+        .limit(10)
+        .all()
+    )
+
+    return render_template(
+        "sales/dashboard.html",
+        month_won_count=month_won_count,
+        month_won_value=month_won_value,
+        month_win_rate=month_win_rate,
+        average_deal_value=average_deal_value,
+        open_deals_count=open_deals_count,
+        open_pipeline_value=open_pipeline_value,
+        stage_distribution=stage_distribution,
+        previous_months=previous_months,
+        team_breakdown=team_breakdown,
+        due_activities=due_activities,
+        format_currency=format_currency,
+    )
 
 
 @app.route("/sales/clients")
