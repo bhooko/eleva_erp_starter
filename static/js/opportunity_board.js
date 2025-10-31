@@ -4,6 +4,12 @@ if (board) {
   const columns = Array.from(board.querySelectorAll('[data-stage-column]'));
   let draggedCard = null;
 
+  const formatCurrency = (value, currency) => {
+    const symbol = currency || '₹';
+    const amount = Number.isFinite(value) ? value : 0;
+    return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const applyDraggable = (card) => {
     if (card.dataset.draggableApplied) {
       return;
@@ -83,6 +89,9 @@ if (board) {
       return;
     }
 
+    const amountValue = parseFloat(card.dataset.amount || '0');
+    const cardCurrency = card.dataset.currency || '₹';
+
     card.classList.add('pointer-events-none');
 
     const params = new URLSearchParams();
@@ -111,6 +120,8 @@ if (board) {
 
         adjustCount(fromStage, -1);
         adjustCount(toStage, 1);
+        adjustTotals(fromStage, -amountValue, cardCurrency);
+        adjustTotals(toStage, amountValue, cardCurrency);
         ensureEmptyState(fromStage);
         ensureEmptyState(toStage);
       })
@@ -149,6 +160,37 @@ if (board) {
       element.dataset.count = String(next);
       element.textContent = next === 1 ? '1 deal' : `${next} deals`;
     });
+  }
+
+  function adjustTotals(stage, delta, currencyHint) {
+    if (!stage || !Number.isFinite(delta) || delta === 0) {
+      return;
+    }
+
+    const normalizeTotal = (current, change) => {
+      const next = (Number.isFinite(current) ? current : 0) + change;
+      return Math.max(0, next);
+    };
+
+    const updateElements = (elements) => {
+      elements.forEach((element) => {
+        if (element.dataset.stage !== stage) {
+          return;
+        }
+        const currentTotal = parseFloat(element.dataset.total || '0');
+        const nextTotal = normalizeTotal(currentTotal, delta);
+        let currency = element.dataset.currency || currencyHint || '₹';
+        if (((!element.dataset.currency || element.dataset.currency === '') || currentTotal === 0) && currencyHint) {
+          currency = currencyHint;
+        }
+        element.dataset.currency = currency;
+        element.dataset.total = String(nextTotal);
+        element.textContent = `Value ${formatCurrency(nextTotal, currency)}`;
+      });
+    };
+
+    updateElements(board.querySelectorAll('[data-stage-total]'));
+    updateElements(document.querySelectorAll('[data-stage-summary-total]'));
   }
 
   function ensureEmptyState(stage) {

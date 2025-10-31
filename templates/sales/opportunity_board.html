@@ -10,11 +10,11 @@
         <span class="text-xs text-slate-500 border border-slate-800/80 rounded-lg px-3 py-1">{{ stages|length }} stages</span>
       </div>
     </div>
-    <div class="flex items-center gap-3">
-      {% with default_pipeline_key=pipeline_key, opportunity_clients=clients, opportunity_owners=owners %}
-        {% include "sales/_opportunity_quick_create.html" %}
-      {% endwith %}
-    </div>
+  <div class="flex items-center gap-3">
+    {% with default_pipeline_key=pipeline_key, opportunity_clients=clients, opportunity_owners=owners %}
+      {% include "sales/_opportunity_quick_create.html" %}
+    {% endwith %}
+  </div>
   </div>
   <div class="flex flex-wrap items-center gap-2 text-sm">
     {% for key, cfg in pipeline_map.items() %}
@@ -33,35 +33,38 @@
         {% for stage in stages %}
         {% set deal_count = grouped.get(stage, [])|length %}
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl flex flex-col transition duration-150" data-stage-column data-stage="{{ stage }}">
-          <div class="px-3 py-2.5 border-b border-slate-800/80 flex items-center justify-between">
-            <div>
+          <div class="px-3 py-2.5 border-b border-slate-800/80">
+            <div class="space-y-1">
               <p class="text-sm font-semibold text-slate-100">{{ stage }}</p>
-              <p class="text-xs text-slate-500" data-stage-count data-stage="{{ stage }}" data-count="{{ deal_count }}">{{ '1 deal' if deal_count == 1 else deal_count ~ ' deals' }}</p>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span data-stage-count data-stage="{{ stage }}" data-count="{{ deal_count }}">{{ '1 deal' if deal_count == 1 else deal_count ~ ' deals' }}</span>
+                <span data-stage-total data-stage="{{ stage }}" data-total="{{ stage_totals_raw.get(stage, 0) or 0 }}" data-currency="{{ stage_currencies.get(stage, '₹') }}">Value {{ stage_totals.get(stage, '₹0.00') }}</span>
+              </div>
             </div>
           </div>
           <div class="p-3 space-y-3 overflow-y-auto min-h-[120px]" style="max-height: 60vh;" data-stage-cards>
             {% for opp in grouped.get(stage, []) %}
-            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 space-y-3 cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}">
-              <div class="flex items-start justify-between gap-2.5">
-                <div class="flex-1 min-w-0">
-                  <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="block text-sm font-semibold text-emerald-200 hover:underline break-words">{{ opp.title }}</a>
-                  <div class="mt-1 text-xs text-slate-400 flex flex-col gap-1">
-                    {% if opp.client %}
-                    <span class="break-words">{{ opp.client.display_name }}</span>
-                    {% endif %}
-                    <span>{{ opp.display_amount }}</span>
-                  </div>
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 flex flex-col gap-3 h-full cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}" data-amount="{{ '%.2f' % opp.amount if opp.amount is not none else '0' }}" data-currency="{{ opp.currency or '₹' }}">
+              <div>
+                <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="block text-sm font-semibold text-emerald-200 hover:underline break-words">{{ opp.title }}</a>
+                <div class="mt-1 text-xs text-slate-400 flex flex-col gap-1">
+                  {% if opp.client %}
+                  <span class="break-words">{{ opp.client.display_name }}</span>
+                  {% endif %}
+                  <span>{{ opp.display_amount }}</span>
                 </div>
-                {% if opp.temperature %}
-                {% set label, badge = opp.badge_variant %}
-                <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ badge }}">{{ label or opp.temperature|capitalize }}</span>
-                {% endif %}
               </div>
-              <div class="flex items-center justify-between text-[11px] text-slate-500">
+              <div class="mt-auto flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
                 <span>Owner: {{ opp.owner.display_name if opp.owner else 'Unassigned' }}</span>
-                {% if opp.expected_close_date %}
-                <span>Close {{ opp.expected_close_date.strftime('%d %b') }}</span>
-                {% endif %}
+                <div class="flex items-center gap-2">
+                  {% if opp.expected_close_date %}
+                  <span>Close {{ opp.expected_close_date.strftime('%d %b') }}</span>
+                  {% endif %}
+                  {% if opp.temperature %}
+                  {% set label, badge = opp.badge_variant %}
+                  <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ badge }}">{{ label or opp.temperature|capitalize }}</span>
+                  {% endif %}
+                </div>
               </div>
             </div>
             {% endfor %}
@@ -84,7 +87,10 @@
     <li class="flex items-center justify-between">
       {% set deal_count = grouped.get(stage, [])|length %}
       <span>{{ stage }}</span>
-      <span class="text-xs text-slate-500" data-stage-summary data-stage="{{ stage }}" data-count="{{ deal_count }}">{{ '1 deal' if deal_count == 1 else deal_count ~ ' deals' }}</span>
+      <span class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <span data-stage-summary data-stage="{{ stage }}" data-count="{{ deal_count }}">{{ '1 deal' if deal_count == 1 else deal_count ~ ' deals' }}</span>
+        <span data-stage-summary-total data-stage="{{ stage }}" data-total="{{ stage_totals_raw.get(stage, 0) or 0 }}" data-currency="{{ stage_currencies.get(stage, '₹') }}">Value {{ stage_totals.get(stage, '₹0.00') }}</span>
+      </span>
     </li>
     {% endfor %}
   </ul>

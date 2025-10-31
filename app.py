@@ -101,6 +101,14 @@ SALES_TEMPERATURES = [
     ("hot", "Hot"),
 ]
 
+SALES_CLIENT_LIFECYCLE_STAGES = [
+    "Prospect",
+    "Qualification",
+    "Negotiation",
+    "Customer",
+    "Post-Sales",
+]
+
 
 def get_pipeline_config(pipeline_key):
     key = (pipeline_key or "lift").lower()
@@ -109,6 +117,21 @@ def get_pipeline_config(pipeline_key):
 
 def get_pipeline_stages(pipeline_key):
     return get_pipeline_config(pipeline_key)["stages"]
+
+
+def format_currency(amount, currency="₹"):
+    if amount is None:
+        return "—"
+    return f"{currency or '₹'}{amount:,.2f}"
+
+
+def normalize_lifecycle_stage(value):
+    value = (value or "").strip()
+    if not value:
+        return None
+    if value not in SALES_CLIENT_LIFECYCLE_STAGES:
+        return SALES_CLIENT_LIFECYCLE_STAGES[0]
+    return value
 
 
 def _random_digits(length=10):
@@ -1582,13 +1605,12 @@ def sales_clients():
         .order_by(SalesClient.display_name.asc())
         .all()
     )
-    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
     return render_template(
         "sales/clients_list.html",
         clients=clients,
-        owners=owners,
         pipeline_map=SALES_PIPELINES,
         temperature_choices=SALES_TEMPERATURES,
+        lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
     )
 
 
@@ -1600,23 +1622,21 @@ def sales_clients_create():
         flash("Client name is required.", "error")
         return redirect(url_for("sales_clients"))
 
+    lifecycle_value = normalize_lifecycle_stage(request.form.get("lifecycle_stage"))
+    if lifecycle_value is None and SALES_CLIENT_LIFECYCLE_STAGES:
+        lifecycle_value = SALES_CLIENT_LIFECYCLE_STAGES[0]
+
     client = SalesClient(
         display_name=name,
         company_name=(request.form.get("company_name") or "").strip() or None,
         email=(request.form.get("email") or "").strip() or None,
         phone=(request.form.get("phone") or "").strip() or None,
-        tag=(request.form.get("tag") or "").strip() or None,
         category=(request.form.get("category") or "Individual").strip() or "Individual",
-        lifecycle_stage=(request.form.get("lifecycle_stage") or "").strip() or None,
         description=(request.form.get("description") or "").strip() or None,
     )
 
-    owner_id_raw = request.form.get("owner_id")
-    if owner_id_raw:
-        try:
-            client.owner = db.session.get(User, int(owner_id_raw))
-        except (TypeError, ValueError):
-            client.owner = None
+    client.lifecycle_stage = lifecycle_value
+    client.owner = current_user
 
     db.session.add(client)
     db.session.flush()
@@ -1641,9 +1661,9 @@ def sales_client_detail(client_id):
             client.company_name = (request.form.get("company_name") or "").strip() or None
             client.email = (request.form.get("email") or "").strip() or None
             client.phone = (request.form.get("phone") or "").strip() or None
-            client.tag = (request.form.get("tag") or "").strip() or None
             client.category = (request.form.get("category") or "").strip() or "Individual"
-            client.lifecycle_stage = (request.form.get("lifecycle_stage") or "").strip() or None
+            lifecycle_value = normalize_lifecycle_stage(request.form.get("lifecycle_stage"))
+            client.lifecycle_stage = lifecycle_value
             client.description = (request.form.get("description") or "").strip() or None
 
             owner_id_raw = request.form.get("owner_id")
@@ -1686,6 +1706,7 @@ def sales_client_detail(client_id):
         pipeline_map=SALES_PIPELINES,
         opportunity_clients=all_clients,
         temperature_choices=SALES_TEMPERATURES,
+        lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
     )
 
 
@@ -1714,6 +1735,17 @@ def sales_opportunities_pipeline(pipeline_key):
     temperature_choices = SALES_TEMPERATURES
     total_opportunities = sum(len(items) for items in grouped.values())
 
+    stage_totals_raw = {}
+    stage_currencies = {}
+    stage_totals_display = {}
+    for stage in stages:
+        opportunities_in_stage = grouped.get(stage, [])
+        total_amount = sum(opp.amount for opp in opportunities_in_stage if opp.amount is not None)
+        currency = next((opp.currency for opp in opportunities_in_stage if opp.currency), "₹")
+        stage_totals_raw[stage] = total_amount
+        stage_currencies[stage] = currency
+        stage_totals_display[stage] = format_currency(total_amount if opportunities_in_stage else 0, currency)
+
     return render_template(
         "sales/opportunity_board.html",
         pipeline_key=pipeline_key,
@@ -1725,6 +1757,9 @@ def sales_opportunities_pipeline(pipeline_key):
         temperature_choices=temperature_choices,
         pipeline_map=SALES_PIPELINES,
         total_opportunities=total_opportunities,
+        stage_totals=stage_totals_display,
+        stage_totals_raw=stage_totals_raw,
+        stage_currencies=stage_currencies,
     )
 
 
@@ -1761,19 +1796,14 @@ def sales_opportunities_create():
         description=(request.form.get("description") or "").strip() or None,
     )
 
+    opportunity.owner = current_user
+
     client_id_raw = request.form.get("client_id")
     if client_id_raw:
         try:
             opportunity.client = db.session.get(SalesClient, int(client_id_raw))
         except (TypeError, ValueError):
             opportunity.client = None
-
-    owner_id_raw = request.form.get("owner_id")
-    if owner_id_raw:
-        try:
-            opportunity.owner = db.session.get(User, int(owner_id_raw))
-        except (TypeError, ValueError):
-            opportunity.owner = None
 
     db.session.add(opportunity)
     db.session.flush()
