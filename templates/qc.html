@@ -9,18 +9,27 @@
         <h2 class="text-lg font-semibold text-slate-100">QC Taskboard</h2>
         <p class="text-sm text-slate-400">Create, assign and follow up on QC tasks across sites.</p>
       </div>
-      <div class="ml-auto flex items-center gap-2 text-xs uppercase tracking-wide">
-        <a href="{{ url_for('qc_home', status='all') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='all' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">All</a>
-        <a href="{{ url_for('qc_home', status='open') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='open' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Open</a>
-        <a href="{{ url_for('qc_home', status='closed') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='closed' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Closed</a>
+      <div class="ml-auto flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
+          <a href="{{ url_for('qc_home', status='all') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='all' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">All</a>
+          <a href="{{ url_for('qc_home', status='open') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='open' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Open</a>
+          <a href="{{ url_for('qc_home', status='closed') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='closed' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Closed</a>
+        </div>
+        <button type="button"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-600/90 text-xs font-medium text-white shadow-sm hover:bg-emerald-500 transition"
+                data-modal-target="qc-create-task-modal">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+          </svg>
+          <span>Create task</span>
+        </button>
       </div>
     </div>
   </div>
 
-  <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
       {% if work_items|length == 0 %}
-        <p class="text-slate-400 text-sm">No tasks yet. Use the form on the right to create one.</p>
+        <p class="text-slate-400 text-sm">No tasks yet. Use the create task button above to add your first one.</p>
       {% else %}
         <table class="min-w-full text-sm">
           <thead class="text-slate-400">
@@ -104,125 +113,128 @@
       {% endif %}
     </div>
 
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <h3 class="text-base font-semibold text-slate-100">Create Task</h3>
-        <button type="button"
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
-                data-form-toggle
-                data-target="qc-create-task-panel"
-                data-open-label="+ Create task"
-                data-close-label="Hide form"
-                aria-controls="qc-create-task-panel"
-                aria-expanded="false">
-          <span data-toggle-label>+ Create task</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+  </div>
+
+  <div id="qc-create-task-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-modal-overlay></div>
+    <div class="relative w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+      <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+        <div>
+          <h3 class="text-lg font-semibold text-slate-100">Create QC Task</h3>
+          <p class="text-xs text-slate-400">Fill out the details below to create a new task.</p>
+        </div>
+        <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-modal-close aria-label="Close create task modal">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
-      <div id="qc-create-task-panel" class="hidden mt-4">
-        <form method="post" action="{{ url_for('qc_work_new') }}" class="space-y-3">
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project</label>
-          <select name="project_id" id="projectSelect" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" selected>Standalone task</option>
-            {% for project in projects %}
-              <option value="{{ project.id }}"
-                      data-site="{{ (project.site_name or project.name)|e }}"
-                      data-client="{{ (project.customer_name or '')|e }}"
-                      data-address="{{ (project.site_address or '')|e }}"
-                      data-lift="{{ (project.lift_type or '')|e }}">
-                {{ project.name }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
-          <input name="site_name" list="siteOptions" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site / Building" />
-          <datalist id="siteOptions">
-            {% for project in projects %}
-              {% if project.site_name %}
-                <option value="{{ project.site_name }}"></option>
-              {% endif %}
-              <option value="{{ project.name }}"></option>
-            {% endfor %}
-          </datalist>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Client</label>
-          <input name="client_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Client / Builder" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Address</label>
-          <textarea name="address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site address"></textarea>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Form Template</label>
-          <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-            <option value="" disabled selected>Select template</option>
-            {% for t in templates %}
-              <option value="{{ t.id }}">{{ t.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Due date</label>
-            <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+      <div class="px-6 py-5">
+        <form method="post" action="{{ url_for('qc_work_new') }}" class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <div class="grid gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project</label>
+              <select name="project_id" id="projectSelect" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>Standalone task</option>
+                {% for project in projects %}
+                  <option value="{{ project.id }}"
+                          data-site="{{ (project.site_name or project.name)|e }}"
+                          data-client="{{ (project.customer_name or '')|e }}"
+                          data-address="{{ (project.site_address or '')|e }}"
+                          data-lift="{{ (project.lift_type or '')|e }}">
+                    {{ project.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
+              <input name="site_name" list="siteOptions" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site / Building" />
+              <datalist id="siteOptions">
+                {% for project in projects %}
+                  {% if project.site_name %}
+                    <option value="{{ project.site_name }}"></option>
+                  {% endif %}
+                  <option value="{{ project.name }}"></option>
+                {% endfor %}
+              </datalist>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Client</label>
+              <input name="client_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Client / Builder" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Address</label>
+              <textarea name="address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site address"></textarea>
+            </div>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assign to</label>
-            <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-              <option value="" selected>Unassigned</option>
-              {% for u in users %}
-                <option value="{{ u.id }}">{{ u.username }}</option>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Form Template</label>
+            <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+              <option value="" disabled selected>Select template</option>
+              {% for t in templates %}
+                <option value="{{ t.id }}">{{ t.name }}</option>
               {% endfor %}
             </select>
           </div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned start</label>
-            <input type="date" name="planned_start_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Due date</label>
+              <input type="date" name="due_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assign to</label>
+              <select name="assigned_to" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>Unassigned</option>
+                {% for u in users %}
+                  <option value="{{ u.id }}">{{ u.username }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned start</label>
+              <input type="date" name="planned_start_date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned duration (days)</label>
+              <input type="number" name="planned_duration_days" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. 5" />
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stage</label>
+              <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>Auto</option>
+                {% for s in STAGES %}
+                  <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
+              <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>Auto</option>
+                {% for lt in LIFT_TYPES %}
+                  <option value="{{ lt }}">{{ lt }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned duration (days)</label>
-            <input type="number" name="planned_duration_days" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. 5" />
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stage</label>
-            <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-              <option value="" selected>Auto</option>
-              {% for s in STAGES %}
-                <option value="{{ s }}">{{ s }}</option>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Milestone</label>
+            <input name="milestone" list="qc-milestone-options" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. Production Milestone" />
+            <datalist id="qc-milestone-options">
+              {% for option in TASK_MILESTONES %}
+                <option value="{{ option }}"></option>
               {% endfor %}
-            </select>
+            </datalist>
           </div>
-          <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
-            <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-              <option value="" selected>Auto</option>
-              {% for lt in LIFT_TYPES %}
-                <option value="{{ lt }}">{{ lt }}</option>
-              {% endfor %}
-            </select>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
+            <button class="inline-flex w-full sm:w-auto justify-center px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-medium text-white">Create Task</button>
+            <a href="{{ url_for('forms_list') }}" class="text-xs text-slate-400 hover:text-slate-200">Manage form templates</a>
           </div>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Milestone</label>
-          <input name="milestone" list="qc-milestone-options" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. Production Milestone" />
-          <datalist id="qc-milestone-options">
-            {% for option in TASK_MILESTONES %}
-              <option value="{{ option }}"></option>
-            {% endfor %}
-          </datalist>
-        </div>
-          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create Task</button>
-          <a href="{{ url_for('forms_list') }}" class="block text-center text-xs text-slate-400 hover:text-slate-200">Manage form templates</a>
         </form>
       </div>
     </div>
@@ -231,6 +243,66 @@
 {% endblock %}
 
 {% block scripts %}
+  <script>
+    (function () {
+      const modal = document.getElementById('qc-create-task-modal');
+      if (!modal) {
+        return;
+      }
+
+      const openButtons = document.querySelectorAll('[data-modal-target="qc-create-task-modal"]');
+      const closeButtons = modal.querySelectorAll('[data-modal-close]');
+      const overlay = modal.querySelector('[data-modal-overlay]');
+      const body = document.body;
+      const focusable = modal.querySelector('input, select, textarea, button');
+      let lastFocusedElement = null;
+
+      const openModal = () => {
+        if (!modal.classList.contains('hidden')) {
+          return;
+        }
+        lastFocusedElement = document.activeElement;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        body.classList.add('overflow-hidden');
+        if (focusable) {
+          requestAnimationFrame(() => {
+            focusable.focus({ preventScroll: true });
+          });
+        }
+      };
+
+      const closeModal = () => {
+        if (modal.classList.contains('hidden')) {
+          return;
+        }
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        body.classList.remove('overflow-hidden');
+        if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+          lastFocusedElement.focus({ preventScroll: true });
+        }
+      };
+
+      openButtons.forEach((button) => {
+        button.addEventListener('click', openModal);
+      });
+
+      closeButtons.forEach((button) => {
+        button.addEventListener('click', closeModal);
+      });
+
+      if (overlay) {
+        overlay.addEventListener('click', closeModal);
+      }
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeModal();
+        }
+      });
+    })();
+  </script>
   <script>
     (function() {
       const projectSelect = document.getElementById('projectSelect');
