@@ -127,18 +127,71 @@
     a:hover { color: var(--color-primary); }
     .animate-slide { transition: all 220ms cubic-bezier(.2,.8,.2,1); }
 
-    .sidebar { width: 280px; }
-    .sidebar.collapsed { width: 78px; }
+    #app {
+      --sidebar-expanded-width: 280px;
+      --sidebar-collapsed-width: 78px;
+      --sidebar-width: var(--sidebar-expanded-width);
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      transition: grid-template-columns 260ms cubic-bezier(.2,.8,.2,1);
+    }
+
+    #app.sidebar-is-collapsed {
+      --sidebar-width: var(--sidebar-collapsed-width);
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      transition: width 260ms cubic-bezier(.2,.8,.2,1),
+                  padding 220ms cubic-bezier(.2,.8,.2,1),
+                  box-shadow 220ms ease;
+    }
+    .sidebar.collapsed { width: var(--sidebar-collapsed-width); }
 
     .sidebar-collapsed .label { opacity: 0; transform: translateX(-8px); pointer-events: none; }
     .sidebar-expanded .label { opacity: 1; transform: translateX(0); }
 
-    .nav-item { border-radius: 12px; transition: background-color 160ms ease, outline-color 160ms ease; }
-    .nav-item:hover { background: rgba(var(--color-neutral-rgb), 0.45); }
+    .nav-item {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: background-color 160ms ease, outline-color 160ms ease, transform 200ms ease;
+      isolation: isolate;
+    }
+    .nav-item::after {
+      content: "";
+      position: absolute;
+      inset: -120% -40%;
+      background: radial-gradient(circle at center, rgba(var(--color-primary-rgb), 0.35) 0%, transparent 65%);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity 260ms ease, transform 320ms cubic-bezier(.2,.8,.2,1);
+      pointer-events: none;
+    }
+    .nav-item:hover,
+    .nav-item:focus-visible {
+      background: rgba(var(--color-neutral-rgb), 0.45);
+      transform: translateY(-1px);
+    }
+    .nav-item:hover::after,
+    .nav-item:focus-visible::after {
+      opacity: 1;
+      transform: scale(1.1);
+    }
     .nav-item.active {
       background: rgba(var(--color-primary-rgb), 0.18);
       outline: 1px solid rgba(var(--color-primary-rgb), 0.35);
       color: var(--text-primary);
+    }
+    .nav-item > span:first-child,
+    .nav-item .nav-icon {
+      transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+    }
+    .nav-item:hover > span:first-child,
+    .nav-item:focus-visible > span:first-child,
+    .nav-item:hover .nav-icon,
+    .nav-item:focus-visible .nav-icon {
+      transform: translateY(-2px);
     }
 
     /* Core backgrounds */
@@ -272,8 +325,12 @@
     .fade-in-up {
       opacity: 0;
       transform: translateY(12px);
-      animation: fadeInUp 420ms cubic-bezier(.2,.8,.2,1) forwards;
-      animation-delay: var(--fade-delay, 0ms);
+      transition: opacity 420ms cubic-bezier(.2,.8,.2,1), transform 420ms cubic-bezier(.2,.8,.2,1);
+      transition-delay: var(--fade-delay, 0ms);
+    }
+    .fade-in-up.is-visible {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .btn-shimmer {
@@ -282,10 +339,21 @@
       isolation: isolate;
       transition: transform 160ms ease, box-shadow 220ms ease;
     }
+    .btn-shimmer::before,
     .btn-shimmer::after {
       content: "";
       position: absolute;
-      inset: -120% 0;
+      inset: -30% -40%;
+      pointer-events: none;
+    }
+    .btn-shimmer::before {
+      background: radial-gradient(circle at center, rgba(var(--color-primary-rgb), 0.4) 0%, transparent 65%);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity 260ms ease, transform 260ms ease;
+      mix-blend-mode: screen;
+    }
+    .btn-shimmer::after {
       background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.65) 45%, transparent 100%);
       transform: translateX(-120%);
       transition: transform 600ms ease;
@@ -296,6 +364,11 @@
     .btn-shimmer:focus-visible {
       transform: translateY(-1px);
       box-shadow: 0 10px 26px rgba(var(--color-primary-rgb), 0.35);
+    }
+    .btn-shimmer:hover::before,
+    .btn-shimmer:focus-visible::before {
+      opacity: 0.65;
+      transform: scale(1);
     }
     .btn-shimmer:hover::after,
     .btn-shimmer:focus-visible::after {
@@ -355,17 +428,21 @@
       position: absolute;
       inset: 0;
       background: linear-gradient(90deg, var(--stage-cold), var(--stage-warm), var(--stage-success));
-      transform: translateX(-110%);
       opacity: 0;
-      transition: transform 520ms ease, opacity 520ms ease;
+      background-size: 220% 100%;
+      transform: translateX(-120%);
+      transition: transform 520ms ease, opacity 320ms ease;
+    }
+    .stage-connector.is-complete::before,
+    .stage-connector.is-progress::before {
+      opacity: 1;
+      animation: connectorFlow 3600ms linear infinite;
     }
     .stage-connector.is-complete::before {
       transform: translateX(0);
-      opacity: 1;
     }
     .stage-connector.is-progress::before {
       transform: translateX(-40%);
-      opacity: 1;
     }
 
     @keyframes stagePulse {
@@ -373,18 +450,33 @@
       50% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
     }
 
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    .collapsible,
+    .motion-panel {
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 220ms cubic-bezier(.2,.8,.2,1), transform 220ms cubic-bezier(.2,.8,.2,1);
+    }
+    .collapsible.collapsible-visible,
+    .motion-panel.is-active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes connectorFlow {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .fade-in-up { animation: none; opacity: 1; transform: none; }
+      .fade-in-up { transition: none; opacity: 1; transform: none; }
+      .collapsible,
+      .motion-panel { transition: none; opacity: 1; transform: none; }
       .card-hover-lift:hover { transform: none; box-shadow: none; }
       .btn-shimmer { transition: none; }
+      .btn-shimmer::before,
       .btn-shimmer::after { display: none; }
       .stage-node { animation: none; }
-      .stage-connector::before { transition: none; }
+      .stage-connector::before { transition: none; animation: none; }
     }
   </style>
 </head>
@@ -452,7 +544,7 @@
       <nav class="sidebar-menu px-3 pb-4 space-y-2 flex-1 overflow-auto">
         <a href="{{ url_for('dashboard') }}"
            class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint == 'dashboard' else '' }}">
-          <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+          <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 10l8-6 8 6v10h-6v-6H10v6H4z" />
             </svg>
@@ -467,7 +559,7 @@
         {% set sales_parent_active = request.endpoint in sales_endpoints %}
         <div class="space-y-1">
           <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if sales_parent_active else '' }}">
-            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4 4h16v2H4zm1 4h14v2H5zm-1 4h16v6H4zm2 2v2h12v-2z"/>
               </svg>
@@ -510,7 +602,7 @@
         <div class="space-y-1">
           <a href="{{ url_for('projects_pending') }}"
              class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in project_endpoints else '' }}">
-            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4 4h16v2H4zm2 4h12v2H6zm-2 4h16v10H4z" />
               </svg>
@@ -540,7 +632,7 @@
         {% set qc_parent_active = request.endpoint in qc_endpoints %}
         <div class="space-y-1">
           <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if qc_parent_active else '' }}">
-            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V6l-6-4z"/>
               </svg>
@@ -568,7 +660,7 @@
         {% if current_user.is_authenticated %}
           <a href="{{ url_for('settings') }}"
              class="nav-item flex items-center gap-3 px-3 py-2 animate-slide {{ 'active' if request.endpoint in ['settings','admin_users'] else '' }}">
-            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.042 7.042 0 00-1.63-.94l-.36-2.54A.5.5 0 0014.4 2h-3.8a.5.5 0 00-.5.42l-.36 2.54c-.59.23-1.14.54-1.63.94l-2.39-.96a.5.5 0 00-.6.22L3.3 8.48a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.44.34.7.22l2.39-.96c.49.4 1.04.72 1.63.94l.36 2.54c.04.26.25.42.5.42h3.8c.25 0 .46-.16.5-.42l.36-2.54c.59-.23 1.14-.54 1.63-.94l2.39.96c.26.12.56.02.7-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
               </svg>
@@ -577,7 +669,7 @@
           </a>
           <a href="{{ url_for('logout') }}"
              class="nav-item flex items-center gap-3 px-3 py-2 animate-slide">
-            <span class="inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M16 13v-2H7V8l-5 4 5 4v-3zM20 3h-8v2h8v14h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
               </svg>
@@ -663,6 +755,7 @@
       const btn = document.getElementById('collapseBtn');
       const icon = document.getElementById('collapseIcon');
       const header = document.querySelector('header');
+      const appShell = document.getElementById('app');
 
       function syncOffsets() {
         const h = header.getBoundingClientRect().height;
@@ -681,6 +774,10 @@
         sidebar.classList.toggle('sidebar-collapsed', collapsed);
         sidebar.classList.toggle('sidebar-expanded', !collapsed);
         icon.style.transform = collapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+        if (appShell) {
+          appShell.classList.toggle('sidebar-is-collapsed', collapsed);
+          appShell.style.setProperty('--sidebar-width', collapsed ? '78px' : '280px');
+        }
       };
       setState(saved === 'collapsed');
 
@@ -700,17 +797,47 @@
           return;
         }
 
+        content.classList.add('collapsible');
+
         const labelEl = button.querySelector('[data-toggle-label]');
         const iconEl = button.querySelector('[data-toggle-icon]');
         const openLabel = button.dataset.openLabel || 'Open form';
         const closeLabel = button.dataset.closeLabel || 'Hide form';
         const initialOpen = button.dataset.initialState === 'open';
 
+        const showContent = () => {
+          content.classList.remove('hidden');
+          requestAnimationFrame(() => {
+            content.classList.add('collapsible-visible');
+          });
+        };
+
+        const hideContent = () => {
+          if (content.classList.contains('hidden')) {
+            return;
+          }
+          content.classList.remove('collapsible-visible');
+          const handleTransitionEnd = (event) => {
+            if (event.target !== content || event.propertyName !== 'opacity') {
+              return;
+            }
+            if (content.classList.contains('collapsible-visible')) {
+              return;
+            }
+            content.classList.add('hidden');
+          };
+          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            content.classList.add('hidden');
+          } else {
+            content.addEventListener('transitionend', handleTransitionEnd, { once: true });
+          }
+        };
+
         const setState = (open) => {
           if (open) {
-            content.classList.remove('hidden');
+            showContent();
           } else {
-            content.classList.add('hidden');
+            hideContent();
           }
           button.setAttribute('aria-expanded', open ? 'true' : 'false');
           if (labelEl) {
@@ -736,6 +863,37 @@
           }
         });
       });
+    });
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const animated = Array.from(document.querySelectorAll('.fade-in-up'));
+      if (!animated.length) {
+        return;
+      }
+
+      const reveal = (element) => {
+        element.classList.add('is-visible');
+      };
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries, obs) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              reveal(entry.target);
+              obs.unobserve(entry.target);
+            }
+          });
+        }, {
+          threshold: 0.15,
+          rootMargin: '0px 0px -40px 0px',
+        });
+
+        animated.forEach((element) => observer.observe(element));
+      } else {
+        animated.forEach(reveal);
+      }
     });
   </script>
   {% block scripts %}{% endblock %}

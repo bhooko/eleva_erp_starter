@@ -117,7 +117,7 @@
         </div>
       </div>
       <div class="px-6 py-6">
-        <div data-tab-panel="timeline">
+        <div data-tab-panel="timeline" class="motion-panel is-active">
           <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
             <input type="hidden" name="form_action" value="add_note">
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
@@ -151,7 +151,7 @@
           {% endif %}
         </div>
 
-        <div data-tab-panel="comments" class="hidden">
+        <div data-tab-panel="comments" class="motion-panel hidden">
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Capture internal comments about this deal to keep the team aligned.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-3">
@@ -179,7 +179,7 @@
           </div>
         </div>
 
-        <div data-tab-panel="files" class="hidden">
+        <div data-tab-panel="files" class="motion-panel hidden">
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Attach proposals, contracts or supporting documents for quick access.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" enctype="multipart/form-data" class="space-y-3">
@@ -216,7 +216,7 @@
           </div>
         </div>
 
-        <div data-tab-panel="activities" class="hidden">
+        <div data-tab-panel="activities" class="motion-panel hidden">
           <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4">
             <input type="hidden" name="form_action" value="schedule_activity">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -294,7 +294,7 @@
           {% endif %}
         </div>
 
-        <div data-tab-panel="items" class="hidden">
+        <div data-tab-panel="items" class="motion-panel hidden">
           <div class="space-y-5">
             <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
@@ -518,6 +518,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const tabTriggers = Array.from(document.querySelectorAll('.tab-trigger'));
     const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const activeClasses = ['bg-emerald-500/20', 'border-emerald-400/40', 'text-emerald-100'];
     const inactiveClasses = ['bg-transparent', 'border-transparent', 'text-slate-300'];
 
@@ -535,7 +536,32 @@
       });
 
       tabPanels.forEach((panel) => {
-        panel.classList.toggle('hidden', panel.dataset.tabPanel !== tab);
+        const isActive = panel.dataset.tabPanel === tab;
+        if (isActive) {
+          panel.classList.remove('hidden');
+          requestAnimationFrame(() => {
+            panel.classList.add('is-active');
+          });
+        } else {
+          panel.classList.remove('is-active');
+          if (panel.classList.contains('hidden')) {
+            return;
+          }
+          if (prefersReducedMotion) {
+            panel.classList.add('hidden');
+            return;
+          }
+          const handleTransition = (event) => {
+            if (event.target !== panel || event.propertyName !== 'opacity') {
+              return;
+            }
+            if (panel.classList.contains('is-active')) {
+              return;
+            }
+            panel.classList.add('hidden');
+          };
+          panel.addEventListener('transitionend', handleTransition, { once: true });
+        }
       });
     }
 
