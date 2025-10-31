@@ -94,12 +94,6 @@
 
   {% if cards.count == 0 %}
     <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
-      No pending work found across modules. Enjoy the breather!
-    </div>
-  {% endif %}
-
-  {% if cards.empty and cards.count > 0 %}
-    <div class="rounded-2xl bg-slate-900/40 border border-slate-800 p-5 text-sm text-slate-300 text-center">
       Nothing pending — time for a coffee? ☕
     </div>
   {% endif %}
