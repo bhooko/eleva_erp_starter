@@ -43,84 +43,51 @@
 
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
     {% if templates %}
-      <div class="space-y-4">
-        {% for template in templates %}
-          <a href="{{ url_for('project_template_detail', template_id=template.id) }}"
-             class="block rounded-2xl border border-slate-800/60 bg-slate-950/40 hover:bg-slate-900/60 transition p-4">
-            <div class="flex flex-wrap items-start gap-3 justify-between">
-              <div>
-                <h3 class="text-base font-semibold text-slate-100">{{ template.name }}</h3>
-                {% if template.description %}
-                  <p class="text-sm text-slate-400 mt-1">{{ template.description }}</p>
-                {% endif %}
-              </div>
-              <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 uppercase tracking-wide">
-                {{ template_counts[template.id] }} task{{ '' if template_counts[template.id] == 1 else 's' }}
-              </span>
-            </div>
-            <div class="mt-3 text-xs text-slate-500 flex items-center gap-2">
-              <span>Created {{ template.created_at.strftime('%Y-%m-%d') }}</span>
-              {% if template.creator %}
-                <span>&middot;</span>
-                <span>by {{ template.creator.display_name }}</span>
-              {% endif %}
-            </div>
-          </a>
-        {% endfor %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-800 text-sm">
+          <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th scope="col" class="px-4 py-3 text-left font-semibold">Template</th>
+              <th scope="col" class="px-4 py-3 text-left font-semibold">Description</th>
+              <th scope="col" class="px-4 py-3 text-left font-semibold">Tasks</th>
+              <th scope="col" class="px-4 py-3 text-left font-semibold">Created</th>
+              <th scope="col" class="px-4 py-3 text-right font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+            {% for template in templates %}
+              <tr class="transition hover:bg-slate-900/40">
+                <td class="px-4 py-3 font-medium text-slate-100">
+                  <div class="text-sm font-semibold text-slate-100">{{ template.name }}</div>
+                  {% if template.creator %}
+                    <div class="text-xs text-slate-500 mt-0.5">Owner: {{ template.creator.display_name }}</div>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-300 align-top">
+                  {% if template.description %}
+                    <div class="max-w-xs text-sm text-slate-300">{{ template.description }}</div>
+                  {% else %}
+                    <span class="text-xs text-slate-500">No description provided</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-300 align-top">{{ template_counts[template.id] }} task{{ '' if template_counts[template.id] == 1 else 's' }}</td>
+                <td class="px-4 py-3 text-slate-300 align-top">{{ template.created_at.strftime('%Y-%m-%d') }}</td>
+                <td class="px-4 py-3 text-right align-top">
+                  <div class="flex justify-end gap-2">
+                    <a href="{{ url_for('project_template_detail', template_id=template.id) }}" class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800">View</a>
+                    <a href="{{ url_for('project_template_detail', template_id=template.id) }}#template-meta-form" class="inline-flex items-center rounded-lg border border-emerald-500/50 bg-emerald-600/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Edit</a>
+                    <form method="post" action="{{ url_for('project_template_delete', template_id=template.id) }}" class="inline" onsubmit="return confirm('Delete project template {{ template.name }}?');">
+                      <button type="submit" class="inline-flex items-center rounded-lg border border-rose-500/60 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     {% else %}
       <p class="text-sm text-slate-400">No templates defined yet. Use the form above to create one.</p>
-    {% endif %}
-  </div>
-
-  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h3 class="text-base font-semibold text-slate-100">Create from Task Template</h3>
-      {% if task_templates %}
-        <button type="button"
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
-                data-form-toggle
-                data-target="task-template-create-panel"
-                data-open-label="+ Use task template"
-                data-close-label="Hide form"
-                aria-controls="task-template-create-panel"
-                aria-expanded="false">
-          <span data-toggle-label>+ Use task template</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
-      {% endif %}
-    </div>
-    {% if task_templates %}
-      <div id="task-template-create-panel" class="hidden mt-4">
-        <form id="task-template-create-form"
-              method="post"
-              data-action-template="{{ url_for('create_project_template_from_task_template', task_template_id=0).replace('/0/create-project-template', '/{id}/create-project-template') }}"
-              class="space-y-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Saved task template</label>
-            <select name="task_template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-              <option value="" disabled selected>Select a task template</option>
-              {% for tt in task_templates %}
-                <option value="{{ tt.id }}">{{ tt.name }} ({{ tt.task_count }} task{{ '' if tt.task_count == 1 else 's' }})</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">New project template name</label>
-            <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Name for the project template" />
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
-            <textarea name="description" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Optional description"></textarea>
-          </div>
-          <button class="w-full px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:bg-slate-700/60 text-sm text-slate-200" data-skip-warning="true">Create from task template</button>
-        </form>
-      </div>
-      <p class="mt-2 text-[11px] text-slate-500">A new project template will be generated with all tasks and dependencies from the selected task template.</p>
-    {% else %}
-      <p class="text-sm text-slate-400">Save a project template as a task template to reuse it here.</p>
     {% endif %}
   </div>
 
@@ -160,22 +127,4 @@
 
 {% block scripts %}
   {{ super() }}
-  <script>
-    (function () {
-      const createForm = document.getElementById('task-template-create-form');
-      if (!createForm) return;
-      createForm.addEventListener('submit', (event) => {
-        const selector = createForm.querySelector('select[name="task_template_id"]');
-        if (!selector || !selector.value) {
-          event.preventDefault();
-          alert('Select a task template to use.');
-          return;
-        }
-        const templateAction = createForm.dataset.actionTemplate;
-        if (templateAction) {
-          createForm.action = templateAction.replace('{id}', selector.value);
-        }
-      });
-    })();
-  </script>
 {% endblock %}

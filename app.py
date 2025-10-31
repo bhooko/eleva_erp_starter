@@ -1737,7 +1737,37 @@ def settings():
     tab = (request.args.get("tab") or "admin").lower()
     allowed_tabs = {"admin", "account"}
     active_tab = tab if tab in allowed_tabs else "admin"
-    return render_template("settings.html", active_tab=active_tab, allowed_tabs=sorted(allowed_tabs))
+
+    users = []
+    departments = []
+    positions = []
+    department_options = []
+    position_options = []
+
+    if current_user.is_admin:
+        departments = sorted(
+            Department.query.order_by(Department.name.asc()).all(),
+            key=lambda d: (d.full_name or "").lower(),
+        )
+        positions = sorted(
+            Position.query.order_by(Position.title.asc()).all(),
+            key=lambda p: (p.display_label or "").lower(),
+        )
+        department_options = departments
+        position_options = positions
+        users = User.query.order_by(User.username.asc()).all()
+
+    return render_template(
+        "settings.html",
+        active_tab=active_tab,
+        allowed_tabs=sorted(allowed_tabs),
+        users=users,
+        departments=departments,
+        department_options=department_options,
+        department_branches=DEPARTMENT_BRANCHES,
+        positions=positions,
+        position_options=position_options
+    )
 
 
 @app.route("/sales")
@@ -4443,6 +4473,22 @@ def create_project_template_from_task_template(task_template_id):
     db.session.commit()
     flash(f"Project template '{name}' created from task template.", "success")
     return redirect(url_for("project_template_detail", template_id=new_template.id))
+
+
+@app.route("/project-templates/<int:template_id>/delete", methods=["POST"])
+@login_required
+def project_template_delete(template_id):
+    template = ProjectTemplate.query.get_or_404(template_id)
+    if not (current_user.is_admin or template.created_by == current_user.id):
+        flash("You do not have permission to delete this template.", "error")
+        return redirect(url_for("project_templates"))
+
+    name = template.name or f'Template {template.id}'
+    db.session.delete(template)
+    db.session.commit()
+    flash(f"Project template '{name}' deleted.", "success")
+    return redirect(url_for("project_templates"))
+
 
 
 # ---- Template task management helpers ----

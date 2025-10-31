@@ -1,0 +1,322 @@
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleCreateButtons = document.querySelectorAll('[data-add-user-toggle]');
+      const createSection = document.getElementById('create-user-section');
+
+      const updateCreateState = (expanded) => {
+        if (!createSection) {
+          return;
+        }
+
+        if (expanded) {
+          createSection.classList.remove('hidden');
+          if (typeof createSection.scrollIntoView === 'function') {
+            createSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        } else {
+          createSection.classList.add('hidden');
+        }
+
+        toggleCreateButtons.forEach((button) => {
+          button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          const labelOpen = button.getAttribute('data-label-open');
+          const labelClosed = button.getAttribute('data-label-closed');
+          if (labelOpen || labelClosed) {
+            button.textContent = expanded ? (labelOpen || button.textContent) : (labelClosed || button.textContent);
+          } else {
+            button.textContent = expanded ? 'Close' : '+ Add user';
+          }
+        });
+      };
+
+      if (createSection) {
+        updateCreateState(!createSection.classList.contains('hidden'));
+        if (window.location.hash === '#create-user-section') {
+          updateCreateState(true);
+        }
+      }
+
+      toggleCreateButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const expanded = createSection && createSection.classList.contains('hidden');
+          updateCreateState(expanded);
+        });
+      });
+
+      const updateSectionVisibility = (button, target, expanded) => {
+        if (!button || !target) {
+          return;
+        }
+
+        if (expanded) {
+          target.classList.remove('hidden');
+        } else {
+          target.classList.add('hidden');
+        }
+
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const expandedLabel = button.getAttribute('data-label-expanded') || button.dataset.labelOriginal || button.textContent;
+        const collapsedLabel = button.getAttribute('data-label-collapsed') || button.dataset.labelOriginal || button.textContent;
+        button.textContent = expanded ? expandedLabel : collapsedLabel;
+      };
+
+      document.querySelectorAll('[data-section-toggle]').forEach((button) => {
+        const targetId = button.getAttribute('data-section-target');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) {
+          button.setAttribute('disabled', 'disabled');
+          return;
+        }
+
+        button.dataset.labelOriginal = button.textContent.trim();
+        updateSectionVisibility(button, target, !target.classList.contains('hidden'));
+
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const shouldExpand = target.classList.contains('hidden');
+          updateSectionVisibility(button, target, shouldExpand);
+          if (shouldExpand && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+
+      const focusPanel = (panel) => {
+        if (!panel) {
+          return;
+        }
+        const autofocus = panel.querySelector('[data-panel-autofocus]') || panel.querySelector('input, select, textarea, button');
+        if (autofocus && typeof autofocus.focus === 'function') {
+          try {
+            autofocus.focus({ preventScroll: true });
+          } catch (error) {
+            autofocus.focus();
+          }
+        }
+      };
+
+      const setTriggerState = (panelId, expanded) => {
+        document.querySelectorAll(`[data-panel-target="${panelId}"]`).forEach((trigger) => {
+          trigger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        });
+      };
+
+      const closePanel = (panel, { returnFocus = true } = {}) => {
+        if (!panel) {
+          return;
+        }
+        panel.classList.add('hidden');
+        panel.removeAttribute('data-panel-open');
+        if (panel.id) {
+          setTriggerState(panel.id, false);
+          if (returnFocus) {
+            const trigger = document.querySelector(`[data-panel-target="${panel.id}"]`);
+            if (trigger && typeof trigger.focus === 'function') {
+              try {
+                trigger.focus({ preventScroll: true });
+              } catch (error) {
+                trigger.focus();
+              }
+            }
+          }
+        }
+      };
+
+      const ensureSectionExpanded = (panel) => {
+        const container = panel ? panel.closest('[data-section-content]') : null;
+        if (!container) {
+          return;
+        }
+        const toggle = document.querySelector(`[data-section-target="${container.id}"]`);
+        if (toggle && container.classList.contains('hidden')) {
+          updateSectionVisibility(toggle, container, true);
+        }
+      };
+
+      const openPanel = (panel, { scroll = true } = {}) => {
+        if (!panel) {
+          return;
+        }
+        ensureSectionExpanded(panel);
+        const group = panel.getAttribute('data-panel-group');
+        if (group) {
+          document.querySelectorAll(`[data-panel][data-panel-group="${group}"][data-panel-open]`).forEach((other) => {
+            if (other !== panel) {
+              closePanel(other, { returnFocus: false });
+            }
+          });
+        }
+
+        panel.classList.remove('hidden');
+        panel.setAttribute('data-panel-open', 'true');
+        if (panel.id) {
+          setTriggerState(panel.id, true);
+        }
+        if (scroll && typeof panel.scrollIntoView === 'function') {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        focusPanel(panel);
+      };
+
+      document.querySelectorAll('[data-panel-target]').forEach((trigger) => {
+        const panelId = trigger.getAttribute('data-panel-target');
+        const panel = panelId ? document.getElementById(panelId) : null;
+        if (!panel) {
+          trigger.setAttribute('disabled', 'disabled');
+          return;
+        }
+
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (panel.classList.contains('hidden')) {
+            openPanel(panel);
+          } else {
+            closePanel(panel);
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-panel-close]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const panelId = button.getAttribute('data-panel-close');
+          const panel = panelId ? document.getElementById(panelId) : button.closest('[data-panel]');
+          closePanel(panel);
+        });
+      });
+
+      let lastModalTrigger = null;
+
+      const focusModalElement = (modal) => {
+        if (!modal) {
+          return;
+        }
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        const autofocus = modal.querySelector('[data-modal-autofocus]') || modal.querySelector('input, select, textarea, button');
+        if (autofocus && typeof autofocus.focus === 'function') {
+          try {
+            autofocus.focus({ preventScroll: true });
+          } catch (error) {
+            autofocus.focus();
+          }
+        }
+      };
+
+      const closeModalElement = (modal) => {
+        if (!modal) {
+          return;
+        }
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        const focusTarget = lastModalTrigger;
+        lastModalTrigger = null;
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (error) {
+            focusTarget.focus();
+          }
+        }
+      };
+
+      const openModalById = (modalId, trigger = null) => {
+        if (!modalId) {
+          return;
+        }
+        const modal = document.getElementById(modalId);
+        if (!modal) {
+          return;
+        }
+        lastModalTrigger = trigger || document.querySelector(`[data-modal-target="${modalId}"]`) || document.activeElement;
+        ensureSectionExpanded(modal);
+        focusModalElement(modal);
+      };
+
+      document.querySelectorAll('[data-modal-target]').forEach((trigger) => {
+        const modalId = trigger.getAttribute('data-modal-target');
+        const modal = modalId ? document.getElementById(modalId) : null;
+        if (!modal) {
+          trigger.setAttribute('disabled', 'disabled');
+          return;
+        }
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          openModalById(modalId, trigger);
+        });
+      });
+
+      document.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeModalElement(button.closest('[data-modal]'));
+        });
+      });
+
+      document.querySelectorAll('[data-modal]').forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            closeModalElement(modal);
+          }
+        });
+      });
+
+      const handleHashTarget = (hash, { scroll = true } = {}) => {
+        if (!hash || hash === '#create-user-section') {
+          return;
+        }
+        const target = document.querySelector(hash);
+        if (!target) {
+          return;
+        }
+        const modal = target.closest('[data-modal]');
+        if (modal) {
+          openModalById(modal.id);
+          return;
+        }
+        const panel = target.closest('[data-panel]');
+        if (panel) {
+          openPanel(panel, { scroll });
+          return;
+        }
+        const sectionContent = target.closest('[data-section-content]');
+        if (sectionContent) {
+          const toggle = document.querySelector(`[data-section-target="${sectionContent.id}"]`);
+          if (toggle && sectionContent.classList.contains('hidden')) {
+            updateSectionVisibility(toggle, sectionContent, true);
+          }
+        }
+        if (scroll && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      };
+
+      handleHashTarget(window.location.hash || '', { scroll: false });
+      window.addEventListener('hashchange', () => {
+        handleHashTarget(window.location.hash || '');
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          document.querySelectorAll('[data-panel][data-panel-open]').forEach((panel) => {
+            closePanel(panel);
+          });
+          document.querySelectorAll('[data-modal]').forEach((modal) => {
+            if (!modal.classList.contains('hidden')) {
+              closeModalElement(modal);
+            }
+          });
+        }
+      });
+
+      document.querySelectorAll('form[data-confirm]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+          const message = form.getAttribute('data-confirm');
+          if (message && !window.confirm(message)) {
+            event.preventDefault();
+          }
+        });
+      });
+    });
+  </script>
