@@ -22,18 +22,80 @@
   </div>
 </div>
 
-<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl">
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl">
+  <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div class="flex-1">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Opportunity Details</div>
+      <dl class="mt-3 grid grid-cols-1 gap-x-10 gap-y-4 text-sm text-slate-300 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Stage</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.stage }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Amount</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.display_amount }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Probability</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if opportunity.probability is not none %}
+              {{ opportunity.probability }}%
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Expected Close</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.expected_close_date.strftime('%d %b %Y') if opportunity.expected_close_date else 'Not set' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Owner</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.owner.display_name if opportunity.owner else 'Unassigned' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.client.display_name if opportunity.client else 'Unassigned' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Related Project</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.related_project or '—' }}</dd>
+        </div>
+        {% set temperature_label, temperature_badge = opportunity.badge_variant %}
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Temperature</dt>
+          <dd class="mt-1">
+            {% if opportunity.temperature %}
+              <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ temperature_badge }}">{{ temperature_label or opportunity.temperature|capitalize }}</span>
+            {% else %}
+              <span class="text-slate-400">Not set</span>
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+    </div>
+    <div class="flex items-start gap-2 md:flex-col">
+      <button type="button" data-modal-open="editOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Edit Opportunity</button>
+    </div>
+  </div>
+  <div class="mt-4 rounded-xl border border-slate-800/60 bg-slate-950/50 p-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500">Description</p>
+    <p class="mt-2 whitespace-pre-line text-sm text-slate-300">{{ opportunity.description or 'No description added yet.' }}</p>
+  </div>
+</div>
+
+<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-4 shadow-xl">
   <div class="text-xs uppercase tracking-wide text-slate-500 mb-3">Stage Progress</div>
-  <div class="flex items-center gap-4 overflow-x-auto pb-2">
+  <div class="flex items-center gap-3 overflow-x-auto pb-1">
     {% for stage_option in stages %}
     {% set is_current = stage_option == opportunity.stage %}
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-3">
       <div class="flex flex-col items-center text-center">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center border-2 {{ 'border-emerald-400 bg-emerald-500/20 text-emerald-100' if is_current else 'border-slate-700 text-slate-300 bg-slate-900' }} font-semibold">{{ loop.index }}</div>
-        <span class="mt-2 text-xs {{ 'text-emerald-200 font-semibold' if is_current else 'text-slate-400' }}">{{ stage_option }}</span>
+        <div title="{{ stage_option }}" class="w-8 h-8 rounded-full flex items-center justify-center border-2 text-xs {{ 'border-emerald-400 bg-emerald-500/20 text-emerald-100' if is_current else 'border-slate-700 text-slate-300 bg-slate-900' }} font-semibold">{{ loop.index }}</div>
+        <span class="mt-2 text-[11px] {{ 'text-emerald-200 font-semibold' if is_current else 'text-slate-400' }}">{{ stage_option }}</span>
       </div>
       {% if not loop.last %}
-      <div class="h-0.5 w-16 {{ 'bg-emerald-400/60' if loop.index0 < current_stage_index else 'bg-slate-700' }}"></div>
+      <div class="h-0.5 w-12 {{ 'bg-emerald-400/60' if loop.index0 < current_stage_index else 'bg-slate-700' }}"></div>
       {% endif %}
     </div>
     {% endfor %}
@@ -43,41 +105,138 @@
 <div class="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
   <div class="space-y-6">
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-6 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Deal Notes</h3>
+      <div class="px-6 pt-5">
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <button type="button" data-tab="timeline" class="tab-trigger tab-active inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-emerald-100 transition">Timeline</button>
+          <button type="button" data-tab="comments" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Comments</button>
+          <button type="button" data-tab="files" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Files</button>
+          <button type="button" data-tab="activities" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Activities</button>
+          <button type="button" data-tab="items" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Items</button>
+        </div>
       </div>
       <div class="px-6 py-6">
-        <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
-          <input type="hidden" name="form_action" value="add_note">
-          <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
-            <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-            <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 text-sm font-semibold hover:bg-emerald-500/30">Add Note</button>
-          </div>
-          <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
-        </form>
-        {% if activities %}
-        <ol class="relative border-l border-slate-800/80 space-y-6 ml-3">
-          {% for activity in activities %}
-          <li class="ml-6">
-            <span class="absolute -left-3 w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 flex items-center justify-center text-xs font-semibold">•</span>
-            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl px-4 py-3">
-              <div class="flex items-center justify-between text-sm">
-                <p class="font-semibold text-slate-100">{{ activity.title }}</p>
-                <span class="text-xs text-slate-500">{{ activity.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
-              </div>
-              {% if activity.notes %}
-              <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
-              {% endif %}
-              {% if activity.actor %}
-              <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">{{ activity.actor.display_name }}</p>
-              {% endif %}
+        <div data-tab-panel="timeline">
+          <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
+            <input type="hidden" name="form_action" value="add_note">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+              <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Add Note</button>
             </div>
-          </li>
-          {% endfor %}
-        </ol>
-        {% else %}
-        <div class="text-center py-16 text-slate-500">No updates yet. Start logging interactions.</div>
-        {% endif %}
+            <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
+          </form>
+          {% if activities %}
+          <ol class="relative ml-3 space-y-6 border-l border-slate-800/80">
+            {% for activity in activities %}
+            <li class="ml-6">
+              <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-xs font-semibold text-emerald-200">•</span>
+              <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 px-4 py-3">
+                <div class="flex items-center justify-between text-sm">
+                  <p class="font-semibold text-slate-100">{{ activity.title }}</p>
+                  <span class="text-xs text-slate-500">{{ activity.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                </div>
+                {% if activity.notes %}
+                <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
+                {% endif %}
+                {% if activity.actor %}
+                <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">{{ activity.actor.display_name }}</p>
+                {% endif %}
+              </div>
+            </li>
+            {% endfor %}
+          </ol>
+          {% else %}
+          <div class="py-16 text-center text-slate-500">No updates yet. Start logging interactions.</div>
+          {% endif %}
+        </div>
+
+        <div data-tab-panel="comments" class="hidden">
+          <div class="space-y-4">
+            <p class="text-sm text-slate-300">Capture internal comments about this deal to keep the team aligned.</p>
+            <form method="post" action="#" class="space-y-3">
+              <textarea rows="4" placeholder="Share an update with your team." class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
+              <div class="flex justify-end">
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Save Comment</button>
+              </div>
+            </form>
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No comments added yet.</div>
+          </div>
+        </div>
+
+        <div data-tab-panel="files" class="hidden">
+          <div class="space-y-4">
+            <p class="text-sm text-slate-300">Attach proposals, contracts or supporting documents for quick access.</p>
+            <div class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-6 py-10 text-center">
+              <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13l3 3L22 6"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 10V3m0 0L8 7m4-4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M20 21H4a2 2 0 01-2-2V7a2 2 0 012-2h5"/></svg>
+              <p class="text-sm text-slate-400">Drag and drop files here or click to browse.</p>
+              <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Upload File</button>
+            </div>
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No files uploaded yet.</div>
+          </div>
+        </div>
+
+        <div data-tab-panel="activities" class="hidden">
+          <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4">
+            <input type="hidden" name="form_action" value="schedule_activity">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Activity Type</label>
+                <select name="activity_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                  <option value="meeting">Meeting</option>
+                  <option value="call">Call</option>
+                  <option value="email">Email</option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Subject</label>
+                <input type="text" name="activity_subject" placeholder="Follow-up" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Date</label>
+                <input type="date" name="activity_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              </div>
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Time</label>
+                <input type="time" name="activity_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              </div>
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder?</label>
+                <div class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/40 px-3 py-2">
+                  <input type="checkbox" name="reminder_enabled" id="reminder_enabled" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-400/60">
+                  <label for="reminder_enabled" class="text-sm text-slate-300">Enable reminder</label>
+                </div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder Date</label>
+                <input type="date" name="reminder_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              </div>
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder Time</label>
+                <input type="time" name="reminder_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              </div>
+            </div>
+            <div>
+              <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes</label>
+              <textarea name="activity_notes" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add talking points or objectives."></textarea>
+            </div>
+            <div class="flex justify-end">
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Schedule Activity</button>
+            </div>
+          </form>
+        </div>
+
+        <div data-tab-panel="items" class="hidden">
+          <div class="space-y-4">
+            <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No items added yet.</div>
+            <div class="flex justify-end">
+              <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Add Item</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -85,86 +244,9 @@
   <div class="space-y-6">
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
       <div class="px-6 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Opportunity Details</h3>
-      </div>
-      <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="px-6 py-5 space-y-4">
-        <input type="hidden" name="form_action" value="update">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title</label>
-          <input type="text" name="title" value="{{ opportunity.title }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" required>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Stage</label>
-            <select name="stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              {% for stage_option in stages %}
-              <option value="{{ stage_option }}" {% if stage_option == opportunity.stage %}selected{% endif %}>{{ stage_option }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Temperature</label>
-            <select name="temperature" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">None</option>
-              {% for value, label in temperature_choices %}
-              <option value="{{ value }}" {% if opportunity.temperature == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Amount</label>
-            <input type="text" name="amount" value="{{ opportunity.amount if opportunity.amount is not none else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Probability (%)</label>
-            <input type="number" name="probability" value="{{ opportunity.probability if opportunity.probability is not none else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" min="0" max="100">
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Expected Close Date</label>
-            <input type="date" name="expected_close_date" value="{{ opportunity.expected_close_date.isoformat() if opportunity.expected_close_date else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Related Project</label>
-            <input type="text" name="related_project" value="{{ opportunity.related_project or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Project / Site">
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
-            <select name="client_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Select client</option>
-              {% for client in clients %}
-              <option value="{{ client.id }}" {% if opportunity.client and opportunity.client.id == client.id %}selected{% endif %}>{{ client.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
-            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Unassigned</option>
-              {% for owner in owners %}
-              <option value="{{ owner.id }}" {% if opportunity.owner and opportunity.owner.id == owner.id %}selected{% endif %}>{{ owner.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
-          <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">{{ opportunity.description or '' }}</textarea>
-        </div>
-        <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Opportunity</button>
-      </form>
-    </div>
-
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-6 py-4 border-b border-slate-800/80">
         <h3 class="text-lg font-semibold">Snapshot</h3>
       </div>
-      <dl class="px-6 py-5 grid grid-cols-1 gap-4 text-sm text-slate-300">
+      <dl class="grid grid-cols-1 gap-4 px-6 py-5 text-sm text-slate-300">
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
           <dd>{{ opportunity.client.display_name if opportunity.client else 'Unassigned' }}</dd>
@@ -179,7 +261,13 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Probability</dt>
-          <dd>{{ opportunity.probability if opportunity.probability is not none else '—' }}%</dd>
+          <dd>
+            {% if opportunity.probability is not none %}
+              {{ opportunity.probability }}%
+            {% else %}
+              —
+            {% endif %}
+          </dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
@@ -189,4 +277,159 @@
     </div>
   </div>
 </div>
+
+<div id="editOpportunityModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="relative w-full max-w-3xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <h3 class="text-lg font-semibold text-slate-100">Edit Opportunity</h3>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close edit opportunity modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5">
+      <input type="hidden" name="form_action" value="update">
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Title</label>
+        <input type="text" name="title" value="{{ opportunity.title }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Stage</label>
+          <select name="stage" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            {% for stage_option in stages %}
+            <option value="{{ stage_option }}" {% if stage_option == opportunity.stage %}selected{% endif %}>{{ stage_option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Temperature</label>
+          <select name="temperature" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="">None</option>
+            {% for value, label in temperature_choices %}
+            <option value="{{ value }}" {% if opportunity.temperature == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Amount</label>
+          <input type="text" name="amount" value="{{ opportunity.amount if opportunity.amount is not none else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Probability (%)</label>
+          <input type="number" name="probability" value="{{ opportunity.probability if opportunity.probability is not none else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" min="0" max="100">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Expected Close Date</label>
+          <input type="date" name="expected_close_date" value="{{ opportunity.expected_close_date.isoformat() if opportunity.expected_close_date else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Related Project</label>
+          <input type="text" name="related_project" value="{{ opportunity.related_project or '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Project / Site">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Client</label>
+          <select name="client_id" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="">Select client</option>
+            {% for client in clients %}
+            <option value="{{ client.id }}" {% if opportunity.client and opportunity.client.id == client.id %}selected{% endif %}>{{ client.display_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Owner</label>
+          <select name="owner_id" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="">Unassigned</option>
+            {% for owner in owners %}
+            <option value="{{ owner.id }}" {% if opportunity.owner and opportunity.owner.id == owner.id %}selected{% endif %}>{{ owner.display_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Description</label>
+        <textarea name="description" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">{{ opportunity.description or '' }}</textarea>
+      </div>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Save Opportunity</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabTriggers = Array.from(document.querySelectorAll('.tab-trigger'));
+    const tabPanels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    const activeClasses = ['bg-emerald-500/20', 'border-emerald-400/40', 'text-emerald-100'];
+    const inactiveClasses = ['bg-transparent', 'border-transparent', 'text-slate-300'];
+
+    function setActiveTab(tab) {
+      tabTriggers.forEach((trigger) => {
+        const isActive = trigger.dataset.tab === tab;
+        trigger.classList.toggle('tab-active', isActive);
+        if (isActive) {
+          inactiveClasses.forEach((cls) => trigger.classList.remove(cls));
+          activeClasses.forEach((cls) => trigger.classList.add(cls));
+        } else {
+          activeClasses.forEach((cls) => trigger.classList.remove(cls));
+          inactiveClasses.forEach((cls) => trigger.classList.add(cls));
+        }
+      });
+
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle('hidden', panel.dataset.tabPanel !== tab);
+      });
+    }
+
+    const defaultTab = document.querySelector('.tab-trigger.tab-active');
+    if (defaultTab) {
+      setActiveTab(defaultTab.dataset.tab);
+    }
+
+    tabTriggers.forEach((trigger) => {
+      trigger.addEventListener('click', () => setActiveTab(trigger.dataset.tab));
+    });
+
+    function toggleModal(modalId, open) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      if (open) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+      } else {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
+    }
+
+    document.querySelectorAll('[data-modal-open]').forEach((button) => {
+      button.addEventListener('click', () => toggleModal(button.dataset.modalOpen, true));
+    });
+
+    document.querySelectorAll('#editOpportunityModal [data-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => toggleModal('editOpportunityModal', false));
+    });
+
+    document.getElementById('editOpportunityModal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) {
+        toggleModal('editOpportunityModal', false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && document.getElementById('editOpportunityModal')?.classList.contains('flex')) {
+        toggleModal('editOpportunityModal', false);
+      }
+    });
+  });
+</script>
 {% endblock %}
