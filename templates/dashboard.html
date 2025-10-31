@@ -99,13 +99,8 @@
   {% endif %}
 
   {% if cards.empty and cards.count > 0 %}
-    <div class="rounded-2xl bg-slate-900/40 border border-slate-800 p-5 text-xs text-slate-400 space-y-2">
-      <div class="font-semibold text-slate-200 text-sm">No pending items in:</div>
-      <ul class="list-disc list-inside space-y-1">
-        {% for module in cards.empty %}
-          <li><span class="text-slate-200">{{ module.module }}</span>{% if module.empty_message %} – {{ module.empty_message }}{% endif %}</li>
-        {% endfor %}
-      </ul>
+    <div class="rounded-2xl bg-slate-900/40 border border-slate-800 p-5 text-sm text-slate-300 text-center">
+      Nothing pending — time for a coffee? ☕
     </div>
   {% endif %}
 </div>
