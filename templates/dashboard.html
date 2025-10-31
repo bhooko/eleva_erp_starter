@@ -1,12 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Eleva ERP – Dashboard{% endblock %}
+{% set view_mode = page_mode or 'dashboard' %}
+{% set switch_endpoint = switch_user_endpoint or 'dashboard' %}
+{% block title %}Eleva ERP – {{ 'Project Tasks' if view_mode == 'projects' else 'Dashboard' }}{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
   <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-center gap-6 card-hover-lift fade-in-up">
     <div>
-      <h2 class="text-lg font-semibold text-slate-100">Task Load</h2>
-      <p class="text-sm text-slate-400 mt-1">Monitor and action the QC tasks assigned to {{ viewing_user.display_name }}.</p>
+      <h2 class="text-lg font-semibold text-slate-100">{{ 'Project Task Load' if view_mode == 'projects' else 'Task Load' }}</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        {% if view_mode == 'projects' %}
+          Review pending QC work for {{ viewing_user.display_name }}'s assigned projects.
+        {% else %}
+          Monitor and action the QC tasks assigned to {{ viewing_user.display_name }}.
+        {% endif %}
+      </p>
       {% if current_user.is_admin and viewing_user.id != current_user.id %}
         <p class="text-xs text-emerald-300/80 mt-2">Administrator view – showing {{ viewing_user.username }}'s workload.</p>
       {% endif %}
@@ -124,7 +132,7 @@
       </div>
     {% endif %}
 
-    {% if closed_tasks %}
+    {% if closed_tasks and view_mode == 'dashboard' %}
       <div class="mt-6 border-t border-slate-800 pt-4">
         <details>
           <summary class="flex items-center justify-between cursor-pointer text-sm font-semibold text-slate-200">
@@ -172,7 +180,7 @@
       <div class="space-y-2">
         {% for member in team_load %}
           {% set is_current = member.user.id == viewing_user.id %}
-          <a href="{{ url_for('dashboard', user_id=member.user.id) }}"
+          <a href="{{ url_for(switch_endpoint, user_id=member.user.id) }}"
              class="flex flex-wrap items-center gap-4 justify-between px-4 py-3 rounded-2xl border transition {{ 'border-emerald-500/60 bg-emerald-500/10' if is_current else 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-900/60 card-hover-lift' }} fade-in-up"
              style="--fade-delay: {{ 180 + loop.index0 * 40 }}ms;">
             <div>
