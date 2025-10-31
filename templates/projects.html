@@ -1,6 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Eleva ERP – Projects{% endblock %}
 
+{% block section_header %}
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-2xl font-semibold tracking-tight">{{ section_title }}</h1>
+    <button type="button"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
+            data-form-toggle
+            data-target="project-create-panel"
+            data-open-label="+ Create project"
+            data-close-label="Hide form"
+            aria-controls="project-create-panel"
+            aria-expanded="false">
+      <span data-toggle-label>+ Create project</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+  </div>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-6">
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
@@ -84,21 +103,9 @@
     </div>
 
     <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="space-y-1">
         <h3 class="text-base font-semibold text-slate-100">Create Project</h3>
-        <button type="button"
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
-                data-form-toggle
-                data-target="project-create-panel"
-                data-open-label="+ Create project"
-                data-close-label="Hide form"
-                aria-controls="project-create-panel"
-                aria-expanded="false">
-          <span data-toggle-label>+ Create project</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
+        <p class="text-xs uppercase tracking-wide text-slate-500">Use the form to add a new project.</p>
       </div>
       <div id="project-create-panel" class="hidden mt-4">
         <form method="post" class="space-y-4">
