@@ -1,6 +1,5 @@
 {% set modal_id = 'opportunityModal' %}
 {% set modal_clients = opportunity_clients if opportunity_clients is defined else clients %}
-{% set modal_owners = opportunity_owners if opportunity_owners is defined else owners %}
 {% set modal_pipeline_key = default_pipeline_key if default_pipeline_key is defined else (pipeline_key if pipeline_key is defined else 'lift') %}
 {% set modal_temperature_choices = temperature_choices if temperature_choices is defined else [] %}
 {% set modal_default_client = default_client_id if default_client_id is defined else None %}
@@ -46,25 +45,14 @@
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title <span class="text-rose-400">*</span></label>
           <input type="text" name="title" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
-            <select name="client_id" id="{{ modal_id }}Client" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Select client</option>
-              {% for client_option in modal_clients %}
-              <option value="{{ client_option.id }}">{{ client_option.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
-            <select name="owner_id" id="{{ modal_id }}Owner" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Unassigned</option>
-              {% for owner_option in modal_owners %}
-              <option value="{{ owner_option.id }}">{{ owner_option.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client</label>
+          <select name="client_id" id="{{ modal_id }}Client" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            <option value="">Select client</option>
+            {% for client_option in modal_clients %}
+            <option value="{{ client_option.id }}">{{ client_option.display_name }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>

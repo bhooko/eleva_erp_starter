@@ -7,16 +7,15 @@
     <h2 class="text-3xl font-semibold tracking-tight">{{ client.display_name }}</h2>
     <div class="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-400">
       <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 14c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z"/></svg> {{ client.owner.display_name if client.owner else 'Unassigned' }}</span>
-      {% if client.tag %}
-      <span class="inline-flex items-center px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs uppercase">{{ client.tag }}</span>
-      {% endif %}
       {% if client.lifecycle_stage %}
       <span class="inline-flex items-center px-2 py-1 rounded-lg bg-slate-800/70 border border-slate-700/70 text-xs text-slate-200">{{ client.lifecycle_stage }}</span>
       {% endif %}
     </div>
   </div>
   <div class="flex items-center gap-3">
-    {% include "sales/_opportunity_quick_create.html" with default_pipeline_key='lift' opportunity_clients=opportunity_clients opportunity_owners=owners default_client_id=client.id %}
+    {% with default_pipeline_key='lift', opportunity_clients=opportunity_clients, default_client_id=client.id %}
+      {% include "sales/_opportunity_quick_create.html" %}
+    {% endwith %}
     <a href="{{ url_for('sales_clients') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-800/80 bg-slate-900/70 text-sm text-slate-200 hover:bg-slate-800/80">All Clients</a>
   </div>
 </div>
@@ -127,10 +126,6 @@
               {% endfor %}
             </select>
           </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Tag</label>
-            <input type="text" name="tag" value="{{ client.tag or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -142,7 +137,12 @@
           </div>
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
-            <input type="text" name="lifecycle_stage" value="{{ client.lifecycle_stage or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            <select name="lifecycle_stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">Not set</option>
+              {% for stage in lifecycle_options %}
+              <option value="{{ stage }}" {% if client.lifecycle_stage == stage %}selected{% endif %}>{{ stage }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
         <div>
