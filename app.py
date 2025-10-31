@@ -791,7 +791,7 @@ class SalesClient(db.Model):
 
     @property
     def open_opportunity_count(self):
-        return sum(1 for opp in self.opportunities if (opp.status or "").lower() != "closed")
+        return sum(1 for opp in self.opportunities if not opp.is_closed)
 
 
 class SalesOpportunity(db.Model):
@@ -849,8 +849,12 @@ class SalesOpportunity(db.Model):
 
     @property
     def is_closed(self):
-        status = (self.status or "").lower()
-        return status == "closed" or self.stage.lower().startswith("closed")
+        status = (self.status or "").strip().lower()
+        if status == "closed":
+            return True
+
+        stage = (self.stage or "").strip().lower()
+        return stage.startswith("closed") if stage else False
 
     @property
     def badge_variant(self):
