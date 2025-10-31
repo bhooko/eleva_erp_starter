@@ -477,7 +477,7 @@
           <div class="pl-12 space-y-1">
             <a href="{{ url_for('sales_home') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_home' else '' }}">
-              <span class="label">Overview</span>
+              <span class="label">Sales Overview</span>
             </a>
             <div class="space-y-1">
               <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
@@ -520,7 +520,7 @@
           <div class="pl-12 space-y-1">
             <a href="{{ url_for('projects_pending') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'projects_pending' else '' }}">
-              <span class="label">Pending Tasks</span>
+              <span class="label">Projects Overview</span>
             </a>
             <a href="{{ url_for('projects_list') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['projects_list','project_detail'] else '' }}">
