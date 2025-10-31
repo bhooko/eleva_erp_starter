@@ -6,15 +6,12 @@
     <h1 class="text-2xl font-semibold tracking-tight">{{ section_title }}</h1>
     <button type="button"
             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-900/70 text-xs text-slate-200 hover:border-emerald-400 hover:text-emerald-300 transition"
-            data-form-toggle
-            data-target="project-create-panel"
-            data-open-label="+ Create project"
-            data-close-label="Hide form"
-            aria-controls="project-create-panel"
-            aria-expanded="false">
-      <span data-toggle-label>+ Create project</span>
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" data-toggle-icon>
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+            data-open-project-modal
+            aria-haspopup="dialog"
+            aria-controls="projectCreateModal">
+      <span>+ Create project</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
       </svg>
     </button>
   </div>
@@ -34,10 +31,9 @@
     </div>
   </div>
 
-  <div class="grid lg:grid-cols-[2fr_1fr] gap-6">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-inner shadow-black/20 overflow-auto">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-inner shadow-black/20 overflow-auto">
       {% if projects|length == 0 %}
-        <p class="text-slate-400 text-sm">No projects yet. Use the form on the right to add one.</p>
+        <p class="text-slate-400 text-sm">No projects yet. Use the “Create project” button to add one.</p>
       {% else %}
         <table class="min-w-full text-sm">
           <thead class="text-slate-400">
@@ -101,145 +97,155 @@
         </table>
       {% endif %}
     </div>
+  </div>
+</div>
 
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-      <div class="space-y-1">
-        <h3 class="text-base font-semibold text-slate-100">Create Project</h3>
+<div id="projectCreateModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="projectCreateTitle">
+  <div class="relative w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl">
+    <div class="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 id="projectCreateTitle" class="text-lg font-semibold text-slate-100">Create Project</h2>
         <p class="text-xs uppercase tracking-wide text-slate-500">Use the form to add a new project.</p>
       </div>
-      <div id="project-create-panel" class="hidden mt-4">
-        <form method="post" class="space-y-4">
-        <div class="grid gap-3">
+      <button type="button" class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-400 hover:text-slate-200" data-close-project-modal aria-label="Close create project modal">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" class="space-y-4 px-6 py-5 overflow-y-auto max-h-[75vh]">
+      <div class="grid gap-3">
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>
+          <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Project title" />
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>
-            <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Project title" />
-          </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
-              <input name="site_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Building or campus" />
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Customer name</label>
-              <input name="customer_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Customer / Builder" />
-            </div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site name</label>
+            <input name="site_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Building or campus" />
           </div>
           <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site address</label>
-            <textarea name="site_address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Street, city"></textarea>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Customer name</label>
+            <input name="customer_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Customer / Builder" />
           </div>
-          <div class="grid sm:grid-cols-2 gap-3">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Site address</label>
+          <textarea name="site_address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="Street, city"></textarea>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
+            <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for lt in LIFT_TYPES %}
+                <option value="{{ lt }}">{{ lt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
-              <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" selected>Not specified</option>
-                {% for lt in LIFT_TYPES %}
-                  <option value="{{ lt }}">{{ lt }}</option>
-                {% endfor %}
-              </select>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Floors (G+ format)</label>
+              <input name="floors" type="text" data-floor-format="gplus" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. G+10" />
             </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Floors (G+ format)</label>
-                <input name="floors" type="text" data-floor-format="gplus" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. G+10" />
-              </div>
-              <div>
-                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stops</label>
-                <input name="stops" type="number" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. 8" />
-              </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stops</label>
+              <input name="stops" type="number" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. 8" />
             </div>
           </div>
-          <div class="grid sm:grid-cols-2 gap-3">
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Opening type</label>
+            <select name="opening_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_OPENING_TYPES %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift location</label>
+            <select name="location" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_LOCATIONS %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Structure type</label>
+            <select name="structure_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_STRUCTURE_TYPES %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Cladding type</label>
+            <select name="cladding_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_CLADDING_TYPES %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Cabin finish</label>
+            <select name="cabin_finish" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_CABIN_FINISHES %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Opening type</label>
-              <select name="opening_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Door operation</label>
+              <select name="door_operation_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
                 <option value="" selected>Not specified</option>
-                {% for option in PROJECT_OPENING_TYPES %}
+                {% for option in PROJECT_DOOR_OPERATION_TYPES %}
                   <option value="{{ option }}">{{ option }}</option>
                 {% endfor %}
               </select>
             </div>
             <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift location</label>
-              <select name="location" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Door finish</label>
+              <select name="door_finish" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
                 <option value="" selected>Not specified</option>
-                {% for option in PROJECT_LOCATIONS %}
-                  <option value="{{ option }}">{{ option }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Structure type</label>
-              <select name="structure_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" selected>Not specified</option>
-                {% for option in PROJECT_STRUCTURE_TYPES %}
-                  <option value="{{ option }}">{{ option }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Cladding type</label>
-              <select name="cladding_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" selected>Not specified</option>
-                {% for option in PROJECT_CLADDING_TYPES %}
-                  <option value="{{ option }}">{{ option }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Cabin finish</label>
-              <select name="cabin_finish" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" selected>Not specified</option>
-                {% for option in PROJECT_CABIN_FINISHES %}
-                  <option value="{{ option }}">{{ option }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Door operation</label>
-                <select name="door_operation_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                  <option value="" selected>Not specified</option>
-                  {% for option in PROJECT_DOOR_OPERATION_TYPES %}
-                    <option value="{{ option }}">{{ option }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Door finish</label>
-                <select name="door_finish" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                  <option value="" selected>Not specified</option>
-                  {% for option in PROJECT_DOOR_FINISHES %}
-                    <option value="{{ option }}">{{ option }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Handover date</label>
-              <input name="handover_date" type="date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Priority</label>
-              <select name="priority" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-                <option value="" selected>Not specified</option>
-                {% for option in PROJECT_PRIORITIES %}
+                {% for option in PROJECT_DOOR_FINISHES %}
                   <option value="{{ option }}">{{ option }}</option>
                 {% endfor %}
               </select>
             </div>
           </div>
         </div>
-          <button class="w-full px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm">Create project</button>
-        </form>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Handover date</label>
+            <input name="handover_date" type="date" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Priority</label>
+            <select name="priority" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected>Not specified</option>
+              {% for option in PROJECT_PRIORITIES %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
       </div>
-    </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-xl border border-slate-700 text-sm text-slate-300 hover:text-slate-100" data-close-project-modal>Cancel</button>
+        <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm text-white">Create project</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}
@@ -248,6 +254,47 @@
   {{ super() }}
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const modal = document.getElementById('projectCreateModal');
+      const openButton = document.querySelector('[data-open-project-modal]');
+      const closeButtons = modal ? modal.querySelectorAll('[data-close-project-modal]') : [];
+
+      if (modal && openButton) {
+        const closeModal = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          openButton.focus({ preventScroll: false });
+        };
+
+        const openModal = () => {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          const autofocus = modal.querySelector('input, select, textarea');
+          if (autofocus) {
+            autofocus.focus({ preventScroll: false });
+          }
+        };
+
+        openButton.addEventListener('click', () => {
+          openModal();
+        });
+
+        closeButtons.forEach((button) => {
+          button.addEventListener('click', closeModal);
+        });
+
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+          }
+        });
+      }
+
       const inputs = document.querySelectorAll('[data-floor-format="gplus"]');
       inputs.forEach((input) => {
         const normalize = () => {
