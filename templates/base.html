@@ -515,12 +515,12 @@
                 <path d="M4 4h16v2H4zm2 4h12v2H6zm-2 4h16v10H4z" />
               </svg>
             </span>
-            <span class="label text-[15px] flex-1">Projects</span>
+            <span class="label text-[15px] flex-1">New Installation</span>
           </a>
           <div class="pl-12 space-y-1">
             <a href="{{ url_for('projects_pending') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'projects_pending' else '' }}">
-              <span class="label">Projects Overview</span>
+              <span class="label">NI Overview</span>
             </a>
             <a href="{{ url_for('projects_list') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['projects_list','project_detail'] else '' }}">
@@ -554,7 +554,7 @@
             </a>
             <a href="{{ url_for('forms_list') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['forms_list','forms_edit','forms_new','forms_fill'] else '' }}">
-              <span class="label">Form Templates</span>
+              <span class="label">QC Form Templates</span>
             </a>
             <a href="{{ url_for('qc_recent_submissions') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['submission_view','qc_recent_submissions'] else '' }}">

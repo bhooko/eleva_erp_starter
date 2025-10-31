@@ -13,6 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading, re, uuid, random, string
+from collections import OrderedDict
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
@@ -2945,6 +2946,205 @@ def admin_positions_delete(position_id):
 
 
 def _build_task_overview(viewing_user: "User"):
+    def _describe_due_date(target_date, now):
+        if not target_date:
+            return None, None, "none"
+        if isinstance(target_date, datetime.date) and not isinstance(target_date, datetime.datetime):
+            target_dt = datetime.datetime.combine(target_date, datetime.time.min)
+        else:
+            target_dt = target_date
+        delta_days = (target_dt.date() - now.date()).days
+        display = target_dt.strftime("%d %b %Y")
+        if delta_days < 0:
+            days = abs(delta_days)
+            label = f"Overdue by {days} day{'s' if days != 1 else ''}"
+            variant = "overdue"
+        elif delta_days == 0:
+            label = "Due today"
+            variant = "today"
+        elif delta_days == 1:
+            label = "Due tomorrow"
+            variant = "upcoming"
+        else:
+            label = f"Due in {delta_days} days"
+            variant = "upcoming"
+        return label, display, variant
+
+    def _status_badge_class(key):
+        mapping = {
+            "open": "bg-amber-500/20 text-amber-100 border border-amber-500/40",
+            "in_progress": "bg-sky-500/20 text-sky-100 border border-sky-500/40",
+            "blocked": "bg-rose-500/20 text-rose-100 border border-rose-500/40",
+            "scheduled": "bg-sky-500/20 text-sky-100 border border-sky-500/40",
+            "overdue": "bg-rose-500/20 text-rose-100 border border-rose-500/40",
+        }
+        return mapping.get(key, "bg-slate-800/60 text-slate-200 border border-slate-700/60")
+
+    def _due_badge_class(variant):
+        mapping = {
+            "overdue": "bg-rose-500/20 text-rose-100 border border-rose-500/40",
+            "today": "bg-amber-500/20 text-amber-100 border border-amber-500/40",
+            "upcoming": "bg-slate-800/60 text-slate-200 border border-slate-700/60",
+        }
+        return mapping.get(variant, "bg-slate-800/60 text-slate-200 border border-slate-700/60")
+
+    def _ensure_module(modules_map, order, label, empty_message, description=None):
+        module = modules_map.get(label)
+        if module is None:
+            module = {
+                "module": label,
+                "items": [],
+                "empty_message": empty_message,
+                "description": description,
+            }
+            modules_map[label] = module
+            order.append(label)
+        else:
+            if description and not module.get("description"):
+                module["description"] = description
+        return module
+
+    def _status_key(status):
+        key = (status or "").strip().lower()
+        if key == "in progress":
+            return "in_progress"
+        if key == "blocked":
+            return "blocked"
+        if key == "closed":
+            return "closed"
+        if key == "overdue":
+            return "overdue"
+        if key == "scheduled":
+            return "scheduled"
+        return "open"
+
+    def _build_pending_modules(viewing_user, open_tasks, now):
+        modules_map = OrderedDict()
+        module_order = []
+
+        _ensure_module(
+            modules_map,
+            module_order,
+            "Projects",
+            "No pending project tasks.",
+            "Tasks from active projects assigned to you.",
+        )
+        _ensure_module(
+            modules_map,
+            module_order,
+            "Sales",
+            "No pending sales activities.",
+            "Upcoming and overdue sales engagements on your opportunities.",
+        )
+
+        for task in open_tasks:
+            module_label = "Projects" if task.project else "Quality Control"
+            module_description = (
+                "Project execution tasks awaiting your action."
+                if module_label == "Projects"
+                else "Quality inspections and tasks that still need attention."
+            )
+            module = _ensure_module(
+                modules_map,
+                module_order,
+                module_label,
+                "No pending QC tasks." if module_label == "Quality Control" else "No pending project tasks.",
+                module_description,
+            )
+
+            due_label, due_display, due_variant = _describe_due_date(task.due_date, now)
+            metadata = []
+            if task.stage:
+                metadata.append(task.stage)
+            if task.lift_type:
+                metadata.append(task.lift_type)
+            if task.template and task.template.name:
+                metadata.append(f"Form: {task.template.name}")
+            if task.project and task.project.name:
+                metadata.append(f"Project: {task.project.name}")
+
+            module["items"].append(
+                {
+                    "title": task.display_title,
+                    "subtitle": task.client_name or task.site_name,
+                    "description": task.description,
+                    "identifier": f"#{task.id}",
+                    "status": task.status or "Open",
+                    "status_class": _status_badge_class(_status_key(task.status)),
+                    "due_description": due_label,
+                    "due_display": due_display,
+                    "due_class": _due_badge_class(due_variant),
+                    "url": url_for("qc_work_detail", work_id=task.id),
+                    "secondary_url": url_for("forms_fill", form_id=task.template_id, work_id=task.id)
+                    if task.template_id
+                    else None,
+                    "secondary_label": "New Submission" if task.template_id else None,
+                    "metadata": metadata,
+                }
+            )
+
+        sales_module = modules_map.get("Sales")
+        if sales_module is None:
+            sales_module = _ensure_module(
+                modules_map,
+                module_order,
+                "Sales",
+                "No pending sales activities.",
+                "Upcoming and overdue sales engagements on your opportunities.",
+            )
+        sales_items = (
+            SalesOpportunityEngagement.query
+            .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
+            .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
+            .filter(
+                or_(
+                    SalesOpportunity.owner_id == viewing_user.id,
+                    SalesOpportunityEngagement.created_by_id == viewing_user.id,
+                )
+            )
+            .filter(func.lower(SalesOpportunity.status) != "closed")
+            .order_by(SalesOpportunityEngagement.scheduled_for.asc(), SalesOpportunityEngagement.id.asc())
+            .limit(50)
+            .all()
+        )
+
+        for activity in sales_items:
+            opportunity = activity.opportunity
+            due_label, due_display, due_variant = _describe_due_date(activity.scheduled_for, now)
+            status_key = "overdue" if due_variant == "overdue" else "scheduled"
+            metadata = [activity.display_activity_type]
+            subtitle = None
+            if opportunity:
+                subtitle = opportunity.title
+                if opportunity.stage:
+                    metadata.append(opportunity.stage)
+                if opportunity.client and opportunity.client.display_name:
+                    metadata.append(f"Client: {opportunity.client.display_name}")
+
+            sales_module["items"].append(
+                {
+                    "title": activity.subject or activity.display_activity_type,
+                    "subtitle": subtitle,
+                    "description": activity.notes,
+                    "identifier": f"Activity #{activity.id}",
+                    "status": "Overdue" if status_key == "overdue" else "Scheduled",
+                    "status_class": _status_badge_class(status_key),
+                    "due_description": due_label,
+                    "due_display": due_display,
+                    "due_class": _due_badge_class(due_variant),
+                    "url": url_for("sales_opportunity_detail", opportunity_id=opportunity.id)
+                    if opportunity
+                    else None,
+                    "secondary_url": None,
+                    "secondary_label": None,
+                    "metadata": metadata,
+                }
+            )
+
+        pending_modules = [modules_map[label] for label in module_order]
+        pending_total = sum(len(module["items"]) for module in pending_modules)
+        return pending_modules, pending_total
+
     status_order = case(
         (QCWork.status == "In Progress", 0),
         (QCWork.status == "Open", 1),
@@ -2993,6 +3193,8 @@ def _build_task_overview(viewing_user: "User"):
                 )
             })
 
+    pending_modules, pending_total = _build_pending_modules(viewing_user, open_tasks, now)
+
     return {
         "open_tasks": open_tasks,
         "closed_tasks": closed_tasks,
@@ -3001,6 +3203,8 @@ def _build_task_overview(viewing_user: "User"):
         "overdue_count": overdue_count,
         "blocked_tasks": blocked_tasks,
         "team_load": team_load,
+        "pending_modules": pending_modules,
+        "pending_total": pending_total,
     }
 
 
@@ -3043,6 +3247,14 @@ def projects_pending():
         "page_mode": "projects",
         "switch_user_endpoint": "projects_pending",
     })
+
+    project_modules = [
+        module
+        for module in context.get("pending_modules", [])
+        if module.get("module") in {"Projects", "Quality Control"}
+    ]
+    context["pending_modules"] = project_modules
+    context["pending_total"] = sum(len(module.get("items", [])) for module in project_modules)
 
     return render_template("dashboard.html", **context)
 
