@@ -1896,6 +1896,84 @@ def sales_opportunity_detail(opportunity_id):
             flash("Timeline note added.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
+        elif action == "schedule_activity":
+            activity_type = (request.form.get("activity_type") or "meeting").strip().lower()
+            if activity_type not in {"meeting", "call", "email"}:
+                activity_type = "meeting"
+
+            subject = (request.form.get("activity_subject") or "").strip()
+            activity_date_raw = (request.form.get("activity_date") or "").strip()
+            activity_time_raw = (request.form.get("activity_time") or "").strip()
+            reminder_enabled = request.form.get("reminder_enabled") is not None
+            reminder_date_raw = (request.form.get("reminder_date") or "").strip()
+            reminder_time_raw = (request.form.get("reminder_time") or "").strip()
+            additional_notes = (request.form.get("activity_notes") or "").strip()
+
+            scheduled_parts = []
+            if activity_date_raw:
+                try:
+                    scheduled_date = datetime.datetime.strptime(activity_date_raw, "%Y-%m-%d").date()
+                    scheduled_parts.append(scheduled_date.strftime("%d %b %Y"))
+                except ValueError:
+                    flash("Provide a valid date for the activity (YYYY-MM-DD).", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            else:
+                scheduled_date = None
+
+            if activity_time_raw:
+                try:
+                    scheduled_time = datetime.datetime.strptime(activity_time_raw, "%H:%M").time()
+                    scheduled_parts.append(scheduled_time.strftime("%I:%M %p"))
+                except ValueError:
+                    flash("Provide a valid time for the activity (HH:MM).", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            else:
+                scheduled_time = None
+
+            reminder_parts = []
+            if reminder_enabled:
+                if not reminder_date_raw:
+                    flash("Select a reminder date when enabling reminders.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                try:
+                    reminder_date = datetime.datetime.strptime(reminder_date_raw, "%Y-%m-%d").date()
+                    reminder_parts.append(reminder_date.strftime("%d %b %Y"))
+                except ValueError:
+                    flash("Provide a valid reminder date (YYYY-MM-DD).", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                if reminder_time_raw:
+                    try:
+                        reminder_time = datetime.datetime.strptime(reminder_time_raw, "%H:%M").time()
+                        reminder_parts.append(reminder_time.strftime("%I:%M %p"))
+                    except ValueError:
+                        flash("Provide a valid reminder time (HH:MM).", "error")
+                        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            details = []
+            if scheduled_parts:
+                details.append(f"Scheduled for {' '.join(scheduled_parts)}.")
+            elif not subject:
+                details.append("Scheduled without a specific date. Update when confirmed.")
+
+            if reminder_parts:
+                details.append(f"Reminder set for {' '.join(reminder_parts)}.")
+
+            if additional_notes:
+                details.append(additional_notes)
+
+            title = subject or f"Scheduled {activity_type.title()}"
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                title,
+                notes="\n\n".join(details) if details else None,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Activity scheduled.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
     activities = (
         SalesActivity.query
         .filter_by(parent_type="opportunity", parent_id=opportunity.id)
