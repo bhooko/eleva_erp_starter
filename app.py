@@ -2772,16 +2772,7 @@ def admin_positions_delete(position_id):
     return redirect(url_for("admin_users") + "#positions")
 
 
-@app.route("/dashboard")
-@login_required
-def dashboard():
-    viewing_user = current_user
-    selected_user_id = request.args.get("user_id", type=int)
-    if selected_user_id and current_user.is_admin:
-        candidate = db.session.get(User, selected_user_id)
-        if candidate:
-            viewing_user = candidate
-
+def _build_task_overview(viewing_user: "User"):
     status_order = case(
         (QCWork.status == "In Progress", 0),
         (QCWork.status == "Open", 1),
@@ -2830,18 +2821,58 @@ def dashboard():
                 )
             })
 
-    return render_template(
-        "dashboard.html",
-        open_tasks=open_tasks,
-        closed_tasks=closed_tasks,
-        open_count=open_count,
-        in_progress_count=in_progress_count,
-        overdue_count=overdue_count,
-        viewing_user=viewing_user,
-        blocked_tasks=blocked_tasks,
-        team_load=team_load,
-        category_label=None
-    )
+    return {
+        "open_tasks": open_tasks,
+        "closed_tasks": closed_tasks,
+        "open_count": open_count,
+        "in_progress_count": in_progress_count,
+        "overdue_count": overdue_count,
+        "blocked_tasks": blocked_tasks,
+        "team_load": team_load,
+    }
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    viewing_user = current_user
+    selected_user_id = request.args.get("user_id", type=int)
+    if selected_user_id and current_user.is_admin:
+        candidate = db.session.get(User, selected_user_id)
+        if candidate:
+            viewing_user = candidate
+
+    context = _build_task_overview(viewing_user)
+    context.update({
+        "viewing_user": viewing_user,
+        "category_label": None,
+        "page_mode": "dashboard",
+        "switch_user_endpoint": "dashboard",
+    })
+
+    return render_template("dashboard.html", **context)
+
+
+@app.route("/projects/pending")
+@login_required
+def projects_pending():
+    viewing_user = current_user
+    selected_user_id = request.args.get("user_id", type=int)
+    if selected_user_id and current_user.is_admin:
+        candidate = db.session.get(User, selected_user_id)
+        if candidate:
+            viewing_user = candidate
+
+    context = _build_task_overview(viewing_user)
+    context.update({
+        "viewing_user": viewing_user,
+        "category_label": "Projects",
+        "category_url": url_for("projects_pending"),
+        "page_mode": "projects",
+        "switch_user_endpoint": "projects_pending",
+    })
+
+    return render_template("dashboard.html", **context)
 
 
 # ---------------------- FORMS (TEMPLATES) ----------------------
