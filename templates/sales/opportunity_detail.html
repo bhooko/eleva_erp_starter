@@ -22,7 +22,7 @@
   </div>
 </div>
 
-<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl">
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up">
   <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
     <div class="flex-1">
       <div class="text-xs uppercase tracking-wide text-slate-500">Opportunity Details</div>
@@ -75,7 +75,7 @@
       </dl>
     </div>
     <div class="flex items-start gap-2 md:flex-col">
-      <button type="button" data-modal-open="editOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Edit Opportunity</button>
+      <button type="button" data-modal-open="editOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Edit Opportunity</button>
     </div>
   </div>
   <div class="mt-4 rounded-xl border border-slate-800/60 bg-slate-950/50 p-4">
@@ -84,27 +84,29 @@
   </div>
 </div>
 
-<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-4 shadow-xl">
+<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-4 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 80ms;">
   <div class="text-xs uppercase tracking-wide text-slate-500 mb-3">Stage Progress</div>
   <div class="flex items-center gap-3 overflow-x-auto pb-1">
     {% for stage_option in stages %}
-    {% set is_current = stage_option == opportunity.stage %}
-    <div class="flex items-center gap-3">
-      <div class="flex flex-col items-center text-center">
-        <div title="{{ stage_option }}" class="w-8 h-8 rounded-full flex items-center justify-center border-2 text-xs {{ 'border-emerald-400 bg-emerald-500/20 text-emerald-100' if is_current else 'border-slate-700 text-slate-300 bg-slate-900' }} font-semibold">{{ loop.index }}</div>
-        <span class="mt-2 text-[11px] {{ 'text-emerald-200 font-semibold' if is_current else 'text-slate-400' }}">{{ stage_option }}</span>
+      {% set is_current = stage_option == opportunity.stage %}
+      {% set is_complete = loop.index0 < current_stage_index %}
+      {% set connector_state = 'is-complete' if loop.index0 < current_stage_index else ('is-progress' if loop.index0 == current_stage_index else '') %}
+      <div class="flex items-center gap-3">
+        <div class="flex flex-col items-center text-center">
+          <div title="{{ stage_option }}" class="stage-node w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold {{ 'is-active' if is_current else '' }} {{ 'is-complete' if is_complete else '' }}">{{ loop.index }}</div>
+          <span class="mt-2 text-[11px] stage-label {{ 'is-active' if is_current else '' }}">{{ stage_option }}</span>
+        </div>
+        {% if not loop.last %}
+          <div class="stage-connector {{ connector_state }}"></div>
+        {% endif %}
       </div>
-      {% if not loop.last %}
-      <div class="h-0.5 w-12 {{ 'bg-emerald-400/60' if loop.index0 < current_stage_index else 'bg-slate-700' }}"></div>
-      {% endif %}
-    </div>
     {% endfor %}
   </div>
 </div>
 
 <div class="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
   <div class="space-y-6">
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 120ms;">
       <div class="px-6 pt-5">
         <div class="flex flex-wrap items-center gap-2 text-sm">
           <button type="button" data-tab="timeline" class="tab-trigger tab-active inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-emerald-100 transition">Timeline</button>
@@ -120,7 +122,7 @@
             <input type="hidden" name="form_action" value="add_note">
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
               <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Add Note</button>
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Add Note</button>
             </div>
             <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
           </form>
@@ -156,7 +158,7 @@
               <input type="hidden" name="form_action" value="add_comment">
               <textarea name="comment_body" rows="4" placeholder="Share an update with your team." class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required></textarea>
               <div class="flex justify-end">
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Save Comment</button>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Save Comment</button>
               </div>
             </form>
             {% if comments %}
@@ -191,7 +193,7 @@
                 </label>
               </div>
               <div class="flex justify-end">
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Upload File</button>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Upload File</button>
               </div>
             </form>
             {% if files %}
@@ -254,13 +256,13 @@
               <textarea name="activity_notes" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add talking points or objectives."></textarea>
             </div>
             <div class="flex justify-end">
-              <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Schedule Activity</button>
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Schedule Activity</button>
             </div>
           </form>
           {% if scheduled_activities %}
           <div class="mt-6 space-y-4">
             {% for engagement in scheduled_activities %}
-            <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4">
+            <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 160 + loop.index0 * 40 }}ms;">
               <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <p class="font-semibold text-slate-100">{{ engagement.display_activity_type }}</p>
                 <span class="text-xs text-slate-500">{{ engagement.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
@@ -288,14 +290,14 @@
             {% endfor %}
           </div>
           {% else %}
-          <div class="mt-6 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No activities scheduled yet.</div>
+          <div class="mt-6 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">No activities scheduled yet.</div>
           {% endif %}
         </div>
 
         <div data-tab-panel="items" class="hidden">
           <div class="space-y-5">
             <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
-            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5">
+            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
               <input type="hidden" name="form_action" value="add_item">
               <div>
                 <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details</label>
@@ -338,13 +340,13 @@
                 </select>
               </div>
               <div class="flex justify-end">
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Add Item</button>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Add Item</button>
               </div>
             </form>
             {% if items %}
             <div class="space-y-4">
               {% for item in items %}
-              <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4">
+              <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 200 + loop.index0 * 40 }}ms;">
                 <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <p class="font-semibold text-slate-100">{{ item.lift_type or 'Lift Item' }}</p>
                   <span class="text-xs text-slate-500">{{ item.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
@@ -382,7 +384,7 @@
               {% endfor %}
             </div>
             {% else %}
-            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No items added yet.</div>
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500 card-hover-lift fade-in-up" style="--fade-delay: 200ms;">No items added yet.</div>
             {% endif %}
           </div>
         </div>
@@ -391,7 +393,7 @@
   </div>
 
   <div class="space-y-6">
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
       <div class="px-6 py-4 border-b border-slate-800/80">
         <h3 class="text-lg font-semibold">Snapshot</h3>
       </div>
@@ -506,7 +508,7 @@
       </div>
       <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
         <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
-        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Save Opportunity</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Save Opportunity</button>
       </div>
     </form>
   </div>

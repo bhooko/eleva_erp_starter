@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-center gap-6">
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-center gap-6 card-hover-lift fade-in-up">
     <div>
       <h2 class="text-lg font-semibold text-slate-100">Task Load</h2>
       <p class="text-sm text-slate-400 mt-1">Monitor and action the QC tasks assigned to {{ viewing_user.display_name }}.</p>
@@ -27,7 +27,7 @@
     </div>
   </div>
 
-  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6">
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 fade-in-up" style="--fade-delay: 80ms;">
     <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
       <div>
         <h3 class="text-lg font-semibold text-slate-100">{{ viewing_user.display_name }}'s Active Tasks</h3>
@@ -44,7 +44,7 @@
     {% else %}
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {% for task in open_tasks %}
-          <article class="h-full rounded-xl border border-slate-800 bg-slate-950/50 p-4 flex flex-col gap-3 shadow-inner shadow-black/10">
+          <article class="h-full rounded-xl border border-slate-800 bg-slate-950/50 p-4 flex flex-col gap-3 shadow-inner shadow-black/10 card-hover-lift fade-in-up" style="--fade-delay: {{ loop.index0 * 60 }}ms;">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-slate-100 leading-tight truncate" title="{{ task.display_title }}">{{ task.display_title }}</div>
@@ -87,9 +87,9 @@
             {% endif %}
 
             <div class="mt-auto flex flex-wrap gap-2">
-              <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 transition">Open Task</a>
+              <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 transition btn-shimmer">Open Task</a>
               {% if task.template_id %}
-                <a href="{{ url_for('forms_fill', form_id=task.template_id, work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition">New Submission</a>
+                <a href="{{ url_for('forms_fill', form_id=task.template_id, work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition btn-shimmer">New Submission</a>
               {% endif %}
             </div>
           </article>
@@ -102,7 +102,7 @@
         <h4 class="text-sm font-semibold text-amber-200 mb-3">Upcoming (Waiting on Dependencies)</h4>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {% for task in blocked_tasks %}
-            <article class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 flex flex-col gap-2">
+            <article class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 flex flex-col gap-2 card-hover-lift fade-in-up" style="--fade-delay: {{ loop.index0 * 60 }}ms;">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <div class="text-xs font-semibold text-amber-100 truncate" title="{{ task.display_title }}">{{ task.display_title }}</div>
@@ -133,7 +133,7 @@
           </summary>
           <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {% for task in closed_tasks %}
-              <article class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 flex flex-col gap-2">
+              <article class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 flex flex-col gap-2 card-hover-lift fade-in-up" style="--fade-delay: {{ loop.index0 * 40 }}ms;">
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <div class="text-xs font-semibold text-slate-100 truncate" title="{{ task.display_title }}">{{ task.display_title }}</div>
@@ -153,7 +153,7 @@
                   <a href="{{ url_for('project_detail', project_id=task.project.id) }}" class="text-[11px] text-emerald-300 hover:underline truncate" title="{{ task.project.name }}">Project: {{ task.project.name }}</a>
                 {% endif %}
                 <div class="mt-auto flex flex-wrap gap-2">
-                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium rounded-lg border border-slate-700/60 bg-slate-900/60 hover:bg-slate-800/60 transition">View Task</a>
+                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium rounded-lg border border-slate-700/60 bg-slate-900/60 hover:bg-slate-800/60 transition btn-shimmer">View Task</a>
                 </div>
               </article>
             {% endfor %}
@@ -164,7 +164,7 @@
   </div>
 
   {% if team_load %}
-    <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6">
+    <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 fade-in-up" style="--fade-delay: 160ms;">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold text-slate-100">Team Assignment Overview</h3>
         <p class="text-xs text-slate-400">Click a teammate to inspect their queue.</p>
@@ -173,7 +173,8 @@
         {% for member in team_load %}
           {% set is_current = member.user.id == viewing_user.id %}
           <a href="{{ url_for('dashboard', user_id=member.user.id) }}"
-             class="flex flex-wrap items-center gap-4 justify-between px-4 py-3 rounded-2xl border transition {{ 'border-emerald-500/60 bg-emerald-500/10' if is_current else 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-900/60' }}">
+             class="flex flex-wrap items-center gap-4 justify-between px-4 py-3 rounded-2xl border transition {{ 'border-emerald-500/60 bg-emerald-500/10' if is_current else 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-900/60 card-hover-lift' }} fade-in-up"
+             style="--fade-delay: {{ 180 + loop.index0 * 40 }}ms;">
             <div>
               <div class="text-sm font-semibold text-slate-100">{{ member.user.display_name }}</div>
               <div class="text-xs text-slate-400">{{ member.user.username }}</div>

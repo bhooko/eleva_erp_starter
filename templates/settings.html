@@ -6,7 +6,8 @@
 {% set active = active_tab or 'admin' %}
 {% set tabs = [
   {"id": "admin", "label": "Admin", "description": "Manage workspace-level tools and controls."},
-  {"id": "account", "label": "Account", "description": "Personalise your experience and manage your profile."}
+  {"id": "account", "label": "Account", "description": "Personalise your experience and manage your profile."},
+  {"id": "display", "label": "Display", "description": "Switch colour schemes and tune visual comfort."}
 ] %}
 
 <div class="space-y-6">
@@ -71,6 +72,8 @@
         {% endif %}
       </section>
 
+      
+
       <section id="settings-panel-account"
                class="{{ '' if active == 'account' else 'hidden' }} space-y-5"
                role="tabpanel"
@@ -104,6 +107,120 @@
           </a>
         </div>
       </section>
+
+      <section id="settings-panel-display"
+                     class="{{ '' if active == 'display' else 'hidden' }} space-y-5"
+                     role="tabpanel"
+                     aria-labelledby="settings-tab-display"
+                     data-tab-panel="display">
+              <header>
+                <h3 class="text-lg font-semibold text-slate-100">Display</h3>
+                <p class="mt-1 text-sm text-slate-400">Switch between Eleva's curated colour schemes. Your choice is saved locally and applied instantly.</p>
+              </header>
+
+              <p class="text-sm text-slate-400" data-theme-status>Active theme: Warm Modern</p>
+
+              {% set theme_options = [
+                {
+                  'value': 'eleva-signature',
+                  'name': 'Eleva Signature',
+                  'emoji': '✨',
+                  'summary': 'Deep charcoal base with Eleva blue and cyan highlights. Ideal when you want crisp contrast with confident accents.',
+                  'showcase': ['#0F141A', '#007AFF', '#39C0ED', '#00C58E'],
+                  'swatches': [
+                    {'label': 'Base', 'value': '#0F141A', 'background': '#0F141A'},
+                    {'label': 'Primary Accent', 'value': '#007AFF', 'background': '#007AFF'},
+                    {'label': 'Secondary Accent', 'value': '#39C0ED', 'background': '#39C0ED'},
+                    {'label': 'Success', 'value': '#00C58E', 'background': '#00C58E'},
+                    {'label': 'Warning', 'value': '#FBBF24', 'background': '#FBBF24'},
+                    {'label': 'Error', 'value': '#F87171', 'background': '#F87171'},
+                    {'label': 'Card Background', 'value': '#1C2128', 'background': '#1C2128'},
+                    {'label': 'Text Primary', 'value': '#E5E7EB', 'background': '#E5E7EB'},
+                    {'label': 'Text Secondary', 'value': '#9CA3AF', 'background': '#9CA3AF'},
+                    {'label': 'Border', 'value': '#2D333B', 'background': '#2D333B'}
+                  ]
+                },
+                {
+                  'value': 'metallic-elevate',
+                  'name': 'Metallic Elevate',
+                  'emoji': '⚙️',
+                  'summary': 'Graphite neutrals with brushed steel tones and electric blue energy. Great for a sleek, high-contrast workspace.',
+                  'showcase': ['#121212', '#A9B1B7', '#3B82F6', '#00E0E0'],
+                  'swatches': [
+                    {'label': 'Base', 'value': '#121212', 'background': '#121212'},
+                    {'label': 'Primary Accent', 'value': '#A9B1B7', 'background': '#A9B1B7'},
+                    {'label': 'Secondary Accent', 'value': '#3B82F6', 'background': '#3B82F6'},
+                    {'label': 'Highlight Gradient', 'value': '#3B82F6 → #00C6FF', 'background': 'linear-gradient(90deg, #3B82F6, #00C6FF)'},
+                    {'label': 'Hover / Focus', 'value': '#00E0E0', 'background': '#00E0E0'},
+                    {'label': 'Success', 'value': '#14B8A6', 'background': '#14B8A6'},
+                    {'label': 'Error', 'value': '#EF4444', 'background': '#EF4444'},
+                    {'label': 'Text Primary', 'value': '#F5F6F7', 'background': '#F5F6F7'},
+                    {'label': 'Text Muted', 'value': '#9CA3AF', 'background': '#9CA3AF'}
+                  ]
+                },
+                {
+                  'value': 'warm-modern',
+                  'name': 'Warm Modern',
+                  'emoji': '🌇',
+                  'summary': 'Midnight navy foundation with burnt orange and gold accents. Balanced warmth for a friendly yet professional feel.',
+                  'showcase': ['#111827', '#FB923C', '#FACC15', '#374151'],
+                  'swatches': [
+                    {'label': 'Base', 'value': '#111827', 'background': '#111827'},
+                    {'label': 'Primary Accent', 'value': '#FB923C', 'background': '#FB923C'},
+                    {'label': 'Secondary Accent', 'value': '#FACC15', 'background': '#FACC15'},
+                    {'label': 'Neutral Grey', 'value': '#374151', 'background': '#374151'},
+                    {'label': 'Text Primary', 'value': '#F9FAFB', 'background': '#F9FAFB'},
+                    {'label': 'Text Secondary', 'value': '#D1D5DB', 'background': '#D1D5DB'},
+                    {'label': 'Card Background', 'value': '#1F2937', 'background': '#1F2937'}
+                  ]
+                }
+              ] %}
+
+              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label="Colour scheme options">
+                {% for option in theme_options %}
+                  <label class="group relative block rounded-2xl border border-slate-800/60 bg-slate-950/40 p-5 transition-colors card-hover-lift fade-in-up"
+                         data-theme-option="{{ option.value }}"
+                         data-theme-name="{{ option.name }}"
+                         role="radio"
+                         aria-checked="false"
+                         tabindex="0"
+                         style="--fade-delay: {{ loop.index0 * 80 }}ms;">
+                    <input type="radio" name="theme_preference" value="{{ option.value }}" class="sr-only" data-theme-radio>
+                    <span class="absolute right-5 top-5 hidden text-xs font-semibold text-emerald-200" data-theme-active-badge>Active</span>
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-sm font-semibold text-slate-200" data-theme-title>
+                          <span>{{ option.emoji }}</span>
+                          <span>{{ option.name }}</span>
+                        </div>
+                        <p class="text-sm text-slate-400 leading-relaxed">{{ option.summary }}</p>
+                      </div>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        {% for color in option.showcase %}
+                          <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800/70"
+                                style="background: {{ color }};">
+                            <span class="sr-only">Preview swatch {{ color }}</span>
+                          </span>
+                        {% endfor %}
+                      </div>
+                    </div>
+                    <dl class="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                      {% for swatch in option.swatches %}
+                        <div class="rounded-xl border border-slate-800/60 bg-slate-900/40 p-2">
+                          <div class="mb-1 flex items-center gap-2">
+                            <span class="inline-block h-3.5 w-3.5 rounded-full border border-slate-800/70" style="background: {{ swatch.background }};"></span>
+                            <dt class="font-medium text-slate-200">{{ swatch.label }}</dt>
+                          </div>
+                          <dd class="text-[11px] uppercase tracking-wide text-slate-500">{{ swatch.value }}</dd>
+                        </div>
+                      {% endfor %}
+                    </dl>
+                  </label>
+                {% endfor %}
+              </div>
+
+              <p class="text-xs text-slate-500">Themes adjust interface colours, accents, stage gradients and button treatments without affecting your data.</p>
+            </section>
     </div>
   </div>
 </div>
@@ -146,6 +263,78 @@
       buttons.forEach((button) => {
         button.addEventListener('click', () => activateTab(button.dataset.tabButton));
       });
+
+      const themeCards = Array.from(document.querySelectorAll('[data-theme-option]'));
+      const themeRadios = Array.from(document.querySelectorAll('[data-theme-radio]'));
+      const themeStatus = document.querySelector('[data-theme-status]');
+
+      if (themeCards.length && themeRadios.length) {
+        const themeNames = new Map(themeCards.map((card) => [card.dataset.themeOption, card.dataset.themeName]));
+
+        const updateThemeUI = (theme) => {
+          themeCards.forEach((card) => {
+            const isActive = card.dataset.themeOption === theme;
+            card.classList.toggle('border-emerald-400/60', isActive);
+            card.classList.toggle('bg-emerald-500/10', isActive);
+            card.classList.toggle('shadow-lg', isActive);
+            const badge = card.querySelector('[data-theme-active-badge]');
+            if (badge) {
+              badge.classList.toggle('hidden', !isActive);
+            }
+            card.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          });
+
+          themeRadios.forEach((radio) => {
+            radio.checked = radio.value === theme;
+          });
+
+          if (themeStatus) {
+            const label = themeNames.get(theme) || 'Warm Modern';
+            themeStatus.textContent = `Active theme: ${label}`;
+          }
+        };
+
+        const getCurrentTheme = () => {
+          if (window.elevaTheme && typeof window.elevaTheme.getTheme === 'function') {
+            return window.elevaTheme.getTheme();
+          }
+          try {
+            return localStorage.getItem('eleva:theme') || 'warm-modern';
+          } catch (error) {
+            return 'warm-modern';
+          }
+        };
+
+        const initialTheme = getCurrentTheme();
+        updateThemeUI(initialTheme);
+
+        themeRadios.forEach((radio) => {
+          radio.addEventListener('change', () => {
+            if (!radio.checked) {
+              return;
+            }
+            const selectedTheme = radio.value;
+            if (window.elevaTheme && typeof window.elevaTheme.setTheme === 'function') {
+              window.elevaTheme.setTheme(selectedTheme);
+            }
+            updateThemeUI(selectedTheme);
+          });
+        });
+
+        themeCards.forEach((card) => {
+          card.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              const radio = card.querySelector('input[type="radio"]');
+              if (!radio) {
+                return;
+              }
+              radio.checked = true;
+              radio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        });
+      }
     });
   </script>
 {% endblock %}
