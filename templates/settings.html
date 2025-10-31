@@ -38,32 +38,11 @@
                data-tab-panel="admin">
         <header>
           <h3 class="text-lg font-semibold text-slate-100">Admin tools</h3>
-          <p class="mt-1 text-sm text-slate-400">Quick links to administrative areas of the workspace.</p>
+          <p class="mt-1 text-sm text-slate-400">Manage users, departments and positions without leaving settings.</p>
         </header>
 
         {% if current_user.is_admin %}
-          <div class="grid gap-4 sm:grid-cols-2">
-            <a href="{{ url_for('admin_users') }}"
-               class="group flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/50 p-4 transition-colors duration-150 hover:border-emerald-500/40 hover:bg-emerald-500/10">
-              <div class="flex items-center gap-3">
-                <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/70 border border-slate-700/70">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-300" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.042 7.042 0 00-1.63-.94l-.36-2.54A.5.5 0 0014.4 2h-3.8a.5.5 0 00-.5.42l-.36 2.54c-.59.23-1.14.54-1.63.94l-2.39-.96a.5.5 0 00-.6.22L3.3 8.48a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.44.34.7.22l2.39-.96c.49.4 1.04.72 1.63.94l.36 2.54c.04.26.25.42.5.42h3.8c.25 0 .46-.16.5-.42l.36-2.54c.59-.23 1.14-.54 1.63-.94l2.39.96c.26.12.56.02.7-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
-                  </svg>
-                </span>
-                <div>
-                  <h4 class="text-base font-semibold text-slate-100">Admin</h4>
-                  <p class="text-sm text-slate-400">Manage users, departments and workspace permissions.</p>
-                </div>
-              </div>
-              <span class="mt-auto inline-flex items-center gap-2 text-sm font-medium text-emerald-300">
-                Go to Admin
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </span>
-            </a>
-          </div>
+          {% include "partials/admin_panel.html" %}
         {% else %}
           <div class="rounded-xl border border-slate-800/60 bg-slate-900/40 p-5">
             <h4 class="text-base font-semibold text-slate-100">Admin access required</h4>
@@ -81,31 +60,11 @@
                data-tab-panel="account">
         <header>
           <h3 class="text-lg font-semibold text-slate-100">Account</h3>
-          <p class="mt-1 text-sm text-slate-400">Update your personal details and preferences.</p>
+          <p class="mt-1 text-sm text-slate-400">Review and update your personal details right from this tab.</p>
         </header>
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <a href="{{ url_for('profile') }}"
-             class="group flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/50 p-4 transition-colors duration-150 hover:border-emerald-500/40 hover:bg-emerald-500/10">
-            <div class="flex items-center gap-3">
-              <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/70 border border-slate-700/70">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-300" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </span>
-              <div>
-                <h4 class="text-base font-semibold text-slate-100">Profile</h4>
-                <p class="text-sm text-slate-400">Edit your name, avatar and contact information.</p>
-              </div>
-            </div>
-            <span class="mt-auto inline-flex items-center gap-2 text-sm font-medium text-emerald-300">
-              Update profile
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-          </a>
-        </div>
+        {% set show_profile_back_link = False %}
+        {% include "partials/account_panel.html" %}
       </section>
 
       <section id="settings-panel-display"
@@ -228,6 +187,7 @@
 
 {% block scripts %}
   {{ super() }}
+  {% include "partials/admin_panel_scripts.html" %}
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const buttons = Array.from(document.querySelectorAll('[data-tab-button]'));
