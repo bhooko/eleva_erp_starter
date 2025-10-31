@@ -571,26 +571,10 @@
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_home' else '' }}">
               <span class="label">Sales Overview</span>
             </a>
-            <div class="space-y-1">
-              <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_opportunities_pipeline','sales_opportunity_detail'] else '' }}">
-                <span class="label">Opportunities</span>
-              </a>
-              <div class="pl-8 space-y-1">
-                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
-                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'lift' else '' }}">
-                  <span class="label">Lift</span>
-                </a>
-                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='amc') }}"
-                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'amc' else '' }}">
-                  <span class="label">AMC</span>
-                </a>
-                <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='parking') }}"
-                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_opportunities_pipeline' and request.view_args and request.view_args.get('pipeline_key') == 'parking' else '' }}">
-                  <span class="label">Parking System</span>
-                </a>
-              </div>
-            </div>
+            <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
+               class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_opportunities_pipeline','sales_opportunity_detail'] else '' }}">
+              <span class="label">Opportunities</span>
+            </a>
             <a href="{{ url_for('sales_clients') }}"
                class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_clients','sales_client_detail'] else '' }}">
               <span class="label">Clients</span>
