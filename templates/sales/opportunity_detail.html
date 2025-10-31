@@ -152,25 +152,65 @@
         <div data-tab-panel="comments" class="hidden">
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Capture internal comments about this deal to keep the team aligned.</p>
-            <form method="post" action="#" class="space-y-3">
-              <textarea rows="4" placeholder="Share an update with your team." class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
+            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-3">
+              <input type="hidden" name="form_action" value="add_comment">
+              <textarea name="comment_body" rows="4" placeholder="Share an update with your team." class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required></textarea>
               <div class="flex justify-end">
-                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Save Comment</button>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Save Comment</button>
               </div>
             </form>
+            {% if comments %}
+            <ul class="space-y-4">
+              {% for comment in comments %}
+              <li class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4">
+                <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <span>{{ comment.author.display_name if comment.author else 'System' }}</span>
+                  <span>{{ comment.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
             <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No comments added yet.</div>
+            {% endif %}
           </div>
         </div>
 
         <div data-tab-panel="files" class="hidden">
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Attach proposals, contracts or supporting documents for quick access.</p>
-            <div class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-6 py-10 text-center">
-              <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13l3 3L22 6"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 10V3m0 0L8 7m4-4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M20 21H4a2 2 0 01-2-2V7a2 2 0 012-2h5"/></svg>
-              <p class="text-sm text-slate-400">Drag and drop files here or click to browse.</p>
-              <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Upload File</button>
-            </div>
+            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" enctype="multipart/form-data" class="space-y-3">
+              <input type="hidden" name="form_action" value="upload_file">
+              <div class="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-6 py-8 text-center">
+                <input type="file" name="attachment" id="opportunityFileInput" class="hidden" required>
+                <label for="opportunityFileInput" class="flex cursor-pointer flex-col items-center gap-3">
+                  <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13l3 3L22 6"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 10V3m0 0L8 7m4-4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" d="M20 21H4a2 2 0 01-2-2V7a2 2 0 012-2h5"/></svg>
+                  <p class="text-sm text-slate-400" data-file-label>Drag and drop files here or click to browse.</p>
+                  <span class="inline-flex items-center gap-2 rounded-full border border-slate-800/80 px-3 py-1 text-xs text-slate-300">Choose a file</span>
+                </label>
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Upload File</button>
+              </div>
+            </form>
+            {% if files %}
+            <ul class="divide-y divide-slate-800/80 rounded-xl border border-slate-800/80 bg-slate-950/40">
+              {% for file in files %}
+              <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <a href="{{ url_for('static', filename=file.stored_path) }}" class="font-medium text-slate-100 hover:text-emerald-100" download>{{ file.original_filename }}</a>
+                  <div class="mt-1 text-xs text-slate-500">
+                    Uploaded {{ file.created_at.strftime('%d %b %Y, %I:%M %p') }}{% if file.uploaded_by %} · {{ file.uploaded_by.display_name }}{% endif %}
+                  </div>
+                </div>
+                <span class="text-xs text-slate-400">{{ file.display_size }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
             <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No files uploaded yet.</div>
+            {% endif %}
           </div>
         </div>
 
@@ -201,21 +241,12 @@
                 <input type="time" name="activity_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
               </div>
               <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder?</label>
-                <div class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/40 px-3 py-2">
-                  <input type="checkbox" name="reminder_enabled" id="reminder_enabled" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-400/60">
-                  <label for="reminder_enabled" class="text-sm text-slate-300">Enable reminder</label>
-                </div>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder Date</label>
-                <input type="date" name="reminder_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              </div>
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder Time</label>
-                <input type="time" name="reminder_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder</label>
+                <select name="reminder_option" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                  {% for value, label in reminder_options %}
+                  <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
               </div>
             </div>
             <div>
@@ -226,15 +257,133 @@
               <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Schedule Activity</button>
             </div>
           </form>
+          {% if scheduled_activities %}
+          <div class="mt-6 space-y-4">
+            {% for engagement in scheduled_activities %}
+            <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p class="font-semibold text-slate-100">{{ engagement.display_activity_type }}</p>
+                <span class="text-xs text-slate-500">{{ engagement.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+              </div>
+              {% if engagement.subject %}
+              <p class="mt-2 text-sm text-emerald-100">{{ engagement.subject }}</p>
+              {% endif %}
+              <div class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-2">
+                <div>
+                  <p class="uppercase tracking-wide text-[11px] text-slate-500">Scheduled</p>
+                  <p class="text-sm text-slate-200">{{ engagement.display_schedule }}</p>
+                </div>
+                <div>
+                  <p class="uppercase tracking-wide text-[11px] text-slate-500">Reminder</p>
+                  <p class="text-sm text-slate-200">{{ engagement.display_reminder }}</p>
+                </div>
+              </div>
+              {% if engagement.notes %}
+              <p class="mt-3 text-sm text-slate-300 whitespace-pre-line">{{ engagement.notes }}</p>
+              {% endif %}
+              {% if engagement.created_by %}
+              <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">Logged by {{ engagement.created_by.display_name }}</p>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="mt-6 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No activities scheduled yet.</div>
+          {% endif %}
         </div>
 
         <div data-tab-panel="items" class="hidden">
-          <div class="space-y-4">
+          <div class="space-y-5">
             <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
-            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No items added yet.</div>
-            <div class="flex justify-end">
-              <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Add Item</button>
+            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5">
+              <input type="hidden" name="form_action" value="add_item">
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details</label>
+                <textarea name="item_details" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add specifications, scope, or notes."></textarea>
+              </div>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Lift Type</label>
+                  <select name="item_lift_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                    <option value="">Select lift type</option>
+                    {% for lift_type in lift_types %}
+                    <option value="{{ lift_type }}">{{ lift_type }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Quantity</label>
+                  <input type="number" name="item_quantity" min="0" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="1">
+                </div>
+              </div>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Floors</label>
+                  <input type="text" name="item_floors" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="G+5">
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Cabin Finish</label>
+                  <input type="text" name="item_cabin_finish" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="SS / Designer">
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Door Type</label>
+                  <input type="text" name="item_door_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Auto">
+                </div>
+              </div>
+              <div class="sm:w-1/3">
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Structure</label>
+                <select name="item_structure" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Add Item</button>
+              </div>
+            </form>
+            {% if items %}
+            <div class="space-y-4">
+              {% for item in items %}
+              <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <p class="font-semibold text-slate-100">{{ item.lift_type or 'Lift Item' }}</p>
+                  <span class="text-xs text-slate-500">{{ item.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                </div>
+                {% if item.details %}
+                <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ item.details }}</p>
+                {% endif %}
+                <dl class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-3">
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Lift Type</dt>
+                    <dd class="text-sm text-slate-200">{{ item.lift_type or '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Quantity</dt>
+                    <dd class="text-sm text-slate-200">{{ item.quantity if item.quantity is not none else '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Floors</dt>
+                    <dd class="text-sm text-slate-200">{{ item.floors or '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Structure</dt>
+                    <dd class="text-sm text-slate-200">{{ item.structure_label }}</dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Cabin Finish</dt>
+                    <dd class="text-sm text-slate-200">{{ item.cabin_finish or '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Door Type</dt>
+                    <dd class="text-sm text-slate-200">{{ item.door_type or '—' }}</dd>
+                  </div>
+                </dl>
+              </div>
+              {% endfor %}
             </div>
+            {% else %}
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">No items added yet.</div>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -430,6 +579,15 @@
         toggleModal('editOpportunityModal', false);
       }
     });
+
+    const fileInput = document.getElementById('opportunityFileInput');
+    const fileLabel = document.querySelector('[data-file-label]');
+    if (fileInput && fileLabel) {
+      fileInput.addEventListener('change', () => {
+        const fileName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+        fileLabel.textContent = fileName || 'Drag and drop files here or click to browse.';
+      });
+    }
   });
 </script>
 {% endblock %}

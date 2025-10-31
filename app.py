@@ -109,6 +109,35 @@ SALES_CLIENT_LIFECYCLE_STAGES = [
     "Post-Sales",
 ]
 
+OPPORTUNITY_REMINDER_OPTIONS = [
+    ("", "No reminder"),
+    ("1h", "1 Hr before due"),
+    ("2h", "2 Hr before due"),
+    ("3h", "3 Hr before due"),
+    ("1d", "1 Day before due"),
+]
+
+REMINDER_OPTION_LABELS = {value: label for value, label in OPPORTUNITY_REMINDER_OPTIONS}
+
+OPPORTUNITY_ACTIVITY_LABELS = {
+    "meeting": "Meeting",
+    "call": "Call",
+    "email": "Email",
+}
+
+
+def format_file_size(num_bytes):
+    if num_bytes is None:
+        return "0 B"
+
+    step = 1024.0
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(max(num_bytes, 0))
+    for unit in units:
+        if size < step or unit == units[-1]:
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
+        size /= step
+
 
 def get_pipeline_config(pipeline_key):
     key = (pipeline_key or "lift").lower()
@@ -790,6 +819,26 @@ class SalesOpportunity(db.Model):
 
     owner = db.relationship("User")
     client = db.relationship("SalesClient", back_populates="opportunities")
+    comments = db.relationship(
+        "SalesOpportunityComment",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
+    files = db.relationship(
+        "SalesOpportunityFile",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
+    engagements = db.relationship(
+        "SalesOpportunityEngagement",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
+    items = db.relationship(
+        "SalesOpportunityItem",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def display_amount(self):
@@ -825,6 +874,92 @@ class SalesActivity(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     actor = db.relationship("User")
+
+
+class SalesOpportunityComment(db.Model):
+    __tablename__ = "sales_opportunity_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    opportunity = db.relationship("SalesOpportunity", back_populates="comments")
+    author = db.relationship("User")
+
+
+class SalesOpportunityFile(db.Model):
+    __tablename__ = "sales_opportunity_file"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_path = db.Column(db.String(400), nullable=False)
+    content_type = db.Column(db.String(120), nullable=True)
+    file_size = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    opportunity = db.relationship("SalesOpportunity", back_populates="files")
+    uploaded_by = db.relationship("User")
+
+    @property
+    def display_size(self):
+        return format_file_size(self.file_size or 0)
+
+
+class SalesOpportunityEngagement(db.Model):
+    __tablename__ = "sales_opportunity_engagement"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    activity_type = db.Column(db.String(40), default="meeting")
+    subject = db.Column(db.String(200), nullable=True)
+    scheduled_for = db.Column(db.DateTime, nullable=True)
+    reminder_option = db.Column(db.String(20), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    opportunity = db.relationship("SalesOpportunity", back_populates="engagements")
+    created_by = db.relationship("User")
+
+    @property
+    def display_activity_type(self):
+        return OPPORTUNITY_ACTIVITY_LABELS.get(self.activity_type, (self.activity_type or "").title() or "Activity")
+
+    @property
+    def display_schedule(self):
+        if not self.scheduled_for:
+            return "Date not set"
+        return self.scheduled_for.strftime("%d %b %Y, %I:%M %p")
+
+    @property
+    def display_reminder(self):
+        key = (self.reminder_option or "").strip()
+        return REMINDER_OPTION_LABELS.get(key, "No reminder")
+
+
+class SalesOpportunityItem(db.Model):
+    __tablename__ = "sales_opportunity_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    details = db.Column(db.Text, nullable=True)
+    lift_type = db.Column(db.String(80), nullable=True)
+    quantity = db.Column(db.Integer, nullable=True)
+    floors = db.Column(db.String(80), nullable=True)
+    cabin_finish = db.Column(db.String(120), nullable=True)
+    door_type = db.Column(db.String(120), nullable=True)
+    structure_required = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    opportunity = db.relationship("SalesOpportunity", back_populates="items")
+
+    @property
+    def structure_label(self):
+        return "Yes" if self.structure_required else "No"
 
 
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
@@ -1321,6 +1456,10 @@ def ensure_tables():
         SalesClient.__table__,
         SalesOpportunity.__table__,
         SalesActivity.__table__,
+        SalesOpportunityComment.__table__,
+        SalesOpportunityFile.__table__,
+        SalesOpportunityEngagement.__table__,
+        SalesOpportunityItem.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -1896,6 +2035,131 @@ def sales_opportunity_detail(opportunity_id):
             flash("Timeline note added.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
+        elif action == "add_comment":
+            body = (request.form.get("comment_body") or "").strip()
+            if not body:
+                flash("Comment cannot be empty.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            comment = SalesOpportunityComment(
+                opportunity=opportunity,
+                body=body,
+                author=current_user if current_user.is_authenticated else None,
+            )
+            db.session.add(comment)
+
+            snippet = body if len(body) <= 120 else f"{body[:117]}..."
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Comment added",
+                notes=snippet,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Comment saved.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "upload_file":
+            uploaded_file = request.files.get("attachment")
+            if not uploaded_file or not uploaded_file.filename:
+                flash("Select a file to upload.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            safe_name = secure_filename(uploaded_file.filename)
+            if not safe_name:
+                flash("The selected file name is not valid.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            upload_root = os.path.join(app.config["UPLOAD_FOLDER"], "opportunities", str(opportunity.id))
+            os.makedirs(upload_root, exist_ok=True)
+
+            unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+            destination_path = os.path.join(upload_root, unique_name)
+            uploaded_file.save(destination_path)
+
+            static_root = os.path.join(BASE_DIR, "static")
+            stored_relative = os.path.relpath(destination_path, static_root).replace(os.sep, "/")
+
+            record = SalesOpportunityFile(
+                opportunity=opportunity,
+                original_filename=uploaded_file.filename,
+                stored_path=stored_relative,
+                content_type=uploaded_file.mimetype,
+                file_size=os.path.getsize(destination_path),
+                uploaded_by=current_user if current_user.is_authenticated else None,
+            )
+            db.session.add(record)
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "File uploaded",
+                notes=uploaded_file.filename,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("File uploaded.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "add_item":
+            details = (request.form.get("item_details") or "").strip()
+            lift_type = (request.form.get("item_lift_type") or "").strip()
+            if lift_type and lift_type not in LIFT_TYPES:
+                lift_type = None
+
+            quantity_raw = (request.form.get("item_quantity") or "").strip()
+            quantity_value = None
+            if quantity_raw:
+                try:
+                    quantity_value = int(quantity_raw)
+                    if quantity_value < 0:
+                        raise ValueError
+                except ValueError:
+                    flash("Quantity must be a positive whole number.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            floors_value = (request.form.get("item_floors") or "").strip() or None
+            cabin_finish = (request.form.get("item_cabin_finish") or "").strip() or None
+            door_type = (request.form.get("item_door_type") or "").strip() or None
+            structure_value = (request.form.get("item_structure") or "no").strip().lower()
+            structure_required = structure_value in {"yes", "true", "1", "on"}
+
+            if not any([details, lift_type, quantity_value, floors_value, cabin_finish, door_type]):
+                flash("Provide at least one detail for the opportunity item.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            item = SalesOpportunityItem(
+                opportunity=opportunity,
+                details=details or None,
+                lift_type=lift_type or None,
+                quantity=quantity_value,
+                floors=floors_value,
+                cabin_finish=cabin_finish,
+                door_type=door_type,
+                structure_required=structure_required,
+            )
+            db.session.add(item)
+
+            summary_bits = []
+            if lift_type:
+                summary_bits.append(f"Lift type: {lift_type}")
+            if quantity_value is not None:
+                summary_bits.append(f"Qty: {quantity_value}")
+            if floors_value:
+                summary_bits.append(f"Floors: {floors_value}")
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Item added",
+                notes="; ".join(summary_bits) or None,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Opportunity item added.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
         elif action == "schedule_activity":
             activity_type = (request.form.get("activity_type") or "meeting").strip().lower()
             if activity_type not in {"meeting", "call", "email"}:
@@ -1904,9 +2168,9 @@ def sales_opportunity_detail(opportunity_id):
             subject = (request.form.get("activity_subject") or "").strip()
             activity_date_raw = (request.form.get("activity_date") or "").strip()
             activity_time_raw = (request.form.get("activity_time") or "").strip()
-            reminder_enabled = request.form.get("reminder_enabled") is not None
-            reminder_date_raw = (request.form.get("reminder_date") or "").strip()
-            reminder_time_raw = (request.form.get("reminder_time") or "").strip()
+            reminder_option = (request.form.get("reminder_option") or "").strip()
+            if reminder_option not in {value for value, _ in OPPORTUNITY_REMINDER_OPTIONS}:
+                reminder_option = ""
             additional_notes = (request.form.get("activity_notes") or "").strip()
 
             scheduled_parts = []
@@ -1930,25 +2194,24 @@ def sales_opportunity_detail(opportunity_id):
             else:
                 scheduled_time = None
 
-            reminder_parts = []
-            if reminder_enabled:
-                if not reminder_date_raw:
-                    flash("Select a reminder date when enabling reminders.", "error")
-                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
-                try:
-                    reminder_date = datetime.datetime.strptime(reminder_date_raw, "%Y-%m-%d").date()
-                    reminder_parts.append(reminder_date.strftime("%d %b %Y"))
-                except ValueError:
-                    flash("Provide a valid reminder date (YYYY-MM-DD).", "error")
-                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            scheduled_for = None
+            if scheduled_date and scheduled_time:
+                scheduled_for = datetime.datetime.combine(scheduled_date, scheduled_time)
+            elif scheduled_date:
+                scheduled_for = datetime.datetime.combine(scheduled_date, datetime.time())
+            elif scheduled_time:
+                scheduled_for = datetime.datetime.combine(datetime.date.today(), scheduled_time)
 
-                if reminder_time_raw:
-                    try:
-                        reminder_time = datetime.datetime.strptime(reminder_time_raw, "%H:%M").time()
-                        reminder_parts.append(reminder_time.strftime("%I:%M %p"))
-                    except ValueError:
-                        flash("Provide a valid reminder time (HH:MM).", "error")
-                        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            engagement = SalesOpportunityEngagement(
+                opportunity=opportunity,
+                activity_type=activity_type,
+                subject=subject or None,
+                scheduled_for=scheduled_for,
+                reminder_option=reminder_option or None,
+                notes=additional_notes or None,
+                created_by=current_user if current_user.is_authenticated else None,
+            )
+            db.session.add(engagement)
 
             details = []
             if scheduled_parts:
@@ -1956,13 +2219,15 @@ def sales_opportunity_detail(opportunity_id):
             elif not subject:
                 details.append("Scheduled without a specific date. Update when confirmed.")
 
-            if reminder_parts:
-                details.append(f"Reminder set for {' '.join(reminder_parts)}.")
+            reminder_label = REMINDER_OPTION_LABELS.get(reminder_option or "", "No reminder")
+            if reminder_option:
+                details.append(f"Reminder set: {reminder_label}.")
 
             if additional_notes:
                 details.append(additional_notes)
 
-            title = subject or f"Scheduled {activity_type.title()}"
+            activity_label = OPPORTUNITY_ACTIVITY_LABELS.get(activity_type, activity_type.title())
+            title = subject or f"Scheduled {activity_label}"
             log_sales_activity(
                 "opportunity",
                 opportunity.id,
@@ -1980,6 +2245,30 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesActivity.created_at.desc())
         .all()
     )
+    comments = (
+        SalesOpportunityComment.query
+        .filter_by(opportunity_id=opportunity.id)
+        .order_by(SalesOpportunityComment.created_at.desc())
+        .all()
+    )
+    files = (
+        SalesOpportunityFile.query
+        .filter_by(opportunity_id=opportunity.id)
+        .order_by(SalesOpportunityFile.created_at.desc())
+        .all()
+    )
+    scheduled_activities = (
+        SalesOpportunityEngagement.query
+        .filter_by(opportunity_id=opportunity.id)
+        .order_by(SalesOpportunityEngagement.created_at.desc())
+        .all()
+    )
+    items = (
+        SalesOpportunityItem.query
+        .filter_by(opportunity_id=opportunity.id)
+        .order_by(SalesOpportunityItem.created_at.desc())
+        .all()
+    )
     owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
     clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
 
@@ -1993,6 +2282,12 @@ def sales_opportunity_detail(opportunity_id):
         owners=owners,
         clients=clients,
         activities=activities,
+        comments=comments,
+        files=files,
+        scheduled_activities=scheduled_activities,
+        items=items,
+        reminder_options=OPPORTUNITY_REMINDER_OPTIONS,
+        lift_types=LIFT_TYPES,
         temperature_choices=SALES_TEMPERATURES,
         pipeline_map=SALES_PIPELINES,
     )
