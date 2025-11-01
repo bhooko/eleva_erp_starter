@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – SRT Overview{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+  <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
+    <p class="text-sm text-slate-400">Pending SRT Tasks</p>
+    <p class="text-3xl font-semibold text-white mt-2">{{ summary.total_pending }}</p>
+    <p class="text-xs text-slate-500 mt-3">Includes all open and in-progress SRT activities.</p>
+  </div>
+  <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
+    <p class="text-sm text-slate-400">High Priority</p>
+    <p class="text-3xl font-semibold text-rose-300 mt-2">{{ summary.high_priority }}</p>
+    <p class="text-xs text-slate-500 mt-3">Tasks flagged high priority and still pending closure.</p>
+  </div>
+  <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
+    <p class="text-sm text-slate-400">Due in 7 Days</p>
+    <p class="text-3xl font-semibold text-amber-300 mt-2">{{ summary.due_this_week }}</p>
+    <p class="text-xs text-slate-500 mt-3">Upcoming deadlines within the next week.</p>
+  </div>
+  <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
+    <p class="text-sm text-slate-400">Oldest Task Age</p>
+    <p class="text-3xl font-semibold text-sky-300 mt-2">{{ summary.oldest_age }}<span class="text-base font-medium"> days</span></p>
+    <p class="text-xs text-slate-500 mt-3">Age calculated from creation date of oldest open task.</p>
+  </div>
+</div>
+
+<div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-6 py-4 border-b border-slate-800/70">
+    <div>
+      <h2 class="text-xl font-semibold text-white">SRT Taskboard</h2>
+      <p class="text-sm text-slate-400">Monitor outstanding service recovery tasks across active client sites.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('srt_overview') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['all', ''] else 'text-slate-300 hover:bg-slate-800/80' }}">All</a>
+      <a href="{{ url_for('srt_overview', status='pending') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['pending', 'open'] else 'text-slate-300 hover:bg-slate-800/80' }}">Pending</a>
+      <a href="{{ url_for('srt_overview', status='in-progress') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['in-progress', 'in_progress'] else 'text-slate-300 hover:bg-slate-800/80' }}">In Progress</a>
+      <a href="{{ url_for('srt_overview', status='closed') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['closed', 'completed'] else 'text-slate-300 hover:bg-slate-800/80' }}">Closed</a>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-800/70">
+      <thead class="bg-slate-900/80">
+        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <th class="px-6 py-3">Task ID</th>
+          <th class="px-6 py-3">Site</th>
+          <th class="px-6 py-3">Summary</th>
+          <th class="px-6 py-3">Priority</th>
+          <th class="px-6 py-3">Status</th>
+          <th class="px-6 py-3">Due Date</th>
+          <th class="px-6 py-3">Due In</th>
+          <th class="px-6 py-3">Owner</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/60">
+        {% if tasks %}
+          {% for task in tasks %}
+            <tr class="text-sm text-slate-200">
+              <td class="px-6 py-4 font-medium">{{ task.id }}</td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-white">{{ task.site }}</div>
+                <div class="text-xs text-slate-400">SRT Age: {{ task.age_days }} days</div>
+              </td>
+              <td class="px-6 py-4 text-slate-300">{{ task.summary }}</td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-rose-500/20 text-rose-300' if task.priority == 'High' else 'bg-amber-400/20 text-amber-200' if task.priority == 'Medium' else 'bg-emerald-500/20 text-emerald-200' }}">{{ task.priority }}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-sky-500/20 text-sky-200' if task.status == 'In Progress' else 'bg-emerald-500/20 text-emerald-200' if task.status == 'Closed' else 'bg-slate-500/20 text-slate-200' }}">{{ task.status }}</span>
+              </td>
+              <td class="px-6 py-4">{{ task.due_date.strftime('%d %b %Y') if task.due_date }}</td>
+              <td class="px-6 py-4">
+                {% if task.due_in is not none %}
+                  {% if task.due_in < 0 %}
+                    <span class="text-rose-300">Overdue {{ task.due_in | abs }}d</span>
+                  {% elif task.due_in == 0 %}
+                    <span class="text-amber-300">Due today</span>
+                  {% else %}
+                    <span class="text-emerald-300">Due in {{ task.due_in }}d</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-slate-400">—</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-slate-300">{{ task.owner }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" class="px-6 py-6 text-center text-slate-400 text-sm">No tasks found for the selected filter.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

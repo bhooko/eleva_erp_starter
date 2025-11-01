@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – SRT Sites{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800/60 px-6 py-5">
+    <h2 class="text-xl font-semibold text-white">Active SRT Sites</h2>
+    <p class="text-sm text-slate-400 mt-2">Track client touchpoints, service notes and the latest readiness updates for each SRT engagement.</p>
+  </div>
+
+  {% for site in sites %}
+    <div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
+      <div class="px-6 py-5 border-b border-slate-800/70 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
+          <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <span class="px-3 py-1.5 rounded-full border border-emerald-500/40 text-emerald-200">{{ site.status }}</span>
+          <span class="px-3 py-1.5 rounded-full border border-slate-700/70 text-slate-300">Last visit: {{ site.last_visit.strftime('%d %b %Y') }}</span>
+        </div>
+      </div>
+      <div class="px-6 py-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="space-y-3">
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Client Interactions</h4>
+          <div class="space-y-3">
+            {% for interaction in site.interactions %}
+              <div class="p-4 rounded-xl bg-slate-800/70 border border-slate-700/70">
+                <p class="text-xs text-slate-400 uppercase tracking-wide">{{ interaction.type }} • {{ interaction.date.strftime('%d %b %Y') }}</p>
+                <p class="text-sm text-slate-200 mt-1 leading-relaxed">{{ interaction.summary }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest Site Updates</h4>
+          <div class="space-y-3">
+            {% for update in site.updates %}
+              <div class="p-4 rounded-xl bg-slate-800/70 border border-slate-700/70">
+                <p class="text-xs text-slate-400 uppercase tracking-wide">{{ update.label }}</p>
+                <p class="text-sm text-slate-200 mt-1 leading-relaxed">{{ update.value }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

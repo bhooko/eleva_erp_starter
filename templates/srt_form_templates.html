@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – SRT Form Templates{% endblock %}
+
+{% block content %}
+<div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
+  <div class="px-6 py-5 border-b border-slate-800/70">
+    <h2 class="text-xl font-semibold text-white">SRT Form Templates</h2>
+    <p class="text-sm text-slate-400 mt-2">Curated templates that follow the QC layout for service recovery tracking, evidence logging and approvals.</p>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-800/70">
+      <thead class="bg-slate-900/80">
+        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <th class="px-6 py-3">Template Name</th>
+          <th class="px-6 py-3">Category</th>
+          <th class="px-6 py-3">Last Updated</th>
+          <th class="px-6 py-3">Usage</th>
+          <th class="px-6 py-3">Description</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/60">
+        {% for template in templates %}
+          <tr class="text-sm text-slate-200">
+            <td class="px-6 py-4 font-semibold text-white">{{ template.name }}</td>
+            <td class="px-6 py-4">
+              <span class="px-2 py-1 text-xs font-semibold rounded-full bg-slate-500/20 text-slate-200">{{ template.category }}</span>
+            </td>
+            <td class="px-6 py-4">{{ template.last_updated.strftime('%d %b %Y') }}</td>
+            <td class="px-6 py-4">
+              <span class="text-emerald-300 font-medium">{{ template.usage_count }}</span>
+              <span class="text-xs text-slate-400"> submissions</span>
+            </td>
+            <td class="px-6 py-4 text-slate-300 leading-relaxed">{{ template.description }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
