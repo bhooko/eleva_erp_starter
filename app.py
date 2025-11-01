@@ -60,6 +60,121 @@ PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
 PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
 DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
+SRT_SAMPLE_TASKS = [
+    {
+        "id": "SRT-1001",
+        "site": "Panaji HQ",
+        "summary": "Emergency brake inspection",
+        "priority": "High",
+        "status": "Pending",
+        "due_date": datetime.date(2024, 6, 18),
+        "owner": "Ravi Kumar",
+        "age_days": 3,
+    },
+    {
+        "id": "SRT-1002",
+        "site": "Nova Residency",
+        "summary": "Door alignment follow-up",
+        "priority": "Medium",
+        "status": "Pending",
+        "due_date": datetime.date(2024, 6, 22),
+        "owner": "Priya Nair",
+        "age_days": 5,
+    },
+    {
+        "id": "SRT-1003",
+        "site": "Harbour View Tower",
+        "summary": "Cabin levelling calibration",
+        "priority": "High",
+        "status": "In Progress",
+        "due_date": datetime.date(2024, 6, 20),
+        "owner": "Amol Patil",
+        "age_days": 2,
+    },
+    {
+        "id": "SRT-1004",
+        "site": "Metro Heights",
+        "summary": "Post-service vibration audit",
+        "priority": "Low",
+        "status": "Pending",
+        "due_date": datetime.date(2024, 6, 30),
+        "owner": "Sneha Kulkarni",
+        "age_days": 1,
+    },
+]
+
+SRT_FORM_TEMPLATES = [
+    {
+        "name": "SRT - Emergency Brake Audit",
+        "category": "Safety",
+        "last_updated": datetime.date(2024, 4, 28),
+        "usage_count": 14,
+        "description": "Checklist capturing emergency brake checks, load test confirmation and evidence uploads.",
+    },
+    {
+        "name": "SRT - Door Operation Review",
+        "category": "Doors",
+        "last_updated": datetime.date(2024, 5, 9),
+        "usage_count": 9,
+        "description": "Structured walk-through for door alignment, interlocks and threshold compliance.",
+    },
+    {
+        "name": "SRT - Post Service Summary",
+        "category": "Reporting",
+        "last_updated": datetime.date(2024, 3, 19),
+        "usage_count": 22,
+        "description": "Captures punch-list closure status, photos and pending parts for handover.",
+    },
+]
+
+SRT_SITES = [
+    {
+        "name": "Panaji HQ",
+        "client": "Trident Holdings",
+        "city": "Panaji",
+        "last_visit": datetime.date(2024, 6, 11),
+        "status": "Technician visit scheduled",
+        "interactions": [
+            {"date": datetime.date(2024, 6, 13), "type": "Call", "summary": "Scheduled emergency brake inspection with facility manager."},
+            {"date": datetime.date(2024, 6, 10), "type": "Email", "summary": "Shared safety advisories and pre-visit checklist."},
+        ],
+        "updates": [
+            {"label": "Latest Update", "value": "Awaiting spare brake pads delivery (ETA 17 Jun)."},
+            {"label": "Next Action", "value": "Confirm service window with client."},
+        ],
+    },
+    {
+        "name": "Nova Residency",
+        "client": "Silverline Developers",
+        "city": "Mapusa",
+        "last_visit": datetime.date(2024, 6, 5),
+        "status": "Client feedback pending",
+        "interactions": [
+            {"date": datetime.date(2024, 6, 12), "type": "Site Visit", "summary": "Performed door alignment checks on blocks A & B."},
+            {"date": datetime.date(2024, 6, 7), "type": "Call", "summary": "Discussed vibration readings with maintenance lead."},
+        ],
+        "updates": [
+            {"label": "Latest Update", "value": "Awaiting confirmation on revised door thresholds."},
+            {"label": "Next Action", "value": "Share measurement sheet with QC for review."},
+        ],
+    },
+    {
+        "name": "Harbour View Tower",
+        "client": "Bluewater Properties",
+        "city": "Vasco",
+        "last_visit": datetime.date(2024, 6, 2),
+        "status": "Monitoring",
+        "interactions": [
+            {"date": datetime.date(2024, 6, 9), "type": "Email", "summary": "Sent levelling calibration results and next steps."},
+            {"date": datetime.date(2024, 5, 30), "type": "Call", "summary": "Logged client concern about door closure speed."},
+        ],
+        "updates": [
+            {"label": "Latest Update", "value": "Calibration within tolerance; monitoring for 48 hrs."},
+            {"label": "Next Action", "value": "Revisit only if variance exceeds 3 mm."},
+        ],
+    },
+]
+
 SALES_PIPELINES = {
     "lift": {
         "label": "Lift",
@@ -4614,6 +4729,62 @@ def project_template_task_reorder(template_id):
 
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ---------------------- SRT MODULE ----------------------
+@app.route("/srt")
+@login_required
+def srt_overview():
+    status_filter = request.args.get("status", "all").lower()
+    today = datetime.date.today()
+
+    tasks = []
+    for task in SRT_SAMPLE_TASKS:
+        due_in = (task["due_date"] - today).days if task.get("due_date") else None
+        tasks.append({**task, "due_in": due_in})
+
+    if status_filter in {"pending", "open"}:
+        filtered_tasks = [task for task in tasks if task["status"].lower() != "closed"]
+    elif status_filter in {"in-progress", "in_progress"}:
+        filtered_tasks = [task for task in tasks if task["status"].lower() == "in progress"]
+    elif status_filter in {"closed", "completed"}:
+        filtered_tasks = [task for task in tasks if task["status"].lower() == "closed"]
+    else:
+        filtered_tasks = list(tasks)
+
+    summary = {
+        "total_pending": sum(1 for task in tasks if task["status"].lower() != "closed"),
+        "high_priority": sum(1 for task in tasks if task["priority"].lower() == "high" and task["status"].lower() != "closed"),
+        "due_this_week": sum(
+            1
+            for task in tasks
+            if task["status"].lower() != "closed"
+            and task.get("due_in") is not None
+            and 0 <= task["due_in"] <= 7
+        ),
+        "oldest_age": max((task["age_days"] for task in tasks), default=0),
+    }
+
+    return render_template(
+        "srt_overview.html",
+        tasks=filtered_tasks,
+        status_filter=status_filter,
+        summary=summary,
+    )
+
+
+@app.route("/srt/form-templates")
+@login_required
+def srt_form_templates():
+    templates = sorted(SRT_FORM_TEMPLATES, key=lambda item: item["name"].lower())
+    return render_template("srt_form_templates.html", templates=templates)
+
+
+@app.route("/srt/sites")
+@login_required
+def srt_sites():
+    sites = sorted(SRT_SITES, key=lambda item: item["name"].lower())
+    return render_template("srt_sites.html", sites=sites)
 
 
 # ---------------------- QC TABS ----------------------
