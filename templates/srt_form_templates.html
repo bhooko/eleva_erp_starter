@@ -2,40 +2,260 @@
 {% block title %}Eleva ERP – SRT Form Templates{% endblock %}
 
 {% block content %}
-<div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
-  <div class="px-6 py-5 border-b border-slate-800/70">
-    <h2 class="text-xl font-semibold text-white">SRT Form Templates</h2>
-    <p class="text-sm text-slate-400 mt-2">Curated templates that follow the QC layout for service recovery tracking, evidence logging and approvals.</p>
+<div class="space-y-6">
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-white">SRT Form Templates</h2>
+        <p class="text-sm text-slate-400 mt-1">Manage reusable forms that mirror QC layouts for service recovery tracking, evidence logging and approvals.</p>
+      </div>
+      <div class="ml-auto flex items-center gap-3">
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/30 transition"
+                data-srt-modal-open="srt-template-create">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+          </svg>
+          <span>Add template</span>
+        </button>
+      </div>
+    </div>
   </div>
 
-  <div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-slate-800/70">
-      <thead class="bg-slate-900/80">
-        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <th class="px-6 py-3">Template Name</th>
-          <th class="px-6 py-3">Category</th>
-          <th class="px-6 py-3">Last Updated</th>
-          <th class="px-6 py-3">Usage</th>
-          <th class="px-6 py-3">Description</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-800/60">
-        {% for template in templates %}
-          <tr class="text-sm text-slate-200">
-            <td class="px-6 py-4 font-semibold text-white">{{ template.name }}</td>
-            <td class="px-6 py-4">
-              <span class="px-2 py-1 text-xs font-semibold rounded-full bg-slate-500/20 text-slate-200">{{ template.category }}</span>
-            </td>
-            <td class="px-6 py-4">{{ template.last_updated.strftime('%d %b %Y') }}</td>
-            <td class="px-6 py-4">
-              <span class="text-emerald-300 font-medium">{{ template.usage_count }}</span>
-              <span class="text-xs text-slate-400"> submissions</span>
-            </td>
-            <td class="px-6 py-4 text-slate-300 leading-relaxed">{{ template.description }}</td>
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800/70 text-sm">
+        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-6 py-3 text-left">Template</th>
+            <th class="px-6 py-3 text-left">Category</th>
+            <th class="px-6 py-3 text-left">Last updated</th>
+            <th class="px-6 py-3 text-left">Usage</th>
+            <th class="px-6 py-3 text-left">Description</th>
+            <th class="px-6 py-3 text-left">Actions</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 text-slate-200">
+          {% for template in templates %}
+            <tr class="hover:bg-slate-800/40">
+              <td class="px-6 py-4">
+                <div class="font-semibold text-white">{{ template.name }}</div>
+                <div class="text-xs text-slate-400 mt-1">ID: {{ template.id }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center rounded-full bg-slate-500/20 px-2 py-1 text-xs font-semibold text-slate-100">{{ template.category }}</span>
+              </td>
+              <td class="px-6 py-4">{{ template.last_updated.strftime('%d %b %Y') }}</td>
+              <td class="px-6 py-4">
+                <span class="text-emerald-300 font-semibold">{{ template.usage_count }}</span>
+                <span class="text-xs text-slate-400"> submissions</span>
+              </td>
+              <td class="px-6 py-4 text-slate-300 leading-relaxed">{{ template.description or '—' }}</td>
+              <td class="px-6 py-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button"
+                          class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
+                          data-template-edit
+                          data-template-id="{{ template.id }}"
+                          data-template-name="{{ template.name }}"
+                          data-template-category="{{ template.category }}"
+                          data-template-updated="{{ template.last_updated.strftime('%Y-%m-%d') }}"
+                          data-template-usage="{{ template.usage_count }}"
+                          data-template-description="{{ template.description|e }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.651 1.65a1.125 1.125 0 010 1.59L8.71 17.54a2.25 2.25 0 01-.948.566l-3.422 1.027a.562.562 0 01-.693-.693l1.027-3.422a2.25 2.25 0 01.566-.948l9.804-9.804a1.125 1.125 0 011.59 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 19.5h-6" />
+                    </svg>
+                    <span>Edit</span>
+                  </button>
+                  <button type="button"
+                          class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
+                          title="Preview coming soon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-9A2.25 2.25 0 002.25 5.25v13.5A2.25 2.25 0 004.5 21h9a2.25 2.25 0 002.25-2.25V15" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18 12l3-3m0 0l-3-3m3 3H9" />
+                    </svg>
+                    <span>Preview</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
+
+<div id="srt-template-create" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
+  <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100">Add SRT template</h3>
+        <p class="text-xs text-slate-400">Define a reusable SRT form based on QC sections.</p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close create template modal">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-4">
+      <input type="hidden" name="action" value="create" />
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+          <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. SRT - Safety Walkthrough" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Category</label>
+          <input name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Safety" />
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Last updated</label>
+          <input type="date" name="last_updated" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Usage count</label>
+          <input type="number" min="0" name="usage_count" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="0" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+        <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Describe the sections included in this template"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-3">
+        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-modal-close>Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span>Save template</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="srt-template-edit" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
+  <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100">Edit SRT template</h3>
+        <p class="text-xs text-slate-400">Update the template metadata before assigning it to tasks.</p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close edit template modal">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" class="px-6 py-5 space-y-4" data-template-edit-form>
+      <input type="hidden" name="action" value="update" />
+      <input type="hidden" name="template_id" />
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+          <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Category</label>
+          <input name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Last updated</label>
+          <input type="date" name="last_updated" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Usage count</label>
+          <input type="number" min="0" name="usage_count" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+        <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-3">
+        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-modal-close>Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span>Update template</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const modals = new Map();
+
+    document.querySelectorAll('[data-srt-modal]').forEach((modal) => {
+      modals.set(modal.id, modal);
+    });
+
+    const openModal = (id) => {
+      const modal = modals.get(id);
+      if (!modal) {
+        return;
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      const autofocus = modal.querySelector('[data-srt-autofocus]') || modal.querySelector('input, textarea, select, button');
+      if (autofocus) {
+        setTimeout(() => autofocus.focus(), 50);
+      }
+    };
+
+    const closeModal = (modal) => {
+      if (!modal) {
+        return;
+      }
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    document.querySelectorAll('[data-srt-modal-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        openModal(button.getAttribute('data-srt-modal-open'));
+      });
+    });
+
+    document.querySelectorAll('[data-srt-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => {
+        closeModal(button.closest('[data-srt-modal]'));
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target.matches('[data-srt-modal]')) {
+        closeModal(event.target);
+      }
+    });
+
+    const editModalId = 'srt-template-edit';
+    const editForm = document.querySelector('[data-template-edit-form]');
+
+    document.querySelectorAll('[data-template-edit]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!editForm) {
+          return;
+        }
+        editForm.querySelector('[name="template_id"]').value = button.getAttribute('data-template-id') || '';
+        editForm.querySelector('[name="name"]').value = button.getAttribute('data-template-name') || '';
+        editForm.querySelector('[name="category"]').value = button.getAttribute('data-template-category') || '';
+        editForm.querySelector('[name="last_updated"]').value = button.getAttribute('data-template-updated') || '';
+        editForm.querySelector('[name="usage_count"]').value = button.getAttribute('data-template-usage') || '';
+        editForm.querySelector('[name="description"]').value = button.getAttribute('data-template-description') || '';
+        openModal(editModalId);
+      });
+    });
+  });
+</script>
 {% endblock %}

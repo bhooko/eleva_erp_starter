@@ -736,6 +736,27 @@
         <h1 class="text-2xl font-semibold mb-4 tracking-tight">{{ section_title }}</h1>
         {% endblock %}
 
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="mb-5 space-y-3">
+              {% for category, message in messages %}
+                {% if category in ['success', 'ok'] %}
+                  {% set tone_classes = 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100' %}
+                {% elif category in ['error', 'danger'] %}
+                  {% set tone_classes = 'border-rose-500/50 bg-rose-500/10 text-rose-100' %}
+                {% elif category in ['warning'] %}
+                  {% set tone_classes = 'border-amber-400/60 bg-amber-500/10 text-amber-100' %}
+                {% else %}
+                  {% set tone_classes = 'border-slate-700/60 bg-slate-800/60 text-slate-200' %}
+                {% endif %}
+                <div class="rounded-xl border px-4 py-3 text-sm font-medium shadow-sm {{ tone_classes }}">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
       </section>
     </main>
@@ -775,12 +796,51 @@
       const icon = document.getElementById('collapseIcon');
       const header = document.querySelector('header');
       const appShell = document.getElementById('app');
+      const menu = sidebar ? sidebar.querySelector('.sidebar-menu') : null;
+      const scrollKey = 'eleva.sidebar.scrollTop';
+
+      const restoreScroll = () => {
+        if (!menu) {
+          return;
+        }
+        try {
+          const saved = localStorage.getItem(scrollKey);
+          if (saved !== null) {
+            const value = parseInt(saved, 10);
+            if (!Number.isNaN(value)) {
+              menu.scrollTop = value;
+            }
+          }
+        } catch (error) {
+          // Ignore storage errors (private mode, etc.).
+        }
+      };
+
+      const scheduleScrollSave = (() => {
+        if (!menu) {
+          return () => {};
+        }
+        let frameId = null;
+        const save = () => {
+          frameId = null;
+          try {
+            localStorage.setItem(scrollKey, String(menu.scrollTop));
+          } catch (error) {
+            // Ignore storage errors.
+          }
+        };
+        return () => {
+          if (frameId) {
+            cancelAnimationFrame(frameId);
+          }
+          frameId = requestAnimationFrame(save);
+        };
+      })();
 
       function syncOffsets() {
         const h = header.getBoundingClientRect().height;
         sidebar.style.top = h + 'px';
         sidebar.style.height = `calc(100vh - ${h}px)`;
-        const menu = sidebar.querySelector('.sidebar-menu');
         if (menu) menu.style.removeProperty('height');
       }
       window.addEventListener('resize', syncOffsets);
@@ -797,8 +857,18 @@
           appShell.classList.toggle('sidebar-is-collapsed', collapsed);
           appShell.style.setProperty('--sidebar-width', collapsed ? '78px' : '280px');
         }
+        if (menu) {
+          requestAnimationFrame(restoreScroll);
+        }
       };
       setState(saved === 'collapsed');
+
+      if (menu) {
+        restoreScroll();
+        menu.addEventListener('scroll', scheduleScrollSave, { passive: true });
+        window.addEventListener('beforeunload', scheduleScrollSave, { passive: true });
+        window.addEventListener('pagehide', scheduleScrollSave, { passive: true });
+      }
 
       btn.addEventListener('click', function () {
         const collapsed = !sidebar.classList.contains('collapsed');

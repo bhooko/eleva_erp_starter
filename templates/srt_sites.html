@@ -2,49 +2,463 @@
 {% block title %}Eleva ERP – SRT Sites{% endblock %}
 
 {% block content %}
-<div class="space-y-5">
-  <div class="rounded-2xl bg-slate-900/60 border border-slate-800/60 px-6 py-5">
-    <h2 class="text-xl font-semibold text-white">Active SRT Sites</h2>
-    <p class="text-sm text-slate-400 mt-2">Track client touchpoints, service notes and the latest readiness updates for each SRT engagement.</p>
-  </div>
-
-  {% for site in sites %}
-    <div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
-      <div class="px-6 py-5 border-b border-slate-800/70 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
-          <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-3 text-sm">
-          <span class="px-3 py-1.5 rounded-full border border-emerald-500/40 text-emerald-200">{{ site.status }}</span>
-          <span class="px-3 py-1.5 rounded-full border border-slate-700/70 text-slate-300">Last visit: {{ site.last_visit.strftime('%d %b %Y') }}</span>
-        </div>
-      </div>
-      <div class="px-6 py-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div class="space-y-3">
-          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Client Interactions</h4>
-          <div class="space-y-3">
-            {% for interaction in site.interactions %}
-              <div class="p-4 rounded-xl bg-slate-800/70 border border-slate-700/70">
-                <p class="text-xs text-slate-400 uppercase tracking-wide">{{ interaction.type }} • {{ interaction.date.strftime('%d %b %Y') }}</p>
-                <p class="text-sm text-slate-200 mt-1 leading-relaxed">{{ interaction.summary }}</p>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="space-y-3">
-          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest Site Updates</h4>
-          <div class="space-y-3">
-            {% for update in site.updates %}
-              <div class="p-4 rounded-xl bg-slate-800/70 border border-slate-700/70">
-                <p class="text-xs text-slate-400 uppercase tracking-wide">{{ update.label }}</p>
-                <p class="text-sm text-slate-200 mt-1 leading-relaxed">{{ update.value }}</p>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
+<div class="space-y-6" data-site-detail-container data-active-site="{{ selected_site_key or '' }}">
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-white">SRT Site Directory</h2>
+        <p class="text-sm text-slate-400 mt-1">Select a site to review client contacts, the latest SRT form update and pending recovery actions.</p>
       </div>
     </div>
-  {% endfor %}
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-[minmax(0,380px)_1fr]">
+    <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 shadow-inner shadow-black/20 overflow-hidden">
+      <div class="border-b border-slate-800/70 px-5 py-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">All SRT sites</h3>
+      </div>
+      <div class="overflow-y-auto max-h-[60vh]">
+        <table class="min-w-full divide-y divide-slate-800/70 text-sm">
+          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th class="px-5 py-3 text-left">Site</th>
+              <th class="px-5 py-3 text-left">Client</th>
+              <th class="px-5 py-3 text-left">Status</th>
+              <th class="px-5 py-3 text-left">Last visit</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70">
+            {% for site in sites %}
+              <tr class="cursor-pointer transition hover:bg-slate-800/50"
+                  data-site-row="{{ site.key }}"
+                  data-site-name="{{ site.name }}"
+                  data-site-client="{{ site.client }}"
+                  tabindex="0"
+                  role="button"
+                  aria-selected="{{ 'true' if site.key == selected_site_key else 'false' }}">
+                <td class="px-5 py-3">
+                  <div class="font-semibold text-white">{{ site.name }}</div>
+                  <div class="text-xs text-slate-400">{{ site.city }}</div>
+                </td>
+                <td class="px-5 py-3 text-slate-200">{{ site.client }}</td>
+                <td class="px-5 py-3">
+                  <span class="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-100">{{ site.status }}</span>
+                </td>
+                <td class="px-5 py-3 text-slate-300">{{ site.last_visit.strftime('%d %b %Y') }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      {% for site in sites %}
+        <article class="space-y-6 {{ '' if site.key == selected_site_key else 'hidden' }}" data-site-panel data-site="{{ site.key }}">
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 px-6 py-5 shadow-inner shadow-black/30">
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="flex-1 min-w-[220px]">
+                <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
+                <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
+                <p class="text-xs text-slate-500 mt-2">{{ site.address }}</p>
+              </div>
+              <div class="flex flex-col items-start gap-2 text-sm">
+                <span class="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-100">{{ site.status }}</span>
+                <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-slate-300">Last visit: {{ site.last_visit.strftime('%d %b %Y') }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-6 md:grid-cols-2">
+            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Primary contact</h4>
+              {% set contact = site.client_contact %}
+              <dl class="mt-3 space-y-2 text-sm text-slate-200">
+                <div class="flex items-start gap-3">
+                  <dt class="min-w-[92px] text-slate-400">Name</dt>
+                  <dd class="font-medium">{{ contact.name or '—' }}</dd>
+                </div>
+                <div class="flex items-start gap-3">
+                  <dt class="min-w-[92px] text-slate-400">Phone</dt>
+                  <dd>{{ contact.phone or '—' }}</dd>
+                </div>
+                <div class="flex items-start gap-3">
+                  <dt class="min-w-[92px] text-slate-400">Email</dt>
+                  <dd>{{ contact.email or '—' }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest SRT form update</h4>
+              {% set form_update = site.form_update %}
+              <div class="mt-3 space-y-3 text-sm text-slate-200">
+                <div>
+                  <p class="text-base font-semibold text-white">{{ form_update.form_name or 'Form TBC' }}</p>
+                  <p class="text-xs text-slate-400 mt-1">Last updated {{ form_update.last_updated.strftime('%d %b %Y') if form_update.last_updated else '—' }}</p>
+                </div>
+                <div class="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
+                  {{ form_update.status or 'Draft' }}
+                </div>
+                <p class="leading-relaxed text-slate-300">{{ form_update.summary or 'No additional notes recorded yet.' }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+            <div class="flex flex-wrap items-center gap-3">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Additional contacts</h4>
+              <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition" data-add-contact>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>Add contact</span>
+              </button>
+            </div>
+            <form class="mt-4 space-y-4" data-contact-form data-primary-name="primary_contact_{{ site.key }}">
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+                  <thead class="text-xs uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th class="px-3 py-2 text-left">Name</th>
+                      <th class="px-3 py-2 text-left">Designation</th>
+                      <th class="px-3 py-2 text-left">Contact no.</th>
+                      <th class="px-3 py-2 text-left">Email</th>
+                      <th class="px-3 py-2 text-left">Primary</th>
+                      <th class="px-3 py-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800/60" data-contact-rows>
+                    {% for contact in site.additional_contacts %}
+                      <tr data-contact-row>
+                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.name }}" placeholder="Contact name" /></td>
+                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.designation }}" placeholder="Role" /></td>
+                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.phone }}" placeholder="Phone" /></td>
+                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.email }}" placeholder="Email" /></td>
+                        <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" {% if contact.is_primary %}checked{% endif %} class="text-emerald-500 focus:ring-emerald-400" /></td>
+                        <td class="px-3 py-2 text-center">
+                          <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <p class="text-xs text-slate-500">Add quick references for contractor, labourer or supervisor contacts. Mark one as the primary escalation point.</p>
+              <template data-contact-template>
+                <tr data-contact-row>
+                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Contact name" /></td>
+                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Role" /></td>
+                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Phone" /></td>
+                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Email" /></td>
+                  <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" class="text-emerald-500 focus:ring-emerald-400" /></td>
+                  <td class="px-3 py-2 text-center">
+                    <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </form>
+          </div>
+
+          <div class="grid gap-6 lg:grid-cols-2">
+            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+              <div class="flex items-center justify-between gap-3">
+                <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent client interactions</h4>
+              </div>
+              <div class="mt-3 space-y-3">
+                {% for interaction in site.interactions %}
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-400">{{ interaction.type }} • {{ interaction.date.strftime('%d %b %Y') }}</p>
+                    <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ interaction.summary }}</p>
+                  </div>
+                {% else %}
+                  <p class="text-sm text-slate-400">No interactions logged yet.</p>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest site updates</h4>
+              <div class="mt-3 space-y-3">
+                {% for update in site.updates %}
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-400">{{ update.label }}</p>
+                    <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ update.value }}</p>
+                  </div>
+                {% else %}
+                  <p class="text-sm text-slate-400">No updates captured.</p>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+            <div class="flex flex-wrap items-center gap-3">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">SRT task board</h4>
+              <button type="button"
+                      class="ml-auto inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 transition"
+                      data-srt-task-open
+                      data-site-name="{{ site.name }}"
+                      data-site-key="{{ site.key }}">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>Add SRT task</span>
+              </button>
+            </div>
+            <div class="mt-4">
+              {% if site.tasks %}
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+                    <thead class="text-xs uppercase tracking-wide text-slate-400">
+                      <tr>
+                        <th class="px-3 py-2 text-left">Task</th>
+                        <th class="px-3 py-2 text-left">Priority</th>
+                        <th class="px-3 py-2 text-left">Owner</th>
+                        <th class="px-3 py-2 text-left">Due</th>
+                        <th class="px-3 py-2 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                      {% for task in site.tasks %}
+                        <tr>
+                          <td class="px-3 py-2">
+                            <div class="font-medium text-white">{{ task.summary }}</div>
+                            <div class="text-xs text-slate-500">{{ task.id }}</div>
+                          </td>
+                          <td class="px-3 py-2">
+                            <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs">{{ task.priority }}</span>
+                          </td>
+                          <td class="px-3 py-2">{{ task.owner or 'Unassigned' }}</td>
+                          <td class="px-3 py-2">{{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}</td>
+                          <td class="px-3 py-2">{{ task.status }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <p class="text-sm text-slate-400">No open SRT tasks for this site. Use the button above to add one.</p>
+              {% endif %}
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
 </div>
+
+<div id="srt-task-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
+  <div class="w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100">Add SRT task</h3>
+        <p class="text-xs text-slate-400">Track follow-up actions for the selected site.</p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close add task modal">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('srt_task_create') }}" class="px-6 py-5 space-y-4" data-srt-task-form>
+      <input type="hidden" name="site_name" data-task-site-input />
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Site</label>
+          <div class="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" data-task-site-label>—</div>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Priority</label>
+          <select name="priority" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+            <option>High</option>
+            <option selected>Medium</option>
+            <option>Low</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task summary</label>
+        <input name="summary" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Close loop on client safety observation" data-srt-autofocus />
+      </div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Owner</label>
+          <select name="owner" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+            <option value="">Unassigned</option>
+            {% for member in team_members %}
+              <option value="{{ member }}">{{ member }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Due date</label>
+          <input type="date" name="due_date" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-3">
+        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-modal-close>Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span>Create task</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const siteRows = Array.from(document.querySelectorAll('[data-site-row]'));
+    const panels = new Map();
+    document.querySelectorAll('[data-site-panel]').forEach((panel) => {
+      panels.set(panel.getAttribute('data-site'), panel);
+    });
+
+    const detailContainer = document.querySelector('[data-site-detail-container]');
+    let activeSiteKey = detailContainer ? detailContainer.getAttribute('data-active-site') : null;
+
+    if (!activeSiteKey && siteRows.length) {
+      activeSiteKey = siteRows[0].getAttribute('data-site-row');
+    }
+
+    const updateUrl = (key) => {
+      if (!window.history || !window.location) {
+        return;
+      }
+      const url = new URL(window.location.href);
+      if (key) {
+        url.searchParams.set('site', key);
+      } else {
+        url.searchParams.delete('site');
+      }
+      window.history.replaceState({}, '', url.toString());
+    };
+
+    const highlightRow = (row, isActive) => {
+      row.classList.toggle('bg-slate-800/40', isActive);
+      row.classList.toggle('ring-2', isActive);
+      row.classList.toggle('ring-emerald-400/60', isActive);
+      row.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    };
+
+    const activateSite = (key, { updateHistory = true } = {}) => {
+      if (!key || !panels.has(key)) {
+        return;
+      }
+      panels.forEach((panel, panelKey) => {
+        panel.classList.toggle('hidden', panelKey !== key);
+      });
+      siteRows.forEach((row) => {
+        highlightRow(row, row.getAttribute('data-site-row') === key);
+      });
+      activeSiteKey = key;
+      if (updateHistory) {
+        updateUrl(key);
+      }
+    };
+
+    if (activeSiteKey) {
+      activateSite(activeSiteKey, { updateHistory: false });
+    }
+
+    siteRows.forEach((row) => {
+      const key = row.getAttribute('data-site-row');
+      const handler = () => activateSite(key);
+      row.addEventListener('click', handler);
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handler();
+        }
+      });
+    });
+
+    const modals = new Map();
+    document.querySelectorAll('[data-srt-modal]').forEach((modal) => {
+      modals.set(modal.id, modal);
+    });
+
+    const openModal = (id) => {
+      const modal = modals.get(id);
+      if (!modal) {
+        return;
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      const autofocus = modal.querySelector('[data-srt-autofocus]') || modal.querySelector('input, select, textarea, button');
+      if (autofocus) {
+        setTimeout(() => autofocus.focus(), 50);
+      }
+    };
+
+    const closeModal = (modal) => {
+      if (!modal) {
+        return;
+      }
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    document.querySelectorAll('[data-srt-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => {
+        closeModal(button.closest('[data-srt-modal]'));
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target.matches('[data-srt-modal]')) {
+        closeModal(event.target);
+      }
+    });
+
+    const taskModalId = 'srt-task-modal';
+    const taskForm = document.querySelector('[data-srt-task-form]');
+    const taskSiteInput = taskForm ? taskForm.querySelector('[data-task-site-input]') : null;
+    const taskSiteLabel = taskForm ? taskForm.querySelector('[data-task-site-label]') : null;
+
+    document.querySelectorAll('[data-srt-task-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const siteName = button.getAttribute('data-site-name') || 'Selected site';
+        if (taskSiteInput) {
+          taskSiteInput.value = siteName;
+        }
+        if (taskSiteLabel) {
+          taskSiteLabel.textContent = siteName;
+        }
+        openModal(taskModalId);
+      });
+    });
+
+    const initContactForm = (form) => {
+      const addBtn = form.closest('[data-site-panel]')?.querySelector('[data-add-contact]');
+      const rowsContainer = form.querySelector('[data-contact-rows]');
+      const template = form.querySelector('template[data-contact-template]');
+
+      if (addBtn && template && rowsContainer) {
+        addBtn.addEventListener('click', () => {
+          const clone = template.content.firstElementChild.cloneNode(true);
+          rowsContainer.appendChild(clone);
+        });
+      }
+
+      form.addEventListener('click', (event) => {
+        if (event.target.matches('[data-remove-contact]')) {
+          const row = event.target.closest('[data-contact-row]');
+          if (row) {
+            row.remove();
+          }
+        }
+      });
+    };
+
+    document.querySelectorAll('[data-contact-form]').forEach(initContactForm);
+  });
+</script>
 {% endblock %}
