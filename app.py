@@ -135,7 +135,7 @@ def _default_srt_item():
     return {
         "label": "New Checklist Item",
         "type": "select",
-        "options": ["Pass", "Fail", "N/A"],
+        "options": ["OK", "Not Ok", "Client Input Required"],
         "required": True,
         "allow_photo": True,
         "allow_remark": True,
@@ -206,7 +206,7 @@ def _normalise_srt_schema(raw_schema):
                         str(value).strip()
                         for value in raw_item.get("options", [])
                         if str(value).strip()
-                    ] or ["Pass", "Fail", "N/A"]
+                    ] or ["OK", "Not Ok", "Client Input Required"]
                 else:
                     options = []
 
@@ -261,7 +261,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Brake calipers inspected for wear",
                         "type": "select",
-                        "options": ["Pass", "Fail", "Needs follow up"],
+                        "options": ["OK", "Not Ok", "Client Input Required"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -321,7 +321,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Door closing speed within spec",
                         "type": "select",
-                        "options": ["Pass", "Slow", "Fast"],
+                        "options": ["OK", "Not Ok", "Client Input Required"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -347,7 +347,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Landing door interlocks",
                         "type": "select",
-                        "options": ["Pass", "Fail", "Requires adjustment"],
+                        "options": ["OK", "Not Ok", "Client Input Required"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -3978,6 +3978,7 @@ def forms_fill(form_id):
                 photo_name = f"photo__{s_idx}__{f_idx}"
                 options = field.get("options") or []
 
+                normalized_val = ""
                 if ftype == "table":
                     rows = field.get("rows") or []
                     columns = field.get("columns") or []
@@ -4035,6 +4036,7 @@ def forms_fill(form_id):
                         )
                 elif ftype == "select":
                     val = request.form.get(field_name, "")
+                    normalized_val = val.strip().lower() if isinstance(val, str) else ""
                     if required and not val:
                         flash(f"'{label}' is required", "error")
                         return render_template(
@@ -4057,7 +4059,7 @@ def forms_fill(form_id):
                             category_url=url_for('forms_list'),
                             subcategory_label=fs.name
                         )
-                    if isinstance(val, str) and val.strip().lower() == "ng":
+                    if normalized_val in {"ng", "not ok"}:
                         any_ng = True
                 else:
                     val = request.form.get(field_name, "").strip()
@@ -4075,8 +4077,12 @@ def forms_fill(form_id):
                             ext = f.filename.rsplit(".", 1)[1].lower() if "." in f.filename else ""
                             if ext in {"png", "jpg", "jpeg", "webp"}:
                                 valid_item_files.append(f)
-                    if field.get("photo_required_if_ng") and isinstance(val, str) and val.strip().lower() == "ng" and not valid_item_files:
-                        flash(f"Photo evidence is required for '{label}' when marked NG.", "error")
+                    if (
+                        field.get("photo_required_if_ng")
+                        and normalized_val in {"ng", "not ok"}
+                        and not valid_item_files
+                    ):
+                        flash(f"Photo evidence is required for '{label}' when marked Not Ok.", "error")
                         return render_template(
                             "form_render.html",
                             fs=fs,
@@ -4118,7 +4124,7 @@ def forms_fill(form_id):
         ]
 
         if any_ng and per_item_photo_count + len(valid_photo_files) == 0:
-            flash("At least one photo is required when any item is marked NG.", "error")
+            flash("At least one photo is required when any item is marked Not Ok.", "error")
             return render_template(
                 "form_render.html",
                 fs=fs,
@@ -5155,7 +5161,6 @@ def srt_form_templates():
         category = (request.form.get("category") or "General").strip() or "General"
         description = (request.form.get("description") or "").strip()
         usage_count_raw = request.form.get("usage_count")
-        last_updated_raw = request.form.get("last_updated")
         schema_json = (request.form.get("schema_json") or "").strip()
 
         usage_count = 0
@@ -5164,13 +5169,6 @@ def srt_form_templates():
                 usage_count = max(0, int(usage_count_raw))
         except ValueError:
             usage_count = 0
-
-        last_updated = datetime.date.today()
-        if last_updated_raw:
-            try:
-                last_updated = datetime.datetime.strptime(last_updated_raw, "%Y-%m-%d").date()
-            except ValueError:
-                last_updated = datetime.date.today()
 
         schema_payload = _default_srt_schema()
         if schema_json:
@@ -5181,6 +5179,7 @@ def srt_form_templates():
             schema_payload = loaded
 
         schema = copy.deepcopy(_normalise_srt_schema(schema_payload))
+        today = datetime.date.today()
 
         if action == "create":
             if not name:
@@ -5197,7 +5196,7 @@ def srt_form_templates():
                         "category": category or "General",
                         "description": description,
                         "usage_count": usage_count,
-                        "last_updated": last_updated,
+                        "last_updated": today,
                         "schema": schema,
                     }
                 )
@@ -5231,7 +5230,7 @@ def srt_form_templates():
                         "category": category or "General",
                         "description": description,
                         "usage_count": usage_count,
-                        "last_updated": last_updated,
+                        "last_updated": today,
                         "schema": schema,
                     }
                 )
