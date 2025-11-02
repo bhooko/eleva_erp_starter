@@ -5203,6 +5203,20 @@ def srt_form_templates():
                 )
                 flash("SRT form template added.", "success")
 
+        elif action == "delete":
+            template_id = request.form.get("template_id")
+            if not template_id:
+                flash("Template not found.", "error")
+            else:
+                updated_templates = [
+                    item for item in SRT_FORM_TEMPLATES if item["id"] != template_id
+                ]
+                if len(updated_templates) == len(SRT_FORM_TEMPLATES):
+                    flash("Template not found.", "error")
+                else:
+                    SRT_FORM_TEMPLATES = updated_templates
+                    flash("Template deleted.", "success")
+
         elif action == "update":
             template_id = request.form.get("template_id")
             template = next((item for item in SRT_FORM_TEMPLATES if item["id"] == template_id), None)
