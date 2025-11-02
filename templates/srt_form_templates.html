@@ -216,7 +216,7 @@
     const defaultItem = () => ({
       label: 'New Checklist Item',
       type: 'select',
-      options: ['OK', 'Not Ok', 'Client Input Required'],
+      options: ['OK', 'Not OK', 'Need Client Input'],
       required: true,
       allow_photo: true,
       allow_remark: true,
@@ -261,7 +261,7 @@
         const opts = Array.isArray(raw?.options) ? raw.options : [];
         options = opts.map((opt) => String(opt).trim()).filter(Boolean);
         if (!options.length) {
-          options = ['OK', 'Not Ok', 'Client Input Required'];
+          options = ['OK', 'Not OK', 'Need Client Input'];
         }
       }
 
@@ -390,7 +390,7 @@
                 </label>
                 <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${item.allow_photo && item.type === 'select' ? '' : 'opacity-40'}">
                   <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="photo_required_if_ng" ${item.photo_required_if_ng && item.allow_photo && item.type === 'select' ? 'checked' : ''} ${item.allow_photo && item.type === 'select' ? '' : 'disabled'}>
-                  <span>Photo required if Not Ok</span>
+                  <span>Photo required if Not OK is selected</span>
                 </label>
                 <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
                   <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="allow_remark" ${item.allow_remark ? 'checked' : ''}>
