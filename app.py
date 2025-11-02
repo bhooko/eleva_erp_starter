@@ -5251,11 +5251,24 @@ def srt_overview():
         "oldest_age": max((task["age_days"] for task in tasks), default=0),
     }
 
+    site_options = sorted(
+        (
+            {
+                "key": site.get("key"),
+                "name": site.get("name"),
+            }
+            for site in SRT_SITES
+        ),
+        key=lambda item: (item.get("name") or "").lower(),
+    )
+
     return render_template(
         "srt_overview.html",
         tasks=filtered_tasks,
         status_filter=status_filter,
         summary=summary,
+        site_options=site_options,
+        team_members=SRT_TEAM_MEMBERS,
     )
 
 
@@ -5447,6 +5460,11 @@ def srt_task_create():
     )
 
     flash("SRT task added to the board.", "success")
+
+    redirect_to = request.form.get("redirect_to")
+    if redirect_to and redirect_to.startswith("/"):
+        return redirect(redirect_to)
+
     return redirect(url_for("srt_sites", site=slugify(site_name)))
 
 
