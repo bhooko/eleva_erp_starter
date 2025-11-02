@@ -68,7 +68,24 @@
       <tbody class="divide-y divide-slate-800/60">
         {% if tasks %}
           {% for task in tasks %}
-            <tr class="text-sm text-slate-200">
+            {% set task_payload = {
+              "id": task.id,
+              "site": task.site,
+              "summary": task.summary,
+              "priority": task.priority,
+              "status": task.status,
+              "owner": task.owner,
+              "due_date": task.due_date_iso,
+              "due_date_display": task.due_date_display,
+              "due_in": task.due_in
+            } %}
+            <tr class="text-sm text-slate-200 cursor-pointer transition hover:bg-slate-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                data-srt-task-row
+                data-task-id="{{ task.id }}"
+                data-task='{{ task_payload | tojson }}'
+                tabindex="0"
+                role="button"
+                aria-label="View task {{ task.id }} details">
               <td class="px-6 py-4 font-medium">{{ task.id }}</td>
               <td class="px-6 py-4">
                 <div class="font-medium text-white">{{ task.site }}</div>
@@ -81,7 +98,7 @@
               <td class="px-6 py-4">
                 <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-sky-500/20 text-sky-200' if task.status == 'In Progress' else 'bg-emerald-500/20 text-emerald-200' if task.status == 'Closed' else 'bg-slate-500/20 text-slate-200' }}">{{ task.status }}</span>
               </td>
-              <td class="px-6 py-4">{{ task.due_date.strftime('%d %b %Y') if task.due_date }}</td>
+              <td class="px-6 py-4">{{ task.due_date_display or '—' }}</td>
               <td class="px-6 py-4">
                 {% if task.due_in is not none %}
                   {% if task.due_in < 0 %}
@@ -176,53 +193,521 @@
   </div>
 </div>
 
+<div id="srt-task-detail-modal"
+     class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+     data-detail-url-template="{{ url_for('srt_task_data', task_id='__TASK_ID__') }}">
+  <div class="flex w-full max-w-3xl max-h-[90vh] flex-col rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+      <div class="min-w-0">
+        <h3 class="truncate text-lg font-semibold text-slate-100" data-task-title>Task details</h3>
+        <p class="mt-1 truncate text-xs text-slate-400" data-task-subtitle></p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-task-close aria-label="Close task detail modal">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto">
+      <div class="px-6 py-5 space-y-6">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Status</p>
+            <span class="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold" data-task-status-badge>Pending</span>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Priority</p>
+            <span class="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold" data-task-priority>—</span>
+          </div>
+          <div class="md:col-span-2">
+            <p class="text-xs uppercase tracking-wide text-slate-400">Summary</p>
+            <p class="mt-1 text-sm text-slate-200 leading-relaxed" data-task-summary></p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Owner</p>
+            <p class="mt-1 text-sm text-slate-200" data-task-owner></p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Due date</p>
+            <p class="mt-1 text-sm text-slate-200" data-task-due></p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/80 px-5 py-5">
+          <div class="flex items-center justify-between gap-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Update task</h4>
+            <p class="text-xs text-slate-500">Add a comment, attachment or change the status.</p>
+          </div>
+          <form method="post"
+                class="mt-4 space-y-4"
+                data-srt-task-form
+                data-update-url-template="{{ url_for('srt_task_update', task_id='__TASK_ID__') }}">
+            <input type="hidden" name="redirect_to" value="{{ overview_redirect }}" />
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Status</label>
+                <select name="status" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" data-task-status-input>
+                  <option>Pending</option>
+                  <option>In Progress</option>
+                  <option>Closed</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Owner</label>
+                <select name="owner" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" data-task-owner-input>
+                  <option value="">Unassigned</option>
+                  {% for member in team_members %}
+                    <option value="{{ member }}">{{ member }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Due date</label>
+                <input type="date" name="due_date" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" data-task-due-input />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Comment</label>
+              <textarea name="comment" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Share an update with the team" data-task-comment></textarea>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Attachment label</label>
+                <input type="text" name="attachment_label" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Inspection photo" data-task-attachment-label />
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Attachment link</label>
+                <input type="url" name="attachment_url" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="https://" data-task-attachment-url />
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/20 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-500/30 transition" data-status-action="In Progress">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 13.5m0-13.5L5.25 18.75" />
+                  </svg>
+                  <span>Mark in progress</span>
+                </button>
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 transition" data-status-action="Closed">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Close task</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-3">
+                <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-task-close>Cancel</button>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Save update</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div>
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Activity timeline</h4>
+          <div class="mt-3 space-y-3" data-task-timeline>
+            <p class="text-sm text-slate-400">No updates recorded yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const modal = document.getElementById('srt-overview-task-modal');
-    if (!modal) {
-      return;
+    const activeModals = [];
+
+    const addTaskModal = document.getElementById('srt-overview-task-modal');
+    if (addTaskModal) {
+      const openButtons = document.querySelectorAll('[data-srt-overview-open]');
+      const closeButtons = addTaskModal.querySelectorAll('[data-srt-overview-close]');
+      const summaryField = addTaskModal.querySelector('[data-srt-autofocus]');
+
+      const openAddModal = () => {
+        addTaskModal.classList.remove('hidden');
+        addTaskModal.classList.add('flex');
+        if (summaryField) {
+          setTimeout(() => summaryField.focus(), 50);
+        }
+      };
+
+      const closeAddModal = () => {
+        addTaskModal.classList.add('hidden');
+        addTaskModal.classList.remove('flex');
+      };
+
+      openButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          openAddModal();
+        });
+      });
+
+      closeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          closeAddModal();
+        });
+      });
+
+      addTaskModal.addEventListener('click', (event) => {
+        if (event.target === addTaskModal) {
+          closeAddModal();
+        }
+      });
+
+      activeModals.push({ element: addTaskModal, close: closeAddModal });
     }
 
-    const openButtons = document.querySelectorAll('[data-srt-overview-open]');
-    const closeButtons = modal.querySelectorAll('[data-srt-overview-close]');
-    const summaryField = modal.querySelector('[data-srt-autofocus]');
+    const detailModal = document.getElementById('srt-task-detail-modal');
+    if (detailModal) {
+      const detailCloseButtons = detailModal.querySelectorAll('[data-srt-task-close]');
+      const detailForm = detailModal.querySelector('[data-srt-task-form]');
+      const statusSelect = detailForm ? detailForm.querySelector('[data-task-status-input]') : null;
+      const ownerSelect = detailForm ? detailForm.querySelector('[data-task-owner-input]') : null;
+      const dueInput = detailForm ? detailForm.querySelector('[data-task-due-input]') : null;
+      const commentField = detailForm ? detailForm.querySelector('[data-task-comment]') : null;
+      const attachmentLabelField = detailForm ? detailForm.querySelector('[data-task-attachment-label]') : null;
+      const attachmentUrlField = detailForm ? detailForm.querySelector('[data-task-attachment-url]') : null;
+      const statusBadge = detailModal.querySelector('[data-task-status-badge]');
+      const priorityBadge = detailModal.querySelector('[data-task-priority]');
+      const summaryField = detailModal.querySelector('[data-task-summary]');
+      const ownerDisplay = detailModal.querySelector('[data-task-owner]');
+      const dueDisplay = detailModal.querySelector('[data-task-due]');
+      const titleField = detailModal.querySelector('[data-task-title]');
+      const subtitleField = detailModal.querySelector('[data-task-subtitle]');
+      const timelineContainer = detailModal.querySelector('[data-task-timeline]');
+      const quickActionButtons = detailModal.querySelectorAll('[data-status-action]');
+      const detailUrlTemplate = detailModal.getAttribute('data-detail-url-template');
+      const updateUrlTemplate = detailForm ? detailForm.getAttribute('data-update-url-template') : '';
+      const redirectInput = detailForm ? detailForm.querySelector('input[name="redirect_to"]') : null;
 
-    const openModal = () => {
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      if (summaryField) {
-        setTimeout(() => summaryField.focus(), 50);
-      }
-    };
+      const statusClassFor = (value) => {
+        const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ';
+        const normalised = (value || '').toLowerCase();
+        if (normalised === 'in progress') {
+          return `${base}bg-sky-500/20 text-sky-200`;
+        }
+        if (normalised === 'closed') {
+          return `${base}bg-emerald-500/20 text-emerald-200`;
+        }
+        return `${base}bg-slate-500/20 text-slate-200`;
+      };
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    };
+      const priorityClassFor = (value) => {
+        const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ';
+        const normalised = (value || '').toLowerCase();
+        if (normalised === 'high') {
+          return `${base}bg-rose-500/20 text-rose-200`;
+        }
+        if (normalised === 'medium') {
+          return `${base}bg-amber-400/20 text-amber-200`;
+        }
+        return `${base}bg-emerald-500/20 text-emerald-200`;
+      };
 
-    openButtons.forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        openModal();
+      const renderTimeline = (events) => {
+        if (!timelineContainer) {
+          return;
+        }
+        timelineContainer.innerHTML = '';
+        if (!events || !events.length) {
+          const emptyState = document.createElement('p');
+          emptyState.className = 'text-sm text-slate-400';
+          emptyState.textContent = 'No updates recorded yet.';
+          timelineContainer.appendChild(emptyState);
+          return;
+        }
+
+        events.forEach((event) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3';
+
+          const header = document.createElement('div');
+          header.className = 'flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-slate-400';
+
+          const label = document.createElement('span');
+          label.textContent = event.label || 'Update';
+          header.appendChild(label);
+
+          const timestamp = document.createElement('span');
+          timestamp.textContent = event.timestamp_display || '';
+          header.appendChild(timestamp);
+
+          wrapper.appendChild(header);
+
+          if (event.actor) {
+            const actorLine = document.createElement('p');
+            actorLine.className = 'mt-1 text-xs text-slate-500';
+            actorLine.textContent = `By ${event.actor}`;
+            wrapper.appendChild(actorLine);
+          }
+
+          if (event.detail) {
+            const detailLine = document.createElement('p');
+            detailLine.className = 'mt-2 text-sm text-slate-200';
+            detailLine.textContent = event.detail;
+            wrapper.appendChild(detailLine);
+          }
+
+          if (event.comment) {
+            const commentLine = document.createElement('p');
+            commentLine.className = 'mt-2 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100';
+            commentLine.textContent = event.comment;
+            wrapper.appendChild(commentLine);
+          }
+
+          if (event.attachment_url) {
+            const attachmentWrapper = document.createElement('a');
+            attachmentWrapper.className = 'mt-3 inline-flex items-center gap-2 text-sm font-medium text-emerald-200 hover:text-emerald-100';
+            attachmentWrapper.href = event.attachment_url;
+            attachmentWrapper.target = '_blank';
+            attachmentWrapper.rel = 'noopener noreferrer';
+
+            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            icon.setAttribute('viewBox', '0 0 24 24');
+            icon.setAttribute('fill', 'none');
+            icon.setAttribute('stroke-width', '1.5');
+            icon.setAttribute('stroke', 'currentColor');
+            icon.classList.add('w-4', 'h-4');
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('d', 'M9 9l6-6m0 0h4.5M15 3v4.5M9 15l-6 6m0 0H3m0 0v-4.5');
+            icon.appendChild(path);
+
+            const labelText = document.createElement('span');
+            labelText.textContent = event.attachment_label || event.attachment_url;
+
+            attachmentWrapper.appendChild(icon);
+            attachmentWrapper.appendChild(labelText);
+            wrapper.appendChild(attachmentWrapper);
+          }
+
+          timelineContainer.appendChild(wrapper);
+        });
+      };
+
+      const closeDetailModal = () => {
+        detailModal.classList.add('hidden');
+        detailModal.classList.remove('flex');
+        if (commentField) {
+          commentField.value = '';
+        }
+        if (attachmentLabelField) {
+          attachmentLabelField.value = '';
+        }
+        if (attachmentUrlField) {
+          attachmentUrlField.value = '';
+        }
+      };
+
+      const setOwnerOption = (value) => {
+        if (!ownerSelect) {
+          return;
+        }
+        const normalised = value || '';
+        const existing = Array.from(ownerSelect.options).find((option) => option.value === normalised);
+        if (!existing && normalised) {
+          const option = document.createElement('option');
+          option.value = normalised;
+          option.textContent = normalised;
+          option.selected = true;
+          ownerSelect.appendChild(option);
+        }
+        ownerSelect.value = normalised;
+      };
+
+      const populateTaskDetails = (task) => {
+        if (!task) {
+          return;
+        }
+        if (titleField) {
+          titleField.textContent = `${task.id} • ${task.site}`;
+        }
+        if (subtitleField) {
+          subtitleField.textContent = task.summary || '';
+        }
+        if (summaryField) {
+          summaryField.textContent = task.summary || '';
+        }
+        if (statusBadge) {
+          statusBadge.className = statusClassFor(task.status);
+          statusBadge.textContent = task.status || 'Pending';
+        }
+        if (priorityBadge) {
+          priorityBadge.className = priorityClassFor(task.priority);
+          priorityBadge.textContent = task.priority || '—';
+        }
+        if (ownerDisplay) {
+          ownerDisplay.textContent = task.owner || 'Unassigned';
+        }
+        if (dueDisplay) {
+          let dueText = task.due_date_display || 'No due date';
+          if (typeof task.due_in === 'number') {
+            if (task.due_in < 0) {
+              dueText = `${dueText} • Overdue ${Math.abs(task.due_in)} day${Math.abs(task.due_in) === 1 ? '' : 's'}`;
+            } else if (task.due_in === 0) {
+              dueText = `${dueText} • Due today`;
+            } else {
+              dueText = `${dueText} • Due in ${task.due_in} day${task.due_in === 1 ? '' : 's'}`;
+            }
+          }
+          dueDisplay.textContent = dueText;
+        }
+        if (statusSelect) {
+          statusSelect.value = task.status || 'Pending';
+        }
+        setOwnerOption(task.owner || '');
+        if (dueInput) {
+          dueInput.value = task.due_date || '';
+        }
+      };
+
+      const openDetailModal = (taskId, initialTask) => {
+        if (!detailForm || !updateUrlTemplate) {
+          return;
+        }
+
+        const detailUrl = detailUrlTemplate ? detailUrlTemplate.replace('__TASK_ID__', encodeURIComponent(taskId)) : '';
+        detailForm.action = updateUrlTemplate.replace('__TASK_ID__', encodeURIComponent(taskId));
+
+        if (redirectInput) {
+          redirectInput.value = `${window.location.pathname}${window.location.search}`;
+        }
+
+        if (commentField) {
+          commentField.value = '';
+        }
+        if (attachmentLabelField) {
+          attachmentLabelField.value = '';
+        }
+        if (attachmentUrlField) {
+          attachmentUrlField.value = '';
+        }
+
+        populateTaskDetails(initialTask);
+
+        if (timelineContainer) {
+          timelineContainer.innerHTML = '';
+          const loading = document.createElement('p');
+          loading.className = 'text-sm text-slate-400';
+          loading.textContent = 'Loading activity…';
+          timelineContainer.appendChild(loading);
+        }
+
+        detailModal.classList.remove('hidden');
+        detailModal.classList.add('flex');
+
+        if (detailUrl) {
+          fetch(detailUrl, { credentials: 'same-origin' })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error('Unable to load task data.');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (!payload || payload.ok === false) {
+                throw new Error(payload && payload.message ? payload.message : 'Unable to load task data');
+              }
+              populateTaskDetails(payload.task);
+              renderTimeline(payload.timeline);
+            })
+            .catch((error) => {
+              if (!timelineContainer) {
+                return;
+              }
+              timelineContainer.innerHTML = '';
+              const errorMessage = document.createElement('p');
+              errorMessage.className = 'text-sm text-rose-300';
+              errorMessage.textContent = error.message || 'Unable to load activity for this task.';
+              timelineContainer.appendChild(errorMessage);
+            });
+        }
+      };
+
+      detailCloseButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          closeDetailModal();
+        });
       });
-    });
 
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        closeModal();
+      detailModal.addEventListener('click', (event) => {
+        if (event.target === detailModal) {
+          closeDetailModal();
+        }
       });
-    });
 
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        closeModal();
-      }
-    });
+      quickActionButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const targetStatus = button.getAttribute('data-status-action');
+          if (!targetStatus || !statusSelect || !detailForm) {
+            return;
+          }
+          statusSelect.value = targetStatus;
+          if (typeof detailForm.requestSubmit === 'function') {
+            detailForm.requestSubmit();
+          } else {
+            detailForm.submit();
+          }
+        });
+      });
+
+      const rows = document.querySelectorAll('[data-srt-task-row]');
+      rows.forEach((row) => {
+        const activate = () => {
+          const taskId = row.getAttribute('data-task-id');
+          const payloadRaw = row.getAttribute('data-task');
+          let taskData = null;
+          if (payloadRaw) {
+            try {
+              taskData = JSON.parse(payloadRaw);
+            } catch (error) {
+              taskData = null;
+            }
+          }
+          if (taskId) {
+            openDetailModal(taskId, taskData || { id: taskId });
+          }
+        };
+
+        row.addEventListener('click', (event) => {
+          const interactive = ['A', 'BUTTON'];
+          if (interactive.includes(event.target.tagName)) {
+            return;
+          }
+          activate();
+        });
+
+        row.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activate();
+          }
+        });
+      });
+
+      activeModals.push({ element: detailModal, close: closeDetailModal });
+    }
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && modal.classList.contains('flex')) {
-        closeModal();
+      if (event.key !== 'Escape') {
+        return;
       }
+      activeModals.forEach((modal) => {
+        if (modal.element.classList.contains('flex')) {
+          modal.close();
+        }
+      });
     });
   });
 </script>

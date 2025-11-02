@@ -131,6 +131,82 @@ SRT_SAMPLE_TASKS = [
     },
 ]
 
+
+SRT_TASK_ACTIVITY = {
+    "SRT-1001": [
+        {
+            "timestamp": datetime.datetime(2024, 6, 14, 10, 30),
+            "type": "status",
+            "label": "Status set to Pending",
+            "detail": "Logged after emergency site visit.",
+            "actor": "Ravi Kumar",
+        },
+        {
+            "timestamp": datetime.datetime(2024, 6, 15, 9, 5),
+            "type": "comment",
+            "label": "Technician note",
+            "comment": "Awaiting brake pad shipment from vendor.",
+            "actor": "Ravi Kumar",
+        },
+    ],
+    "SRT-1002": [
+        {
+            "timestamp": datetime.datetime(2024, 6, 13, 15, 45),
+            "type": "status",
+            "label": "Task created",
+            "detail": "Door alignment issue reported by client.",
+            "actor": "Priya Nair",
+        },
+        {
+            "timestamp": datetime.datetime(2024, 6, 16, 11, 20),
+            "type": "attachment",
+            "label": "Upload: Alignment checklist",
+            "attachment_label": "Alignment checklist",
+            "attachment_url": "https://drive.example.com/alignment-checklist.pdf",
+            "actor": "Priya Nair",
+        },
+    ],
+    "SRT-1003": [
+        {
+            "timestamp": datetime.datetime(2024, 6, 12, 14, 15),
+            "type": "status",
+            "label": "Marked in progress",
+            "detail": "Calibration initiated with diagnostics kit.",
+            "actor": "Amol Patil",
+        },
+        {
+            "timestamp": datetime.datetime(2024, 6, 15, 8, 10),
+            "type": "comment",
+            "label": "Client update",
+            "comment": "Client informed of ongoing calibration window.",
+            "actor": "Amol Patil",
+        },
+    ],
+    "SRT-1004": [
+        {
+            "timestamp": datetime.datetime(2024, 6, 17, 16, 55),
+            "type": "status",
+            "label": "Task created",
+            "detail": "Scheduled vibration audit post service.",
+            "actor": "Sneha Kulkarni",
+        }
+    ],
+}
+
+
+def _get_srt_task(task_id):
+    return next((task for task in SRT_SAMPLE_TASKS if task["id"] == task_id), None)
+
+
+def _log_srt_activity(task_id, **payload):
+    if not task_id:
+        return
+
+    event = dict(payload)
+    event.setdefault("timestamp", datetime.datetime.utcnow())
+    SRT_TASK_ACTIVITY.setdefault(task_id, []).append(event)
+
+
 def _default_srt_item():
     return {
         "label": "New Checklist Item",
@@ -5226,8 +5302,18 @@ def srt_overview():
 
     tasks = []
     for task in SRT_SAMPLE_TASKS:
-        due_in = (task["due_date"] - today).days if task.get("due_date") else None
-        tasks.append({**task, "due_in": due_in})
+        due_date = task.get("due_date")
+        due_in = (due_date - today).days if due_date else None
+        due_date_display = due_date.strftime("%d %b %Y") if due_date else ""
+        due_date_iso = due_date.isoformat() if due_date else ""
+        tasks.append(
+            {
+                **task,
+                "due_in": due_in,
+                "due_date_display": due_date_display,
+                "due_date_iso": due_date_iso,
+            }
+        )
 
     if status_filter in {"pending", "open"}:
         filtered_tasks = [task for task in tasks if task["status"].lower() != "closed"]
@@ -5459,6 +5545,20 @@ def srt_task_create():
         },
     )
 
+    actor_name = None
+    if current_user.is_authenticated:
+        actor_name = current_user.display_name
+    elif owner and owner != "Unassigned":
+        actor_name = owner
+
+    _log_srt_activity(
+        task_id,
+        type="status",
+        label="Task created",
+        detail=summary,
+        actor=actor_name or "System",
+    )
+
     flash("SRT task added to the board.", "success")
 
     redirect_to = request.form.get("redirect_to")
@@ -5466,6 +5566,165 @@ def srt_task_create():
         return redirect(redirect_to)
 
     return redirect(url_for("srt_sites", site=slugify(site_name)))
+
+
+@app.route("/srt/task/<task_id>/data")
+@login_required
+def srt_task_data(task_id):
+    task = _get_srt_task(task_id)
+    if not task:
+        return jsonify({"ok": False, "message": "Task not found."}), 404
+
+    today = datetime.date.today()
+    due_date = task.get("due_date")
+    due_in = (due_date - today).days if due_date else None
+
+    timeline = sorted(
+        [
+            {
+                "type": event.get("type", "update"),
+                "label": event.get("label") or "Update",
+                "detail": event.get("detail"),
+                "actor": event.get("actor"),
+                "comment": event.get("comment"),
+                "attachment_label": event.get("attachment_label"),
+                "attachment_url": event.get("attachment_url"),
+                "timestamp": (event.get("timestamp") or datetime.datetime.utcnow()).isoformat(),
+                "timestamp_display": (event.get("timestamp") or datetime.datetime.utcnow()).strftime(
+                    "%d %b %Y • %H:%M"
+                ),
+            }
+            for event in SRT_TASK_ACTIVITY.get(task_id, [])
+        ],
+        key=lambda item: item["timestamp"],
+        reverse=True,
+    )
+
+    task_payload = {
+        "id": task["id"],
+        "site": task["site"],
+        "summary": task["summary"],
+        "priority": task["priority"],
+        "status": task["status"],
+        "owner": task["owner"],
+        "due_date": due_date.isoformat() if due_date else None,
+        "due_date_display": due_date.strftime("%d %b %Y") if due_date else "",
+        "due_in": due_in,
+    }
+
+    return jsonify({"ok": True, "task": task_payload, "timeline": timeline})
+
+
+@app.route("/srt/task/<task_id>/update", methods=["POST"])
+@login_required
+def srt_task_update(task_id):
+    task = _get_srt_task(task_id)
+    if not task:
+        flash("Task not found.", "error")
+        return redirect(url_for("srt_overview"))
+
+    redirect_to = request.form.get("redirect_to") or url_for("srt_overview")
+    if not redirect_to.startswith("/"):
+        redirect_to = url_for("srt_overview")
+
+    status_raw = (request.form.get("status") or task.get("status") or "").strip()
+    status_lookup = status_raw.lower()
+    if status_lookup in {"in-progress", "in_progress"}:
+        status = "In Progress"
+    elif status_lookup == "closed":
+        status = "Closed"
+    elif status_lookup == "pending":
+        status = "Pending"
+    else:
+        status = status_raw.title() or task.get("status") or "Pending"
+
+    owner = (request.form.get("owner") or task.get("owner") or "").strip() or "Unassigned"
+    due_date_raw = request.form.get("due_date")
+    due_date = None
+    if due_date_raw:
+        try:
+            due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            due_date = task.get("due_date")
+    else:
+        due_date = None
+
+    comment = (request.form.get("comment") or "").strip()
+    attachment_label = (request.form.get("attachment_label") or "").strip()
+    attachment_url = (request.form.get("attachment_url") or "").strip()
+
+    original_status = task.get("status")
+    original_owner = task.get("owner")
+    original_due = task.get("due_date")
+
+    events = []
+    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+
+    if status != original_status:
+        events.append(
+            {
+                "type": "status",
+                "label": f"Status updated to {status}",
+                "detail": f"{original_status or '—'} → {status}",
+                "actor": actor_name,
+            }
+        )
+        task["status"] = status
+
+    if owner != original_owner:
+        events.append(
+            {
+                "type": "assignment",
+                "label": "Owner reassigned",
+                "detail": f"{original_owner or 'Unassigned'} → {owner or 'Unassigned'}",
+                "actor": actor_name,
+            }
+        )
+        task["owner"] = owner or "Unassigned"
+
+    if due_date != original_due:
+        new_due_display = due_date.strftime("%d %b %Y") if due_date else "No due date"
+        old_due_display = original_due.strftime("%d %b %Y") if original_due else "No due date"
+        events.append(
+            {
+                "type": "due_date",
+                "label": "Due date updated",
+                "detail": f"{old_due_display} → {new_due_display}",
+                "actor": actor_name,
+            }
+        )
+        task["due_date"] = due_date
+
+    if comment:
+        events.append(
+            {
+                "type": "comment",
+                "label": "Comment added",
+                "comment": comment,
+                "actor": actor_name,
+            }
+        )
+
+    if attachment_url:
+        events.append(
+            {
+                "type": "attachment",
+                "label": attachment_label or "Attachment uploaded",
+                "attachment_label": attachment_label or attachment_url,
+                "attachment_url": attachment_url,
+                "actor": actor_name,
+            }
+        )
+
+    if not events:
+        flash("No updates were made to the task.", "info")
+        return redirect(redirect_to)
+
+    for event in events:
+        _log_srt_activity(task_id, **event)
+
+    flash("Task updated successfully.", "success")
+    return redirect(redirect_to)
 
 
 # ---------------------- QC TABS ----------------------
