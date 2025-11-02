@@ -76,7 +76,28 @@
                   </button>
                   <button type="button"
                           class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
-                          title="Preview coming soon">
+                          data-designer-open="duplicate"
+                          data-template-id="{{ template.id }}"
+                          data-template-name="{{ template.name }}"
+                          data-template-category="{{ template.category }}"
+                          data-template-usage="{{ template.usage_count }}"
+                          data-template-updated-label="{{ template.last_updated.strftime('%d %b %Y') }}"
+                          data-template-description="{{ template.description|e }}"
+                          data-template-schema='{{ template.schema|tojson|replace("'", "&#39;") }}'>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 6.75A2.25 2.25 0 017.5 4.5h9.75a.75.75 0 01.75.75V15a2.25 2.25 0 01-2.25 2.25H8.25a.75.75 0 00-.75.75V18A2.25 2.25 0 015.25 15.75V6.75z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 19.5h9.75a2.25 2.25 0 002.25-2.25V8.25" />
+                    </svg>
+                    <span>Duplicate</span>
+                  </button>
+                  <button type="button"
+                          class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
+                          data-preview-open
+                          data-template-name="{{ template.name }}"
+                          data-template-category="{{ template.category }}"
+                          data-template-updated-label="{{ template.last_updated.strftime('%d %b %Y') }}"
+                          data-template-description="{{ template.description|e }}"
+                          data-template-schema='{{ template.schema|tojson|replace("'", "&#39;") }}'>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-9A2.25 2.25 0 002.25 5.25v13.5A2.25 2.25 0 004.5 21h9a2.25 2.25 0 002.25-2.25V15" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M18 12l3-3m0 0l-3-3m3 3H9" />
@@ -175,6 +196,27 @@
     </form>
   </div>
 </div>
+
+<div class="fixed inset-0 z-40 hidden items-center justify-center p-4" data-srt-preview>
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-preview-close></div>
+  <div class="relative w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl shadow-black/40 flex flex-col min-h-0">
+    <div class="border-b border-slate-800 px-6 py-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div class="space-y-1">
+        <h3 class="text-lg font-semibold text-slate-100" data-preview-title>Template preview</h3>
+        <p class="text-sm text-slate-300" data-preview-description>—</p>
+        <p class="text-xs uppercase tracking-wide text-slate-500" data-preview-meta></p>
+      </div>
+      <button type="button" class="self-start rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-preview-close aria-label="Close preview">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-6 py-5 space-y-6" data-preview-body>
+      <p class="text-sm text-slate-400">Select a template to see its structure.</p>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -182,6 +224,12 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const designerOverlay = document.querySelector('[data-srt-designer]');
+    const previewOverlay = document.querySelector('[data-srt-preview]');
+    const previewBody = previewOverlay ? previewOverlay.querySelector('[data-preview-body]') : null;
+    const previewTitle = previewOverlay ? previewOverlay.querySelector('[data-preview-title]') : null;
+    const previewDescription = previewOverlay ? previewOverlay.querySelector('[data-preview-description]') : null;
+    const previewMeta = previewOverlay ? previewOverlay.querySelector('[data-preview-meta]') : null;
+    const previewEmptyState = '<p class="text-sm text-slate-400">Select a template to see its structure.</p>';
     const filePicker = document.querySelector('[data-designer-file-picker]');
     if (!designerOverlay) {
       return;
@@ -506,7 +554,15 @@
     };
 
     const openDesigner = (config) => {
-      mode = config.mode;
+      const duplicateMode = config.mode === 'duplicate';
+      mode = config.mode === 'edit' ? 'edit' : 'create';
+      if (previewOverlay && previewOverlay.classList.contains('flex')) {
+        previewOverlay.classList.add('hidden');
+        previewOverlay.classList.remove('flex');
+        if (previewBody) {
+          previewBody.innerHTML = previewEmptyState;
+        }
+      }
       form.reset();
       schema = normaliseSchema(config.schema);
       render();
@@ -515,11 +571,40 @@
       if (actionInput) {
         actionInput.value = mode === 'edit' ? 'update' : 'create';
       }
-      form.querySelector('input[name="template_id"]').value = config.templateId || '';
-      form.querySelector('input[name="name"]').value = config.name || '';
-      form.querySelector('input[name="category"]').value = config.category || '';
-      form.querySelector('input[name="usage_count"]').value = config.usageCount || '';
-      form.querySelector('textarea[name="description"]').value = config.description || '';
+      const idField = form.querySelector('input[name="template_id"]');
+      if (idField) {
+        idField.value = mode === 'edit' ? config.templateId || '' : '';
+      }
+
+      const nameField = form.querySelector('input[name="name"]');
+      if (nameField) {
+        if (mode === 'edit') {
+          nameField.value = config.name || '';
+        } else if (duplicateMode && config.name) {
+          nameField.value = `${config.name} (Copy)`;
+        } else {
+          nameField.value = config.name || '';
+        }
+      }
+
+      const categoryField = form.querySelector('input[name="category"]');
+      if (categoryField) {
+        categoryField.value = duplicateMode || mode === 'edit' ? (config.category || '') : '';
+      }
+
+      const usageField = form.querySelector('input[name="usage_count"]');
+      if (usageField) {
+        usageField.value = mode === 'edit' ? (config.usageCount || '') : '';
+      }
+
+      const descriptionField = form.querySelector('textarea[name="description"]');
+      if (descriptionField) {
+        if (mode === 'edit' || duplicateMode) {
+          descriptionField.value = config.description || '';
+        } else {
+          descriptionField.value = '';
+        }
+      }
 
       if (lastUpdatedDisplay) {
         if (mode === 'edit') {
@@ -530,15 +615,31 @@
       }
 
       if (titleEl) {
-        titleEl.textContent = mode === 'edit' ? 'Edit SRT template' : 'New SRT template';
+        if (mode === 'edit') {
+          titleEl.textContent = 'Edit SRT template';
+        } else if (duplicateMode) {
+          titleEl.textContent = 'Duplicate SRT template';
+        } else {
+          titleEl.textContent = 'New SRT template';
+        }
       }
       if (subtitleEl) {
-        subtitleEl.textContent = mode === 'edit'
-          ? 'Update metadata, sections and checklist items. Images will refresh automatically when changed.'
-          : 'Build sections, add checklist items and attach reference images for technicians.';
+        if (mode === 'edit') {
+          subtitleEl.textContent = 'Update metadata, sections and checklist items. Images will refresh automatically when changed.';
+        } else if (duplicateMode) {
+          subtitleEl.textContent = 'Create a copy of an existing template. Adjust the name and checklist items before saving.';
+        } else {
+          subtitleEl.textContent = 'Build sections, add checklist items and attach reference images for technicians.';
+        }
       }
       if (submitLabel) {
-        submitLabel.textContent = mode === 'edit' ? 'Update template' : 'Save template';
+        if (mode === 'edit') {
+          submitLabel.textContent = 'Update template';
+        } else if (duplicateMode) {
+          submitLabel.textContent = 'Create duplicate';
+        } else {
+          submitLabel.textContent = 'Save template';
+        }
       }
       if (deleteButton) {
         if (mode === 'edit') {
@@ -576,8 +677,14 @@
             parsedSchema = [];
           }
         }
+        let modeValue = 'create';
+        if (modeAttr === 'edit') {
+          modeValue = 'edit';
+        } else if (modeAttr === 'duplicate') {
+          modeValue = 'duplicate';
+        }
         openDesigner({
-          mode: modeAttr === 'edit' ? 'edit' : 'create',
+          mode: modeValue,
           templateId: button.getAttribute('data-template-id') || '',
           name: button.getAttribute('data-template-name') || '',
           category: button.getAttribute('data-template-category') || '',
@@ -619,12 +726,6 @@
         }
       });
     }
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && designerOverlay.classList.contains('flex')) {
-        closeDesigner();
-      }
-    });
 
     builderEl.addEventListener('click', (event) => {
       const actionEl = event.target.closest('[data-action]');
@@ -935,6 +1036,237 @@
         }
       });
     }
+
+    const renderPreviewItem = (item) => {
+      if (!item || typeof item !== 'object') {
+        return '';
+      }
+
+      if (item.type === 'table') {
+        const rows = Array.isArray(item.rows) && item.rows.length ? item.rows : ['Row 1', 'Row 2'];
+        const columns = Array.isArray(item.columns) && item.columns.length ? item.columns : ['Column 1', 'Column 2'];
+        const headerCells = columns
+          .map((col) => `<th class="px-3 py-2 border-b border-slate-800 text-left">${escapeHtml(col)}</th>`)
+          .join('');
+        const bodyRows = rows
+          .map((row) => {
+            const cells = columns
+              .map(() => '<td class="px-3 py-2 border-t border-slate-800 text-slate-500">—</td>')
+              .join('');
+            return `<tr><th class="px-3 py-2 border-t border-r border-slate-800 text-left font-medium text-slate-200">${escapeHtml(row)}</th>${cells}</tr>`;
+          })
+          .join('');
+        const badges = [];
+        if (item.required) {
+          badges.push('<span class="rounded-full bg-slate-800/80 px-2 py-1">All cells required</span>');
+        }
+        const badgesMarkup = badges.join('');
+        const itemImage = item.display_image
+          ? `<div class="md:w-40 shrink-0"><img src="${escapeHtml(item.display_image)}" alt="Reference for ${escapeHtml(item.label || 'table grid')}" class="w-full rounded-xl border border-slate-800 object-cover"></div>`
+          : '';
+        return `
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
+            <div class="flex flex-col md:flex-row md:items-start md:gap-4">
+              <div class="flex-1 space-y-3">
+                <div>
+                  <p class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                    ${escapeHtml(item.label || 'Table grid')}
+                    ${item.required ? '<span class="text-rose-400">*</span>' : ''}
+                  </p>
+                  ${badgesMarkup ? `<div class="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">${badgesMarkup}</div>` : ''}
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-800">
+                  <table class="min-w-[320px] w-full text-left text-xs text-slate-200">
+                    <thead class="bg-slate-950/40">
+                      <tr>
+                        <th class="px-3 py-2 border-b border-slate-800">Row</th>
+                        ${headerCells}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${bodyRows}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              ${itemImage}
+            </div>
+          </div>
+        `;
+      }
+
+      const typeLabels = {
+        select: 'Choice list',
+        text: 'Short text',
+        textarea: 'Long text',
+      };
+      const typeLabel = typeLabels[item.type] || 'Choice list';
+      const badges = [];
+      if (item.required) {
+        badges.push('<span class="rounded-full bg-slate-800/80 px-2 py-1">Required</span>');
+      }
+      if (item.allow_photo) {
+        badges.push(
+          `<span class="rounded-full bg-slate-800/80 px-2 py-1">${item.photo_required_if_ng ? 'Photo required on Not OK' : 'Photo allowed'}</span>`
+        );
+      }
+      if (item.allow_remark) {
+        badges.push('<span class="rounded-full bg-slate-800/80 px-2 py-1">Remarks allowed</span>');
+      }
+      const badgesMarkup = badges.join('');
+
+      let bodyContent = '';
+      if (item.type === 'select') {
+        const options = Array.isArray(item.options) && item.options.length
+          ? item.options
+          : ['OK', 'Not OK', 'Need Client Input'];
+        const optionMarkup = options
+          .map((opt) => `<li class="px-3 py-1 rounded-lg border border-slate-700/60 bg-slate-800/70 text-xs text-slate-200">${escapeHtml(opt)}</li>`)
+          .join('');
+        bodyContent = `<div><p class="text-xs text-slate-400 mb-1">Options</p><div class="flex flex-wrap gap-2">${optionMarkup}</div></div>`;
+      } else if (item.type === 'text') {
+        bodyContent = '<p class="text-xs text-slate-400">Technicians will enter a short, single-line response.</p>';
+      } else {
+        bodyContent = '<p class="text-xs text-slate-400">Technicians will enter a longer note across multiple lines.</p>';
+      }
+
+      const itemImage = item.display_image
+        ? `<div class="md:w-40 shrink-0"><img src="${escapeHtml(item.display_image)}" alt="Reference for ${escapeHtml(item.label || 'check item')}" class="w-full rounded-xl border border-slate-800 object-cover"></div>`
+        : '';
+
+      return `
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
+          <div class="flex flex-col md:flex-row md:items-start md:gap-4">
+            <div class="flex-1 space-y-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                  ${escapeHtml(item.label || 'Checklist item')}
+                  ${item.required ? '<span class="text-rose-400">*</span>' : ''}
+                </p>
+                <div class="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                  <span class="rounded-full bg-slate-800/80 px-2 py-1">${escapeHtml(typeLabel)}</span>
+                  ${badgesMarkup}
+                </div>
+              </div>
+              ${bodyContent}
+            </div>
+            ${itemImage}
+          </div>
+        </div>
+      `;
+    };
+
+    const renderPreviewSections = (sections) => {
+      if (!Array.isArray(sections) || !sections.length) {
+        return '<p class="text-sm text-slate-400">No sections configured yet.</p>';
+      }
+      return sections
+        .map((section) => {
+          const heading = section.section
+            ? `<div class="flex items-center gap-3"><div class="w-1.5 h-6 rounded-full bg-emerald-500/60"></div><h4 class="text-sm font-semibold text-slate-100">${escapeHtml(section.section)}</h4></div>`
+            : '';
+          const sectionImage = section.display_image
+            ? `<div class="rounded-xl border border-slate-800/70 bg-slate-900/50 p-3"><img src="${escapeHtml(section.display_image)}" alt="Section reference" class="w-full max-w-xs rounded-lg object-cover"></div>`
+            : '';
+          const headerMarkup = heading || sectionImage
+            ? `<div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4"><div class="space-y-3 flex-1">${heading}${sectionImage ? sectionImage : ''}</div></div>`
+            : '';
+          const itemsMarkup = Array.isArray(section.items) && section.items.length
+            ? section.items.map((item) => renderPreviewItem(item)).join('')
+            : '<p class="text-sm text-slate-400">No checklist items in this section yet.</p>';
+          return `
+            <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+              ${headerMarkup}
+              <div class="space-y-4">
+                ${itemsMarkup}
+              </div>
+            </section>
+          `;
+        })
+        .join('');
+    };
+
+    const closePreview = () => {
+      if (!previewOverlay) {
+        return;
+      }
+      previewOverlay.classList.add('hidden');
+      previewOverlay.classList.remove('flex');
+      if (previewBody) {
+        previewBody.innerHTML = previewEmptyState;
+      }
+    };
+
+    const openPreview = (config) => {
+      if (!previewOverlay) {
+        return;
+      }
+      const normalised = normaliseSchema(config.schema);
+      if (previewTitle) {
+        previewTitle.textContent = config.name?.trim() ? config.name.trim() : 'Untitled template';
+      }
+      if (previewDescription) {
+        const desc = config.description?.trim();
+        previewDescription.textContent = desc ? desc : 'No description provided.';
+      }
+      if (previewMeta) {
+        const metaParts = [];
+        const categoryLabel = config.category?.trim();
+        const updatedLabel = config.lastUpdatedLabel?.trim();
+        if (categoryLabel) {
+          metaParts.push(`Category: ${categoryLabel}`);
+        }
+        if (updatedLabel) {
+          metaParts.push(`Last updated: ${updatedLabel}`);
+        }
+        previewMeta.textContent = metaParts.join(' • ');
+      }
+      if (previewBody) {
+        previewBody.innerHTML = renderPreviewSections(normalised);
+      }
+      previewOverlay.classList.remove('hidden');
+      previewOverlay.classList.add('flex');
+    };
+
+    if (previewOverlay) {
+      previewOverlay.querySelectorAll('[data-preview-close]').forEach((button) => {
+        button.addEventListener('click', closePreview);
+      });
+    }
+
+    document.querySelectorAll('[data-preview-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const schemaAttr = button.getAttribute('data-template-schema');
+        let parsedSchema = [];
+        if (schemaAttr) {
+          try {
+            parsedSchema = JSON.parse(schemaAttr);
+          } catch (err) {
+            parsedSchema = [];
+          }
+        }
+        openPreview({
+          name: button.getAttribute('data-template-name') || '',
+          category: button.getAttribute('data-template-category') || '',
+          description: button.getAttribute('data-template-description') || '',
+          lastUpdatedLabel: button.getAttribute('data-template-updated-label') || '',
+          schema: parsedSchema,
+        });
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      if (previewOverlay && previewOverlay.classList.contains('flex')) {
+        closePreview();
+        return;
+      }
+      if (designerOverlay.classList.contains('flex')) {
+        closeDesigner();
+      }
+    });
 
     form.addEventListener('submit', () => {
       updateHidden();
