@@ -213,31 +213,46 @@
       "'": '&#39;'
     })[ch]);
 
-    const defaultItem = () => ({
-      label: 'New Checklist Item',
-      type: 'select',
-      options: ['OK', 'Not OK', 'Need Client Input'],
-      required: true,
-      allow_photo: true,
-      allow_remark: true,
-      photo_required_if_ng: false,
-      display_image: ''
-    });
+    const placeholderSections = new WeakSet();
+    const placeholderItems = new WeakSet();
 
-    const defaultTable = () => ({
-      label: 'New Table',
-      type: 'table',
-      required: true,
-      rows: ['Row 1', 'Row 2'],
-      columns: ['Column 1', 'Column 2'],
-      display_image: ''
-    });
+    const defaultItem = () => {
+      const item = {
+        label: 'New Checklist Item',
+        type: 'select',
+        options: ['OK', 'Not OK', 'Need Client Input'],
+        required: true,
+        allow_photo: true,
+        allow_remark: true,
+        photo_required_if_ng: false,
+        display_image: ''
+      };
+      placeholderItems.add(item);
+      return item;
+    };
 
-    const defaultSection = () => ({
-      section: 'New Section',
-      display_image: '',
-      items: [defaultItem()]
-    });
+    const defaultTable = () => {
+      const item = {
+        label: 'New Table',
+        type: 'table',
+        required: true,
+        rows: ['Row 1', 'Row 2'],
+        columns: ['Column 1', 'Column 2'],
+        display_image: ''
+      };
+      placeholderItems.add(item);
+      return item;
+    };
+
+    const defaultSection = () => {
+      const section = {
+        section: 'New Section',
+        display_image: '',
+        items: [defaultItem()]
+      };
+      placeholderSections.add(section);
+      return section;
+    };
 
     const normaliseItem = (raw) => {
       const kind = String(raw && raw.type ? raw.type : 'select').toLowerCase();
@@ -362,6 +377,9 @@
       const sectionsMarkup = schema.map((section, sectionIndex) => {
         const removeSectionDisabled = schema.length === 1;
         const sectionImageControls = renderImageControls('section', sectionIndex, null, section.display_image || '');
+        const sectionSuggestion = 'New Section';
+        const sectionIsPlaceholder = placeholderSections.has(section) && (!section.section || section.section === sectionSuggestion);
+        const sectionInputValue = sectionIsPlaceholder ? sectionSuggestion : section.section;
         const itemsMarkup = section.items.map((item, itemIndex) => {
           const removeItemDisabled = section.items.length === 1 && schema.length === 1;
           const isTable = item.type === 'table';
@@ -400,6 +418,10 @@
 
           const rowsText = Array.isArray(item.rows) ? item.rows.join('\n') : '';
           const columnsText = Array.isArray(item.columns) ? item.columns.join('\n') : '';
+          const itemSuggestion = isTable ? 'New Table' : 'New Checklist Item';
+          const itemIsPlaceholder = placeholderItems.has(item) && (!item.label || item.label === itemSuggestion);
+          const itemInputValue = itemIsPlaceholder ? itemSuggestion : item.label;
+
           const tableExtras = isTable
             ? `<div class="space-y-3">
                 <div class="grid sm:grid-cols-2 gap-3">
@@ -432,7 +454,7 @@
                 <div class="space-y-3">
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Check label</label>
-                    <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(item.label)}" maxlength="160" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="label">
+                    <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(itemInputValue)}" maxlength="160" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="label"${itemIsPlaceholder ? ` data-suggestion="${itemSuggestion}"` : ''}>
                   </div>
                   <div class="grid sm:grid-cols-2 gap-3">
                     <div>
@@ -459,7 +481,7 @@
               <div class="flex-1 space-y-3">
                 <div>
                   <label class="block text-xs text-slate-400 mb-1">Section name</label>
-                  <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(section.section)}" placeholder="Eg. Machine Room" data-scope="section" data-section="${sectionIndex}" data-field="section" maxlength="160">
+                  <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(sectionInputValue)}" placeholder="Eg. Machine Room" data-scope="section" data-section="${sectionIndex}" data-field="section" maxlength="160"${sectionIsPlaceholder ? ` data-suggestion="${sectionSuggestion}"` : ''}>
                   <p class="text-[11px] text-slate-500 mt-1">Leave blank to hide this heading when the checklist is rendered.</p>
                 </div>
                 ${sectionImageControls}
@@ -676,6 +698,40 @@
       }
     });
 
+    builderEl.addEventListener('focusin', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.dataset) {
+        return;
+      }
+      const suggestion = target.getAttribute('data-suggestion');
+      if (!suggestion || target.value !== suggestion) {
+        return;
+      }
+      const scope = target.dataset.scope;
+      const field = target.dataset.field;
+      if (!scope || !field) {
+        return;
+      }
+      const sectionIdx = Number(target.dataset.section || 0);
+      if (scope === 'section' && field === 'section') {
+        const section = schema[sectionIdx];
+        if (section) {
+          section.section = '';
+          placeholderSections.delete(section);
+        }
+      } else if (scope === 'item' && field === 'label') {
+        const itemIdx = Number(target.dataset.item || 0);
+        const item = schema[sectionIdx]?.items?.[itemIdx];
+        if (item) {
+          item.label = '';
+          placeholderItems.delete(item);
+        }
+      }
+      target.value = '';
+      target.removeAttribute('data-suggestion');
+      updateHidden();
+    });
+
     builderEl.addEventListener('input', (event) => {
       const scope = event.target.dataset.scope;
       const field = event.target.dataset.field;
@@ -686,6 +742,9 @@
       if (scope === 'section') {
         if (field === 'section') {
           schema[sectionIdx].section = event.target.value;
+          if (placeholderSections.has(schema[sectionIdx]) && event.target.value !== 'New Section') {
+            placeholderSections.delete(schema[sectionIdx]);
+          }
         } else if (field === 'display_image') {
           schema[sectionIdx].display_image = event.target.value.trim();
         }
@@ -701,6 +760,9 @@
 
       if (field === 'label') {
         item.label = event.target.value;
+        if (placeholderItems.has(item) && event.target.value !== (item.type === 'table' ? 'New Table' : 'New Checklist Item')) {
+          placeholderItems.delete(item);
+        }
       } else if (field === 'options') {
         item.options = event.target.value.split('\n').map((value) => value.trim()).filter(Boolean);
         if (!item.options.length) {
