@@ -34,6 +34,26 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
+
+def _random_digits(length=10):
+    return "".join(random.choice(string.digits) for _ in range(length))
+
+
+def generate_random_phone(country_code="+91"):
+    return f"{country_code}-{_random_digits(10)}"
+
+
+def generate_random_email(domains=None):
+    domain_pool = domains or [
+        "example.com",
+        "maildrop.cc",
+        "inbound.test",
+        "demo.local",
+    ]
+    local_part = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    return f"{local_part}@{random.choice(domain_pool)}"
+
+
 # ---------------------- QC Profile choices (visible in UI) ----------------------
 STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
@@ -59,6 +79,7 @@ PROJECT_CABIN_FINISHES = ["SS", "MS", "Glass", "SS+Glass", "Designer", "Cage", "
 PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
 PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
 DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
+
 
 def slugify(value):
     value = (value or "").lower()
@@ -384,25 +405,6 @@ def normalize_lifecycle_stage(value):
     if value not in SALES_CLIENT_LIFECYCLE_STAGES:
         return SALES_CLIENT_LIFECYCLE_STAGES[0]
     return value
-
-
-def _random_digits(length=10):
-    return "".join(random.choice(string.digits) for _ in range(length))
-
-
-def generate_random_phone(country_code="+91"):
-    return f"{country_code}-{_random_digits(10)}"
-
-
-def generate_random_email(domains=None):
-    domain_pool = domains or [
-        "example.com",
-        "maildrop.cc",
-        "inbound.test",
-        "demo.local",
-    ]
-    local_part = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
-    return f"{local_part}@{random.choice(domain_pool)}"
 
 
 def log_sales_activity(parent_type, parent_id, title, notes=None, actor=None):
