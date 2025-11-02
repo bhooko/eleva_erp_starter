@@ -541,13 +541,15 @@
                 ${sectionImageControls}
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <button type="button" class="px-3 py-2 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-item" data-section="${sectionIndex}">+ Add check</button>
                 <button type="button" class="px-3 py-2 text-xs rounded-xl border border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 transition" data-action="add-table" data-section="${sectionIndex}">+ Add table</button>
                 <button type="button" class="px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition ${removeSectionDisabled ? 'opacity-50 cursor-not-allowed' : ''}" data-action="remove-section" data-section="${sectionIndex}" ${removeSectionDisabled ? 'disabled' : ''}>Remove section</button>
               </div>
             </div>
             <div class="space-y-4">
               ${itemsMarkup}
+              <div>
+                <button type="button" class="px-3 py-2 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-item" data-section="${sectionIndex}">+ Add check</button>
+              </div>
             </div>
           </div>
         `;
