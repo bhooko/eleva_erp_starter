@@ -35,4 +35,4 @@ flask run --debug
 
 ### Editing forms
 - Go to Dashboard → Forms → Edit. Change the JSON to add your own fields.
-- For dropdown checks, use `"type":"select","options":["OK","Not Ok","Client Input Required"]` and set `"photo_required_if_ng": true` to require photos when "Not Ok" is selected.
+- For dropdown checks, use `"type":"select","options":["OK","Not OK","Need Client Input"]` and set `"photo_required_if_ng": true` to require photos when "Not OK" is selected.

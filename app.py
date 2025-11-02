@@ -135,7 +135,7 @@ def _default_srt_item():
     return {
         "label": "New Checklist Item",
         "type": "select",
-        "options": ["OK", "Not Ok", "Client Input Required"],
+        "options": ["OK", "Not OK", "Need Client Input"],
         "required": True,
         "allow_photo": True,
         "allow_remark": True,
@@ -206,7 +206,7 @@ def _normalise_srt_schema(raw_schema):
                         str(value).strip()
                         for value in raw_item.get("options", [])
                         if str(value).strip()
-                    ] or ["OK", "Not Ok", "Client Input Required"]
+                    ] or ["OK", "Not OK", "Need Client Input"]
                 else:
                     options = []
 
@@ -261,7 +261,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Brake calipers inspected for wear",
                         "type": "select",
-                        "options": ["OK", "Not Ok", "Client Input Required"],
+                        "options": ["OK", "Not OK", "Need Client Input"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -321,7 +321,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Door closing speed within spec",
                         "type": "select",
-                        "options": ["OK", "Not Ok", "Client Input Required"],
+                        "options": ["OK", "Not OK", "Need Client Input"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -347,7 +347,7 @@ SRT_FORM_TEMPLATES = [
                     {
                         "label": "Landing door interlocks",
                         "type": "select",
-                        "options": ["OK", "Not Ok", "Client Input Required"],
+                        "options": ["OK", "Not OK", "Need Client Input"],
                         "required": True,
                         "allow_photo": True,
                         "allow_remark": True,
@@ -924,7 +924,7 @@ def _normalize_form_schema(schema_raw):
         normalized["type"] = ftype
         normalized["required"] = bool(item.get("required", False))
         if ftype == "select":
-            opts = item.get("options") or ["Good", "NG"]
+            opts = item.get("options") or ["OK", "Not OK", "Need Client Input"]
             normalized["options"] = [str(opt) for opt in opts if str(opt).strip()]
             normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False))
             normalized["allow_photo"] = bool(item.get("allow_photo", normalized["photo_required_if_ng"]))
@@ -1991,9 +1991,9 @@ def bootstrap_db():
 
     if not FormSchema.query.filter_by(name="QC - New Installation").first():
         sample_schema = [
-            {"label": "Lift Cabin Condition", "type": "select", "required": True, "options": ["Good", "NG"], "photo_required_if_ng": True},
-            {"label": "Machine Room Cleanliness", "type": "select", "required": True, "options": ["Good", "NG"], "photo_required_if_ng": True},
-            {"label": "Lift Shaft Obstruction", "type": "select", "required": True, "options": ["Good", "NG"], "photo_required_if_ng": True},
+            {"label": "Lift Cabin Condition", "type": "select", "required": True, "options": ["OK", "Not OK", "Need Client Input"], "photo_required_if_ng": True},
+            {"label": "Machine Room Cleanliness", "type": "select", "required": True, "options": ["OK", "Not OK", "Need Client Input"], "photo_required_if_ng": True},
+            {"label": "Lift Shaft Obstruction", "type": "select", "required": True, "options": ["OK", "Not OK", "Need Client Input"], "photo_required_if_ng": True},
             {"label": "General Remarks", "type": "textarea", "required": False},
         ]
         fs = FormSchema(
@@ -4082,7 +4082,7 @@ def forms_fill(form_id):
                         and normalized_val in {"ng", "not ok"}
                         and not valid_item_files
                     ):
-                        flash(f"Photo evidence is required for '{label}' when marked Not Ok.", "error")
+                        flash(f"Photo evidence is required for '{label}' when marked Not OK.", "error")
                         return render_template(
                             "form_render.html",
                             fs=fs,
@@ -4124,7 +4124,7 @@ def forms_fill(form_id):
         ]
 
         if any_ng and per_item_photo_count + len(valid_photo_files) == 0:
-            flash("At least one photo is required when any item is marked Not Ok.", "error")
+            flash("At least one photo is required when any item is marked Not OK.", "error")
             return render_template(
                 "form_render.html",
                 fs=fs,

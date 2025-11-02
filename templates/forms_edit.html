@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     label: 'New Check',
     type: 'select',
     required: true,
-    options: ['Good', 'NG'],
+    options: ['OK', 'Not OK', 'Need Client Input'],
     allow_photo: true,
     photo_required_if_ng: true,
     allow_remark: true
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (base.type === 'select') {
         const opts = Array.isArray(item.options) ? item.options : base.options;
         const normalizedOpts = opts.map((opt) => String(opt).trim()).filter(Boolean);
-        base.options = normalizedOpts.length ? normalizedOpts : ['Good', 'NG'];
+        base.options = normalizedOpts.length ? normalizedOpts : ['OK', 'Not OK', 'Need Client Input'];
       } else {
         base.options = [];
       }
@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : '';
         const typeSelect = `
           <select class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="type">
-            <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (Good / NG)</option>
+            <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (OK / Not OK / Need Client Input)</option>
             <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
             <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
             <option value="table" ${item.type === 'table' ? 'selected' : ''}>Table with reference</option>
@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
               </label>
               <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${photoRequiredWrapper}">
                 <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="photo_required_if_ng" ${item.photo_required_if_ng && !disablePhotoRequired ? 'checked' : ''} ${photoRequiredDisabledAttr}>
-                <span>Photo required if NG</span>
+                <span>Photo required if Not OK is selected</span>
               </label>
               <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
                 <input type="checkbox" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="allow_remark" ${item.allow_remark ? 'checked' : ''}>
@@ -552,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.type = allowed.includes(newType) ? newType : 'select';
         if (item.type === 'select') {
           if (!item.options || !item.options.length) {
-            item.options = ['Good', 'NG'];
+            item.options = ['OK', 'Not OK', 'Need Client Input'];
           }
           if (typeof item.allow_photo !== 'boolean') {
             item.allow_photo = true;
