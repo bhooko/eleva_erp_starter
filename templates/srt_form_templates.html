@@ -7,12 +7,12 @@
     <div class="flex flex-wrap items-center gap-3">
       <div>
         <h2 class="text-xl font-semibold text-white">SRT Form Templates</h2>
-        <p class="text-sm text-slate-400 mt-1">Manage reusable forms that mirror QC layouts for service recovery tracking, evidence logging and approvals.</p>
+        <p class="text-sm text-slate-400 mt-1">Design reusable SRT checklists, mirroring QC layouts with guided images and flexible item types.</p>
       </div>
       <div class="ml-auto flex items-center gap-3">
         <button type="button"
                 class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/30 transition"
-                data-srt-modal-open="srt-template-create">
+                data-designer-open="create">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
           </svg>
@@ -41,6 +41,11 @@
               <td class="px-6 py-4">
                 <div class="font-semibold text-white">{{ template.name }}</div>
                 <div class="text-xs text-slate-400 mt-1">ID: {{ template.id }}</div>
+                {% set items_count = template.schema|map(attribute='items')|map('length')|sum %}
+                <div class="text-xs text-slate-500 mt-1">
+                  {{ template.schema|length }} section{{ 's' if template.schema|length != 1 else '' }} ·
+                  {{ items_count }} check{{ 's' if items_count != 1 else '' }}
+                </div>
               </td>
               <td class="px-6 py-4">
                 <span class="inline-flex items-center rounded-full bg-slate-500/20 px-2 py-1 text-xs font-semibold text-slate-100">{{ template.category }}</span>
@@ -55,13 +60,14 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button"
                           class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
-                          data-template-edit
+                          data-designer-open="edit"
                           data-template-id="{{ template.id }}"
                           data-template-name="{{ template.name }}"
                           data-template-category="{{ template.category }}"
                           data-template-updated="{{ template.last_updated.strftime('%Y-%m-%d') }}"
                           data-template-usage="{{ template.usage_count }}"
-                          data-template-description="{{ template.description|e }}">
+                          data-template-description="{{ template.description|e }}"
+                          data-template-schema='{{ template.schema|tojson|replace("'", "&#39;") }}'>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.651 1.65a1.125 1.125 0 010 1.59L8.71 17.54a2.25 2.25 0 01-.948.566l-3.422 1.027a.562.562 0 01-.693-.693l1.027-3.422a2.25 2.25 0 01.566-.948l9.804-9.804a1.125 1.125 0 011.59 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 19.5h-6" />
@@ -87,174 +93,739 @@
   </div>
 </div>
 
-<div id="srt-template-create" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
-  <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
-    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
-      <div>
-        <h3 class="text-lg font-semibold text-slate-100">Add SRT template</h3>
-        <p class="text-xs text-slate-400">Define a reusable SRT form based on QC sections.</p>
+<input type="file" accept="image/*" class="hidden" data-designer-file-picker>
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4" data-srt-designer>
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-designer-close></div>
+  <div class="relative w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl shadow-black/40 flex flex-col">
+    <form method="post" class="flex-1 flex flex-col" data-designer-form>
+      <input type="hidden" name="action" value="create">
+      <input type="hidden" name="template_id" value="">
+      <input type="hidden" name="schema_json" value="">
+      <div class="border-b border-slate-800 px-6 py-4 flex items-start gap-3">
+        <div class="flex-1">
+          <h3 class="text-lg font-semibold text-slate-100" data-designer-title>New SRT template</h3>
+          <p class="text-xs text-slate-400 mt-1" data-designer-subtitle>Build sections, add checklist items and attach reference images for technicians.</p>
+        </div>
+        <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-designer-close aria-label="Close designer">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close create template modal">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-    <form method="post" class="px-6 py-5 space-y-4">
-      <input type="hidden" name="action" value="create" />
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
-          <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. SRT - Safety Walkthrough" />
+      <div class="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+            <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Eg. SRT - Safety Walkthrough">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Category</label>
+            <input name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Eg. Safety">
+          </div>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Last updated</label>
+            <input type="date" name="last_updated" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Usage count</label>
+            <input type="number" min="0" name="usage_count" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="0">
+          </div>
         </div>
         <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Category</label>
-          <input name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Safety" />
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+          <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Summarise the focus of this checklist."></textarea>
+        </div>
+        <div class="space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <h4 class="text-sm font-semibold text-slate-200">Checklist builder</h4>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <button type="button" class="px-3 py-1.5 rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 transition" data-designer-copy>Copy JSON</button>
+              <button type="button" class="px-3 py-1.5 rounded-xl border border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 transition" data-designer-download>Download JSON</button>
+              <span class="text-xs text-slate-400" data-designer-feedback></span>
+            </div>
+          </div>
+          <div class="space-y-4" data-designer-builder></div>
+          <details class="bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
+            <summary class="text-xs text-slate-400 cursor-pointer">Preview JSON</summary>
+            <pre class="mt-2 text-[11px] leading-5 text-emerald-100/80 whitespace-pre-wrap" data-designer-preview></pre>
+          </details>
         </div>
       </div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Last updated</label>
-          <input type="date" name="last_updated" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Usage count</label>
-          <input type="number" min="0" name="usage_count" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="0" />
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
-        <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Describe the sections included in this template"></textarea>
-      </div>
-      <div class="flex items-center justify-end gap-3">
-        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-modal-close>Cancel</button>
-        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
+      <div class="border-t border-slate-800 px-6 py-4 flex items-center justify-end gap-3">
+        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-designer-close>Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition" data-designer-submit>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
-          <span>Save template</span>
+          <span data-designer-submit-label>Save template</span>
         </button>
       </div>
     </form>
   </div>
 </div>
+{% endblock %}
 
-<div id="srt-template-edit" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
-  <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
-    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
-      <div>
-        <h3 class="text-lg font-semibold text-slate-100">Edit SRT template</h3>
-        <p class="text-xs text-slate-400">Update the template metadata before assigning it to tasks.</p>
-      </div>
-      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close edit template modal">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-    <form method="post" class="px-6 py-5 space-y-4" data-template-edit-form>
-      <input type="hidden" name="action" value="update" />
-      <input type="hidden" name="template_id" />
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
-          <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Category</label>
-          <input name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
-        </div>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Last updated</label>
-          <input type="date" name="last_updated" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Usage count</label>
-          <input type="number" min="0" name="usage_count" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
-        <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm"></textarea>
-      </div>
-      <div class="flex items-center justify-end gap-3">
-        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:text-white transition" data-srt-modal-close>Cancel</button>
-        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-          <span>Update template</span>
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-
+{% block scripts %}
+{{ super() }}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const modals = new Map();
+    const designerOverlay = document.querySelector('[data-srt-designer]');
+    const filePicker = document.querySelector('[data-designer-file-picker]');
+    if (!designerOverlay) {
+      return;
+    }
 
-    document.querySelectorAll('[data-srt-modal]').forEach((modal) => {
-      modals.set(modal.id, modal);
+    const form = designerOverlay.querySelector('[data-designer-form]');
+    const builderEl = designerOverlay.querySelector('[data-designer-builder]');
+    const hiddenInput = form.querySelector('input[name="schema_json"]');
+    const titleEl = designerOverlay.querySelector('[data-designer-title]');
+    const subtitleEl = designerOverlay.querySelector('[data-designer-subtitle]');
+    const feedbackEl = designerOverlay.querySelector('[data-designer-feedback]');
+    const previewEl = designerOverlay.querySelector('[data-designer-preview]');
+    const submitLabel = designerOverlay.querySelector('[data-designer-submit-label]');
+    const copyBtn = designerOverlay.querySelector('[data-designer-copy]');
+    const downloadBtn = designerOverlay.querySelector('[data-designer-download]');
+
+    let mode = 'create';
+    let schema = [];
+    let pendingImageTarget = null;
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[ch]);
+
+    const defaultItem = () => ({
+      label: 'New Checklist Item',
+      type: 'select',
+      options: ['Pass', 'Fail', 'N/A'],
+      required: true,
+      allow_photo: true,
+      allow_remark: true,
+      photo_required_if_ng: false,
+      display_image: ''
     });
 
-    const openModal = (id) => {
-      const modal = modals.get(id);
-      if (!modal) {
-        return;
+    const defaultTable = () => ({
+      label: 'New Table',
+      type: 'table',
+      required: true,
+      rows: ['Row 1', 'Row 2'],
+      columns: ['Column 1', 'Column 2'],
+      display_image: ''
+    });
+
+    const defaultSection = () => ({
+      section: 'New Section',
+      display_image: '',
+      items: [defaultItem()]
+    });
+
+    const normaliseItem = (raw) => {
+      const kind = String(raw && raw.type ? raw.type : 'select').toLowerCase();
+      if (kind === 'table') {
+        const rows = Array.isArray(raw?.rows) ? raw.rows : [];
+        const columns = Array.isArray(raw?.columns) ? raw.columns : [];
+        return {
+          label: String(raw?.label ?? ''),
+          type: 'table',
+          required: Boolean(raw?.required),
+          rows: rows.map((row) => String(row).trim()).filter(Boolean).length ? rows.map((row) => String(row).trim()).filter(Boolean) : ['Row 1', 'Row 2'],
+          columns: columns.map((col) => String(col).trim()).filter(Boolean).length ? columns.map((col) => String(col).trim()).filter(Boolean) : ['Column 1', 'Column 2'],
+          display_image: String(raw?.display_image ?? '')
+        };
       }
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      const autofocus = modal.querySelector('[data-srt-autofocus]') || modal.querySelector('input, textarea, select, button');
-      if (autofocus) {
-        setTimeout(() => autofocus.focus(), 50);
+
+      const allowed = ['select', 'text', 'textarea'];
+      const type = allowed.includes(kind) ? kind : 'select';
+      let options = [];
+      if (type === 'select') {
+        const opts = Array.isArray(raw?.options) ? raw.options : [];
+        options = opts.map((opt) => String(opt).trim()).filter(Boolean);
+        if (!options.length) {
+          options = ['Pass', 'Fail', 'N/A'];
+        }
+      }
+
+      const allowPhoto = raw?.allow_photo !== undefined ? Boolean(raw.allow_photo) : type === 'select';
+      const photoRequired = allowPhoto && type === 'select' ? Boolean(raw?.photo_required_if_ng) : false;
+
+      return {
+        label: String(raw?.label ?? ''),
+        type,
+        options,
+        required: Boolean(raw?.required ?? type === 'select'),
+        allow_photo: allowPhoto,
+        allow_remark: Boolean(raw?.allow_remark ?? type !== 'text'),
+        photo_required_if_ng: photoRequired,
+        display_image: String(raw?.display_image ?? '')
+      };
+    };
+
+    const normaliseSection = (rawSection) => {
+      const section = String(rawSection?.section ?? '');
+      const displayImage = String(rawSection?.display_image ?? '');
+      const rawItems = Array.isArray(rawSection?.items) ? rawSection.items : [];
+      const items = rawItems.length ? rawItems.map(normaliseItem) : [defaultItem()];
+      return {
+        section,
+        display_image: displayImage,
+        items
+      };
+    };
+
+    const normaliseSchema = (rawSchema) => {
+      if (!Array.isArray(rawSchema)) {
+        return [defaultSection()];
+      }
+      const cleaned = rawSchema
+        .map((section) => normaliseSection(section))
+        .filter(Boolean);
+      return cleaned.length ? cleaned : [defaultSection()];
+    };
+
+    const getSerializedSchema = () => JSON.stringify(schema, null, 2);
+
+    const updateHidden = () => {
+      const payload = getSerializedSchema();
+      hiddenInput.value = payload;
+      if (previewEl) {
+        previewEl.textContent = payload;
       }
     };
 
-    const closeModal = (modal) => {
-      if (!modal) {
+    const showFeedback = (message, tone = 'muted') => {
+      if (!feedbackEl) {
         return;
       }
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+      feedbackEl.textContent = message;
+      feedbackEl.classList.remove('text-emerald-300', 'text-rose-300', 'text-slate-400');
+      if (tone === 'success') {
+        feedbackEl.classList.add('text-emerald-300');
+      } else if (tone === 'error') {
+        feedbackEl.classList.add('text-rose-300');
+      } else {
+        feedbackEl.classList.add('text-slate-400');
+      }
+      if (message) {
+        setTimeout(() => {
+          if (feedbackEl.textContent === message) {
+            feedbackEl.textContent = '';
+            feedbackEl.classList.remove('text-emerald-300', 'text-rose-300');
+            feedbackEl.classList.add('text-slate-400');
+          }
+        }, 4000);
+      }
     };
 
-    document.querySelectorAll('[data-srt-modal-open]').forEach((button) => {
+    const renderImageControls = (scope, sectionIndex, itemIndex, value) => {
+      const baseAttrs = `data-scope="${scope}" data-section="${sectionIndex}"${itemIndex !== null ? ` data-item="${itemIndex}"` : ''}`;
+      const preview = value
+        ? `<div class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2"><img src="${escapeHtml(value)}" alt="${scope === 'section' ? 'Section' : 'Item'} display" class="max-h-32 rounded-lg object-cover"></div>`
+        : `<div class="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/50 px-3 py-4 text-xs text-slate-500 text-center">No image selected</div>`;
+      const clearButton = value
+        ? `<button type="button" class="px-3 py-1.5 text-xs rounded-xl border border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 transition" data-action="clear-image" ${baseAttrs}>Remove</button>`
+        : '';
+      return `
+        <div class="space-y-2">
+          <label class="block text-xs text-slate-400">Display image</label>
+          ${preview}
+          <div class="flex flex-wrap items-center gap-2">
+            <input type="text" class="flex-1 min-w-[200px] px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(value)}" placeholder="Paste URL or data URI" ${baseAttrs} data-field="display_image">
+            <button type="button" class="px-3 py-1.5 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 transition" data-action="upload-image" ${baseAttrs}>Upload</button>
+            ${clearButton}
+          </div>
+          <p class="text-[11px] text-slate-500">Shown beside the ${scope === 'section' ? 'section heading' : 'check item'} during checklist entry.</p>
+        </div>
+      `;
+    };
+
+    const render = () => {
+      const sectionsMarkup = schema.map((section, sectionIndex) => {
+        const removeSectionDisabled = schema.length === 1;
+        const sectionImageControls = renderImageControls('section', sectionIndex, null, section.display_image || '');
+        const itemsMarkup = section.items.map((item, itemIndex) => {
+          const removeItemDisabled = section.items.length === 1 && schema.length === 1;
+          const isTable = item.type === 'table';
+          const optionsBlock = !isTable && item.type === 'select'
+            ? `<div>
+                <label class="block text-xs text-slate-400 mb-1">Options <span class="text-slate-500">(one per line)</span></label>
+                <textarea rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="options">${escapeHtml(item.options.join('\n'))}</textarea>
+              </div>`
+            : '';
+
+          const togglesBlock = isTable
+            ? `<div class="flex flex-wrap gap-3 text-xs text-slate-300">
+                <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                  <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="required" ${item.required ? 'checked' : ''}>
+                  <span>All cells required</span>
+                </label>
+              </div>`
+            : `<div class="flex flex-wrap gap-3 text-xs text-slate-300">
+                <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                  <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="required" ${item.required ? 'checked' : ''}>
+                  <span>Required</span>
+                </label>
+                <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                  <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="allow_photo" ${item.allow_photo ? 'checked' : ''}>
+                  <span>Allow photo</span>
+                </label>
+                <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60 ${item.allow_photo && item.type === 'select' ? '' : 'opacity-40'}">
+                  <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="photo_required_if_ng" ${item.photo_required_if_ng && item.allow_photo && item.type === 'select' ? 'checked' : ''} ${item.allow_photo && item.type === 'select' ? '' : 'disabled'}>
+                  <span>Photo required if NG</span>
+                </label>
+                <label class="inline-flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
+                  <input type="checkbox" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="allow_remark" ${item.allow_remark ? 'checked' : ''}>
+                  <span>Allow remark</span>
+                </label>
+              </div>`;
+
+          const rowsText = Array.isArray(item.rows) ? item.rows.join('\n') : '';
+          const columnsText = Array.isArray(item.columns) ? item.columns.join('\n') : '';
+          const tableExtras = isTable
+            ? `<div class="space-y-3">
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Row labels <span class="text-slate-500">(one per line)</span></label>
+                    <textarea rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="rows">${escapeHtml(rowsText)}</textarea>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Column labels <span class="text-slate-500">(one per line)</span></label>
+                    <textarea rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="columns">${escapeHtml(columnsText)}</textarea>
+                  </div>
+                </div>
+              </div>`
+            : '';
+
+          const typeSelect = `
+            <select class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="type">
+              <option value="select" ${item.type === 'select' ? 'selected' : ''}>Choice list</option>
+              <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
+              <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
+              <option value="table" ${item.type === 'table' ? 'selected' : ''}>Table grid</option>
+            </select>
+          `;
+
+          const imageControls = renderImageControls('item', sectionIndex, itemIndex, item.display_image || '');
+
+          return `
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 space-y-3">
+              <div class="grid md:grid-cols-[minmax(0,1fr)_180px] gap-4">
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Check label</label>
+                    <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(item.label)}" maxlength="160" data-scope="item" data-section="${sectionIndex}" data-item="${itemIndex}" data-field="label">
+                  </div>
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">Field type</label>
+                      ${typeSelect}
+                    </div>
+                    <div class="sm:text-right flex sm:justify-end items-center">
+                      <button type="button" class="px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition ${removeItemDisabled ? 'opacity-50 cursor-not-allowed' : ''}" data-action="remove-item" data-section="${sectionIndex}" data-item="${itemIndex}" ${removeItemDisabled ? 'disabled' : ''}>Remove</button>
+                    </div>
+                  </div>
+                  ${togglesBlock}
+                  ${optionsBlock}
+                  ${tableExtras}
+                  ${imageControls}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div class="flex-1 space-y-3">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Section name</label>
+                  <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(section.section)}" placeholder="Eg. Machine Room" data-scope="section" data-section="${sectionIndex}" data-field="section" maxlength="160">
+                  <p class="text-[11px] text-slate-500 mt-1">Leave blank to hide this heading when the checklist is rendered.</p>
+                </div>
+                ${sectionImageControls}
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="px-3 py-2 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-item" data-section="${sectionIndex}">+ Add check</button>
+                <button type="button" class="px-3 py-2 text-xs rounded-xl border border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 transition" data-action="add-table" data-section="${sectionIndex}">+ Add table</button>
+                <button type="button" class="px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition ${removeSectionDisabled ? 'opacity-50 cursor-not-allowed' : ''}" data-action="remove-section" data-section="${sectionIndex}" ${removeSectionDisabled ? 'disabled' : ''}>Remove section</button>
+              </div>
+            </div>
+            <div class="space-y-4">
+              ${itemsMarkup}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      builderEl.innerHTML = `${sectionsMarkup}
+        <div class="pt-3">
+          <button type="button" class="px-4 py-2 text-sm rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-section">+ Add section</button>
+        </div>`;
+    };
+
+    const openDesigner = (config) => {
+      mode = config.mode;
+      form.reset();
+      schema = normaliseSchema(config.schema);
+      render();
+      updateHidden();
+
+      form.querySelector('input[name="action"]').value = mode === 'edit' ? 'update' : 'create';
+      form.querySelector('input[name="template_id"]').value = config.templateId || '';
+      form.querySelector('input[name="name"]').value = config.name || '';
+      form.querySelector('input[name="category"]').value = config.category || '';
+      form.querySelector('input[name="last_updated"]').value = config.lastUpdated || '';
+      form.querySelector('input[name="usage_count"]').value = config.usageCount || '';
+      form.querySelector('textarea[name="description"]').value = config.description || '';
+
+      if (titleEl) {
+        titleEl.textContent = mode === 'edit' ? 'Edit SRT template' : 'New SRT template';
+      }
+      if (subtitleEl) {
+        subtitleEl.textContent = mode === 'edit'
+          ? 'Update metadata, sections and checklist items. Images will refresh automatically when changed.'
+          : 'Build sections, add checklist items and attach reference images for technicians.';
+      }
+      if (submitLabel) {
+        submitLabel.textContent = mode === 'edit' ? 'Update template' : 'Save template';
+      }
+
+      designerOverlay.classList.remove('hidden');
+      designerOverlay.classList.add('flex');
+      const firstInput = form.querySelector('input[name="name"]');
+      if (firstInput) {
+        setTimeout(() => firstInput.focus(), 80);
+      }
+    };
+
+    const closeDesigner = () => {
+      designerOverlay.classList.add('hidden');
+      designerOverlay.classList.remove('flex');
+      pendingImageTarget = null;
+      showFeedback('', 'muted');
+    };
+
+    document.querySelectorAll('[data-designer-open]').forEach((button) => {
       button.addEventListener('click', () => {
-        openModal(button.getAttribute('data-srt-modal-open'));
+        const modeAttr = button.getAttribute('data-designer-open');
+        const schemaAttr = button.getAttribute('data-template-schema');
+        let parsedSchema = [];
+        if (schemaAttr) {
+          try {
+            parsedSchema = JSON.parse(schemaAttr);
+          } catch (err) {
+            parsedSchema = [];
+          }
+        }
+        openDesigner({
+          mode: modeAttr === 'edit' ? 'edit' : 'create',
+          templateId: button.getAttribute('data-template-id') || '',
+          name: button.getAttribute('data-template-name') || '',
+          category: button.getAttribute('data-template-category') || '',
+          lastUpdated: button.getAttribute('data-template-updated') || '',
+          usageCount: button.getAttribute('data-template-usage') || '',
+          description: button.getAttribute('data-template-description') || '',
+          schema: parsedSchema
+        });
       });
     });
 
-    document.querySelectorAll('[data-srt-modal-close]').forEach((button) => {
-      button.addEventListener('click', () => {
-        closeModal(button.closest('[data-srt-modal]'));
-      });
+    designerOverlay.querySelectorAll('[data-designer-close]').forEach((button) => {
+      button.addEventListener('click', closeDesigner);
     });
 
-    document.addEventListener('click', (event) => {
-      if (event.target.matches('[data-srt-modal]')) {
-        closeModal(event.target);
+    designerOverlay.addEventListener('click', (event) => {
+      if (event.target.closest('[data-designer-close]')) {
+        closeDesigner();
       }
     });
 
-    const editModalId = 'srt-template-edit';
-    const editForm = document.querySelector('[data-template-edit-form]');
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && designerOverlay.classList.contains('flex')) {
+        closeDesigner();
+      }
+    });
 
-    document.querySelectorAll('[data-template-edit]').forEach((button) => {
-      button.addEventListener('click', () => {
-        if (!editForm) {
+    builderEl.addEventListener('click', (event) => {
+      const actionEl = event.target.closest('[data-action]');
+      if (!actionEl) {
+        return;
+      }
+      const action = actionEl.dataset.action;
+      if (action === 'add-section') {
+        schema.push(defaultSection());
+        render();
+        updateHidden();
+      } else if (action === 'add-item') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        schema[sectionIdx].items.push(defaultItem());
+        render();
+        updateHidden();
+      } else if (action === 'add-table') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        schema[sectionIdx].items.push(defaultTable());
+        render();
+        updateHidden();
+      } else if (action === 'remove-section') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        if (schema.length === 1) {
           return;
         }
-        editForm.querySelector('[name="template_id"]').value = button.getAttribute('data-template-id') || '';
-        editForm.querySelector('[name="name"]').value = button.getAttribute('data-template-name') || '';
-        editForm.querySelector('[name="category"]').value = button.getAttribute('data-template-category') || '';
-        editForm.querySelector('[name="last_updated"]').value = button.getAttribute('data-template-updated') || '';
-        editForm.querySelector('[name="usage_count"]').value = button.getAttribute('data-template-usage') || '';
-        editForm.querySelector('[name="description"]').value = button.getAttribute('data-template-description') || '';
-        openModal(editModalId);
+        schema.splice(sectionIdx, 1);
+        if (!schema.length) {
+          schema.push(defaultSection());
+        }
+        render();
+        updateHidden();
+      } else if (action === 'remove-item') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        const itemIdx = Number(actionEl.dataset.item || 0);
+        const items = schema[sectionIdx].items;
+        if (items.length === 1) {
+          if (schema.length === 1) {
+            return;
+          }
+          items.splice(itemIdx, 1);
+          if (!items.length) {
+            items.push(defaultItem());
+          }
+        } else {
+          items.splice(itemIdx, 1);
+        }
+        render();
+        updateHidden();
+      } else if (action === 'upload-image') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        const itemIdx = actionEl.dataset.item !== undefined ? Number(actionEl.dataset.item) : null;
+        pendingImageTarget = { scope: actionEl.dataset.scope, sectionIdx, itemIdx };
+        if (filePicker) {
+          filePicker.value = '';
+          filePicker.click();
+        }
+      } else if (action === 'clear-image') {
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        const itemIdx = actionEl.dataset.item !== undefined ? Number(actionEl.dataset.item) : null;
+        if (actionEl.dataset.scope === 'section') {
+          schema[sectionIdx].display_image = '';
+        } else if (actionEl.dataset.scope === 'item') {
+          const item = schema[sectionIdx].items[itemIdx];
+          if (item) {
+            item.display_image = '';
+          }
+        }
+        render();
+        updateHidden();
+      }
+    });
+
+    builderEl.addEventListener('input', (event) => {
+      const scope = event.target.dataset.scope;
+      const field = event.target.dataset.field;
+      if (!scope || !field) {
+        return;
+      }
+      const sectionIdx = Number(event.target.dataset.section || 0);
+      if (scope === 'section') {
+        if (field === 'section') {
+          schema[sectionIdx].section = event.target.value;
+        } else if (field === 'display_image') {
+          schema[sectionIdx].display_image = event.target.value.trim();
+        }
+        updateHidden();
+        return;
+      }
+
+      const itemIdx = Number(event.target.dataset.item || 0);
+      const item = schema[sectionIdx].items[itemIdx];
+      if (!item) {
+        return;
+      }
+
+      if (field === 'label') {
+        item.label = event.target.value;
+      } else if (field === 'options') {
+        item.options = event.target.value.split('\n').map((value) => value.trim()).filter(Boolean);
+        if (!item.options.length) {
+          item.options = ['Pass', 'Fail', 'N/A'];
+        }
+      } else if (field === 'display_image') {
+        item.display_image = event.target.value.trim();
+      } else if (field === 'rows') {
+        item.rows = event.target.value.split('\n').map((value) => value.trim()).filter(Boolean);
+        if (!item.rows.length) {
+          item.rows = ['Row 1', 'Row 2'];
+        }
+      } else if (field === 'columns') {
+        item.columns = event.target.value.split('\n').map((value) => value.trim()).filter(Boolean);
+        if (!item.columns.length) {
+          item.columns = ['Column 1', 'Column 2'];
+        }
+      }
+      updateHidden();
+    });
+
+    builderEl.addEventListener('change', (event) => {
+      const scope = event.target.dataset.scope;
+      const field = event.target.dataset.field;
+      if (scope !== 'item' || !field) {
+        return;
+      }
+      const sectionIdx = Number(event.target.dataset.section || 0);
+      const itemIdx = Number(event.target.dataset.item || 0);
+      const item = schema[sectionIdx].items[itemIdx];
+      if (!item) {
+        return;
+      }
+      let requiresRender = false;
+      if (field === 'type') {
+        const newType = event.target.value;
+        if (newType === 'table') {
+          const defaults = defaultTable();
+          item.type = 'table';
+          item.options = [];
+          item.allow_photo = false;
+          item.allow_remark = false;
+          item.photo_required_if_ng = false;
+          item.rows = Array.isArray(item.rows) && item.rows.length ? item.rows : defaults.rows.slice();
+          item.columns = Array.isArray(item.columns) && item.columns.length ? item.columns : defaults.columns.slice();
+        } else {
+          const allowed = ['select', 'text', 'textarea'];
+          item.type = allowed.includes(newType) ? newType : 'select';
+          if (item.type === 'select') {
+            if (!item.options || !item.options.length) {
+              item.options = ['Pass', 'Fail', 'N/A'];
+            }
+            if (typeof item.allow_photo !== 'boolean') {
+              item.allow_photo = true;
+            }
+          } else {
+            item.options = [];
+            item.photo_required_if_ng = false;
+          }
+          if (item.type !== 'select') {
+            item.allow_photo = Boolean(item.allow_photo && item.type !== 'table');
+          }
+          item.rows = [];
+          item.columns = [];
+        }
+        requiresRender = true;
+      } else if (field === 'required') {
+        item.required = event.target.checked;
+      } else if (field === 'allow_photo') {
+        item.allow_photo = event.target.checked;
+        if (!item.allow_photo) {
+          item.photo_required_if_ng = false;
+        }
+        requiresRender = true;
+      } else if (field === 'photo_required_if_ng') {
+        item.photo_required_if_ng = event.target.checked;
+      } else if (field === 'allow_remark') {
+        item.allow_remark = event.target.checked;
+      }
+      if (requiresRender) {
+        render();
+      }
+      updateHidden();
+    });
+
+    if (filePicker) {
+      filePicker.addEventListener('change', (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file || !pendingImageTarget) {
+          pendingImageTarget = null;
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          if (pendingImageTarget.scope === 'section') {
+            schema[pendingImageTarget.sectionIdx].display_image = dataUrl;
+          } else if (pendingImageTarget.scope === 'item') {
+            const item = schema[pendingImageTarget.sectionIdx].items[pendingImageTarget.itemIdx];
+            if (item) {
+              item.display_image = dataUrl;
+            }
+          }
+          pendingImageTarget = null;
+          render();
+          updateHidden();
+          showFeedback('Image attached successfully.', 'success');
+        };
+        reader.onerror = () => {
+          showFeedback('Unable to read the selected image.', 'error');
+          pendingImageTarget = null;
+        };
+        reader.readAsDataURL(file);
       });
+    }
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const payload = getSerializedSchema();
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(payload);
+            showFeedback('Schema copied to clipboard.', 'success');
+            return;
+          }
+          throw new Error('Clipboard API unavailable');
+        } catch (err) {
+          try {
+            const tempArea = document.createElement('textarea');
+            tempArea.value = payload;
+            tempArea.setAttribute('readonly', '');
+            tempArea.style.position = 'absolute';
+            tempArea.style.left = '-9999px';
+            document.body.appendChild(tempArea);
+            tempArea.select();
+            const copied = document.execCommand('copy');
+            document.body.removeChild(tempArea);
+            if (copied) {
+              showFeedback('Schema copied to clipboard.', 'success');
+            } else {
+              throw new Error('Copy failed');
+            }
+          } catch (fallbackErr) {
+            console.warn('Copy failed', fallbackErr);
+            showFeedback('Copy failed. Download the JSON instead.', 'error');
+          }
+        }
+      });
+    }
+
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', () => {
+        const payload = getSerializedSchema();
+        try {
+          const blob = new Blob([payload], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const formName = form.querySelector('input[name="name"]').value || 'srt-template';
+          const filename = formName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'srt-template';
+          link.href = url;
+          link.download = `${filename}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          showFeedback('Downloaded schema JSON.', 'success');
+        } catch (err) {
+          console.error('Download failed', err);
+          showFeedback('Download failed. Please try again.', 'error');
+        }
+      });
+    }
+
+    form.addEventListener('submit', () => {
+      updateHidden();
     });
   });
 </script>
