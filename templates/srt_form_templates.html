@@ -766,7 +766,7 @@
       } else if (field === 'options') {
         item.options = event.target.value.split('\n').map((value) => value.trim()).filter(Boolean);
         if (!item.options.length) {
-          item.options = ['Pass', 'Fail', 'N/A'];
+          item.options = ['OK', 'Not OK', 'Need Client Input'];
         }
       } else if (field === 'display_image') {
         item.display_image = event.target.value.trim();
@@ -813,7 +813,7 @@
           item.type = allowed.includes(newType) ? newType : 'select';
           if (item.type === 'select') {
             if (!item.options || !item.options.length) {
-              item.options = ['Pass', 'Fail', 'N/A'];
+              item.options = ['OK', 'Not OK', 'Need Client Input'];
             }
             if (typeof item.allow_photo !== 'boolean') {
               item.allow_photo = true;
