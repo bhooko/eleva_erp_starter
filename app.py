@@ -12,7 +12,7 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re, uuid, random, string
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy
 from collections import OrderedDict
 
 from sqlalchemy import case, inspect, func, or_, and_
@@ -131,6 +131,120 @@ SRT_SAMPLE_TASKS = [
     },
 ]
 
+def _default_srt_item():
+    return {
+        "label": "New Checklist Item",
+        "type": "select",
+        "options": ["Pass", "Fail", "N/A"],
+        "required": True,
+        "allow_photo": True,
+        "allow_remark": True,
+        "photo_required_if_ng": False,
+        "display_image": "",
+    }
+
+
+def _default_srt_schema():
+    return [
+        {
+            "section": "General",
+            "display_image": "",
+            "items": [_default_srt_item()],
+        }
+    ]
+
+
+def _normalise_srt_schema(raw_schema):
+    if not isinstance(raw_schema, list):
+        return _default_srt_schema()
+
+    normalised_sections = []
+    for raw_section in raw_schema:
+        if not isinstance(raw_section, dict):
+            continue
+
+        section_name = str(raw_section.get("section", "") or "")
+        section_image = str(raw_section.get("display_image", "") or "")
+        raw_items = raw_section.get("items")
+        normalised_items = []
+
+        if isinstance(raw_items, list):
+            for raw_item in raw_items:
+                if not isinstance(raw_item, dict):
+                    continue
+
+                item_type = str(raw_item.get("type", "select") or "select").lower()
+                if item_type == "table":
+                    rows = [
+                        str(value).strip()
+                        for value in raw_item.get("rows", [])
+                        if str(value).strip()
+                    ]
+                    columns = [
+                        str(value).strip()
+                        for value in raw_item.get("columns", [])
+                        if str(value).strip()
+                    ]
+                    normalised_items.append(
+                        {
+                            "label": str(raw_item.get("label", "") or ""),
+                            "type": "table",
+                            "required": bool(raw_item.get("required", False)),
+                            "rows": rows or ["Row 1", "Row 2"],
+                            "columns": columns or ["Column 1", "Column 2"],
+                            "display_image": str(raw_item.get("display_image", "") or ""),
+                        }
+                    )
+                    continue
+
+                allowed_types = {"select", "text", "textarea"}
+                if item_type not in allowed_types:
+                    item_type = "select"
+
+                if item_type == "select":
+                    options = [
+                        str(value).strip()
+                        for value in raw_item.get("options", [])
+                        if str(value).strip()
+                    ] or ["Pass", "Fail", "N/A"]
+                else:
+                    options = []
+
+                allow_photo = bool(raw_item.get("allow_photo", item_type == "select"))
+                photo_required = bool(raw_item.get("photo_required_if_ng", False))
+                if not allow_photo or item_type != "select":
+                    photo_required = False
+
+                normalised_items.append(
+                    {
+                        "label": str(raw_item.get("label", "") or ""),
+                        "type": item_type,
+                        "options": options,
+                        "required": bool(raw_item.get("required", item_type == "select")),
+                        "allow_photo": allow_photo,
+                        "allow_remark": bool(raw_item.get("allow_remark", item_type != "text")),
+                        "photo_required_if_ng": photo_required,
+                        "display_image": str(raw_item.get("display_image", "") or ""),
+                    }
+                )
+
+        if not normalised_items:
+            normalised_items = [_default_srt_item()]
+
+        normalised_sections.append(
+            {
+                "section": section_name,
+                "display_image": section_image,
+                "items": normalised_items,
+            }
+        )
+
+    if not normalised_sections:
+        return _default_srt_schema()
+
+    return normalised_sections
+
+
 SRT_FORM_TEMPLATES = [
     {
         "id": "srt-emergency-brake-audit",
@@ -139,6 +253,58 @@ SRT_FORM_TEMPLATES = [
         "last_updated": datetime.date(2024, 4, 28),
         "usage_count": 14,
         "description": "Checklist capturing emergency brake checks, load test confirmation and evidence uploads.",
+        "schema": [
+            {
+                "section": "Emergency Brake Assembly",
+                "display_image": "/static/uploads/1761394043.501005_SAVE_20230822_183825.jpg",
+                "items": [
+                    {
+                        "label": "Brake calipers inspected for wear",
+                        "type": "select",
+                        "options": ["Pass", "Fail", "Needs follow up"],
+                        "required": True,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": True,
+                        "display_image": "/static/uploads/1761394043.510924_SAVE_20230822_1837491.jpg",
+                    },
+                    {
+                        "label": "Counterweight gap measurement (mm)",
+                        "type": "text",
+                        "options": [],
+                        "required": True,
+                        "allow_photo": False,
+                        "allow_remark": False,
+                        "photo_required_if_ng": False,
+                        "display_image": "",
+                    },
+                    {
+                        "label": "Load test observation notes",
+                        "type": "textarea",
+                        "options": [],
+                        "required": False,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": False,
+                        "display_image": "",
+                    },
+                ],
+            },
+            {
+                "section": "Test Documentation",
+                "display_image": "",
+                "items": [
+                    {
+                        "label": "Brake torque verification table",
+                        "type": "table",
+                        "required": True,
+                        "rows": ["Test 1", "Test 2", "Test 3"],
+                        "columns": ["Recorded", "Expected", "Variance"],
+                        "display_image": "/static/uploads/1761394043.506364_SAVE_20230822_183832.jpg",
+                    }
+                ],
+            },
+        ],
     },
     {
         "id": "srt-door-operation-review",
@@ -147,6 +313,60 @@ SRT_FORM_TEMPLATES = [
         "last_updated": datetime.date(2024, 5, 9),
         "usage_count": 9,
         "description": "Structured walk-through for door alignment, interlocks and threshold compliance.",
+        "schema": [
+            {
+                "section": "Door Movement",
+                "display_image": "",
+                "items": [
+                    {
+                        "label": "Door closing speed within spec",
+                        "type": "select",
+                        "options": ["Pass", "Slow", "Fast"],
+                        "required": True,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": True,
+                        "display_image": "",
+                    },
+                    {
+                        "label": "Sill alignment reference",
+                        "type": "textarea",
+                        "options": [],
+                        "required": False,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": False,
+                        "display_image": "/static/uploads/1761394043.501005_SAVE_20230822_183825.jpg",
+                    },
+                ],
+            },
+            {
+                "section": "Interlock Compliance",
+                "display_image": "",
+                "items": [
+                    {
+                        "label": "Landing door interlocks",
+                        "type": "select",
+                        "options": ["Pass", "Fail", "Requires adjustment"],
+                        "required": True,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": True,
+                        "display_image": "",
+                    },
+                    {
+                        "label": "Interlock wiring continuity",
+                        "type": "text",
+                        "options": [],
+                        "required": False,
+                        "allow_photo": False,
+                        "allow_remark": False,
+                        "photo_required_if_ng": False,
+                        "display_image": "",
+                    },
+                ],
+            },
+        ],
     },
     {
         "id": "srt-post-service-summary",
@@ -155,6 +375,48 @@ SRT_FORM_TEMPLATES = [
         "last_updated": datetime.date(2024, 3, 19),
         "usage_count": 22,
         "description": "Captures punch-list closure status, photos and pending parts for handover.",
+        "schema": [
+            {
+                "section": "Punch List",
+                "display_image": "",
+                "items": [
+                    {
+                        "label": "Outstanding issues",
+                        "type": "textarea",
+                        "options": [],
+                        "required": False,
+                        "allow_photo": True,
+                        "allow_remark": True,
+                        "photo_required_if_ng": False,
+                        "display_image": "",
+                    },
+                    {
+                        "label": "Pending parts arrival date",
+                        "type": "text",
+                        "options": [],
+                        "required": False,
+                        "allow_photo": False,
+                        "allow_remark": False,
+                        "photo_required_if_ng": False,
+                        "display_image": "",
+                    },
+                ],
+            },
+            {
+                "section": "Hand-over Evidence",
+                "display_image": "/static/uploads/1761394043.506364_SAVE_20230822_183832.jpg",
+                "items": [
+                    {
+                        "label": "Client sign-off table",
+                        "type": "table",
+                        "required": True,
+                        "rows": ["Client", "Technician", "Supervisor"],
+                        "columns": ["Name", "Signature", "Date"],
+                        "display_image": "",
+                    }
+                ],
+            },
+        ],
     },
 ]
 
@@ -4894,6 +5156,7 @@ def srt_form_templates():
         description = (request.form.get("description") or "").strip()
         usage_count_raw = request.form.get("usage_count")
         last_updated_raw = request.form.get("last_updated")
+        schema_json = (request.form.get("schema_json") or "").strip()
 
         usage_count = 0
         try:
@@ -4908,6 +5171,16 @@ def srt_form_templates():
                 last_updated = datetime.datetime.strptime(last_updated_raw, "%Y-%m-%d").date()
             except ValueError:
                 last_updated = datetime.date.today()
+
+        schema_payload = _default_srt_schema()
+        if schema_json:
+            try:
+                loaded = json.loads(schema_json)
+            except json.JSONDecodeError:
+                loaded = _default_srt_schema()
+            schema_payload = loaded
+
+        schema = copy.deepcopy(_normalise_srt_schema(schema_payload))
 
         if action == "create":
             if not name:
@@ -4925,6 +5198,7 @@ def srt_form_templates():
                         "description": description,
                         "usage_count": usage_count,
                         "last_updated": last_updated,
+                        "schema": schema,
                     }
                 )
                 flash("SRT form template added.", "success")
@@ -4944,14 +5218,28 @@ def srt_form_templates():
                         "description": description,
                         "usage_count": usage_count,
                         "last_updated": last_updated,
+                        "schema": schema,
                     }
                 )
                 flash("Template updated.", "success")
 
         return redirect(url_for("srt_form_templates"))
 
-    templates = sorted(SRT_FORM_TEMPLATES, key=lambda item: item["name"].lower())
-    return render_template("srt_form_templates.html", templates=templates)
+    templates_normalised = []
+    for template in SRT_FORM_TEMPLATES:
+        template.setdefault("schema", _default_srt_schema())
+        normalised_schema = copy.deepcopy(_normalise_srt_schema(template["schema"]))
+        template["schema"] = normalised_schema
+        templates_normalised.append(
+            {
+                **template,
+                "schema": copy.deepcopy(normalised_schema),
+            }
+        )
+
+    templates_normalised.sort(key=lambda item: item["name"].lower())
+
+    return render_template("srt_form_templates.html", templates=templates_normalised)
 
 
 @app.route("/srt/sites")
