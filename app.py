@@ -245,7 +245,7 @@ def _normalise_srt_schema(raw_schema):
     return normalised_sections
 
 
-SRT_FORM_TEMPLATES = [
+_SRT_FORM_TEMPLATES_SEED = [
     {
         "id": "srt-emergency-brake-audit",
         "name": "SRT - Emergency Brake Audit",
@@ -419,6 +419,115 @@ SRT_FORM_TEMPLATES = [
         ],
     },
 ]
+
+
+SRT_FORM_TEMPLATES_FILE = os.path.join(BASE_DIR, "instance", "srt_form_templates.json")
+
+
+def _seed_default_srt_form_templates():
+    return copy.deepcopy(_SRT_FORM_TEMPLATES_SEED)
+
+
+def _coerce_positive_int(value, default=0):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _parse_srt_template_date(value, default=None):
+    if isinstance(value, datetime.date):
+        return value
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return default
+        for fmt in ("%Y-%m-%d", "%d %b %Y", "%d %B %Y"):
+            try:
+                return datetime.datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+
+    return default
+
+
+def _load_srt_form_templates():
+    if os.path.exists(SRT_FORM_TEMPLATES_FILE):
+        try:
+            with open(SRT_FORM_TEMPLATES_FILE, "r", encoding="utf-8") as handle:
+                raw_templates = json.load(handle)
+        except (OSError, json.JSONDecodeError, TypeError) as exc:
+            app.logger.warning("Failed to load SRT templates from disk: %s", exc)
+            raw_templates = []
+        templates_loaded = []
+        for raw in raw_templates:
+            if not isinstance(raw, dict):
+                continue
+
+            name = str(raw.get("name", "") or "").strip()
+            template_id = str(raw.get("id", "") or "").strip()
+            if not template_id:
+                template_id = slugify(name or f"srt-template-{_random_digits(4)}")
+
+            last_updated = _parse_srt_template_date(
+                raw.get("last_updated"), default=datetime.date.today()
+            )
+
+            schema_payload = raw.get("schema")
+            schema = copy.deepcopy(_normalise_srt_schema(schema_payload))
+
+            templates_loaded.append(
+                {
+                    "id": template_id,
+                    "name": name or "Untitled template",
+                    "category": str(raw.get("category", "") or "General").strip() or "General",
+                    "description": str(raw.get("description", "") or ""),
+                    "usage_count": _coerce_positive_int(raw.get("usage_count"), 0),
+                    "last_updated": last_updated or datetime.date.today(),
+                    "schema": schema,
+                }
+            )
+
+        if templates_loaded:
+            templates_loaded.sort(key=lambda item: item["name"].lower())
+            return templates_loaded
+
+    return _seed_default_srt_form_templates()
+
+
+def _persist_srt_form_templates():
+    payload = []
+    for template in SRT_FORM_TEMPLATES:
+        record = {
+            "id": template.get("id") or slugify(template.get("name") or "srt-template"),
+            "name": template.get("name", ""),
+            "category": template.get("category", "General"),
+            "description": template.get("description", ""),
+            "usage_count": _coerce_positive_int(template.get("usage_count"), 0),
+            "last_updated": "",
+            "schema": copy.deepcopy(template.get("schema") or _default_srt_schema()),
+        }
+
+        last_updated = template.get("last_updated")
+        if isinstance(last_updated, datetime.date):
+            record["last_updated"] = last_updated.isoformat()
+        elif isinstance(last_updated, str):
+            record["last_updated"] = last_updated
+        else:
+            record["last_updated"] = datetime.date.today().isoformat()
+
+        payload.append(record)
+
+    try:
+        with open(SRT_FORM_TEMPLATES_FILE, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        app.logger.error("Failed to persist SRT templates: %s", exc)
+
+
+SRT_FORM_TEMPLATES = _load_srt_form_templates()
 
 SRT_TEAM_MEMBERS = [
     "Ravi Kumar",
@@ -5200,6 +5309,7 @@ def srt_form_templates():
                         "schema": schema,
                     }
                 )
+                _persist_srt_form_templates()
                 flash("SRT form template added.", "success")
 
         elif action == "delete":
@@ -5214,6 +5324,7 @@ def srt_form_templates():
                     flash("Template not found.", "error")
                 else:
                     SRT_FORM_TEMPLATES = updated_templates
+                    _persist_srt_form_templates()
                     flash("Template deleted.", "success")
 
         elif action == "update":
@@ -5234,6 +5345,7 @@ def srt_form_templates():
                         "schema": schema,
                     }
                 )
+                _persist_srt_form_templates()
                 flash("Template updated.", "success")
 
         return redirect(url_for("srt_form_templates"))
