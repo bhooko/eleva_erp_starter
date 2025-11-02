@@ -60,6 +60,13 @@ PROJECT_DOOR_OPERATION_TYPES = ["Manual", "Auto"]
 PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
 DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
+def slugify(value):
+    value = (value or "").lower()
+    value = re.sub(r"[^a-z0-9]+", "-", value)
+    value = re.sub(r"-+", "-", value).strip("-")
+    return value or _random_digits(6)
+
+
 SRT_SAMPLE_TASKS = [
     {
         "id": "SRT-1001",
@@ -105,6 +112,7 @@ SRT_SAMPLE_TASKS = [
 
 SRT_FORM_TEMPLATES = [
     {
+        "id": "srt-emergency-brake-audit",
         "name": "SRT - Emergency Brake Audit",
         "category": "Safety",
         "last_updated": datetime.date(2024, 4, 28),
@@ -112,6 +120,7 @@ SRT_FORM_TEMPLATES = [
         "description": "Checklist capturing emergency brake checks, load test confirmation and evidence uploads.",
     },
     {
+        "id": "srt-door-operation-review",
         "name": "SRT - Door Operation Review",
         "category": "Doors",
         "last_updated": datetime.date(2024, 5, 9),
@@ -119,6 +128,7 @@ SRT_FORM_TEMPLATES = [
         "description": "Structured walk-through for door alignment, interlocks and threshold compliance.",
     },
     {
+        "id": "srt-post-service-summary",
         "name": "SRT - Post Service Summary",
         "category": "Reporting",
         "last_updated": datetime.date(2024, 3, 19),
@@ -127,13 +137,30 @@ SRT_FORM_TEMPLATES = [
     },
 ]
 
+SRT_TEAM_MEMBERS = [
+    "Ravi Kumar",
+    "Priya Nair",
+    "Amol Patil",
+    "Sneha Kulkarni",
+    "Anita D'silva",
+    "Rahul Menezes",
+]
+
+
 SRT_SITES = [
     {
+        "key": "panaji-hq",
         "name": "Panaji HQ",
         "client": "Trident Holdings",
         "city": "Panaji",
+        "address": "Trident Holdings HQ, 5th Floor, Patto Plaza, Panaji, Goa",
         "last_visit": datetime.date(2024, 6, 11),
         "status": "Technician visit scheduled",
+        "client_contact": {
+            "name": "Rohan Mascarhenas",
+            "phone": generate_random_phone(),
+            "email": generate_random_email(),
+        },
         "interactions": [
             {"date": datetime.date(2024, 6, 13), "type": "Call", "summary": "Scheduled emergency brake inspection with facility manager."},
             {"date": datetime.date(2024, 6, 10), "type": "Email", "summary": "Shared safety advisories and pre-visit checklist."},
@@ -142,13 +169,42 @@ SRT_SITES = [
             {"label": "Latest Update", "value": "Awaiting spare brake pads delivery (ETA 17 Jun)."},
             {"label": "Next Action", "value": "Confirm service window with client."},
         ],
+        "additional_contacts": [
+            {
+                "name": "Meena Dsouza",
+                "designation": "Contractor",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": True,
+            },
+            {
+                "name": "Vikram Sawant",
+                "designation": "Supervisor",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": False,
+            },
+        ],
+        "form_update": {
+            "form_name": "SRT - Emergency Brake Audit",
+            "status": "Awaiting closure",
+            "last_updated": datetime.date(2024, 6, 12),
+            "summary": "Technician notes uploaded; pending brake pad replacement verification.",
+        },
     },
     {
+        "key": "nova-residency",
         "name": "Nova Residency",
         "client": "Silverline Developers",
         "city": "Mapusa",
+        "address": "Nova Residency Block B, Mapusa Industrial Estate, Goa",
         "last_visit": datetime.date(2024, 6, 5),
         "status": "Client feedback pending",
+        "client_contact": {
+            "name": "Anita D'souza",
+            "phone": generate_random_phone(),
+            "email": generate_random_email(),
+        },
         "interactions": [
             {"date": datetime.date(2024, 6, 12), "type": "Site Visit", "summary": "Performed door alignment checks on blocks A & B."},
             {"date": datetime.date(2024, 6, 7), "type": "Call", "summary": "Discussed vibration readings with maintenance lead."},
@@ -157,13 +213,42 @@ SRT_SITES = [
             {"label": "Latest Update", "value": "Awaiting confirmation on revised door thresholds."},
             {"label": "Next Action", "value": "Share measurement sheet with QC for review."},
         ],
+        "additional_contacts": [
+            {
+                "name": "Sahil Naik",
+                "designation": "Labour Contractor",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": True,
+            },
+            {
+                "name": "Priyanka Kenkre",
+                "designation": "Client Coordinator",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": False,
+            },
+        ],
+        "form_update": {
+            "form_name": "SRT - Door Operation Review",
+            "status": "Under review",
+            "last_updated": datetime.date(2024, 6, 9),
+            "summary": "Alignment readings submitted; awaiting QC comments on thresholds.",
+        },
     },
     {
+        "key": "harbour-view-tower",
         "name": "Harbour View Tower",
         "client": "Bluewater Properties",
         "city": "Vasco",
+        "address": "Harbour View Tower, Port Road, Vasco, Goa",
         "last_visit": datetime.date(2024, 6, 2),
         "status": "Monitoring",
+        "client_contact": {
+            "name": "Ketan Prabhu",
+            "phone": generate_random_phone(),
+            "email": generate_random_email(),
+        },
         "interactions": [
             {"date": datetime.date(2024, 6, 9), "type": "Email", "summary": "Sent levelling calibration results and next steps."},
             {"date": datetime.date(2024, 5, 30), "type": "Call", "summary": "Logged client concern about door closure speed."},
@@ -172,6 +257,28 @@ SRT_SITES = [
             {"label": "Latest Update", "value": "Calibration within tolerance; monitoring for 48 hrs."},
             {"label": "Next Action", "value": "Revisit only if variance exceeds 3 mm."},
         ],
+        "additional_contacts": [
+            {
+                "name": "Rima Fernandes",
+                "designation": "Supervisor",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": True,
+            },
+            {
+                "name": "Mahesh Lotlikar",
+                "designation": "Electrician",
+                "phone": generate_random_phone(),
+                "email": generate_random_email(),
+                "is_primary": False,
+            },
+        ],
+        "form_update": {
+            "form_name": "SRT - Post Service Summary",
+            "status": "Monitoring",
+            "last_updated": datetime.date(2024, 6, 8),
+            "summary": "Calibration log uploaded; awaiting confirmation on vibration levels.",
+        },
     },
 ]
 
@@ -4773,9 +4880,74 @@ def srt_overview():
     )
 
 
-@app.route("/srt/form-templates")
+@app.route("/srt/form-templates", methods=["GET", "POST"])
 @login_required
 def srt_form_templates():
+    global SRT_FORM_TEMPLATES
+
+    if request.method == "POST":
+        action = request.form.get("action", "").lower()
+        name = (request.form.get("name") or "").strip()
+        category = (request.form.get("category") or "General").strip() or "General"
+        description = (request.form.get("description") or "").strip()
+        usage_count_raw = request.form.get("usage_count")
+        last_updated_raw = request.form.get("last_updated")
+
+        usage_count = 0
+        try:
+            if usage_count_raw is not None and usage_count_raw != "":
+                usage_count = max(0, int(usage_count_raw))
+        except ValueError:
+            usage_count = 0
+
+        last_updated = datetime.date.today()
+        if last_updated_raw:
+            try:
+                last_updated = datetime.datetime.strptime(last_updated_raw, "%Y-%m-%d").date()
+            except ValueError:
+                last_updated = datetime.date.today()
+
+        if action == "create":
+            if not name:
+                flash("Template name is required.", "error")
+            else:
+                template_id = slugify(name)
+                if any(template["id"] == template_id for template in SRT_FORM_TEMPLATES):
+                    template_id = f"{template_id}-{_random_digits(4)}"
+
+                SRT_FORM_TEMPLATES.append(
+                    {
+                        "id": template_id,
+                        "name": name,
+                        "category": category or "General",
+                        "description": description,
+                        "usage_count": usage_count,
+                        "last_updated": last_updated,
+                    }
+                )
+                flash("SRT form template added.", "success")
+
+        elif action == "update":
+            template_id = request.form.get("template_id")
+            template = next((item for item in SRT_FORM_TEMPLATES if item["id"] == template_id), None)
+            if not template:
+                flash("Template not found.", "error")
+            elif not name:
+                flash("Template name is required.", "error")
+            else:
+                template.update(
+                    {
+                        "name": name,
+                        "category": category or "General",
+                        "description": description,
+                        "usage_count": usage_count,
+                        "last_updated": last_updated,
+                    }
+                )
+                flash("Template updated.", "success")
+
+        return redirect(url_for("srt_form_templates"))
+
     templates = sorted(SRT_FORM_TEMPLATES, key=lambda item: item["name"].lower())
     return render_template("srt_form_templates.html", templates=templates)
 
@@ -4783,8 +4955,84 @@ def srt_form_templates():
 @app.route("/srt/sites")
 @login_required
 def srt_sites():
-    sites = sorted(SRT_SITES, key=lambda item: item["name"].lower())
-    return render_template("srt_sites.html", sites=sites)
+    selected_key = request.args.get("site")
+
+    sites = []
+    site_map = {}
+    for site in sorted(SRT_SITES, key=lambda item: item["name"].lower()):
+        site_copy = {key: value for key, value in site.items() if key != "additional_contacts"}
+        contacts = [dict(contact) for contact in site.get("additional_contacts", [])]
+        site_copy["additional_contacts"] = contacts
+        site_copy["tasks"] = [
+            dict(task)
+            for task in SRT_SAMPLE_TASKS
+            if task.get("site") == site["name"]
+        ]
+        site_copy.setdefault("client_contact", {})
+        site_copy.setdefault("form_update", {})
+        site_copy.setdefault("updates", [])
+        site_copy.setdefault("interactions", [])
+        site_map[site["key"]] = site_copy
+        sites.append(site_copy)
+
+    if not sites:
+        selected_site = None
+    else:
+        if selected_key and selected_key in site_map:
+            selected_site = site_map[selected_key]
+        else:
+            selected_site = sites[0]
+            selected_key = selected_site["key"]
+
+    return render_template(
+        "srt_sites.html",
+        sites=sites,
+        selected_site_key=selected_key,
+        team_members=SRT_TEAM_MEMBERS,
+    )
+
+
+@app.route("/srt/task", methods=["POST"])
+@login_required
+def srt_task_create():
+    site_name = (request.form.get("site_name") or "").strip()
+    summary = (request.form.get("summary") or "").strip()
+    priority = (request.form.get("priority") or "Medium").strip().title() or "Medium"
+    owner = (request.form.get("owner") or "Unassigned").strip() or "Unassigned"
+    due_date_raw = request.form.get("due_date")
+
+    due_date = None
+    if due_date_raw:
+        try:
+            due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            due_date = None
+
+    if not site_name or not summary:
+        flash("Site and summary are required to create a task.", "error")
+        return redirect(url_for("srt_sites"))
+
+    existing_ids = {task["id"] for task in SRT_SAMPLE_TASKS}
+    task_id = f"SRT-{_random_digits(4)}"
+    while task_id in existing_ids:
+        task_id = f"SRT-{_random_digits(4)}"
+
+    SRT_SAMPLE_TASKS.insert(
+        0,
+        {
+            "id": task_id,
+            "site": site_name,
+            "summary": summary,
+            "priority": priority,
+            "status": "Pending",
+            "due_date": due_date,
+            "owner": owner or "Unassigned",
+            "age_days": 0,
+        },
+    )
+
+    flash("SRT task added to the board.", "success")
+    return redirect(url_for("srt_sites", site=slugify(site_name)))
 
 
 # ---------------------- QC TABS ----------------------
