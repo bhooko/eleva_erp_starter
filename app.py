@@ -92,6 +92,7 @@ SRT_SAMPLE_TASKS = [
     {
         "id": "SRT-1001",
         "site": "Panaji HQ",
+        "name": "Brake system safety check",
         "summary": "Emergency brake inspection",
         "priority": "High",
         "status": "Pending",
@@ -102,6 +103,7 @@ SRT_SAMPLE_TASKS = [
     {
         "id": "SRT-1002",
         "site": "Nova Residency",
+        "name": "Door alignment corrective action",
         "summary": "Door alignment follow-up",
         "priority": "Medium",
         "status": "Pending",
@@ -112,6 +114,7 @@ SRT_SAMPLE_TASKS = [
     {
         "id": "SRT-1003",
         "site": "Harbour View Tower",
+        "name": "Cabin levelling calibration program",
         "summary": "Cabin levelling calibration",
         "priority": "High",
         "status": "In Progress",
@@ -122,6 +125,7 @@ SRT_SAMPLE_TASKS = [
     {
         "id": "SRT-1004",
         "site": "Metro Heights",
+        "name": "Post-service vibration audit follow-up",
         "summary": "Post-service vibration audit",
         "priority": "Low",
         "status": "Pending",
@@ -5322,7 +5326,7 @@ def srt_overview():
     elif status_filter in {"closed", "completed"}:
         filtered_tasks = [task for task in tasks if task["status"].lower() == "closed"]
     else:
-        filtered_tasks = list(tasks)
+        filtered_tasks = [task for task in tasks if task["status"].lower() != "closed"]
 
     summary = {
         "total_pending": sum(1 for task in tasks if task["status"].lower() != "closed"),
@@ -5511,7 +5515,8 @@ def srt_sites():
 def srt_task_create():
     site_name = (request.form.get("site_name") or "").strip()
     summary = (request.form.get("summary") or "").strip()
-    priority = (request.form.get("priority") or "Medium").strip().title() or "Medium"
+    task_name = (request.form.get("name") or "").strip()
+    priority = (request.form.get("priority") or "Normal").strip().title() or "Normal"
     owner = (request.form.get("owner") or "Unassigned").strip() or "Unassigned"
     due_date_raw = request.form.get("due_date")
 
@@ -5522,8 +5527,8 @@ def srt_task_create():
         except ValueError:
             due_date = None
 
-    if not site_name or not summary:
-        flash("Site and summary are required to create a task.", "error")
+    if not site_name or not task_name or not summary:
+        flash("Site, task name and summary are required to create a task.", "error")
         return redirect(url_for("srt_sites"))
 
     existing_ids = {task["id"] for task in SRT_SAMPLE_TASKS}
@@ -5536,6 +5541,7 @@ def srt_task_create():
         {
             "id": task_id,
             "site": site_name,
+            "name": task_name,
             "summary": summary,
             "priority": priority,
             "status": "Pending",
@@ -5555,7 +5561,7 @@ def srt_task_create():
         task_id,
         type="status",
         label="Task created",
-        detail=summary,
+        detail=f"{task_name} — {summary}" if summary else task_name,
         actor=actor_name or "System",
     )
 
@@ -5603,6 +5609,7 @@ def srt_task_data(task_id):
     task_payload = {
         "id": task["id"],
         "site": task["site"],
+        "name": task.get("name") or "",
         "summary": task["summary"],
         "priority": task["priority"],
         "status": task["status"],
