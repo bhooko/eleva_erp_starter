@@ -137,7 +137,8 @@
                   'value': 'india',
                   'name': 'India',
                   'emoji': '🇮🇳',
-                  'summary': 'Saffron, white and India green with navy highlights inspired by the tricolour. Usage tip: saffron for top bars, white for cards, green for CTAs and navy for icons or typography.',
+                  'summary': 'Saffron, white and India green with navy highlights inspired by the tricolour.',
+                  'usage_tip': 'Saffron for top bars, white for cards, green for CTAs and navy for icons or typography.',
                   'showcase': ['#FF9933', '#FFFFFF', '#138808', '#000080'],
                   'swatches': [
                     {'label': 'Primary', 'value': '#FF9933', 'background': '#FF9933'},
@@ -167,6 +168,10 @@
                           <span>{{ option.name }}</span>
                         </div>
                         <p class="text-sm text-slate-400 leading-relaxed">{{ option.summary }}</p>
+                        {% if option.usage_tip %}
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Usage tip</p>
+                          <p class="text-sm text-slate-400 leading-relaxed">{{ option.usage_tip }}</p>
+                        {% endif %}
                       </div>
                       <div class="flex flex-wrap justify-end gap-2">
                         {% for color in option.showcase %}

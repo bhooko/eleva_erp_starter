@@ -2,7 +2,7 @@
 {% block title %}Eleva ERP – SRT Sites{% endblock %}
 
 {% block content %}
-<div class="space-y-6" data-site-detail-container data-active-site="{{ selected_site_key or '' }}">
+<div class="space-y-6" data-site-page data-default-site="{{ selected_site_key or '' }}">
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
     <div class="flex flex-wrap items-center gap-3">
       <div>
@@ -12,12 +12,15 @@
     </div>
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[minmax(0,380px)_1fr]">
-    <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 shadow-inner shadow-black/20 overflow-hidden">
-      <div class="border-b border-slate-800/70 px-5 py-4">
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/50 shadow-inner shadow-black/10">
+    <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800/60 px-6 py-4">
+      <div>
         <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">All SRT sites</h3>
+        <p class="text-xs text-slate-500 mt-1">Click a row to open a full overview of site details and contacts.</p>
       </div>
-      <div class="overflow-y-auto max-h-[60vh]">
+    </div>
+    <div class="overflow-x-auto">
+      <div class="max-h-[calc(100vh-260px)] overflow-y-auto">
         <table class="min-w-full divide-y divide-slate-800/70 text-sm">
           <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -29,13 +32,13 @@
           </thead>
           <tbody class="divide-y divide-slate-800/70">
             {% for site in sites %}
-              <tr class="cursor-pointer transition hover:bg-slate-800/50"
+              <tr class="cursor-pointer transition hover:bg-slate-800/40 focus-visible:bg-slate-800/40"
                   data-site-row="{{ site.key }}"
                   data-site-name="{{ site.name }}"
                   data-site-client="{{ site.client }}"
                   tabindex="0"
                   role="button"
-                  aria-selected="{{ 'true' if site.key == selected_site_key else 'false' }}">
+                  aria-selected="false">
                 <td class="px-5 py-3">
                   <div class="font-semibold text-white">{{ site.name }}</div>
                   <div class="text-xs text-slate-400">{{ site.city }}</div>
@@ -51,63 +54,34 @@
         </table>
       </div>
     </div>
+  </div>
+</div>
 
-    <div class="space-y-6">
-      {% for site in sites %}
-        <article class="space-y-6 {{ '' if site.key == selected_site_key else 'hidden' }}" data-site-panel data-site="{{ site.key }}">
-          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 px-6 py-5 shadow-inner shadow-black/30">
-            <div class="flex flex-wrap items-start gap-4">
-              <div class="flex-1 min-w-[220px]">
-                <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
-                <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
-                <p class="text-xs text-slate-500 mt-2">{{ site.address }}</p>
-              </div>
-              <div class="flex flex-col items-start gap-2 text-sm">
-                <span class="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-100">{{ site.status }}</span>
-                <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-slate-300">Last visit: {{ site.last_visit.strftime('%d %b %Y') }}</span>
-              </div>
-            </div>
+{% for site in sites %}
+  {% set primary_contact = site.client_contact or {} %}
+  {% set additional_primary = site.additional_contacts | selectattr('is_primary') | list %}
+  {% set primary_checked = additional_primary | length == 0 %}
+  <template data-site-detail-template="{{ site.key }}">
+    <article class="space-y-6" data-site-detail-panel>
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 px-6 py-5 shadow-inner shadow-black/30">
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="flex-1 min-w-[220px]">
+            <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
+            <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
+            <p class="text-xs text-slate-500 mt-2">{{ site.address }}</p>
           </div>
-
-          <div class="grid gap-6 md:grid-cols-2">
-            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
-              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Primary contact</h4>
-              {% set contact = site.client_contact %}
-              <dl class="mt-3 space-y-2 text-sm text-slate-200">
-                <div class="flex items-start gap-3">
-                  <dt class="min-w-[92px] text-slate-400">Name</dt>
-                  <dd class="font-medium">{{ contact.name or '—' }}</dd>
-                </div>
-                <div class="flex items-start gap-3">
-                  <dt class="min-w-[92px] text-slate-400">Phone</dt>
-                  <dd>{{ contact.phone or '—' }}</dd>
-                </div>
-                <div class="flex items-start gap-3">
-                  <dt class="min-w-[92px] text-slate-400">Email</dt>
-                  <dd>{{ contact.email or '—' }}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
-              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest SRT form update</h4>
-              {% set form_update = site.form_update %}
-              <div class="mt-3 space-y-3 text-sm text-slate-200">
-                <div>
-                  <p class="text-base font-semibold text-white">{{ form_update.form_name or 'Form TBC' }}</p>
-                  <p class="text-xs text-slate-400 mt-1">Last updated {{ form_update.last_updated.strftime('%d %b %Y') if form_update.last_updated else '—' }}</p>
-                </div>
-                <div class="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
-                  {{ form_update.status or 'Draft' }}
-                </div>
-                <p class="leading-relaxed text-slate-300">{{ form_update.summary or 'No additional notes recorded yet.' }}</p>
-              </div>
-            </div>
+          <div class="flex flex-col items-start gap-2 text-sm">
+            <span class="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-100">{{ site.status }}</span>
+            <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-slate-300">Last visit: {{ site.last_visit.strftime('%d %b %Y') }}</span>
           </div>
+        </div>
+      </div>
 
-          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+          <form class="space-y-4" data-contact-form>
             <div class="flex flex-wrap items-center gap-3">
-              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Additional contacts</h4>
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Client contacts</h4>
               <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition" data-add-contact>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -115,143 +89,181 @@
                 <span>Add contact</span>
               </button>
             </div>
-            <form class="mt-4 space-y-4" data-contact-form data-primary-name="primary_contact_{{ site.key }}">
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-800/60 text-sm">
-                  <thead class="text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th class="px-3 py-2 text-left">Name</th>
-                      <th class="px-3 py-2 text-left">Designation</th>
-                      <th class="px-3 py-2 text-left">Contact no.</th>
-                      <th class="px-3 py-2 text-left">Email</th>
-                      <th class="px-3 py-2 text-left">Primary</th>
-                      <th class="px-3 py-2 text-left">Actions</th>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+                <thead class="text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Name</th>
+                    <th class="px-3 py-2 text-left">Designation</th>
+                    <th class="px-3 py-2 text-left">Contact no.</th>
+                    <th class="px-3 py-2 text-left">Email</th>
+                    <th class="px-3 py-2 text-left">Primary</th>
+                    <th class="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60" data-contact-rows>
+                  <tr data-contact-row data-contact-type="primary">
+                    <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ primary_contact.name or '' }}" placeholder="Contact name" /></td>
+                    <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ primary_contact.designation or '' }}" placeholder="Designation" /></td>
+                    <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ primary_contact.phone or '' }}" placeholder="Phone" /></td>
+                    <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ primary_contact.email or '' }}" placeholder="Email" /></td>
+                    <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" class="text-emerald-500 focus:ring-emerald-400" {% if primary_checked %}checked{% endif %} /></td>
+                    <td class="px-3 py-2 text-center"><span class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300">Client POC</span></td>
+                  </tr>
+                  {% for contact in site.additional_contacts %}
+                    <tr data-contact-row>
+                      <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.name }}" placeholder="Contact name" /></td>
+                      <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.designation }}" placeholder="Designation" /></td>
+                      <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.phone }}" placeholder="Phone" /></td>
+                      <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.email }}" placeholder="Email" /></td>
+                      <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" {% if contact.is_primary %}checked{% endif %} class="text-emerald-500 focus:ring-emerald-400" /></td>
+                      <td class="px-3 py-2 text-center">
+                        <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
+                          Remove
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-800/60" data-contact-rows>
-                    {% for contact in site.additional_contacts %}
-                      <tr data-contact-row>
-                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.name }}" placeholder="Contact name" /></td>
-                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.designation }}" placeholder="Role" /></td>
-                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.phone }}" placeholder="Phone" /></td>
-                        <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" value="{{ contact.email }}" placeholder="Email" /></td>
-                        <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" {% if contact.is_primary %}checked{% endif %} class="text-emerald-500 focus:ring-emerald-400" /></td>
-                        <td class="px-3 py-2 text-center">
-                          <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              <p class="text-xs text-slate-500">Add quick references for contractor, labourer or supervisor contacts. Mark one as the primary escalation point.</p>
-              <template data-contact-template>
-                <tr data-contact-row>
-                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Contact name" /></td>
-                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Role" /></td>
-                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Phone" /></td>
-                  <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Email" /></td>
-                  <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" class="text-emerald-500 focus:ring-emerald-400" /></td>
-                  <td class="px-3 py-2 text-center">
-                    <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              </template>
-            </form>
-          </div>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <p class="text-xs text-slate-500">Keep every site contact in one place and switch the primary escalation point using the selector.</p>
+            <template data-contact-template>
+              <tr data-contact-row>
+                <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Contact name" /></td>
+                <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Designation" /></td>
+                <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Phone" /></td>
+                <td class="px-3 py-2"><input class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-sm" placeholder="Email" /></td>
+                <td class="px-3 py-2 text-center"><input type="radio" name="primary_contact_{{ site.key }}" class="text-emerald-500 focus:ring-emerald-400" /></td>
+                <td class="px-3 py-2 text-center">
+                  <button type="button" class="inline-flex items-center rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-500/50 hover:text-rose-200 transition" data-remove-contact>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            </template>
+          </form>
+        </div>
 
-          <div class="grid gap-6 lg:grid-cols-2">
-            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
-              <div class="flex items-center justify-between gap-3">
-                <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent client interactions</h4>
-              </div>
-              <div class="mt-3 space-y-3">
-                {% for interaction in site.interactions %}
-                  <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">{{ interaction.type }} • {{ interaction.date.strftime('%d %b %Y') }}</p>
-                    <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ interaction.summary }}</p>
-                  </div>
-                {% else %}
-                  <p class="text-sm text-slate-400">No interactions logged yet.</p>
-                {% endfor %}
-              </div>
+        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest SRT form update</h4>
+          {% set form_update = site.form_update %}
+          <div class="mt-3 space-y-3 text-sm text-slate-200">
+            <div>
+              <p class="text-base font-semibold text-white">{{ form_update.form_name or 'Form TBC' }}</p>
+              <p class="text-xs text-slate-400 mt-1">Last updated {{ form_update.last_updated.strftime('%d %b %Y') if form_update.last_updated else '—' }}</p>
             </div>
-
-            <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
-              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest site updates</h4>
-              <div class="mt-3 space-y-3">
-                {% for update in site.updates %}
-                  <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">{{ update.label }}</p>
-                    <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ update.value }}</p>
-                  </div>
-                {% else %}
-                  <p class="text-sm text-slate-400">No updates captured.</p>
-                {% endfor %}
-              </div>
+            <div class="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
+              {{ form_update.status or 'Draft' }}
             </div>
+            <p class="leading-relaxed text-slate-300">{{ form_update.summary or 'No additional notes recorded yet.' }}</p>
           </div>
+        </div>
+      </div>
 
-          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
-            <div class="flex flex-wrap items-center gap-3">
-              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">SRT task board</h4>
-              <button type="button"
-                      class="ml-auto inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 transition"
-                      data-srt-task-open
-                      data-site-name="{{ site.name }}"
-                      data-site-key="{{ site.key }}">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                <span>Add SRT task</span>
-              </button>
-            </div>
-            <div class="mt-4">
-              {% if site.tasks %}
-                <div class="overflow-x-auto">
-                  <table class="min-w-full divide-y divide-slate-800/60 text-sm">
-                    <thead class="text-xs uppercase tracking-wide text-slate-400">
-                      <tr>
-                        <th class="px-3 py-2 text-left">Task</th>
-                        <th class="px-3 py-2 text-left">Priority</th>
-                        <th class="px-3 py-2 text-left">Owner</th>
-                        <th class="px-3 py-2 text-left">Due</th>
-                        <th class="px-3 py-2 text-left">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60 text-slate-200">
-                      {% for task in site.tasks %}
-                        <tr>
-                          <td class="px-3 py-2">
-                            <div class="font-medium text-white">{{ task.name or task.summary }}</div>
-                            {% if task.summary %}
-                              <div class="text-xs text-slate-400">{{ task.summary }}</div>
-                            {% endif %}
-                            <div class="text-xs text-slate-500">{{ task.id }}</div>
-                          </td>
-                          <td class="px-3 py-2">
-                            <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs">{{ task.priority }}</span>
-                          </td>
-                          <td class="px-3 py-2">{{ task.owner or 'Unassigned' }}</td>
-                          <td class="px-3 py-2">{{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}</td>
-                          <td class="px-3 py-2">{{ task.status }}</td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% else %}
-                <p class="text-sm text-slate-400">No open SRT tasks for this site. Use the button above to add one.</p>
-              {% endif %}
-            </div>
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+          <div class="flex items-center justify-between gap-3">
+            <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent client interactions</h4>
           </div>
-        </article>
-      {% endfor %}
+          <div class="mt-3 space-y-3">
+            {% for interaction in site.interactions %}
+              <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                <p class="text-xs uppercase tracking-wide text-slate-400">{{ interaction.type }} • {{ interaction.date.strftime('%d %b %Y') }}</p>
+                <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ interaction.summary }}</p>
+              </div>
+            {% else %}
+              <p class="text-sm text-slate-400">No interactions logged yet.</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Latest site updates</h4>
+          <div class="mt-3 space-y-3">
+            {% for update in site.updates %}
+              <div class="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                <p class="text-xs uppercase tracking-wide text-slate-400">{{ update.label }}</p>
+                <p class="mt-1 text-sm text-slate-200 leading-relaxed">{{ update.value }}</p>
+              </div>
+            {% else %}
+              <p class="text-sm text-slate-400">No updates captured.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-5 py-5">
+        <div class="flex flex-wrap items-center gap-3">
+          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">SRT task board</h4>
+          <button type="button"
+                  class="ml-auto inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 transition"
+                  data-srt-task-open
+                  data-site-name="{{ site.name }}"
+                  data-site-key="{{ site.key }}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span>Add SRT task</span>
+          </button>
+        </div>
+        <div class="mt-4">
+          {% if site.tasks %}
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+                <thead class="text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Task</th>
+                    <th class="px-3 py-2 text-left">Priority</th>
+                    <th class="px-3 py-2 text-left">Owner</th>
+                    <th class="px-3 py-2 text-left">Due</th>
+                    <th class="px-3 py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                  {% for task in site.tasks %}
+                    <tr>
+                      <td class="px-3 py-2">
+                        <div class="font-medium text-white">{{ task.name or task.summary }}</div>
+                        {% if task.summary %}
+                          <div class="text-xs text-slate-400">{{ task.summary }}</div>
+                        {% endif %}
+                        <div class="text-xs text-slate-500">{{ task.id }}</div>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs">{{ task.priority }}</span>
+                      </td>
+                      <td class="px-3 py-2">{{ task.owner or 'Unassigned' }}</td>
+                      <td class="px-3 py-2">{{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}</td>
+                      <td class="px-3 py-2">{{ task.status }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-sm text-slate-400">No open SRT tasks for this site. Use the button above to add one.</p>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+  </template>
+{% endfor %}
+
+<div id="srt-site-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" data-srt-modal>
+  <div class="w-full max-w-5xl rounded-3xl border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-4">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100">Site overview</h3>
+        <p class="text-xs text-slate-400">Review client context, contacts and SRT tasks for the selected site.</p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 p-2 text-slate-300 hover:text-white transition" data-srt-modal-close aria-label="Close site overview">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
+    <div class="max-h-[80vh] overflow-y-auto space-y-6 px-6 py-5" data-site-modal-content></div>
   </div>
 </div>
 
@@ -324,30 +336,16 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const siteRows = Array.from(document.querySelectorAll('[data-site-row]'));
-    const panels = new Map();
-    document.querySelectorAll('[data-site-panel]').forEach((panel) => {
-      panels.set(panel.getAttribute('data-site'), panel);
+    const siteTemplates = new Map();
+    document.querySelectorAll('template[data-site-detail-template]').forEach((template) => {
+      siteTemplates.set(template.getAttribute('data-site-detail-template'), template);
     });
 
-    const detailContainer = document.querySelector('[data-site-detail-container]');
-    let activeSiteKey = detailContainer ? detailContainer.getAttribute('data-active-site') : null;
-
-    if (!activeSiteKey && siteRows.length) {
-      activeSiteKey = siteRows[0].getAttribute('data-site-row');
-    }
-
-    const updateUrl = (key) => {
-      if (!window.history || !window.location) {
-        return;
-      }
-      const url = new URL(window.location.href);
-      if (key) {
-        url.searchParams.set('site', key);
-      } else {
-        url.searchParams.delete('site');
-      }
-      window.history.replaceState({}, '', url.toString());
-    };
+    const pageRoot = document.querySelector('[data-site-page]');
+    const defaultSiteKey = pageRoot ? pageRoot.getAttribute('data-default-site') : '';
+    const currentUrl = new URL(window.location.href);
+    const paramSiteKey = currentUrl.searchParams.get('site');
+    const initialSiteKey = siteTemplates.has(paramSiteKey) ? paramSiteKey : (siteTemplates.has(defaultSiteKey) ? defaultSiteKey : null);
 
     const highlightRow = (row, isActive) => {
       row.classList.toggle('bg-slate-800/40', isActive);
@@ -356,37 +354,20 @@
       row.setAttribute('aria-selected', isActive ? 'true' : 'false');
     };
 
-    const activateSite = (key, { updateHistory = true } = {}) => {
-      if (!key || !panels.has(key)) {
+    let activeRow = null;
+
+    const updateUrl = (key) => {
+      if (!window.history || !window.location) {
         return;
       }
-      panels.forEach((panel, panelKey) => {
-        panel.classList.toggle('hidden', panelKey !== key);
-      });
-      siteRows.forEach((row) => {
-        highlightRow(row, row.getAttribute('data-site-row') === key);
-      });
-      activeSiteKey = key;
-      if (updateHistory) {
-        updateUrl(key);
+      const next = new URL(window.location.href);
+      if (key) {
+        next.searchParams.set('site', key);
+      } else {
+        next.searchParams.delete('site');
       }
+      window.history.replaceState({}, '', next.toString());
     };
-
-    if (activeSiteKey) {
-      activateSite(activeSiteKey, { updateHistory: false });
-    }
-
-    siteRows.forEach((row) => {
-      const key = row.getAttribute('data-site-row');
-      const handler = () => activateSite(key);
-      row.addEventListener('click', handler);
-      row.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          handler();
-        }
-      });
-    });
 
     const modals = new Map();
     document.querySelectorAll('[data-srt-modal]').forEach((modal) => {
@@ -414,38 +395,41 @@
       modal.classList.remove('flex');
     };
 
-    document.querySelectorAll('[data-srt-modal-close]').forEach((button) => {
-      button.addEventListener('click', () => {
-        closeModal(button.closest('[data-srt-modal]'));
-      });
-    });
-
-    document.addEventListener('click', (event) => {
-      if (event.target.matches('[data-srt-modal]')) {
-        closeModal(event.target);
-      }
-    });
+    const siteModalId = 'srt-site-modal';
+    const siteModal = modals.get(siteModalId);
+    const siteModalContent = siteModal ? siteModal.querySelector('[data-site-modal-content]') : null;
 
     const taskModalId = 'srt-task-modal';
     const taskForm = document.querySelector('[data-srt-task-form]');
     const taskSiteInput = taskForm ? taskForm.querySelector('[data-task-site-input]') : null;
     const taskSiteLabel = taskForm ? taskForm.querySelector('[data-task-site-label]') : null;
 
-    document.querySelectorAll('[data-srt-task-open]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const siteName = button.getAttribute('data-site-name') || 'Selected site';
-        if (taskSiteInput) {
-          taskSiteInput.value = siteName;
+    const initTaskButtons = (root = document) => {
+      root.querySelectorAll('[data-srt-task-open]').forEach((button) => {
+        if (button.dataset.srtTaskBound === 'true') {
+          return;
         }
-        if (taskSiteLabel) {
-          taskSiteLabel.textContent = siteName;
-        }
-        openModal(taskModalId);
+        button.dataset.srtTaskBound = 'true';
+        button.addEventListener('click', () => {
+          const siteName = button.getAttribute('data-site-name') || 'Selected site';
+          if (taskSiteInput) {
+            taskSiteInput.value = siteName;
+          }
+          if (taskSiteLabel) {
+            taskSiteLabel.textContent = siteName;
+          }
+          openModal(taskModalId);
+        });
       });
-    });
+    };
+    initTaskButtons();
 
     const initContactForm = (form) => {
-      const addBtn = form.closest('[data-site-panel]')?.querySelector('[data-add-contact]');
+      if (form.dataset.contactFormBound === 'true') {
+        return;
+      }
+      form.dataset.contactFormBound = 'true';
+      const addBtn = form.querySelector('[data-add-contact]');
       const rowsContainer = form.querySelector('[data-contact-rows]');
       const template = form.querySelector('template[data-contact-template]');
 
@@ -466,7 +450,88 @@
       });
     };
 
-    document.querySelectorAll('[data-contact-form]').forEach(initContactForm);
+    const handleModalClose = (modal) => {
+      if (!modal) {
+        return;
+      }
+      closeModal(modal);
+      if (modal.id === siteModalId) {
+        if (siteModalContent) {
+          siteModalContent.innerHTML = '';
+        }
+        if (activeRow) {
+          highlightRow(activeRow, false);
+          activeRow = null;
+        }
+        updateUrl(null);
+      }
+    };
+
+    document.querySelectorAll('[data-srt-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => {
+        handleModalClose(button.closest('[data-srt-modal]'));
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target.matches('[data-srt-modal]')) {
+        handleModalClose(event.target);
+      }
+    });
+
+    const openSiteModal = (key, { updateHistory = true } = {}) => {
+      if (!siteModal || !siteModalContent) {
+        return;
+      }
+      const template = siteTemplates.get(key);
+      if (!template) {
+        return;
+      }
+      siteModalContent.innerHTML = '';
+      siteModalContent.appendChild(template.content.cloneNode(true));
+      siteModal.dataset.activeSite = key;
+      siteModalContent.querySelectorAll('[data-contact-form]').forEach((form) => {
+        initContactForm(form);
+      });
+      initTaskButtons(siteModalContent);
+      if (updateHistory) {
+        updateUrl(key);
+      }
+      openModal(siteModalId);
+    };
+
+    const activateRow = (row, options = {}) => {
+      if (!row) {
+        return;
+      }
+      if (activeRow && activeRow !== row) {
+        highlightRow(activeRow, false);
+      }
+      highlightRow(row, true);
+      activeRow = row;
+      openSiteModal(row.getAttribute('data-site-row'), options);
+    };
+
+    siteRows.forEach((row) => {
+      row.addEventListener('click', () => {
+        activateRow(row);
+      });
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activateRow(row);
+        }
+      });
+    });
+
+    if (initialSiteKey) {
+      const initialRow = siteRows.find((row) => row.getAttribute('data-site-row') === initialSiteKey);
+      if (initialRow) {
+        activateRow(initialRow, { updateHistory: false });
+      }
+    } else if (paramSiteKey) {
+      updateUrl(null);
+    }
   });
 </script>
 {% endblock %}
