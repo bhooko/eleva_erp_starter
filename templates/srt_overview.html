@@ -57,7 +57,7 @@
         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
           <th class="px-6 py-3">Task ID</th>
           <th class="px-6 py-3">Site</th>
-          <th class="px-6 py-3">Summary</th>
+          <th class="px-6 py-3">Task</th>
           <th class="px-6 py-3">Priority</th>
           <th class="px-6 py-3">Status</th>
           <th class="px-6 py-3">Due Date</th>
@@ -71,6 +71,7 @@
             {% set task_payload = {
               "id": task.id,
               "site": task.site,
+              "name": task.name,
               "summary": task.summary,
               "priority": task.priority,
               "status": task.status,
@@ -91,7 +92,12 @@
                 <div class="font-medium text-white">{{ task.site }}</div>
                 <div class="text-xs text-slate-400">SRT Age: {{ task.age_days }} days</div>
               </td>
-              <td class="px-6 py-4 text-slate-300">{{ task.summary }}</td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-white">{{ task.name or task.summary }}</div>
+                {% if task.summary %}
+                  <div class="text-xs text-slate-400 mt-1">{{ task.summary }}</div>
+                {% endif %}
+              </td>
               <td class="px-6 py-4">
                 <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-rose-500/20 text-rose-300' if task.priority == 'High' else 'bg-amber-400/20 text-amber-200' if task.priority == 'Medium' else 'bg-emerald-500/20 text-emerald-200' }}">{{ task.priority }}</span>
               </td>
@@ -155,11 +161,16 @@
         <div>
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Priority</label>
           <select name="priority" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
-            <option>High</option>
-            <option selected>Medium</option>
+            <option selected>Normal</option>
             <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
           </select>
         </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
+        <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Brake inspection follow-up" />
       </div>
       <div>
         <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task summary</label>
@@ -219,9 +230,13 @@
             <p class="text-xs uppercase tracking-wide text-slate-400">Priority</p>
             <span class="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold" data-task-priority>—</span>
           </div>
-          <div class="md:col-span-2">
-            <p class="text-xs uppercase tracking-wide text-slate-400">Summary</p>
-            <p class="mt-1 text-sm text-slate-200 leading-relaxed" data-task-summary></p>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Site</p>
+            <p class="mt-1 text-sm text-slate-200" data-task-site>—</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-400">Task ID</p>
+            <p class="mt-1 text-sm text-slate-200" data-task-id>—</p>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-slate-400">Owner</p>
@@ -230,6 +245,10 @@
           <div>
             <p class="text-xs uppercase tracking-wide text-slate-400">Due date</p>
             <p class="mt-1 text-sm text-slate-200" data-task-due></p>
+          </div>
+          <div class="md:col-span-2">
+            <p class="text-xs uppercase tracking-wide text-slate-400">Summary</p>
+            <p class="mt-1 text-sm text-slate-200 leading-relaxed" data-task-summary></p>
           </div>
         </div>
 
@@ -308,10 +327,43 @@
           </form>
         </div>
 
-        <div>
-          <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Activity timeline</h4>
-          <div class="mt-3 space-y-3" data-task-timeline>
-            <p class="text-sm text-slate-400">No updates recorded yet.</p>
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/80 px-5 py-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Task collaboration tabs">
+              <button type="button"
+                      class="px-3 py-1.5 rounded-xl border border-emerald-500/60 bg-emerald-500/10 text-xs text-emerald-200"
+                      data-srt-tab="discussion">
+                Discussion (<span data-count-discussion>0</span>)
+              </button>
+              <button type="button"
+                      class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:text-emerald-200"
+                      data-srt-tab="attachments">
+                Attachments (<span data-count-attachments>0</span>)
+              </button>
+              <button type="button"
+                      class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs text-slate-200 hover:text-emerald-200"
+                      data-srt-tab="activity">
+                Activity (<span data-count-activity>0</span>)
+              </button>
+            </div>
+            <p class="text-xs text-slate-500">Review discussion threads, shared files and the full activity log.</p>
+          </div>
+          <div class="mt-5 space-y-5">
+            <div data-srt-panel="discussion" class="motion-panel is-active">
+              <div class="space-y-3" data-task-discussion>
+                <p class="text-sm text-slate-400">No discussion yet. Add a comment using the form above.</p>
+              </div>
+            </div>
+            <div data-srt-panel="attachments" class="motion-panel hidden">
+              <div class="space-y-3" data-task-attachments>
+                <p class="text-sm text-slate-400">No attachments shared yet.</p>
+              </div>
+            </div>
+            <div data-srt-panel="activity" class="motion-panel hidden">
+              <div class="space-y-3" data-task-activity>
+                <p class="text-sm text-slate-400">No updates recorded yet.</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -379,13 +431,82 @@
       const summaryField = detailModal.querySelector('[data-task-summary]');
       const ownerDisplay = detailModal.querySelector('[data-task-owner]');
       const dueDisplay = detailModal.querySelector('[data-task-due]');
+      const siteDisplay = detailModal.querySelector('[data-task-site]');
+      const idDisplay = detailModal.querySelector('[data-task-id]');
       const titleField = detailModal.querySelector('[data-task-title]');
       const subtitleField = detailModal.querySelector('[data-task-subtitle]');
-      const timelineContainer = detailModal.querySelector('[data-task-timeline]');
+      const discussionContainer = detailModal.querySelector('[data-task-discussion]');
+      const attachmentsContainer = detailModal.querySelector('[data-task-attachments]');
+      const activityContainer = detailModal.querySelector('[data-task-activity]');
+      const discussionCount = detailModal.querySelector('[data-count-discussion]');
+      const attachmentsCount = detailModal.querySelector('[data-count-attachments]');
+      const activityCount = detailModal.querySelector('[data-count-activity]');
       const quickActionButtons = detailModal.querySelectorAll('[data-status-action]');
       const detailUrlTemplate = detailModal.getAttribute('data-detail-url-template');
       const updateUrlTemplate = detailForm ? detailForm.getAttribute('data-update-url-template') : '';
       const redirectInput = detailForm ? detailForm.querySelector('input[name="redirect_to"]') : null;
+      const tabButtons = detailModal.querySelectorAll('[data-srt-tab]');
+      const tabPanels = detailModal.querySelectorAll('[data-srt-panel]');
+      const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let activeTab = 'discussion';
+
+      const activateTab = (target) => {
+        activeTab = target || 'discussion';
+        tabButtons.forEach((button) => {
+          const isActive = button.getAttribute('data-srt-tab') === activeTab;
+          button.classList.toggle('border-emerald-500/60', isActive);
+          button.classList.toggle('bg-emerald-500/10', isActive);
+          button.classList.toggle('text-emerald-200', isActive);
+          button.classList.toggle('border-slate-700', !isActive);
+          button.classList.toggle('bg-slate-900/70', !isActive);
+          button.classList.toggle('text-slate-200', !isActive);
+        });
+        tabPanels.forEach((panel) => {
+          const isActive = panel.getAttribute('data-srt-panel') === activeTab;
+          if (isActive) {
+            panel.classList.remove('hidden');
+            requestAnimationFrame(() => {
+              panel.classList.add('is-active');
+            });
+          } else {
+            panel.classList.remove('is-active');
+            if (panel.classList.contains('hidden')) {
+              return;
+            }
+            if (prefersReducedMotion) {
+              panel.classList.add('hidden');
+              return;
+            }
+            const handleTransition = (event) => {
+              if (event.target !== panel || event.propertyName !== 'opacity') {
+                return;
+              }
+              if (panel.classList.contains('is-active')) {
+                return;
+              }
+              panel.classList.add('hidden');
+            };
+            panel.addEventListener('transitionend', handleTransition, { once: true });
+          }
+        });
+      };
+
+      tabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          activateTab(button.getAttribute('data-srt-tab'));
+        });
+      });
+
+      const showMessage = (container, message, className = 'text-sm text-slate-400') => {
+        if (!container) {
+          return;
+        }
+        container.innerHTML = '';
+        const paragraph = document.createElement('p');
+        paragraph.className = className;
+        paragraph.textContent = message;
+        container.appendChild(paragraph);
+      };
 
       const statusClassFor = (value) => {
         const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ';
@@ -411,102 +532,225 @@
         return `${base}bg-emerald-500/20 text-emerald-200`;
       };
 
-      const renderTimeline = (events) => {
-        if (!timelineContainer) {
-          return;
+      const renderCollaboration = (events) => {
+        const items = Array.isArray(events) ? events : [];
+        const comments = items.filter((event) => event && event.comment);
+        const attachments = items.filter((event) => event && event.attachment_url);
+
+        if (discussionCount) {
+          discussionCount.textContent = comments.length;
         }
-        timelineContainer.innerHTML = '';
-        if (!events || !events.length) {
-          const emptyState = document.createElement('p');
-          emptyState.className = 'text-sm text-slate-400';
-          emptyState.textContent = 'No updates recorded yet.';
-          timelineContainer.appendChild(emptyState);
-          return;
+        if (attachmentsCount) {
+          attachmentsCount.textContent = attachments.length;
+        }
+        if (activityCount) {
+          activityCount.textContent = items.length;
         }
 
-        events.forEach((event) => {
-          const wrapper = document.createElement('div');
-          wrapper.className = 'rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3';
+        if (discussionContainer) {
+          discussionContainer.innerHTML = '';
+          if (!comments.length) {
+            showMessage(discussionContainer, 'No discussion yet. Add a comment using the form above.');
+          } else {
+            comments.forEach((event) => {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'border border-slate-800 rounded-2xl bg-slate-950/40 p-4 space-y-2';
 
-          const header = document.createElement('div');
-          header.className = 'flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-slate-400';
+              const header = document.createElement('div');
+              header.className = 'flex items-center justify-between gap-3';
 
-          const label = document.createElement('span');
-          label.textContent = event.label || 'Update';
-          header.appendChild(label);
+              const author = document.createElement('div');
+              author.className = 'text-sm font-semibold text-slate-100';
+              author.textContent = event.actor || 'System';
+              header.appendChild(author);
 
-          const timestamp = document.createElement('span');
-          timestamp.textContent = event.timestamp_display || '';
-          header.appendChild(timestamp);
+              const timestamp = document.createElement('div');
+              timestamp.className = 'text-xs text-slate-400';
+              timestamp.textContent = event.timestamp_display || '';
+              header.appendChild(timestamp);
 
-          wrapper.appendChild(header);
+              wrapper.appendChild(header);
 
-          if (event.actor) {
-            const actorLine = document.createElement('p');
-            actorLine.className = 'mt-1 text-xs text-slate-500';
-            actorLine.textContent = `By ${event.actor}`;
-            wrapper.appendChild(actorLine);
+              if (event.label) {
+                const label = document.createElement('p');
+                label.className = 'text-xs uppercase tracking-wide text-slate-500';
+                label.textContent = event.label;
+                wrapper.appendChild(label);
+              }
+
+              if (event.comment) {
+                const comment = document.createElement('p');
+                comment.className = 'text-sm text-slate-200 whitespace-pre-line';
+                comment.textContent = event.comment;
+                wrapper.appendChild(comment);
+              }
+
+              if (event.attachment_url) {
+                const attachmentLink = document.createElement('a');
+                attachmentLink.className = 'inline-flex items-center gap-2 text-xs font-semibold text-emerald-200 hover:text-emerald-100';
+                attachmentLink.href = event.attachment_url;
+                attachmentLink.target = '_blank';
+                attachmentLink.rel = 'noopener noreferrer';
+
+                const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                icon.setAttribute('viewBox', '0 0 24 24');
+                icon.setAttribute('fill', 'none');
+                icon.setAttribute('stroke-width', '1.5');
+                icon.setAttribute('stroke', 'currentColor');
+                icon.classList.add('w-4', 'h-4');
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('d', 'M9 9l6-6m0 0h4.5M15 3v4.5M9 15l-6 6m0 0H3m0 0v-4.5');
+                icon.appendChild(path);
+
+                const label = document.createElement('span');
+                label.textContent = event.attachment_label || event.attachment_url;
+
+                attachmentLink.appendChild(icon);
+                attachmentLink.appendChild(label);
+                wrapper.appendChild(attachmentLink);
+              }
+
+              discussionContainer.appendChild(wrapper);
+            });
           }
-
-          if (event.detail) {
-            const detailLine = document.createElement('p');
-            detailLine.className = 'mt-2 text-sm text-slate-200';
-            detailLine.textContent = event.detail;
-            wrapper.appendChild(detailLine);
-          }
-
-          if (event.comment) {
-            const commentLine = document.createElement('p');
-            commentLine.className = 'mt-2 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100';
-            commentLine.textContent = event.comment;
-            wrapper.appendChild(commentLine);
-          }
-
-          if (event.attachment_url) {
-            const attachmentWrapper = document.createElement('a');
-            attachmentWrapper.className = 'mt-3 inline-flex items-center gap-2 text-sm font-medium text-emerald-200 hover:text-emerald-100';
-            attachmentWrapper.href = event.attachment_url;
-            attachmentWrapper.target = '_blank';
-            attachmentWrapper.rel = 'noopener noreferrer';
-
-            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            icon.setAttribute('viewBox', '0 0 24 24');
-            icon.setAttribute('fill', 'none');
-            icon.setAttribute('stroke-width', '1.5');
-            icon.setAttribute('stroke', 'currentColor');
-            icon.classList.add('w-4', 'h-4');
-
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('stroke-linecap', 'round');
-            path.setAttribute('stroke-linejoin', 'round');
-            path.setAttribute('d', 'M9 9l6-6m0 0h4.5M15 3v4.5M9 15l-6 6m0 0H3m0 0v-4.5');
-            icon.appendChild(path);
-
-            const labelText = document.createElement('span');
-            labelText.textContent = event.attachment_label || event.attachment_url;
-
-            attachmentWrapper.appendChild(icon);
-            attachmentWrapper.appendChild(labelText);
-            wrapper.appendChild(attachmentWrapper);
-          }
-
-          timelineContainer.appendChild(wrapper);
-        });
-      };
-
-      const closeDetailModal = () => {
-        detailModal.classList.add('hidden');
-        detailModal.classList.remove('flex');
-        if (commentField) {
-          commentField.value = '';
         }
-        if (attachmentLabelField) {
-          attachmentLabelField.value = '';
+
+        if (attachmentsContainer) {
+          attachmentsContainer.innerHTML = '';
+          if (!attachments.length) {
+            showMessage(attachmentsContainer, 'No attachments shared yet.');
+          } else {
+            const list = document.createElement('ul');
+            list.className = 'space-y-3';
+            attachments.forEach((event) => {
+              const item = document.createElement('li');
+              item.className = 'flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4';
+
+              const meta = document.createElement('div');
+              meta.className = 'space-y-1';
+
+              const title = document.createElement('div');
+              title.className = 'text-sm font-semibold text-slate-100';
+              title.textContent = event.attachment_label || event.label || 'Attachment';
+              meta.appendChild(title);
+
+              const subtitle = document.createElement('div');
+              subtitle.className = 'text-xs text-slate-400';
+              const subtitleParts = [];
+              if (event.timestamp_display) {
+                subtitleParts.push(event.timestamp_display);
+              }
+              if (event.actor) {
+                subtitleParts.push(event.actor);
+              }
+              subtitle.textContent = subtitleParts.join(' · ');
+              meta.appendChild(subtitle);
+
+              if (event.detail) {
+                const detail = document.createElement('p');
+                detail.className = 'text-xs text-slate-300';
+                detail.textContent = event.detail;
+                meta.appendChild(detail);
+              }
+
+              item.appendChild(meta);
+
+              const link = document.createElement('a');
+              link.className = 'px-3 py-1.5 rounded-xl border border-slate-700 text-xs text-slate-200 hover:bg-slate-800/60';
+              link.href = event.attachment_url;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = 'Open';
+              item.appendChild(link);
+
+              list.appendChild(item);
+            });
+            attachmentsContainer.appendChild(list);
+          }
         }
-        if (attachmentUrlField) {
-          attachmentUrlField.value = '';
+
+        if (activityContainer) {
+          activityContainer.innerHTML = '';
+          if (!items.length) {
+            showMessage(activityContainer, 'No updates recorded yet.');
+          } else {
+            items.forEach((event) => {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 space-y-2';
+
+              const header = document.createElement('div');
+              header.className = 'flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-slate-400';
+
+              const label = document.createElement('span');
+              label.textContent = event.label || 'Update';
+              header.appendChild(label);
+
+              const timestamp = document.createElement('span');
+              timestamp.textContent = event.timestamp_display || '';
+              header.appendChild(timestamp);
+
+              wrapper.appendChild(header);
+
+              if (event.actor) {
+                const actor = document.createElement('p');
+                actor.className = 'text-xs text-slate-500';
+                actor.textContent = `By ${event.actor}`;
+                wrapper.appendChild(actor);
+              }
+
+              if (event.detail) {
+                const detail = document.createElement('p');
+                detail.className = 'text-sm text-slate-200';
+                detail.textContent = event.detail;
+                wrapper.appendChild(detail);
+              }
+
+              if (event.comment) {
+                const comment = document.createElement('p');
+                comment.className = 'rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100';
+                comment.textContent = event.comment;
+                wrapper.appendChild(comment);
+              }
+
+              if (event.attachment_url) {
+                const attachmentLink = document.createElement('a');
+                attachmentLink.className = 'inline-flex items-center gap-2 text-sm font-medium text-emerald-200 hover:text-emerald-100';
+                attachmentLink.href = event.attachment_url;
+                attachmentLink.target = '_blank';
+                attachmentLink.rel = 'noopener noreferrer';
+
+                const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                icon.setAttribute('viewBox', '0 0 24 24');
+                icon.setAttribute('fill', 'none');
+                icon.setAttribute('stroke-width', '1.5');
+                icon.setAttribute('stroke', 'currentColor');
+                icon.classList.add('w-4', 'h-4');
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('d', 'M9 9l6-6m0 0h4.5M15 3v4.5M9 15l-6 6m0 0H3m0 0v-4.5');
+                icon.appendChild(path);
+
+                const label = document.createElement('span');
+                label.textContent = event.attachment_label || event.attachment_url;
+
+                attachmentLink.appendChild(icon);
+                attachmentLink.appendChild(label);
+                wrapper.appendChild(attachmentLink);
+              }
+
+              activityContainer.appendChild(wrapper);
+            });
+          }
         }
+
+        activateTab(activeTab);
       };
 
       const setOwnerOption = (value) => {
@@ -525,18 +769,49 @@
         ownerSelect.value = normalised;
       };
 
+      const closeDetailModal = () => {
+        detailModal.classList.add('hidden');
+        detailModal.classList.remove('flex');
+        if (commentField) {
+          commentField.value = '';
+        }
+        if (attachmentLabelField) {
+          attachmentLabelField.value = '';
+        }
+        if (attachmentUrlField) {
+          attachmentUrlField.value = '';
+        }
+        renderCollaboration([]);
+        activeTab = 'discussion';
+        activateTab(activeTab);
+      };
+
       const populateTaskDetails = (task) => {
         if (!task) {
           return;
         }
         if (titleField) {
-          titleField.textContent = `${task.id} • ${task.site}`;
+          const title = task.name || task.summary || task.id || 'Task details';
+          titleField.textContent = title;
         }
         if (subtitleField) {
-          subtitleField.textContent = task.summary || '';
+          const segments = [];
+          if (task.id) {
+            segments.push(task.id);
+          }
+          if (task.site) {
+            segments.push(task.site);
+          }
+          subtitleField.textContent = segments.join(' • ');
         }
         if (summaryField) {
-          summaryField.textContent = task.summary || '';
+          summaryField.textContent = task.summary || '—';
+        }
+        if (siteDisplay) {
+          siteDisplay.textContent = task.site || '—';
+        }
+        if (idDisplay) {
+          idDisplay.textContent = task.id || '—';
         }
         if (statusBadge) {
           statusBadge.className = statusClassFor(task.status);
@@ -571,6 +846,21 @@
         }
       };
 
+      const setLoadingState = () => {
+        if (discussionCount) {
+          discussionCount.textContent = '—';
+        }
+        if (attachmentsCount) {
+          attachmentsCount.textContent = '—';
+        }
+        if (activityCount) {
+          activityCount.textContent = '—';
+        }
+        showMessage(discussionContainer, 'Loading updates…');
+        showMessage(attachmentsContainer, 'Loading updates…');
+        showMessage(activityContainer, 'Loading updates…');
+      };
+
       const openDetailModal = (taskId, initialTask) => {
         if (!detailForm || !updateUrlTemplate) {
           return;
@@ -595,13 +885,9 @@
 
         populateTaskDetails(initialTask);
 
-        if (timelineContainer) {
-          timelineContainer.innerHTML = '';
-          const loading = document.createElement('p');
-          loading.className = 'text-sm text-slate-400';
-          loading.textContent = 'Loading activity…';
-          timelineContainer.appendChild(loading);
-        }
+        activeTab = 'discussion';
+        activateTab(activeTab);
+        setLoadingState();
 
         detailModal.classList.remove('hidden');
         detailModal.classList.add('flex');
@@ -619,17 +905,21 @@
                 throw new Error(payload && payload.message ? payload.message : 'Unable to load task data');
               }
               populateTaskDetails(payload.task);
-              renderTimeline(payload.timeline);
+              renderCollaboration(payload.timeline);
             })
             .catch((error) => {
-              if (!timelineContainer) {
-                return;
+              showMessage(discussionContainer, error.message || 'Unable to load activity for this task.', 'text-sm text-rose-300');
+              showMessage(attachmentsContainer, error.message || 'Unable to load activity for this task.', 'text-sm text-rose-300');
+              showMessage(activityContainer, error.message || 'Unable to load activity for this task.', 'text-sm text-rose-300');
+              if (discussionCount) {
+                discussionCount.textContent = '0';
               }
-              timelineContainer.innerHTML = '';
-              const errorMessage = document.createElement('p');
-              errorMessage.className = 'text-sm text-rose-300';
-              errorMessage.textContent = error.message || 'Unable to load activity for this task.';
-              timelineContainer.appendChild(errorMessage);
+              if (attachmentsCount) {
+                attachmentsCount.textContent = '0';
+              }
+              if (activityCount) {
+                activityCount.textContent = '0';
+              }
             });
         }
       };
@@ -696,6 +986,8 @@
         });
       });
 
+      renderCollaboration([]);
+      activateTab(activeTab);
       activeModals.push({ element: detailModal, close: closeDetailModal });
     }
 

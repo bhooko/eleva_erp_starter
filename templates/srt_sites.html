@@ -227,7 +227,10 @@
                       {% for task in site.tasks %}
                         <tr>
                           <td class="px-3 py-2">
-                            <div class="font-medium text-white">{{ task.summary }}</div>
+                            <div class="font-medium text-white">{{ task.name or task.summary }}</div>
+                            {% if task.summary %}
+                              <div class="text-xs text-slate-400">{{ task.summary }}</div>
+                            {% endif %}
                             <div class="text-xs text-slate-500">{{ task.id }}</div>
                           </td>
                           <td class="px-3 py-2">
@@ -275,11 +278,16 @@
         <div>
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Priority</label>
           <select name="priority" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
-            <option>High</option>
-            <option selected>Medium</option>
+            <option selected>Normal</option>
             <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
           </select>
         </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
+        <input name="name" required class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Eg. Brake inspection follow-up" />
       </div>
       <div>
         <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task summary</label>
