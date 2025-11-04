@@ -693,6 +693,33 @@
             </a>
           </div>
         </div>
+
+        {% set cs_endpoints = ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home'] %}
+        {% set cs_parent_active = request.endpoint in cs_endpoints %}
+        <div class="space-y-1">
+          <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if cs_parent_active else '' }}">
+            <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M5 4a3 3 0 013-3h8a3 3 0 013 3v3h1a1 1 0 011 1v5.382a1 1 0 01-.276.69l-6.724 7.39a1 1 0 01-1.448 0l-6.724-7.39A1 1 0 013 13.382V8a1 1 0 011-1h1V4zM9 4v3h6V4H9z"/>
+              </svg>
+            </span>
+            <span class="label text-[15px] flex-1">Customer Support</span>
+          </div>
+          <div class="pl-12 space-y-1">
+            <a href="{{ url_for('customer_support_overview') }}"
+               class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_overview' else '' }}">
+              <span class="label">CS Overview</span>
+            </a>
+            <a href="{{ url_for('customer_support_tasks') }}"
+               class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_tasks' else '' }}">
+              <span class="label">Tasks &amp; Tickets</span>
+            </a>
+            <a href="{{ url_for('customer_support_calls') }}"
+               class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_calls' else '' }}">
+              <span class="label">Call History</span>
+            </a>
+          </div>
+        </div>
       </nav>
 
       <div class="px-3 pb-4 space-y-2 border-t border-slate-800/60 pt-4">
