@@ -5,7 +5,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
   <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
     <p class="text-sm text-slate-400">Pending SRT Tasks</p>
-    <p class="text-3xl font-semibold text-white mt-2">{{ summary.total_pending }}</p>
+    <p class="text-3xl font-semibold text-theme-primary mt-2">{{ summary.total_pending }}</p>
     <p class="text-xs text-slate-500 mt-3">Includes all open and in-progress SRT activities.</p>
   </div>
   <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
@@ -28,7 +28,7 @@
 <div class="rounded-2xl bg-slate-900/60 border border-slate-800/60">
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-6 py-4 border-b border-slate-800/70">
     <div>
-      <h2 class="text-xl font-semibold text-white">SRT Taskboard</h2>
+      <h2 class="text-xl font-semibold text-theme-primary">SRT Taskboard</h2>
       <p class="text-sm text-slate-400">Monitor outstanding service recovery tasks across active client sites.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
@@ -89,11 +89,11 @@
                 aria-label="View task {{ task.id }} details">
               <td class="px-6 py-4 font-medium">{{ task.id }}</td>
               <td class="px-6 py-4">
-                <div class="font-medium text-white">{{ task.site }}</div>
+                <div class="font-medium text-theme-primary">{{ task.site }}</div>
                 <div class="text-xs text-slate-400">SRT Age: {{ task.age_days }} days</div>
               </td>
               <td class="px-6 py-4">
-                <div class="font-medium text-white">{{ task.name or task.summary }}</div>
+                <div class="font-medium text-theme-primary">{{ task.name or task.summary }}</div>
                 {% if task.summary %}
                   <div class="text-xs text-slate-400 mt-1">{{ task.summary }}</div>
                 {% endif %}

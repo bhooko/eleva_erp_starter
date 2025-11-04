@@ -6,7 +6,7 @@
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
     <div class="flex flex-wrap items-center gap-3">
       <div>
-        <h2 class="text-xl font-semibold text-white">SRT Site Directory</h2>
+        <h2 class="text-xl font-semibold text-theme-primary">SRT Site Directory</h2>
         <p class="text-sm text-slate-400 mt-1">Select a site to review client contacts, the latest SRT form update and pending recovery actions.</p>
       </div>
     </div>
@@ -40,7 +40,7 @@
                   role="button"
                   aria-selected="false">
                 <td class="px-5 py-3">
-                  <div class="font-semibold text-white">{{ site.name }}</div>
+                  <div class="font-semibold text-theme-primary">{{ site.name }}</div>
                   <div class="text-xs text-slate-400">{{ site.city }}</div>
                 </td>
                 <td class="px-5 py-3 text-slate-200">{{ site.client }}</td>
@@ -66,7 +66,7 @@
       <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 px-6 py-5 shadow-inner shadow-black/30">
         <div class="flex flex-wrap items-start gap-4">
           <div class="flex-1 min-w-[220px]">
-            <h3 class="text-lg font-semibold text-white">{{ site.name }}</h3>
+            <h3 class="text-lg font-semibold text-theme-primary">{{ site.name }}</h3>
             <p class="text-sm text-slate-400">{{ site.client }} • {{ site.city }}</p>
             <p class="text-xs text-slate-500 mt-2">{{ site.address }}</p>
           </div>
@@ -150,7 +150,7 @@
           {% set form_update = site.form_update %}
           <div class="mt-3 space-y-3 text-sm text-slate-200">
             <div>
-              <p class="text-base font-semibold text-white">{{ form_update.form_name or 'Form TBC' }}</p>
+              <p class="text-base font-semibold text-theme-primary">{{ form_update.form_name or 'Form TBC' }}</p>
               <p class="text-xs text-slate-400 mt-1">Last updated {{ form_update.last_updated.strftime('%d %b %Y') if form_update.last_updated else '—' }}</p>
             </div>
             <div class="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
@@ -224,7 +224,7 @@
                   {% for task in site.tasks %}
                     <tr>
                       <td class="px-3 py-2">
-                        <div class="font-medium text-white">{{ task.name or task.summary }}</div>
+                        <div class="font-medium text-theme-primary">{{ task.name or task.summary }}</div>
                         {% if task.summary %}
                           <div class="text-xs text-slate-400">{{ task.summary }}</div>
                         {% endif %}
@@ -341,11 +341,8 @@
       siteTemplates.set(template.getAttribute('data-site-detail-template'), template);
     });
 
-    const pageRoot = document.querySelector('[data-site-page]');
-    const defaultSiteKey = pageRoot ? pageRoot.getAttribute('data-default-site') : '';
     const currentUrl = new URL(window.location.href);
     const paramSiteKey = currentUrl.searchParams.get('site');
-    const initialSiteKey = siteTemplates.has(paramSiteKey) ? paramSiteKey : (siteTemplates.has(defaultSiteKey) ? defaultSiteKey : null);
 
     const highlightRow = (row, isActive) => {
       row.classList.toggle('bg-slate-800/40', isActive);
@@ -524,12 +521,7 @@
       });
     });
 
-    if (initialSiteKey) {
-      const initialRow = siteRows.find((row) => row.getAttribute('data-site-row') === initialSiteKey);
-      if (initialRow) {
-        activateRow(initialRow, { updateHistory: false });
-      }
-    } else if (paramSiteKey) {
+    if (paramSiteKey && !siteTemplates.has(paramSiteKey)) {
       updateUrl(null);
     }
   });
