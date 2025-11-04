@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Customer Support · Call History{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Customer Support</p>
+      <h1 class="mt-1 text-2xl font-semibold text-slate-100">Call &amp; interaction history</h1>
+      <p class="mt-2 max-w-2xl text-sm text-slate-400">Search recorded calls, emails and WhatsApp threads. Use the filters to zero-in on the conversations you need.</p>
+    </div>
+    <a href="{{ url_for('customer_support_tasks') }}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <span>Add ticket</span>
+    </a>
+  </div>
+
+  <form method="get" class="grid gap-4 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-6 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
+    <div>
+      <label class="text-xs uppercase tracking-wide text-slate-500">Search</label>
+      <div class="mt-1 flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4 text-slate-400">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197M17.25 10.5A6.75 6.75 0 104.5 17.25 6.75 6.75 0 0017.25 10.5z" />
+        </svg>
+        <input name="q" value="{{ search_term }}" placeholder="Ticket ID, caller or subject" class="h-10 flex-1 bg-transparent text-sm text-slate-100 focus:outline-none" />
+      </div>
+    </div>
+    <div>
+      <label class="text-xs uppercase tracking-wide text-slate-500">Status</label>
+      <select name="status" class="mt-1 h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+        <option value="">All</option>
+        {% for option in status_options %}
+          <option value="{{ option|lower }}" {{ 'selected' if status_filter|lower == option|lower else '' }}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="text-xs uppercase tracking-wide text-slate-500">Category</label>
+      <select name="category" class="mt-1 h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+        <option value="">All</option>
+        {% for category in categories %}
+          <option value="{{ category.label|lower }}" {{ 'selected' if category_filter|lower == category.label|lower else '' }}>{{ category.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="flex-1 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30">Apply</button>
+      <a href="{{ url_for('customer_support_calls') }}" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Reset</a>
+    </div>
+  </form>
+
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60">
+    <div class="flex flex-col gap-2 border-b border-slate-800/60 px-6 py-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Logged interactions</h2>
+        <p class="text-sm text-slate-400">Sorted by most recent activity. Columns support manual sorting.</p>
+      </div>
+      <span class="text-xs uppercase tracking-wide text-slate-500">{{ call_logs|length }} conversations</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+        <thead class="bg-slate-900/80 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-6 py-3">
+              <button type="button" class="inline-flex items-center gap-1">Ticket
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3 w-3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m0-6L12 5.25 8.25 9" />
+                </svg>
+              </button>
+            </th>
+            <th class="px-6 py-3">
+              <button type="button" class="inline-flex items-center gap-1">Subject
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3 w-3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m0-6L12 5.25 8.25 9" />
+                </svg>
+              </button>
+            </th>
+            <th class="px-6 py-3">Category</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Channel</th>
+            <th class="px-6 py-3">Caller</th>
+            <th class="px-6 py-3">Owner</th>
+            <th class="px-6 py-3">Duration</th>
+            <th class="px-6 py-3">Logged</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/50 text-slate-200">
+          {% for call in call_logs %}
+            <tr class="transition hover:bg-slate-800/40">
+              <td class="px-6 py-4">
+                <a href="{{ url_for('customer_support_tasks', ticket=call.ticket_id) }}" class="font-semibold text-emerald-200 hover:text-emerald-100">{{ call.ticket_id }}</a>
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-slate-100">{{ call.subject }}</div>
+                <div class="text-xs text-slate-400">Call ID · {{ call.call_id }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="rounded-full bg-slate-800/80 px-3 py-1 text-xs">{{ call.category }}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold {{ 'bg-rose-500/20 text-rose-200' if call.status == 'Open' else 'bg-amber-500/20 text-amber-200' if call.status == 'In Progress' else 'bg-emerald-500/20 text-emerald-200' if call.status == 'Resolved' else 'bg-sky-500/20 text-sky-200' }}">{{ call.status }}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">{{ call.channel }}</span>
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-slate-100">{{ call.caller }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-slate-100">{{ call.handled_by }}</div>
+              </td>
+              <td class="px-6 py-4 text-xs text-slate-400">{{ call.duration_minutes }} mins</td>
+              <td class="px-6 py-4 text-xs text-slate-400">{{ call.logged_at.strftime('%d %b %Y · %I:%M %p') }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9" class="px-6 py-8 text-center text-sm text-slate-400">No matching interactions found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -198,6 +198,341 @@ SRT_TASK_ACTIVITY = {
 }
 
 
+CUSTOMER_SUPPORT_CATEGORIES = [
+    {
+        "id": "sales-ni",
+        "label": "Sales – NI",
+        "description": "Pre-sales and new installation related follow-ups.",
+        "default_first_response_hours": 4,
+        "default_resolution_hours": 24,
+    },
+    {
+        "id": "sales-amc",
+        "label": "Sales – AMC",
+        "description": "Annual maintenance contract conversations and renewals.",
+        "default_first_response_hours": 6,
+        "default_resolution_hours": 48,
+    },
+    {
+        "id": "support-amc",
+        "label": "Support – AMC",
+        "description": "Breakdown, callbacks and reactive maintenance tickets.",
+        "default_first_response_hours": 2,
+        "default_resolution_hours": 18,
+    },
+    {
+        "id": "other-dept",
+        "label": "Other Department",
+        "description": "Requests that need to be routed to internal departments.",
+        "default_first_response_hours": 8,
+        "default_resolution_hours": 72,
+    },
+    {
+        "id": "other-query",
+        "label": "Other Query",
+        "description": "General enquiries that do not fit the above categories.",
+        "default_first_response_hours": 12,
+        "default_resolution_hours": 120,
+    },
+]
+
+CUSTOMER_SUPPORT_CHANNELS = [
+    {"id": "phone", "label": "Phone", "icon": "📞"},
+    {"id": "email", "label": "Email", "icon": "✉️"},
+    {"id": "web", "label": "Web", "icon": "🌐"},
+    {"id": "walk-in", "label": "Walk-in", "icon": "🚪"},
+    {"id": "whatsapp", "label": "WhatsApp", "icon": "💬"},
+]
+
+CUSTOMER_SUPPORT_SLA_PRESETS = [
+    {
+        "id": "standard",
+        "label": "Standard",
+        "first_response_hours": 6,
+        "resolution_hours": 48,
+    },
+    {
+        "id": "priority",
+        "label": "Priority",
+        "first_response_hours": 2,
+        "resolution_hours": 18,
+    },
+    {
+        "id": "critical",
+        "label": "Critical",
+        "first_response_hours": 1,
+        "resolution_hours": 8,
+    },
+]
+
+CUSTOMER_SUPPORT_TICKETS = [
+    {
+        "id": "CS-1045",
+        "subject": "Door sensor fault at Nova Residency",
+        "customer": "Nova Residency",
+        "contact_name": "Rakesh Pawar",
+        "contact_phone": generate_random_phone(),
+        "contact_email": generate_random_email(),
+        "category": "Support-AMC",
+        "channel": "Phone",
+        "priority": "High",
+        "status": "Open",
+        "assignee": "Anita Sharma",
+        "created_at": datetime.datetime(2024, 6, 20, 10, 45),
+        "updated_at": datetime.datetime(2024, 6, 20, 14, 5),
+        "sla": {"first_response_hours": 2, "resolution_hours": 18},
+        "attachments": [
+            {
+                "label": "Door sensor photo",
+                "type": "image",
+                "url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=600&q=80",
+            },
+            {
+                "label": "Issue video clip",
+                "type": "video",
+                "url": "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+            },
+        ],
+        "timeline": [
+            {
+                "timestamp": datetime.datetime(2024, 6, 20, 10, 45),
+                "type": "status",
+                "label": "Ticket logged",
+                "visibility": "external",
+                "actor": "Service Desk",
+                "detail": "Complaint received via phone from Mr. Pawar.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 20, 11, 5),
+                "type": "assignment",
+                "label": "Assigned to Anita Sharma",
+                "visibility": "internal",
+                "actor": "Service Desk",
+                "detail": "Escalated to field engineer for same-day response.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 20, 13, 40),
+                "type": "comment",
+                "label": "Internal note",
+                "visibility": "internal",
+                "actor": "Anita Sharma",
+                "detail": "Replacement sensor requisition raised with stores.",
+            },
+        ],
+        "linked_tasks": [
+            {
+                "id": "TASK-4521",
+                "title": "Replace door sensor",
+                "assignee": "Field Team 3",
+                "status": "Assigned",
+                "due_date": datetime.date(2024, 6, 21),
+            }
+        ],
+    },
+    {
+        "id": "CS-1032",
+        "subject": "AMC renewal quote follow-up",
+        "customer": "Galaxy Towers",
+        "contact_name": "Natasha Rodrigues",
+        "contact_phone": generate_random_phone(),
+        "contact_email": generate_random_email(),
+        "category": "Sales-AMC",
+        "channel": "Email",
+        "priority": "Medium",
+        "status": "In Progress",
+        "assignee": "Rahul Mishra",
+        "created_at": datetime.datetime(2024, 6, 18, 9, 5),
+        "updated_at": datetime.datetime(2024, 6, 19, 16, 30),
+        "sla": {"first_response_hours": 6, "resolution_hours": 48},
+        "attachments": [
+            {
+                "label": "Previous AMC schedule",
+                "type": "file",
+                "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+            }
+        ],
+        "timeline": [
+            {
+                "timestamp": datetime.datetime(2024, 6, 18, 9, 5),
+                "type": "status",
+                "label": "Ticket logged",
+                "visibility": "external",
+                "actor": "Service Desk",
+                "detail": "Email received requesting updated AMC commercial.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 18, 12, 15),
+                "type": "comment",
+                "label": "External reply",
+                "visibility": "external",
+                "actor": "Rahul Mishra",
+                "detail": "Shared revised pricing with client and awaiting confirmation.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 19, 16, 30),
+                "type": "status",
+                "label": "Status updated to In Progress",
+                "visibility": "internal",
+                "actor": "Rahul Mishra",
+                "detail": "Follow-up call scheduled for 21 Jun.",
+            },
+        ],
+        "linked_tasks": [],
+    },
+    {
+        "id": "CS-1018",
+        "subject": "Lift car voice announcement glitch",
+        "customer": "Coastal Business Park",
+        "contact_name": "Faheem Khan",
+        "contact_phone": generate_random_phone(),
+        "contact_email": generate_random_email(),
+        "category": "Support-AMC",
+        "channel": "WhatsApp",
+        "priority": "Low",
+        "status": "Resolved",
+        "assignee": "Sneha Kulkarni",
+        "created_at": datetime.datetime(2024, 6, 15, 18, 20),
+        "updated_at": datetime.datetime(2024, 6, 16, 11, 0),
+        "sla": {"first_response_hours": 2, "resolution_hours": 18},
+        "attachments": [],
+        "timeline": [
+            {
+                "timestamp": datetime.datetime(2024, 6, 15, 18, 20),
+                "type": "status",
+                "label": "Ticket logged",
+                "visibility": "external",
+                "actor": "Service Desk",
+                "detail": "Client shared WhatsApp voice note on announcement glitch.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 16, 9, 45),
+                "type": "comment",
+                "label": "External update",
+                "visibility": "external",
+                "actor": "Sneha Kulkarni",
+                "detail": "Applied firmware patch remotely and tested successfully.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 16, 11, 0),
+                "type": "status",
+                "label": "Status updated to Resolved",
+                "visibility": "internal",
+                "actor": "Sneha Kulkarni",
+                "detail": "Awaiting client confirmation to mark closed.",
+            },
+        ],
+        "linked_tasks": [],
+    },
+    {
+        "id": "CS-1004",
+        "subject": "Design clarification for duplex lift",
+        "customer": "Blue Horizon Villas",
+        "contact_name": "Nidhi Singh",
+        "contact_phone": generate_random_phone(),
+        "contact_email": generate_random_email(),
+        "category": "Sales-NI",
+        "channel": "Web",
+        "priority": "Medium",
+        "status": "Closed",
+        "assignee": "Vikram Salgaocar",
+        "created_at": datetime.datetime(2024, 6, 10, 15, 5),
+        "updated_at": datetime.datetime(2024, 6, 12, 10, 15),
+        "sla": {"first_response_hours": 4, "resolution_hours": 24},
+        "attachments": [],
+        "timeline": [
+            {
+                "timestamp": datetime.datetime(2024, 6, 10, 15, 5),
+                "type": "status",
+                "label": "Ticket logged",
+                "visibility": "external",
+                "actor": "Service Desk",
+                "detail": "Client submitted query via website contact form.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 11, 9, 30),
+                "type": "comment",
+                "label": "Internal note",
+                "visibility": "internal",
+                "actor": "Vikram Salgaocar",
+                "detail": "Shared CAD snippet clarifying cabin headroom requirement.",
+            },
+            {
+                "timestamp": datetime.datetime(2024, 6, 12, 10, 15),
+                "type": "status",
+                "label": "Closed",
+                "visibility": "external",
+                "actor": "Vikram Salgaocar",
+                "detail": "Client acknowledged receipt of drawings.",
+            },
+        ],
+        "linked_tasks": [],
+    },
+]
+
+CUSTOMER_SUPPORT_CALL_LOGS = [
+    {
+        "ticket_id": "CS-1045",
+        "call_id": "CALL-7801",
+        "subject": "Door sensor fault",
+        "category": "Support-AMC",
+        "status": "Open",
+        "channel": "Phone",
+        "caller": "Rakesh Pawar",
+        "handled_by": "Service Desk",
+        "duration_minutes": 7,
+        "logged_at": datetime.datetime(2024, 6, 20, 10, 45),
+    },
+    {
+        "ticket_id": "CS-1032",
+        "call_id": "CALL-7795",
+        "subject": "AMC renewal follow-up",
+        "category": "Sales-AMC",
+        "status": "In Progress",
+        "channel": "Email",
+        "caller": "Natasha Rodrigues",
+        "handled_by": "Rahul Mishra",
+        "duration_minutes": 0,
+        "logged_at": datetime.datetime(2024, 6, 18, 9, 5),
+    },
+    {
+        "ticket_id": "CS-1018",
+        "call_id": "CALL-7781",
+        "subject": "Voice announcement glitch",
+        "category": "Support-AMC",
+        "status": "Resolved",
+        "channel": "WhatsApp",
+        "caller": "Faheem Khan",
+        "handled_by": "Sneha Kulkarni",
+        "duration_minutes": 4,
+        "logged_at": datetime.datetime(2024, 6, 15, 18, 20),
+    },
+    {
+        "ticket_id": "CS-1004",
+        "call_id": "CALL-7764",
+        "subject": "Design clarification",
+        "category": "Sales-NI",
+        "status": "Closed",
+        "channel": "Web",
+        "caller": "Nidhi Singh",
+        "handled_by": "Vikram Salgaocar",
+        "duration_minutes": 10,
+        "logged_at": datetime.datetime(2024, 6, 10, 15, 5),
+    },
+    {
+        "ticket_id": "CS-1054",
+        "call_id": "CALL-7805",
+        "subject": "Cabin light flicker",
+        "category": "Support-AMC",
+        "status": "Open",
+        "channel": "Phone",
+        "caller": "Sushma Rao",
+        "handled_by": "Service Desk",
+        "duration_minutes": 6,
+        "logged_at": datetime.datetime(2024, 6, 20, 17, 55),
+    },
+]
+
+
 def _get_srt_task(task_id):
     return next((task for task in SRT_SAMPLE_TASKS if task["id"] == task_id), None)
 
@@ -232,6 +567,69 @@ def _default_srt_schema():
             "items": [_default_srt_item()],
         }
     ]
+
+
+def _get_customer_support_ticket(ticket_id):
+    if not ticket_id:
+        return None
+
+    return next((ticket for ticket in CUSTOMER_SUPPORT_TICKETS if ticket["id"] == ticket_id), None)
+
+
+def _customer_support_summary():
+    summary = {
+        "Open": 0,
+        "In Progress": 0,
+        "Resolved": 0,
+        "Closed": 0,
+    }
+
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        summary.setdefault(ticket["status"], 0)
+        summary[ticket["status"]] += 1
+
+    total = sum(summary.values())
+    return {
+        "counts": summary,
+        "total": total,
+        "recent": sorted(
+            CUSTOMER_SUPPORT_TICKETS,
+            key=lambda item: item.get("updated_at") or item.get("created_at"),
+            reverse=True,
+        ),
+    }
+
+
+def _customer_support_filter_calls(category=None, status=None, search=None):
+    records = CUSTOMER_SUPPORT_CALL_LOGS
+
+    if category:
+        category = category.lower()
+        records = [
+            record
+            for record in records
+            if (record.get("category") or "").lower() == category
+        ]
+
+    if status:
+        status = status.lower()
+        records = [
+            record
+            for record in records
+            if (record.get("status") or "").lower() == status
+        ]
+
+    if search:
+        term = search.lower()
+        records = [
+            record
+            for record in records
+            if term in (record.get("subject") or "").lower()
+            or term in (record.get("caller") or "").lower()
+            or term in (record.get("ticket_id") or "").lower()
+        ]
+
+    return sorted(records, key=lambda item: item.get("logged_at"), reverse=True)
 
 
 def _normalise_srt_schema(raw_schema):
@@ -2414,7 +2812,7 @@ def profile():
 @login_required
 def settings():
     tab = (request.args.get("tab") or "admin").lower()
-    allowed_tabs = {"admin", "account"}
+    allowed_tabs = {"admin", "account", "display", "modules"}
     active_tab = tab if tab in allowed_tabs else "admin"
 
     users = []
@@ -2445,7 +2843,10 @@ def settings():
         department_options=department_options,
         department_branches=DEPARTMENT_BRANCHES,
         positions=positions,
-        position_options=position_options
+        position_options=position_options,
+        support_categories=CUSTOMER_SUPPORT_CATEGORIES,
+        support_channels=CUSTOMER_SUPPORT_CHANNELS,
+        support_sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
     )
 
 
@@ -5295,6 +5696,109 @@ def project_template_task_reorder(template_id):
 
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ---------------------- CUSTOMER SUPPORT MODULE ----------------------
+@app.route("/customer-support")
+@login_required
+def customer_support_home():
+    return redirect(url_for("customer_support_overview"))
+
+
+@app.route("/customer-support/overview")
+@login_required
+def customer_support_overview():
+    summary = _customer_support_summary()
+    counts = summary["counts"]
+    recent_tickets = []
+    for ticket in summary["recent"][:5]:
+        recent_tickets.append(
+            {
+                **ticket,
+                "created_display": ticket["created_at"].strftime("%d %b %Y · %I:%M %p"),
+                "updated_display": (ticket.get("updated_at") or ticket["created_at"]).strftime("%d %b %Y · %I:%M %p"),
+            }
+        )
+
+    kpis = [
+        {"label": "Open", "value": counts.get("Open", 0), "tone": "rose"},
+        {"label": "In Progress", "value": counts.get("In Progress", 0), "tone": "amber"},
+        {"label": "Resolved", "value": counts.get("Resolved", 0), "tone": "emerald"},
+        {"label": "Closed", "value": counts.get("Closed", 0), "tone": "sky"},
+    ]
+
+    return render_template(
+        "customer_support_overview.html",
+        kpis=kpis,
+        total_tickets=summary["total"],
+        recent_tickets=recent_tickets,
+        categories=CUSTOMER_SUPPORT_CATEGORIES,
+        channels=CUSTOMER_SUPPORT_CHANNELS,
+    )
+
+
+@app.route("/customer-support/tasks")
+@login_required
+def customer_support_tasks():
+    tickets = sorted(
+        CUSTOMER_SUPPORT_TICKETS,
+        key=lambda ticket: ticket.get("updated_at") or ticket.get("created_at"),
+        reverse=True,
+    )
+    ticket_id = request.args.get("ticket")
+    selected_ticket = _get_customer_support_ticket(ticket_id)
+    if not selected_ticket and tickets:
+        selected_ticket = tickets[0]
+
+    timeline = []
+    attachments = []
+    linked_tasks = []
+    if selected_ticket:
+        timeline = sorted(
+            selected_ticket.get("timeline", []),
+            key=lambda event: event.get("timestamp"),
+            reverse=True,
+        )
+        attachments = selected_ticket.get("attachments", [])
+        linked_tasks = selected_ticket.get("linked_tasks", [])
+
+    return render_template(
+        "customer_support_tasks.html",
+        tickets=tickets,
+        selected_ticket=selected_ticket,
+        timeline=timeline,
+        attachments=attachments,
+        linked_tasks=linked_tasks,
+        categories=CUSTOMER_SUPPORT_CATEGORIES,
+        channels=CUSTOMER_SUPPORT_CHANNELS,
+        sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
+        status_options=["Open", "In Progress", "Resolved", "Closed"],
+        priority_options=["Low", "Medium", "High", "Critical"],
+    )
+
+
+@app.route("/customer-support/calls")
+@login_required
+def customer_support_calls():
+    status_filter = request.args.get("status") or ""
+    category_filter = request.args.get("category") or ""
+    search_term = request.args.get("q") or ""
+
+    call_logs = _customer_support_filter_calls(
+        category=category_filter or None,
+        status=status_filter or None,
+        search=search_term or None,
+    )
+
+    return render_template(
+        "customer_support_calls.html",
+        call_logs=call_logs,
+        status_filter=status_filter,
+        category_filter=category_filter,
+        search_term=search_term,
+        status_options=["Open", "In Progress", "Resolved", "Closed"],
+        categories=CUSTOMER_SUPPORT_CATEGORIES,
+    )
 
 
 # ---------------------- SRT MODULE ----------------------

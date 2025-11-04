@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Customer Support · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Customer Support</p>
+      <h1 class="mt-1 text-2xl font-semibold text-slate-100">Service Desk Overview</h1>
+      <p class="mt-2 max-w-2xl text-sm text-slate-400">Monitor ticket health, keep an eye on open workload and stay ahead of SLA commitments for every customer conversation.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{{ url_for('customer_support_tasks') }}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        <span>Log ticket</span>
+      </a>
+      <a href="{{ url_for('customer_support_calls') }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-800/70 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700/70 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h.008v.008H8.25V6.75zM6 6.75h.008v.008H6V6.75zm4.5 0h.008v.008H10.5V6.75zM3 6.75h.008v.008H3V6.75zm13.5 0h.008v.008H16.5V6.75zm2.25 0h.008v.008H18.75V6.75zm-9 0h.008v.008H9.75V6.75zM12 3.75a.75.75 0 01.75.75v15a.75.75 0 01-1.5 0v-15A.75.75 0 0112 3.75z" />
+        </svg>
+        <span>Call history</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {% for card in kpis %}
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 shadow-inner shadow-black/30">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ card.label }}</p>
+        <p class="mt-3 text-4xl font-semibold text-{{ 'rose' if card.tone == 'rose' else 'amber' if card.tone == 'amber' else 'emerald' if card.tone == 'emerald' else 'sky' }}-200">{{ card.value }}</p>
+        <p class="mt-2 text-xs text-slate-500">{{ 'Tickets currently ' + card.label.lower() if card.label in ['Open', 'In Progress'] else card.label + ' in the last cycle' }}</p>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60">
+    <div class="flex flex-col gap-2 border-b border-slate-800/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Recent tickets</h2>
+        <p class="text-sm text-slate-400">A quick glance at the latest customer queries logged across all channels.</p>
+      </div>
+      <span class="text-xs font-medium uppercase tracking-wide text-slate-500">{{ total_tickets }} total tickets</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+        <thead class="bg-slate-900/70 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-6 py-3">Ticket</th>
+            <th class="px-6 py-3">Customer</th>
+            <th class="px-6 py-3">Category</th>
+            <th class="px-6 py-3">Channel</th>
+            <th class="px-6 py-3">Owner</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Updated</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/50 text-slate-200">
+          {% for ticket in recent_tickets %}
+            <tr class="transition hover:bg-slate-800/40">
+              <td class="px-6 py-4">
+                <div class="font-semibold text-slate-100">{{ ticket.id }}</div>
+                <div class="text-xs text-slate-400">{{ ticket.subject }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-slate-100">{{ ticket.customer }}</div>
+                <div class="text-xs text-slate-400">{{ ticket.contact_name }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-200">
+                  {{ ticket.category }}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <div class="inline-flex items-center gap-2 text-xs text-slate-300">
+                  {% set channel = ticket.channel %}
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-800/70 border border-slate-700/70 text-base">{{ channel[0] }}</span>
+                  <span class="font-medium">{{ ticket.channel }}</span>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-slate-100">{{ ticket.assignee }}</div>
+                <div class="text-xs text-slate-500">Priority: {{ ticket.priority }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold {{ 'bg-rose-500/20 text-rose-200' if ticket.status == 'Open' else 'bg-amber-500/20 text-amber-200' if ticket.status == 'In Progress' else 'bg-emerald-500/20 text-emerald-200' if ticket.status == 'Resolved' else 'bg-sky-500/20 text-sky-200' }}">
+                  {{ ticket.status }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-xs text-slate-400">
+                <div>Created: {{ ticket.created_display }}</div>
+                <div>Updated: {{ ticket.updated_display }}</div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" class="px-6 py-6 text-center text-sm text-slate-400">No tickets logged yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
