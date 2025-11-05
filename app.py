@@ -5747,8 +5747,6 @@ def customer_support_tasks():
     )
     ticket_id = request.args.get("ticket")
     selected_ticket = _get_customer_support_ticket(ticket_id)
-    if not selected_ticket and tickets:
-        selected_ticket = tickets[0]
 
     timeline = []
     attachments = []
@@ -5774,6 +5772,7 @@ def customer_support_tasks():
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
         priority_options=["Low", "Medium", "High", "Critical"],
+        open_ticket_modal=bool(selected_ticket),
     )
 
 
