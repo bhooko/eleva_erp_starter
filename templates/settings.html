@@ -217,7 +217,6 @@
               <h4 class="text-base font-semibold text-slate-100">Customer Support configuration</h4>
               <p class="text-sm text-slate-400">Keep categories, channels and SLA timers aligned with your NI/AMC/Support structure. No deployment needed.</p>
             </div>
-            <span class="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">Editable in-app</span>
           </div>
 
           <div class="grid gap-6 lg:grid-cols-2">
@@ -226,13 +225,8 @@
                 <div>
                   <h5 class="text-sm font-semibold text-slate-100">Categories</h5>
                   <p class="text-xs text-slate-400">Map tickets to Sales-NI, Sales-AMC, Support-AMC or any custom department.</p>
+                  <p class="mt-2 text-[11px] uppercase tracking-wide text-slate-500">Updates appear instantly in the Add Ticket form dropdown.</p>
                 </div>
-                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-                  </svg>
-                  <span>Add category</span>
-                </button>
               </div>
               <div class="mt-4 space-y-3">
                 {% for category in support_categories %}
@@ -273,9 +267,36 @@
                     <h5 class="text-sm font-semibold text-slate-100">Channels</h5>
                     <p class="text-xs text-slate-400">Choose where tickets originate — phone, email, web, walk-in or WhatsApp.</p>
                   </div>
-                  <button type="button" class="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Edit list</button>
+                  <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30" data-add-channel-trigger>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    </svg>
+                    <span>Add channel</span>
+                  </button>
                 </div>
-                <div class="mt-4 grid grid-cols-2 gap-3">
+                <form class="mt-4 hidden flex-col gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4 text-sm" data-add-channel-form>
+                  <p class="text-xs uppercase tracking-wide text-emerald-300">Add a new ticket intake channel</p>
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    <label class="flex flex-col gap-1 text-xs text-slate-300">
+                      <span class="uppercase tracking-wide text-slate-500">Channel label</span>
+                      <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="E.g. Facebook" data-new-channel-label>
+                    </label>
+                    <label class="flex flex-col gap-1 text-xs text-slate-300">
+                      <span class="uppercase tracking-wide text-slate-500">Icon / emoji</span>
+                      <input type="text" maxlength="2" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="💬" data-new-channel-icon>
+                    </label>
+                    <div class="flex items-end gap-2">
+                      <button type="submit" class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span>Add to list</span>
+                      </button>
+                      <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70" data-cancel-add-channel>Cancel</button>
+                    </div>
+                  </div>
+                </form>
+                <div class="mt-4 grid grid-cols-2 gap-3" data-channel-list>
                   {% for channel in support_channels %}
                     <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:border-emerald-400/40">
                       <span class="text-lg">{{ channel.icon }}</span>
@@ -291,8 +312,8 @@
                   <div>
                     <h5 class="text-sm font-semibold text-slate-100">SLA presets</h5>
                     <p class="text-xs text-slate-400">Adjust first response and resolution timers that agents can apply.</p>
+                    <p class="mt-2 text-[11px] uppercase tracking-wide text-slate-500">Preset management is handled by your admin team.</p>
                   </div>
-                  <button type="button" class="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Add preset</button>
                 </div>
                 <div class="mt-4 space-y-3">
                   {% for sla in support_sla_presets %}
@@ -399,6 +420,68 @@
       const themeCards = Array.from(document.querySelectorAll('[data-theme-option]'));
       const themeRadios = Array.from(document.querySelectorAll('[data-theme-radio]'));
       const themeStatus = document.querySelector('[data-theme-status]');
+
+      const addChannelTrigger = document.querySelector('[data-add-channel-trigger]');
+      const addChannelForm = document.querySelector('[data-add-channel-form]');
+      const addChannelCancel = document.querySelector('[data-cancel-add-channel]');
+      const channelList = document.querySelector('[data-channel-list]');
+
+      if (addChannelTrigger && addChannelForm && channelList) {
+        const labelInput = addChannelForm.querySelector('[data-new-channel-label]');
+        const iconInput = addChannelForm.querySelector('[data-new-channel-icon]');
+
+        const toggleChannelForm = (show) => {
+          const shouldShow = typeof show === 'boolean' ? show : addChannelForm.classList.contains('hidden');
+          addChannelForm.classList.toggle('hidden', !shouldShow);
+          if (shouldShow && labelInput) {
+            requestAnimationFrame(() => labelInput.focus());
+          }
+        };
+
+        addChannelTrigger.addEventListener('click', () => toggleChannelForm(true));
+
+        if (addChannelCancel) {
+          addChannelCancel.addEventListener('click', () => {
+            addChannelForm.reset();
+            toggleChannelForm(false);
+          });
+        }
+
+        addChannelForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const label = labelInput ? labelInput.value.trim() : '';
+          const icon = iconInput ? iconInput.value.trim() || '🆕' : '🆕';
+
+          if (!label) {
+            if (labelInput) {
+              labelInput.focus();
+            }
+            return;
+          }
+
+          const channelTag = document.createElement('label');
+          channelTag.className = 'flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-emerald-400/40 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:border-emerald-400/60';
+
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'text-lg';
+          iconSpan.textContent = icon;
+
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = label;
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = true;
+          checkbox.className = 'ml-auto h-4 w-4 rounded border border-slate-600 bg-slate-950 text-emerald-400 focus:ring-emerald-400';
+
+          channelTag.append(iconSpan, labelSpan, checkbox);
+
+          channelList.appendChild(channelTag);
+
+          addChannelForm.reset();
+          toggleChannelForm(false);
+        });
+      }
 
       if (themeCards.length && themeRadios.length) {
         const themeNames = new Map(themeCards.map((card) => [card.dataset.themeOption, card.dataset.themeName]));
