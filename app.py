@@ -54,6 +54,11 @@ def generate_random_email(domains=None):
     return f"{local_part}@{random.choice(domain_pool)}"
 
 
+def generate_linked_task_id():
+    """Generate a short, human-friendly identifier for linked tasks."""
+    return f"TASK-{uuid.uuid4().hex[:6].upper()}"
+
+
 # ---------------------- QC Profile choices (visible in UI) ----------------------
 STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
@@ -264,6 +269,13 @@ CUSTOMER_SUPPORT_SLA_PRESETS = [
         "resolution_hours": 8,
     },
 ]
+
+
+CUSTOMER_SUPPORT_DEFAULT_TEAM = {
+    "Service Desk",
+    "Field Team 3",
+    "Customer Care Desk",
+}
 
 CUSTOMER_SUPPORT_TICKETS = [
     {
@@ -598,6 +610,37 @@ def _customer_support_summary():
             reverse=True,
         ),
     }
+
+
+def _customer_support_team_members():
+    members = set(CUSTOMER_SUPPORT_DEFAULT_TEAM)
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        assignee = ticket.get("assignee")
+        if assignee:
+            members.add(assignee)
+        for event in ticket.get("timeline", []):
+            actor = event.get("actor")
+            if actor:
+                members.add(actor)
+    if current_user.is_authenticated:
+        members.add(current_user.display_name)
+    members.add("Unassigned")
+    return sorted(member for member in members if member)
+
+
+def _infer_attachment_type(filename, mimetype=None):
+    ext = (os.path.splitext(filename)[1] or "").lower()
+    if mimetype:
+        major = mimetype.split("/", 1)[0].lower()
+        if major == "image":
+            return "image"
+        if major == "video":
+            return "video"
+    if ext in {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}:
+        return "image"
+    if ext in {".mp4", ".mov", ".avi", ".mkv", ".webm"}:
+        return "video"
+    return "file"
 
 
 def _customer_support_filter_calls(category=None, status=None, search=None):
@@ -5751,6 +5794,7 @@ def customer_support_tasks():
     timeline = []
     attachments = []
     linked_tasks = []
+    open_linked_task_modal = request.args.get("open_linked_task") == "1"
     if selected_ticket:
         timeline = sorted(
             selected_ticket.get("timeline", []),
@@ -5772,8 +5816,201 @@ def customer_support_tasks():
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
         priority_options=["Low", "Medium", "High", "Critical"],
+        team_members=_customer_support_team_members(),
         open_ticket_modal=bool(selected_ticket),
+        open_linked_task_modal=open_linked_task_modal,
     )
+
+
+@app.route("/customer-support/linked-tasks", methods=["POST"])
+@login_required
+def customer_support_create_linked_task():
+    ticket_id = (request.form.get("ticket_id") or "").strip()
+    if not ticket_id:
+        flash("Select a ticket before creating a linked task.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    ticket = _get_customer_support_ticket(ticket_id)
+    if not ticket:
+        flash("The referenced ticket could not be found.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    title = (request.form.get("title") or "").strip()
+    details = (request.form.get("details") or "").strip()
+    assignee = (request.form.get("assignee") or "").strip()
+    due_date_raw = (request.form.get("due_date") or "").strip()
+    category = (request.form.get("category") or "").strip()
+    priority = (request.form.get("priority") or "").strip()
+
+    errors = []
+    if not title:
+        errors.append("Provide a title for the linked task.")
+
+    due_date = None
+    if due_date_raw:
+        try:
+            due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            errors.append("Enter the due date in YYYY-MM-DD format.")
+
+    if errors:
+        for message in errors:
+            flash(message, "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id, open_linked_task="1"))
+
+    category_label = None
+    if category:
+        category_label = next((item.get("label") for item in CUSTOMER_SUPPORT_CATEGORIES if item.get("id") == category), None)
+
+    new_task = {
+        "id": generate_linked_task_id(),
+        "title": title,
+        "assignee": assignee or "Unassigned",
+        "status": "Open",
+        "due_date": due_date,
+        "details": details or None,
+        "category": category_label or category or None,
+        "priority": priority or "Medium",
+        "created_at": datetime.datetime.utcnow(),
+    }
+
+    ticket.setdefault("linked_tasks", []).append(new_task)
+    flash("Linked task created successfully.", "success")
+    return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+
+@app.route("/customer-support/tickets/<ticket_id>/update", methods=["POST"])
+@login_required
+def customer_support_update_ticket(ticket_id):
+    ticket = _get_customer_support_ticket(ticket_id)
+    if not ticket:
+        flash("The requested ticket could not be found.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    status = (request.form.get("status") or ticket.get("status") or "Open").strip()
+    priority = (request.form.get("priority") or ticket.get("priority") or "Medium").strip()
+    assignee = (request.form.get("assignee") or ticket.get("assignee") or "Unassigned").strip()
+
+    allowed_status = {"Open", "In Progress", "Resolved", "Closed"}
+    allowed_priority = {"Low", "Medium", "High", "Critical"}
+    team_members = set(_customer_support_team_members())
+
+    errors = []
+    if status not in allowed_status:
+        errors.append("Choose a valid status for the ticket.")
+    if priority not in allowed_priority:
+        errors.append("Choose a valid priority for the ticket.")
+    if assignee and assignee not in team_members:
+        errors.append("Select an assignee from the available team members.")
+
+    if errors:
+        for message in errors:
+            flash(message, "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    changes = []
+    if status != ticket.get("status"):
+        changes.append(f"Status updated to {status}")
+        ticket["status"] = status
+    if priority != ticket.get("priority"):
+        changes.append(f"Priority updated to {priority}")
+        ticket["priority"] = priority
+    if assignee != (ticket.get("assignee") or "Unassigned"):
+        changes.append(f"Assigned to {assignee}")
+        ticket["assignee"] = assignee
+
+    if not changes:
+        flash("No changes detected to update.", "info")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    ticket["updated_at"] = datetime.datetime.utcnow()
+    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    ticket.setdefault("timeline", []).append(
+        {
+            "timestamp": datetime.datetime.utcnow(),
+            "type": "status",
+            "label": "Ticket details updated",
+            "visibility": "internal",
+            "actor": actor_name,
+            "detail": "; ".join(changes),
+        }
+    )
+
+    flash("Ticket details updated successfully.", "success")
+    return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+
+@app.route("/customer-support/tickets/<ticket_id>/comment", methods=["POST"])
+@login_required
+def customer_support_post_update(ticket_id):
+    ticket = _get_customer_support_ticket(ticket_id)
+    if not ticket:
+        flash("The requested ticket could not be found.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    comment = (request.form.get("comment") or "").strip()
+    is_external = request.form.get("is_external") == "1"
+    uploaded_files = request.files.getlist("attachments") or []
+    valid_files = [file for file in uploaded_files if file and file.filename]
+
+    if not comment and not valid_files:
+        flash("Add a comment or attach at least one file before posting the update.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    attachments_added = []
+    upload_root = app.config["UPLOAD_FOLDER"]
+    os.makedirs(upload_root, exist_ok=True)
+
+    for file in valid_files:
+        original_name = secure_filename(file.filename)
+        if not original_name:
+            continue
+        dest_name = f"{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
+        dest_path = os.path.join(upload_root, dest_name)
+        try:
+            file.save(dest_path)
+        except Exception:
+            flash(f"Could not save attachment '{original_name}'.", "error")
+            continue
+
+        attachment_type = _infer_attachment_type(original_name, getattr(file, "mimetype", None))
+        attachments_added.append(
+            {
+                "label": original_name,
+                "type": attachment_type,
+                "url": url_for("static", filename=f"uploads/{dest_name}"),
+            }
+        )
+
+    if not comment and not attachments_added:
+        flash("No valid attachments were uploaded.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    if attachments_added:
+        ticket.setdefault("attachments", []).extend(attachments_added)
+
+    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    visibility_label = "External update" if is_external else "Internal note"
+    timeline_entry = {
+        "timestamp": datetime.datetime.utcnow(),
+        "type": "comment" if comment else "attachment",
+        "label": visibility_label,
+        "visibility": "external" if is_external else "internal",
+        "actor": actor_name,
+    }
+
+    if comment:
+        timeline_entry["comment"] = comment
+
+    if attachments_added:
+        names = ", ".join(item["label"] for item in attachments_added)
+        timeline_entry["detail"] = f"Uploaded: {names}"
+
+    ticket.setdefault("timeline", []).append(timeline_entry)
+    ticket["updated_at"] = datetime.datetime.utcnow()
+
+    flash("Ticket update posted successfully.", "success")
+    return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
 
 @app.route("/customer-support/calls")
