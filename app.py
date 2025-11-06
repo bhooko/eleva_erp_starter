@@ -5767,7 +5767,7 @@ def customer_support_tasks():
         timeline=timeline,
         attachments=attachments,
         linked_tasks=linked_tasks,
-        categories=CUSTOMER_SUPPORT_CATEGORIES,
+        support_categories=CUSTOMER_SUPPORT_CATEGORIES,
         channels=CUSTOMER_SUPPORT_CHANNELS,
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
