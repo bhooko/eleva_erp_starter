@@ -218,21 +218,59 @@
                     {% endfor %}
                   </select>
                 </div>
-                <div class="md:col-span-2 space-y-1">
-                  <label class="text-xs text-slate-400">Position</label>
-                  <select name="position_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
-                    <option value="">No position</option>
-                    {% for pos in position_options %}
-                      <option value="{{ pos.id }}" {% if user.position_id == pos.id %}selected{% endif %}>{{ pos.display_label }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
+              <div class="md:col-span-2 space-y-1">
+                <label class="text-xs text-slate-400">Position</label>
+                <select name="position_id" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm">
+                  <option value="">No position</option>
+                  {% for pos in position_options %}
+                    <option value="{{ pos.id }}" {% if user.position_id == pos.id %}selected{% endif %}>{{ pos.display_label }}</option>
+                  {% endfor %}
+                </select>
               </div>
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if user.is_active %}checked{% endif %} />
-                  Active
-                </label>
+            </div>
+            <div class="space-y-4 rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4">
+              <div>
+                <h4 class="text-sm font-semibold text-slate-100">Module permissions</h4>
+                <p class="text-xs text-slate-400">Choose where {{ user.display_name or user.username }} appears in the app and which areas they can be assigned work in.</p>
+              </div>
+              <div class="space-y-4">
+                {% for module in workspace_modules %}
+                  {% set module_perm = user.get_module_permission_settings(module.key) %}
+                  <div class="flex flex-col gap-3 rounded-xl border border-slate-800/60 bg-slate-900/70 p-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div class="text-sm font-semibold text-slate-100">{{ module.label }}</div>
+                      <p class="text-xs text-slate-400">{{ module.description }}</p>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox"
+                               id="user-{{ user.id }}-module-{{ module.key }}-visibility"
+                               name="module_{{ module.key }}_visibility"
+                               value="1"
+                               class="rounded border-slate-700 bg-slate-900"
+                               {% if module_perm.visibility %}checked{% endif %}>
+                        <span>{{ module.visibility_label }}</span>
+                      </label>
+                      <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox"
+                               id="user-{{ user.id }}-module-{{ module.key }}-assignment"
+                               name="module_{{ module.key }}_assignment"
+                               value="1"
+                               class="rounded border-slate-700 bg-slate-900"
+                               {% if module_perm.assignment %}checked{% endif %}>
+                        <span>{{ module.assignment_label }}</span>
+                      </label>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <p class="text-[11px] text-slate-500">Admins always retain full visibility and assignment access across modules.</p>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+                <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if user.is_active %}checked{% endif %} />
+                Active
+              </label>
                 <div class="flex flex-wrap gap-2">
                   <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Save changes</button>
                 </div>

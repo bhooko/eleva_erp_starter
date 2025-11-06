@@ -86,6 +86,47 @@ PROJECT_DOOR_FINISHES = ["SS", "MS", "Collapsible", "BiParting", "Gate"]
 DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
 
+WORKSPACE_MODULES = [
+    {
+        "key": "sales",
+        "label": "Sales",
+        "description": "Pipeline, clients and revenue forecasting dashboards.",
+        "visibility_label": "Show Sales workspace",
+        "assignment_label": "Allow Sales ownership",
+    },
+    {
+        "key": "operations",
+        "label": "Operations",
+        "description": "Project delivery tools inside the New Installation area.",
+        "visibility_label": "Show Operations workspace",
+        "assignment_label": "Allow Operations task assignment",
+    },
+    {
+        "key": "qc",
+        "label": "Quality Control",
+        "description": "QC boards, task tracking and submission reviews.",
+        "visibility_label": "Show QC workspace",
+        "assignment_label": "Allow QC task assignment",
+    },
+    {
+        "key": "srt",
+        "label": "SRT",
+        "description": "Service Response Team dashboards and templates.",
+        "visibility_label": "Show SRT workspace",
+        "assignment_label": "Allow SRT ownership",
+    },
+    {
+        "key": "customer_support",
+        "label": "Customer Support",
+        "description": "Support overview, ticket triage and linked tasks.",
+        "visibility_label": "Show Customer Support workspace",
+        "assignment_label": "Allow Customer Support ownership",
+    },
+]
+
+WORKSPACE_MODULE_MAP = {module["key"]: module for module in WORKSPACE_MODULES}
+
+
 def slugify(value):
     value = (value or "").lower()
     value = re.sub(r"[^a-z0-9]+", "-", value)
@@ -1692,6 +1733,7 @@ class User(UserMixin, db.Model):
         default=lambda: str(uuid.uuid4()),
     )
     position_id = db.Column(db.Integer, db.ForeignKey("position.id"), nullable=True)
+    module_permissions_json = db.Column(db.Text, nullable=False, default="{}")
 
     position = db.relationship("Position", back_populates="users")
 
@@ -1709,9 +1751,99 @@ class User(UserMixin, db.Model):
         role = (self.role or "").strip().lower()
         return role == "admin" or self.username.lower() == "admin"
 
+    def _module_permissions_cache(self):
+        cache = getattr(self, "_module_permissions_data", None)
+        if cache is None:
+            raw = self.module_permissions_json or "{}"
+            try:
+                loaded = json.loads(raw)
+            except (TypeError, ValueError):
+                loaded = {}
+            if not isinstance(loaded, dict):
+                loaded = {}
+            normalised = {}
+            for key, value in loaded.items():
+                if not isinstance(value, dict):
+                    continue
+                module_key = (key or "").strip().lower()
+                if not module_key:
+                    continue
+                normalised[module_key] = {
+                    "visibility": bool(value.get("visibility", True)),
+                    "assignment": bool(value.get("assignment", True)),
+                }
+            self._module_permissions_data = normalised
+            cache = normalised
+        return cache
+
+    def get_module_permission_settings(self, module_key):
+        module_key = (module_key or "").strip().lower()
+        data = self._module_permissions_cache().get(module_key, {})
+        return {
+            "visibility": bool(data.get("visibility", True)),
+            "assignment": bool(data.get("assignment", True)),
+        }
+
+    def set_module_permissions(self, permissions):
+        cleaned = {}
+        for key, value in (permissions or {}).items():
+            module_key = (key or "").strip().lower()
+            if not module_key:
+                continue
+            visibility = bool(value.get("visibility", True)) if isinstance(value, dict) else bool(value)
+            assignment = bool(value.get("assignment", True)) if isinstance(value, dict) else True
+            cleaned[module_key] = {
+                "visibility": visibility,
+                "assignment": assignment,
+            }
+        self.module_permissions_json = json.dumps(cleaned)
+        self._module_permissions_data = cleaned
+
+    def can_view_module(self, module_key):
+        if self.is_admin:
+            return True
+        module_key = (module_key or "").strip().lower()
+        if not module_key:
+            return True
+        settings = self.get_module_permission_settings(module_key)
+        return bool(settings.get("visibility", True))
+
+    def can_be_assigned_module(self, module_key):
+        if self.is_admin:
+            return True
+        module_key = (module_key or "").strip().lower()
+        if not module_key:
+            return True
+        settings = self.get_module_permission_settings(module_key)
+        return bool(settings.get("assignment", True))
+
     def issue_session_token(self):
         self.session_token = str(uuid.uuid4())
         return self.session_token
+
+
+def _module_visibility_required(module_key):
+    if not current_user.can_view_module(module_key):
+        abort(403)
+
+
+def get_assignable_users_for_module(module_key, order_by="name"):
+    module_key = (module_key or "").strip().lower()
+    query = User.query
+    if order_by == "username":
+        query = query.order_by(User.username.asc())
+    else:
+        query = query.order_by(User.first_name.asc(), User.last_name.asc(), User.username.asc())
+    users = query.all()
+    return [user for user in users if user.can_be_assigned_module(module_key)]
+
+
+@app.context_processor
+def inject_workspace_modules():
+    return {
+        "workspace_modules": WORKSPACE_MODULES,
+        "workspace_module_map": WORKSPACE_MODULE_MAP,
+    }
 
 
 class Project(db.Model):
@@ -2399,7 +2531,8 @@ def ensure_qc_columns():
         "display_picture": "TEXT",
         "active": "INTEGER DEFAULT 1",
         "session_token": "TEXT",
-        "position_id": "INTEGER"
+        "position_id": "INTEGER",
+        "module_permissions_json": "TEXT"
     }
     for col, col_type in user_column_defs.items():
         if col not in user_cols:
@@ -2616,6 +2749,8 @@ def bootstrap_db():
         user.issue_session_token()
     for user in User.query.filter(User.active.is_(None)).all():
         user.active = True
+    for user in User.query.filter(or_(User.module_permissions_json.is_(None), User.module_permissions_json == "")).all():
+        user.module_permissions_json = "{}"
 
     get_or_create_default_task_form()
 
@@ -2896,6 +3031,7 @@ def settings():
 @app.route("/sales")
 @login_required
 def sales_home():
+    _module_visibility_required("sales")
     today = datetime.date.today()
     month_start = today.replace(day=1)
     next_month_start = (month_start + datetime.timedelta(days=32)).replace(day=1)
@@ -3074,6 +3210,7 @@ def sales_home():
 @app.route("/sales/clients")
 @login_required
 def sales_clients():
+    _module_visibility_required("sales")
     clients = (
         SalesClient.query
         .order_by(SalesClient.display_name.asc())
@@ -3091,6 +3228,7 @@ def sales_clients():
 @app.route("/sales/clients/create", methods=["POST"])
 @login_required
 def sales_clients_create():
+    _module_visibility_required("sales")
     name = (request.form.get("display_name") or "").strip()
     if not name:
         flash("Client name is required.", "error")
@@ -3123,6 +3261,7 @@ def sales_clients_create():
 @app.route("/sales/clients/<int:client_id>", methods=["GET", "POST"])
 @login_required
 def sales_client_detail(client_id):
+    _module_visibility_required("sales")
     client = db.session.get(SalesClient, client_id)
     if not client:
         flash("Client not found.", "error")
@@ -3143,9 +3282,13 @@ def sales_client_detail(client_id):
             owner_id_raw = request.form.get("owner_id")
             if owner_id_raw:
                 try:
-                    client.owner = db.session.get(User, int(owner_id_raw))
+                    owner_candidate = db.session.get(User, int(owner_id_raw))
                 except (TypeError, ValueError):
-                    client.owner = None
+                    owner_candidate = None
+                if owner_candidate and not owner_candidate.can_be_assigned_module("sales"):
+                    flash("The selected owner cannot be assigned to Sales records.", "error")
+                    return redirect(url_for("sales_client_detail", client_id=client.id))
+                client.owner = owner_candidate
             else:
                 client.owner = None
 
@@ -3168,7 +3311,7 @@ def sales_client_detail(client_id):
         .order_by(SalesActivity.created_at.desc())
         .all()
     )
-    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    owners = get_assignable_users_for_module("sales", order_by="name")
     open_opportunities = [opp for opp in client.opportunities if not opp.is_closed]
     all_clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
     return render_template(
@@ -3187,6 +3330,7 @@ def sales_client_detail(client_id):
 @app.route("/sales/opportunities/<pipeline_key>")
 @login_required
 def sales_opportunities_pipeline(pipeline_key):
+    _module_visibility_required("sales")
     pipeline_key = (pipeline_key or "lift").lower()
     config = get_pipeline_config(pipeline_key)
     stages = list(config["stages"])
@@ -3204,7 +3348,7 @@ def sales_opportunities_pipeline(pipeline_key):
     for stage_list in grouped.values():
         stage_list.sort(key=lambda o: o.updated_at or o.created_at, reverse=True)
 
-    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    owners = get_assignable_users_for_module("sales", order_by="name")
     clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
     temperature_choices = SALES_TEMPERATURES
     total_opportunities = sum(len(items) for items in grouped.values())
@@ -3240,6 +3384,7 @@ def sales_opportunities_pipeline(pipeline_key):
 @app.route("/sales/opportunities/create", methods=["POST"])
 @login_required
 def sales_opportunities_create():
+    _module_visibility_required("sales")
     title = (request.form.get("title") or "").strip()
     pipeline_key = (request.form.get("pipeline") or "lift").lower()
     config = get_pipeline_config(pipeline_key)
@@ -3290,6 +3435,7 @@ def sales_opportunities_create():
 @app.route("/sales/opportunities/<int:opportunity_id>", methods=["GET", "POST"])
 @login_required
 def sales_opportunity_detail(opportunity_id):
+    _module_visibility_required("sales")
     opportunity = db.session.get(SalesOpportunity, opportunity_id)
     if not opportunity:
         flash("Opportunity not found.", "error")
@@ -3351,9 +3497,13 @@ def sales_opportunity_detail(opportunity_id):
             owner_id_raw = request.form.get("owner_id")
             if owner_id_raw:
                 try:
-                    opportunity.owner = db.session.get(User, int(owner_id_raw))
+                    owner_candidate = db.session.get(User, int(owner_id_raw))
                 except (TypeError, ValueError):
-                    opportunity.owner = None
+                    owner_candidate = None
+                if owner_candidate and not owner_candidate.can_be_assigned_module("sales"):
+                    flash("The selected owner cannot be assigned to Sales opportunities.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                opportunity.owner = owner_candidate
             else:
                 opportunity.owner = None
 
@@ -3604,7 +3754,7 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesOpportunityItem.created_at.desc())
         .all()
     )
-    owners = User.query.order_by(User.first_name.asc(), User.last_name.asc()).all()
+    owners = get_assignable_users_for_module("sales", order_by="name")
     clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
 
     return render_template(
@@ -3631,6 +3781,7 @@ def sales_opportunity_detail(opportunity_id):
 @app.route("/sales/opportunities/<int:opportunity_id>/stage", methods=["POST"])
 @login_required
 def sales_opportunity_stage(opportunity_id):
+    _module_visibility_required("sales")
     opportunity = db.session.get(SalesOpportunity, opportunity_id)
     accepts = request.accept_mimetypes.best
     wants_json = request.headers.get("X-Requested-With") == "XMLHttpRequest" or accepts == "application/json"
@@ -3863,6 +4014,17 @@ def admin_users_update(user_id):
 
     if password:
         user.password = password
+
+    permissions_payload = {}
+    for module in WORKSPACE_MODULES:
+        module_key = module["key"]
+        visibility_flag = _form_truthy(request.form.get(f"module_{module_key}_visibility"))
+        assignment_flag = _form_truthy(request.form.get(f"module_{module_key}_assignment"))
+        permissions_payload[module_key] = {
+            "visibility": visibility_flag,
+            "assignment": assignment_flag,
+        }
+    user.set_module_permissions(permissions_payload)
 
     db.session.commit()
     flash(f"User '{user.username}' updated.", "success")
@@ -4175,23 +4337,33 @@ def _build_task_overview(viewing_user: "User"):
         modules_map = OrderedDict()
         module_order = []
 
-        _ensure_module(
-            modules_map,
-            module_order,
-            "Projects",
-            "No pending project tasks.",
-            "Tasks from active projects assigned to you.",
-        )
-        _ensure_module(
-            modules_map,
-            module_order,
-            "Sales",
-            "No pending sales activities.",
-            "Upcoming and overdue sales engagements on your opportunities.",
-        )
+        show_projects = viewing_user.can_view_module("operations") if viewing_user else True
+        show_qc = viewing_user.can_view_module("qc") if viewing_user else True
+        show_sales = viewing_user.can_view_module("sales") if viewing_user else True
+
+        if show_projects:
+            _ensure_module(
+                modules_map,
+                module_order,
+                "Projects",
+                "No pending project tasks.",
+                "Tasks from active projects assigned to you.",
+            )
+        if show_sales:
+            _ensure_module(
+                modules_map,
+                module_order,
+                "Sales",
+                "No pending sales activities.",
+                "Upcoming and overdue sales engagements on your opportunities.",
+            )
 
         for task in open_tasks:
             module_label = "Projects" if task.project else "Quality Control"
+            if module_label == "Projects" and not show_projects:
+                continue
+            if module_label == "Quality Control" and not show_qc:
+                continue
             module_description = (
                 "Project execution tasks awaiting your action."
                 if module_label == "Projects"
@@ -4236,63 +4408,64 @@ def _build_task_overview(viewing_user: "User"):
                 }
             )
 
-        sales_module = modules_map.get("Sales")
-        if sales_module is None:
-            sales_module = _ensure_module(
-                modules_map,
-                module_order,
-                "Sales",
-                "No pending sales activities.",
-                "Upcoming and overdue sales engagements on your opportunities.",
-            )
-        sales_items = (
-            SalesOpportunityEngagement.query
-            .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
-            .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
-            .filter(
-                or_(
-                    SalesOpportunity.owner_id == viewing_user.id,
-                    SalesOpportunityEngagement.created_by_id == viewing_user.id,
+        if show_sales:
+            sales_module = modules_map.get("Sales")
+            if sales_module is None:
+                sales_module = _ensure_module(
+                    modules_map,
+                    module_order,
+                    "Sales",
+                    "No pending sales activities.",
+                    "Upcoming and overdue sales engagements on your opportunities.",
                 )
+            sales_items = (
+                SalesOpportunityEngagement.query
+                .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
+                .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
+                .filter(
+                    or_(
+                        SalesOpportunity.owner_id == viewing_user.id,
+                        SalesOpportunityEngagement.created_by_id == viewing_user.id,
+                    )
+                )
+                .filter(func.lower(SalesOpportunity.status) != "closed")
+                .order_by(SalesOpportunityEngagement.scheduled_for.asc(), SalesOpportunityEngagement.id.asc())
+                .limit(50)
+                .all()
             )
-            .filter(func.lower(SalesOpportunity.status) != "closed")
-            .order_by(SalesOpportunityEngagement.scheduled_for.asc(), SalesOpportunityEngagement.id.asc())
-            .limit(50)
-            .all()
-        )
 
-        for activity in sales_items:
-            opportunity = activity.opportunity
-            due_label, due_display, due_variant = _describe_due_date(activity.scheduled_for, now)
-            status_key = "overdue" if due_variant == "overdue" else "scheduled"
-            metadata = [activity.display_activity_type]
-            subtitle = None
-            if opportunity:
-                subtitle = opportunity.title
-                if opportunity.stage:
-                    metadata.append(opportunity.stage)
-                if opportunity.client and opportunity.client.display_name:
-                    metadata.append(f"Client: {opportunity.client.display_name}")
+            for activity in sales_items:
+                opportunity = activity.opportunity
+                due_label, due_display, due_variant = _describe_due_date(activity.scheduled_for, now)
+                status_key = "overdue" if due_variant == "overdue" else "scheduled"
+                metadata = [activity.display_activity_type]
+                subtitle = None
+                if opportunity:
+                    subtitle = opportunity.title
+                    if opportunity.stage:
+                        metadata.append(opportunity.stage)
+                    if opportunity.client and opportunity.client.display_name:
+                        metadata.append(f"Client: {opportunity.client.display_name}")
 
-            sales_module["items"].append(
-                {
-                    "title": activity.subject or activity.display_activity_type,
-                    "subtitle": subtitle,
-                    "description": activity.notes,
-                    "identifier": f"Activity #{activity.id}",
-                    "status": "Overdue" if status_key == "overdue" else "Scheduled",
-                    "status_class": _status_badge_class(status_key),
-                    "due_description": due_label,
-                    "due_display": due_display,
-                    "due_class": _due_badge_class(due_variant),
-                    "url": url_for("sales_opportunity_detail", opportunity_id=opportunity.id)
-                    if opportunity
-                    else None,
-                    "secondary_url": None,
-                    "secondary_label": None,
-                    "metadata": metadata,
-                }
-            )
+                sales_module["items"].append(
+                    {
+                        "title": activity.subject or activity.display_activity_type,
+                        "subtitle": subtitle,
+                        "description": activity.notes,
+                        "identifier": f"Activity #{activity.id}",
+                        "status": "Overdue" if status_key == "overdue" else "Scheduled",
+                        "status_class": _status_badge_class(status_key),
+                        "due_description": due_label,
+                        "due_display": due_display,
+                        "due_class": _due_badge_class(due_variant),
+                        "url": url_for("sales_opportunity_detail", opportunity_id=opportunity.id)
+                        if opportunity
+                        else None,
+                        "secondary_url": None,
+                        "secondary_label": None,
+                        "metadata": metadata,
+                    }
+                )
 
         pending_modules = [modules_map[label] for label in module_order]
         pending_total = sum(len(module["items"]) for module in pending_modules)
@@ -4385,6 +4558,7 @@ def dashboard():
 @app.route("/projects/pending")
 @login_required
 def projects_pending():
+    _module_visibility_required("operations")
     viewing_user = current_user
     selected_user_id = request.args.get("user_id", type=int)
     if selected_user_id and current_user.is_admin:
@@ -4416,6 +4590,7 @@ def projects_pending():
 @app.route("/forms")
 @login_required
 def forms_list():
+    _module_visibility_required("qc")
     forms = FormSchema.query.order_by(FormSchema.name.asc()).all()
     return render_template("forms_list.html", forms=forms, category_label="Forms", category_url=url_for('forms_list'))
 
@@ -4423,6 +4598,7 @@ def forms_list():
 @app.route("/forms/new", methods=["GET", "POST"])
 @login_required
 def forms_new():
+    _module_visibility_required("qc")
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         stage = (request.form.get("stage") or "").strip()
@@ -4502,6 +4678,7 @@ def forms_new():
 @app.route("/forms/<int:form_id>/edit", methods=["GET", "POST"])
 @login_required
 def forms_edit(form_id):
+    _module_visibility_required("qc")
     item = db.session.get(FormSchema, form_id)
     if not item:
         flash("Form not found", "error")
@@ -4573,6 +4750,7 @@ def forms_edit(form_id):
 @app.route("/forms/<int:form_id>/delete", methods=["POST"])
 @login_required
 def forms_delete(form_id):
+    _module_visibility_required("qc")
     item = db.session.get(FormSchema, form_id)
     if item:
         db.session.delete(item)
@@ -4584,6 +4762,7 @@ def forms_delete(form_id):
 @app.route("/forms/<int:form_id>/fill", methods=["GET", "POST"])
 @login_required
 def forms_fill(form_id):
+    _module_visibility_required("qc")
     fs = db.session.get(FormSchema, form_id)
     if not fs:
         flash("Form not found", "error")
@@ -4840,6 +5019,7 @@ def submission_view(sub_id):
 @app.route("/projects", methods=["GET", "POST"])
 @login_required
 def projects_list():
+    _module_visibility_required("operations")
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         site_name = (request.form.get("site_name") or "").strip()
@@ -4982,6 +5162,7 @@ def projects_list():
 @app.route("/projects/<int:project_id>")
 @login_required
 def project_detail(project_id):
+    _module_visibility_required("operations")
     project = Project.query.get_or_404(project_id)
     project_tasks = (
         QCWork.query
@@ -4995,7 +5176,7 @@ def project_detail(project_id):
 
     templates = ProjectTemplate.query.order_by(ProjectTemplate.name.asc()).all()
     form_templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
-    users = User.query.order_by(User.username.asc()).all()
+    users = get_assignable_users_for_module("operations", order_by="username")
     return render_template(
         "project_detail.html",
         project=project,
@@ -5024,6 +5205,7 @@ def project_detail(project_id):
 @app.route("/projects/<int:project_id>/edit", methods=["POST"])
 @login_required
 def project_edit(project_id):
+    _module_visibility_required("operations")
     project = Project.query.get_or_404(project_id)
 
     name = (request.form.get("name") or "").strip()
@@ -5128,6 +5310,7 @@ def project_edit(project_id):
 @app.route("/projects/<int:project_id>/apply-template", methods=["POST"])
 @login_required
 def project_apply_template(project_id):
+    _module_visibility_required("operations")
     project = Project.query.get_or_404(project_id)
     template_id = request.form.get("template_id", type=int)
     if not template_id:
@@ -5188,6 +5371,14 @@ def project_apply_template(project_id):
 
         milestone_value = template_task.milestone or None
 
+        assigned_user = None
+        default_assignee_id = template_task.default_assignee_id
+        if default_assignee_id:
+            assigned_user = db.session.get(User, default_assignee_id)
+            if not assigned_user or not assigned_user.can_be_assigned_module("operations"):
+                assigned_user = None
+                default_assignee_id = None
+
         new_task = QCWork(
             site_name=project.site_name or project.name,
             client_name=project.customer_name,
@@ -5197,7 +5388,7 @@ def project_apply_template(project_id):
             lift_type=project.lift_type or form_template.lift_type,
             project_id=project.id,
             created_by=current_user.id,
-            assigned_to=template_task.default_assignee_id,
+            assigned_to=default_assignee_id,
             name=template_task.name,
             description=template_task.description,
             template_task_id=template_task.id,
@@ -5228,12 +5419,12 @@ def project_apply_template(project_id):
                 "due_date": due_date.strftime("%Y-%m-%d") if due_date else None
             }
         )
-        if template_task.default_assignee_id:
+        if assigned_user:
             log_work_event(
                 new_task.id,
                 "assigned",
                 actor_id=current_user.id,
-                details={"assigned_to": template_task.default_assignee_id}
+                details={"assigned_to": assigned_user.id}
             )
         if status == "Blocked" and dependency_tasks:
             log_work_event(
@@ -5255,6 +5446,7 @@ def project_apply_template(project_id):
 @app.route("/projects/<int:project_id>/tasks/create", methods=["POST"])
 @login_required
 def project_task_create(project_id):
+    _module_visibility_required("operations")
     project = Project.query.get_or_404(project_id)
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
@@ -5319,6 +5511,12 @@ def project_task_create(project_id):
             due_dt = datetime.datetime.utcnow() + datetime.timedelta(days=duration_days)
 
     dependency_tasks = []
+    assignee_user = None
+    if assigned_to:
+        assignee_user = db.session.get(User, assigned_to)
+        if not assignee_user or not assignee_user.can_be_assigned_module("operations"):
+            flash("Choose an assignee who is available for Operations tasks.", "error")
+            return redirect(url_for("project_detail", project_id=project.id))
     if depends_on_ids:
         dependencies = (
             QCWork.query
@@ -5347,7 +5545,7 @@ def project_task_create(project_id):
         project_id=project.id,
         due_date=due_dt,
         created_by=current_user.id,
-        assigned_to=assigned_to,
+        assigned_to=assigned_to if assignee_user else None,
         name=name,
         description=description or None,
         status=status,
@@ -5373,7 +5571,7 @@ def project_task_create(project_id):
             "milestone": work.milestone
         }
     )
-    if assigned_to:
+    if assignee_user:
         log_work_event(
             work.id,
             "assigned",
@@ -5395,6 +5593,7 @@ def project_task_create(project_id):
 @app.route("/project-templates", methods=["GET", "POST"])
 @login_required
 def project_templates():
+    _module_visibility_required("operations")
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         description = (request.form.get("description") or "").strip()
@@ -5429,8 +5628,9 @@ def project_templates():
 @app.route("/project-templates/<int:template_id>", methods=["GET", "POST"])
 @login_required
 def project_template_detail(template_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
-    users = User.query.order_by(User.username.asc()).all()
+    users = get_assignable_users_for_module("operations", order_by="username")
     forms = FormSchema.query.order_by(FormSchema.name.asc()).all()
 
     if request.method == "POST":
@@ -5461,9 +5661,11 @@ def project_template_detail(template_id):
                 flash("Select dependencies from the same template.", "error")
                 return redirect(url_for("project_template_detail", template_id=template.id))
 
-        if default_assignee_id and not db.session.get(User, default_assignee_id):
-            flash("Choose a valid default assignee.", "error")
-            return redirect(url_for("project_template_detail", template_id=template.id))
+        if default_assignee_id:
+            assignee_candidate = db.session.get(User, default_assignee_id)
+            if not assignee_candidate or not assignee_candidate.can_be_assigned_module("operations"):
+                flash("Choose a valid default assignee with Operations access.", "error")
+                return redirect(url_for("project_template_detail", template_id=template.id))
 
         if form_template_id and not db.session.get(FormSchema, form_template_id):
             flash("Choose a valid form template.", "error")
@@ -5532,6 +5734,7 @@ def project_template_detail(template_id):
 @app.route("/project-templates/<int:template_id>/update", methods=["POST"])
 @login_required
 def project_template_update(template_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
     name = (request.form.get("template_name") or request.form.get("name") or "").strip()
     description = (request.form.get("template_description") or request.form.get("description") or "").strip()
@@ -5549,6 +5752,7 @@ def project_template_update(template_id):
 @app.route("/project-templates/<int:template_id>/save-as-task-template", methods=["POST"])
 @login_required
 def project_template_save_as_task_template(template_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
     name = (request.form.get("task_template_name") or "").strip()
     description = (request.form.get("task_template_description") or "").strip()
@@ -5607,6 +5811,7 @@ def create_project_template_from_task_template(task_template_id):
 @app.route("/project-templates/<int:template_id>/delete", methods=["POST"])
 @login_required
 def project_template_delete(template_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
     if not (current_user.is_admin or template.created_by == current_user.id):
         flash("You do not have permission to delete this template.", "error")
@@ -5624,6 +5829,7 @@ def project_template_delete(template_id):
 @app.route("/project-templates/<int:template_id>/tasks/<int:task_id>/edit", methods=["POST"])
 @login_required
 def project_template_task_edit(template_id, task_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
     task = ProjectTemplateTask.query.filter_by(id=task_id, template_id=template.id).first()
     if not task:
@@ -5660,9 +5866,11 @@ def project_template_task_edit(template_id, task_id):
             flash("Select dependencies from the same template.", "error")
             return redirect(url_for("project_template_detail", template_id=template.id))
 
-    if default_assignee_id and not db.session.get(User, default_assignee_id):
-        flash("Choose a valid default assignee.", "error")
-        return redirect(url_for("project_template_detail", template_id=template.id))
+    if default_assignee_id:
+        assignee_candidate = db.session.get(User, default_assignee_id)
+        if not assignee_candidate or not assignee_candidate.can_be_assigned_module("operations"):
+            flash("Choose a valid default assignee with Operations access.", "error")
+            return redirect(url_for("project_template_detail", template_id=template.id))
 
     if form_template_id and not db.session.get(FormSchema, form_template_id):
         flash("Choose a valid form template.", "error")
@@ -5709,6 +5917,7 @@ def project_template_task_edit(template_id, task_id):
 @app.route("/project-templates/<int:template_id>/tasks/reorder", methods=["POST"])
 @login_required
 def project_template_task_reorder(template_id):
+    _module_visibility_required("operations")
     template = ProjectTemplate.query.get_or_404(template_id)
     payload = request.get_json(silent=True) or {}
     ordered_ids = payload.get("ordered_ids")
@@ -5745,12 +5954,14 @@ def project_template_task_reorder(template_id):
 @app.route("/customer-support")
 @login_required
 def customer_support_home():
+    _module_visibility_required("customer_support")
     return redirect(url_for("customer_support_overview"))
 
 
 @app.route("/customer-support/overview")
 @login_required
 def customer_support_overview():
+    _module_visibility_required("customer_support")
     summary = _customer_support_summary()
     counts = summary["counts"]
     recent_tickets = []
@@ -5783,6 +5994,7 @@ def customer_support_overview():
 @app.route("/customer-support/tasks")
 @login_required
 def customer_support_tasks():
+    _module_visibility_required("customer_support")
     tickets = sorted(
         CUSTOMER_SUPPORT_TICKETS,
         key=lambda ticket: ticket.get("updated_at") or ticket.get("created_at"),
@@ -5825,6 +6037,7 @@ def customer_support_tasks():
 @app.route("/customer-support/linked-tasks", methods=["POST"])
 @login_required
 def customer_support_create_linked_task():
+    _module_visibility_required("customer_support")
     ticket_id = (request.form.get("ticket_id") or "").strip()
     if not ticket_id:
         flash("Select a ticket before creating a linked task.", "error")
@@ -5882,6 +6095,7 @@ def customer_support_create_linked_task():
 @app.route("/customer-support/tickets/<ticket_id>/update", methods=["POST"])
 @login_required
 def customer_support_update_ticket(ticket_id):
+    _module_visibility_required("customer_support")
     ticket = _get_customer_support_ticket(ticket_id)
     if not ticket:
         flash("The requested ticket could not be found.", "error")
@@ -5943,6 +6157,7 @@ def customer_support_update_ticket(ticket_id):
 @app.route("/customer-support/tickets/<ticket_id>/comment", methods=["POST"])
 @login_required
 def customer_support_post_update(ticket_id):
+    _module_visibility_required("customer_support")
     ticket = _get_customer_support_ticket(ticket_id)
     if not ticket:
         flash("The requested ticket could not be found.", "error")
@@ -6016,6 +6231,7 @@ def customer_support_post_update(ticket_id):
 @app.route("/customer-support/calls")
 @login_required
 def customer_support_calls():
+    _module_visibility_required("customer_support")
     status_filter = request.args.get("status") or ""
     category_filter = request.args.get("category") or ""
     search_term = request.args.get("q") or ""
@@ -6041,6 +6257,7 @@ def customer_support_calls():
 @app.route("/srt")
 @login_required
 def srt_overview():
+    _module_visibility_required("srt")
     status_filter = request.args.get("status", "all").lower()
     today = datetime.date.today()
 
@@ -6105,6 +6322,7 @@ def srt_overview():
 @app.route("/srt/form-templates", methods=["GET", "POST"])
 @login_required
 def srt_form_templates():
+    _module_visibility_required("srt")
     global SRT_FORM_TEMPLATES
 
     if request.method == "POST":
@@ -6213,6 +6431,7 @@ def srt_form_templates():
 @app.route("/srt/sites")
 @login_required
 def srt_sites():
+    _module_visibility_required("srt")
     selected_key = request.args.get("site")
 
     sites = []
@@ -6253,6 +6472,7 @@ def srt_sites():
 @app.route("/srt/task", methods=["POST"])
 @login_required
 def srt_task_create():
+    _module_visibility_required("srt")
     site_name = (request.form.get("site_name") or "").strip()
     summary = (request.form.get("summary") or "").strip()
     task_name = (request.form.get("name") or "").strip()
@@ -6317,6 +6537,7 @@ def srt_task_create():
 @app.route("/srt/task/<task_id>/data")
 @login_required
 def srt_task_data(task_id):
+    _module_visibility_required("srt")
     task = _get_srt_task(task_id)
     if not task:
         return jsonify({"ok": False, "message": "Task not found."}), 404
@@ -6365,6 +6586,7 @@ def srt_task_data(task_id):
 @app.route("/srt/task/<task_id>/update", methods=["POST"])
 @login_required
 def srt_task_update(task_id):
+    _module_visibility_required("srt")
     task = _get_srt_task(task_id)
     if not task:
         flash("Task not found.", "error")
@@ -6478,6 +6700,7 @@ def srt_task_update(task_id):
 @app.route("/qc")
 @login_required
 def qc_home():
+    _module_visibility_required("qc")
     status = request.args.get("status", "all")
     status_order = case(
         (QCWork.status == "In Progress", 0),
@@ -6498,7 +6721,7 @@ def qc_home():
 
     work_items = query.all()
     templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
-    users = User.query.order_by(User.username.asc()).all()
+    users = get_assignable_users_for_module("qc", order_by="username")
     projects = Project.query.order_by(Project.name.asc()).all()
     return render_template(
         "qc.html",
@@ -6516,6 +6739,7 @@ def qc_home():
 @app.route("/qc/work/new", methods=["POST"])
 @login_required
 def qc_work_new():
+    _module_visibility_required("qc")
     site_name = (request.form.get("site_name") or "").strip()
     client_name = (request.form.get("client_name") or "").strip()
     address = (request.form.get("address") or "").strip()
@@ -6575,6 +6799,13 @@ def qc_work_new():
 
     template = db.session.get(FormSchema, template_id)
 
+    assignee_user = None
+    if assigned_to:
+        assignee_user = db.session.get(User, assigned_to)
+        if not assignee_user or not assignee_user.can_be_assigned_module("qc"):
+            flash("Choose an assignee who is available for QC tasks.", "error")
+            return redirect(url_for("qc_home"))
+
     work = QCWork(
         site_name=site_name,
         client_name=client_name or None,
@@ -6585,7 +6816,7 @@ def qc_work_new():
         project_id=project.id if project else None,
         due_date=due_dt,
         created_by=current_user.id,
-        assigned_to=assigned_to,
+        assigned_to=assigned_to if assignee_user else None,
         name=site_name,
         planned_start_date=planned_start_date,
         planned_duration_days=duration_days,
@@ -6607,7 +6838,7 @@ def qc_work_new():
             "milestone": work.milestone
         }
     )
-    if assigned_to:
+    if assignee_user:
         log_work_event(
             work.id,
             "assigned",
@@ -6622,6 +6853,7 @@ def qc_work_new():
 @app.route("/qc/work/<int:work_id>")
 @login_required
 def qc_work_detail(work_id):
+    _module_visibility_required("qc")
     work = QCWork.query.get_or_404(work_id)
     submissions = Submission.query.filter_by(work_id=work_id).order_by(Submission.created_at.desc()).all()
     for submission in submissions:
@@ -6633,7 +6865,7 @@ def qc_work_detail(work_id):
             submission.video_count = len(json.loads(submission.videos_json or "[]"))
         except Exception:
             submission.video_count = 0
-    users = User.query.order_by(User.username.asc()).all()
+    users = get_assignable_users_for_module("qc", order_by="username")
     comments = (
         QCWorkComment.query
         .filter_by(work_id=work_id)
@@ -6706,10 +6938,17 @@ def qc_work_detail(work_id):
 @app.route("/qc/work/<int:work_id>/assign", methods=["POST"])
 @login_required
 def qc_work_assign(work_id):
+    _module_visibility_required("qc")
     work = QCWork.query.get_or_404(work_id)
     assigned_to = request.form.get("assigned_to", type=int)
+    assignee_user = None
+    if assigned_to:
+        assignee_user = db.session.get(User, assigned_to)
+        if not assignee_user or not assignee_user.can_be_assigned_module("qc"):
+            flash("Choose an assignee who is available for QC tasks.", "error")
+            return redirect(url_for("qc_work_detail", work_id=work.id))
     previous = work.assigned_to
-    work.assigned_to = assigned_to or None
+    work.assigned_to = assigned_to if assignee_user else None
     if previous != work.assigned_to:
         db.session.flush()
         log_work_event(
@@ -6776,6 +7015,7 @@ def qc_work_comment(work_id):
 @app.route("/qc/work/<int:work_id>/status/<string:action>", methods=["POST"])
 @login_required
 def qc_work_status(work_id, action):
+    _module_visibility_required("qc")
     """Progress status for work: open -> in_progress -> closed."""
     work = QCWork.query.get_or_404(work_id)
     if action not in {"start", "close", "reopen"}:
@@ -6834,6 +7074,7 @@ def qc_work_status(work_id, action):
 @app.route("/qc/recent-submissions")
 @login_required
 def qc_recent_submissions():
+    _module_visibility_required("qc")
     submissions = (
         Submission.query
         .order_by(Submission.created_at.desc())
