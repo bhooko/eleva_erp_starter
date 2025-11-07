@@ -6165,6 +6165,9 @@ def customer_support_tasks():
         key=lambda ticket: ticket.get("updated_at") or ticket.get("created_at"),
         reverse=True,
     )
+    ticket_open_task_map = {
+        ticket.get("id"): _ticket_has_open_linked_tasks(ticket) for ticket in tickets
+    }
     ticket_id = request.args.get("ticket")
     selected_ticket = _get_customer_support_ticket(ticket_id)
 
@@ -6196,6 +6199,10 @@ def customer_support_tasks():
         if ticket_first_update is None and timeline_chronological:
             ticket_first_update = timeline_chronological[0]
 
+    active_support_users = [
+        user for user in get_assignable_users_for_module("customer_support") if user.is_active
+    ]
+
     return render_template(
         "customer_support_tasks.html",
         tickets=tickets,
@@ -6213,6 +6220,8 @@ def customer_support_tasks():
         open_ticket_modal=bool(selected_ticket),
         open_linked_task_modal=open_linked_task_modal,
         has_open_linked_tasks=has_open_linked_tasks,
+        ticket_open_task_map=ticket_open_task_map,
+        active_support_users=active_support_users,
     )
 
 
@@ -6232,7 +6241,7 @@ def customer_support_create_linked_task():
 
     title = (request.form.get("title") or "").strip()
     details = (request.form.get("details") or "").strip()
-    assignee = (request.form.get("assignee") or "").strip()
+    assignee_id_raw = (request.form.get("assignee") or "").strip()
     due_date_raw = (request.form.get("due_date") or "").strip()
     category = (request.form.get("category") or "").strip()
     priority = (request.form.get("priority") or "").strip()
@@ -6248,6 +6257,20 @@ def customer_support_create_linked_task():
         except ValueError:
             errors.append("Enter the due date in YYYY-MM-DD format.")
 
+    assignee_user = None
+    if assignee_id_raw:
+        try:
+            assignee_user = db.session.get(User, int(assignee_id_raw))
+        except (TypeError, ValueError):
+            assignee_user = None
+
+        if not assignee_user:
+            errors.append("Select a valid assignee for the linked task.")
+        elif not assignee_user.is_active:
+            errors.append("The selected assignee is not active on the portal.")
+        elif not assignee_user.can_be_assigned_module("customer_support"):
+            errors.append("The selected user cannot be assigned to customer support tasks.")
+
     if errors:
         for message in errors:
             flash(message, "error")
@@ -6257,10 +6280,13 @@ def customer_support_create_linked_task():
     if category:
         category_label = next((item.get("label") for item in CUSTOMER_SUPPORT_CATEGORIES if item.get("id") == category), None)
 
+    assignee_label = assignee_user.display_name if assignee_user else "Unassigned"
+
     new_task = {
         "id": generate_linked_task_id(),
         "title": title,
-        "assignee": assignee or "Unassigned",
+        "assignee": assignee_label,
+        "assignee_id": assignee_user.id if assignee_user else None,
         "status": "Open",
         "due_date": due_date,
         "details": details or None,
@@ -6359,6 +6385,60 @@ def customer_support_update_ticket(ticket_id):
 
     flash("Ticket details updated successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+
+@app.route("/customer-support/tickets/<ticket_id>/resolve", methods=["POST"])
+@login_required
+def customer_support_mark_ticket_resolved(ticket_id):
+    _module_visibility_required("customer_support")
+    ticket = _get_customer_support_ticket(ticket_id)
+    if not ticket:
+        flash("The requested ticket could not be found.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    closing_comment = (request.form.get("closing_comment") or "").strip()
+    if not closing_comment:
+        flash("Add closing remarks before completing the ticket.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    if _ticket_has_open_linked_tasks(ticket):
+        flash("Resolve linked tasks before marking this ticket resolved.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    current_status = (ticket.get("status") or "").strip()
+    now = datetime.datetime.utcnow()
+    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+
+    if current_status.lower() not in {"resolved", "closed"}:
+        ticket["status"] = "Resolved"
+        ticket["updated_at"] = now
+        previous_label = current_status or "Open"
+        ticket.setdefault("timeline", []).append(
+            {
+                "timestamp": now,
+                "type": "status",
+                "label": "Ticket marked resolved",
+                "visibility": "internal",
+                "actor": actor_name,
+                "detail": f"Status changed from {previous_label} to Resolved.",
+            }
+        )
+    else:
+        ticket["updated_at"] = now
+
+    ticket.setdefault("timeline", []).append(
+        {
+            "timestamp": datetime.datetime.utcnow(),
+            "type": "comment",
+            "label": "Closing remarks",
+            "visibility": "internal",
+            "actor": actor_name,
+            "comment": closing_comment,
+        }
+    )
+
+    flash(f"Ticket {ticket_id} marked as resolved.", "success")
+    return redirect(url_for("customer_support_tasks"))
 
 
 @app.route("/customer-support/tickets/<ticket_id>/delete", methods=["POST"])

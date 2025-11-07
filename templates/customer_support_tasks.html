@@ -40,18 +40,29 @@
             <div class="text-sm font-semibold text-slate-100">{{ ticket.id }} · {{ ticket.subject }}</div>
             <span class="text-xs text-slate-500">{{ (ticket.updated_at or ticket.created_at).strftime('%d %b %H:%M') }}</span>
           </div>
+          {% set has_open_tasks = ticket_open_task_map.get(ticket.id, False) %}
           <div class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.category }}</span>
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.priority }} priority</span>
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.channel }}</span>
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.status }}</span>
             <span>Owner: {{ ticket.assignee }}</span>
-            <a href="{{ url_for('customer_support_tasks', ticket=ticket.id) }}" class="ml-auto inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/30 text-xs">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-9A2.25 2.25 0 002.25 5.25v13.5A2.25 2.25 0 004.5 21h9a2.25 2.25 0 002.25-2.25V15M9.75 9l10.5-6v18l-10.5-6z" />
-              </svg>
-              <span>View</span>
-            </a>
+            <div class="ml-auto flex items-center gap-2">
+              {% if ticket.status not in ['Resolved', 'Closed'] %}
+                <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/50 bg-emerald-400/15 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/25" data-mark-resolved data-ticket-id="{{ ticket.id }}" data-ticket-subject="{{ ticket.subject }}" data-ticket-summary="{{ ticket.id }}{% if ticket.subject %} · {{ ticket.subject }}{% endif %}" data-ticket-has-open-tasks="{{ 'true' if has_open_tasks else 'false' }}">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Mark resolved</span>
+                </button>
+              {% endif %}
+              <a href="{{ url_for('customer_support_tasks', ticket=ticket.id) }}" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/30 text-xs">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-9A2.25 2.25 0 002.25 5.25v13.5A2.25 2.25 0 004.5 21h9a2.25 2.25 0 002.25-2.25V15M9.75 9l10.5-6v18l-10.5-6z" />
+                </svg>
+                <span>View</span>
+              </a>
+            </div>
           </div>
         </div>
       {% else %}
@@ -217,7 +228,13 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
-            <input name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Search teammate" />
+            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+              <option value="">Unassigned</option>
+              {% for user in active_support_users %}
+                <option value="{{ user.id }}">{{ user.display_name }}</option>
+              {% endfor %}
+            </select>
+            <p class="mt-1 text-[11px] text-slate-500">Only active portal users appear in this list.</p>
           </div>
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Due date</label>
@@ -293,7 +310,7 @@
       </div>
       <div class="flex-1 overflow-y-auto px-6 py-5">
         <div class="grid gap-4 md:grid-cols-2">
-          <form method="post" action="{{ url_for('customer_support_update_ticket', ticket_id=selected_ticket.id) }}" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4" data-ticket-status-form data-original-status="{{ selected_ticket.status }}" data-has-open-tasks="{{ 'true' if has_open_linked_tasks else 'false' }}">
+          <form method="post" action="{{ url_for('customer_support_update_ticket', ticket_id=selected_ticket.id) }}" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4" data-ticket-status-form data-original-status="{{ selected_ticket.status }}" data-has-open-tasks="{{ 'true' if has_open_linked_tasks else 'false' }}" data-ticket-id="{{ selected_ticket.id }}" data-ticket-subject="{{ selected_ticket.subject }}">
             <h3 class="text-sm font-semibold text-slate-200">Status &amp; ownership</h3>
             <input type="hidden" name="closing_comment" value="" data-closing-comment-input>
             <div class="mt-3 space-y-3 text-sm text-slate-300">
@@ -326,7 +343,7 @@
                 <span class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100">{{ selected_ticket.sla.first_response_hours }}h response · {{ selected_ticket.sla.resolution_hours }}h resolution</span>
               </div>
             </div>
-            <p class="mt-3 text-xs text-amber-400 {{ '' if has_open_linked_tasks else 'hidden' }}" data-open-tasks-warning>
+            <p class="mt-3 text-xs text-amber-400 hidden" data-open-tasks-warning>
               Linked tasks are still open. Resolve them before marking this ticket as resolved or closed.
             </p>
             <div class="mt-4 flex justify-end">
@@ -508,35 +525,64 @@
     </div>
   </div>
 
-  <div id="closing-remarks-modal" data-modal class="fixed inset-0 z-[55] hidden items-center justify-center bg-slate-950/70 p-4">
-    <div class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/90 shadow-xl shadow-black/40">
-      <div class="flex items-center justify-between border-b border-slate-800/60 px-6 py-4">
-        <div>
-          <h2 class="text-lg font-semibold text-slate-100">Add closing remarks</h2>
-          <p class="text-xs text-slate-500">Summarise the resolution before you mark the ticket as resolved or closed.</p>
-        </div>
-        <button type="button" class="rounded-full border border-slate-700/70 bg-slate-900/80 p-2 text-slate-400 hover:text-slate-200" data-close-modal="closing-remarks" aria-label="Cancel closing remarks">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+{% endif %}
+
+<form method="post" class="hidden" data-quick-resolve-form data-resolve-url-template="{{ url_for('customer_support_mark_ticket_resolved', ticket_id='__TICKET_ID__') }}">
+  <input type="hidden" name="closing_comment" data-quick-resolve-comment>
+</form>
+
+<div id="closing-remarks-modal" data-modal class="fixed inset-0 z-[55] hidden items-center justify-center bg-slate-950/70 p-4">
+  <div class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/90 shadow-xl shadow-black/40">
+    <div class="flex items-center justify-between border-b border-slate-800/60 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Add closing remarks</h2>
+        <p class="text-xs text-slate-500">Summarise the resolution before you mark the ticket as resolved or closed.</p>
+        <p class="hidden pt-1 text-xs text-emerald-300" data-closing-ticket-hint></p>
       </div>
-      <div class="space-y-4 px-6 py-5">
-        <textarea rows="4" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Describe what changed, who was informed and any follow-ups." data-closing-remarks-textarea></textarea>
-        <p class="hidden text-sm text-rose-400" data-closing-error>Please add your closing remarks to proceed.</p>
-      </div>
-      <div class="flex items-center justify-end gap-3 border-t border-slate-800/60 bg-slate-900/70 px-6 py-4">
-        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70" data-cancel-closing>Cancel</button>
-        <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30" data-submit-closing>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-          <span>Save &amp; continue</span>
-        </button>
-      </div>
+      <button type="button" class="rounded-full border border-slate-700/70 bg-slate-900/80 p-2 text-slate-400 hover:text-slate-200" data-close-modal="closing-remarks" aria-label="Cancel closing remarks">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="space-y-4 px-6 py-5">
+      <textarea rows="4" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Describe what changed, who was informed and any follow-ups." data-closing-remarks-textarea></textarea>
+      <p class="hidden text-sm text-rose-400" data-closing-error>Please add your closing remarks to proceed.</p>
+    </div>
+    <div class="flex items-center justify-end gap-3 border-t border-slate-800/60 bg-slate-900/70 px-6 py-4">
+      <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70" data-cancel-closing>Cancel</button>
+      <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30" data-submit-closing>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+        <span>Save &amp; continue</span>
+      </button>
     </div>
   </div>
-{% endif %}
+</div>
+
+<div id="open-tasks-warning-modal" data-modal class="fixed inset-0 z-[56] hidden items-center justify-center bg-slate-950/70 p-4">
+  <div class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/90 shadow-xl shadow-black/40">
+    <div class="flex items-center justify-between border-b border-slate-800/60 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Linked tasks still open</h2>
+        <p class="text-xs text-slate-500">Resolve or close all linked tasks before completing this ticket.</p>
+      </div>
+      <button type="button" class="rounded-full border border-slate-700/70 bg-slate-900/80 p-2 text-slate-400 hover:text-slate-200" data-close-modal="open-tasks-warning" aria-label="Dismiss warning">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="space-y-4 px-6 py-5">
+      <p class="text-sm text-slate-300" data-open-tasks-message>This ticket still has linked tasks in progress. Resolve them before completing the ticket.</p>
+      <p class="text-xs text-slate-500">Update the linked tasks to Done, Resolved or Closed, then try again.</p>
+    </div>
+    <div class="flex items-center justify-end gap-3 border-t border-slate-800/60 bg-slate-900/70 px-6 py-4">
+      <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70" data-close-modal="open-tasks-warning">Okay</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -577,7 +623,8 @@
           return;
         }
 
-        const closeButtons = Array.from(modal.querySelectorAll(closeSelectors.join(',')));
+        const selectors = Array.isArray(closeSelectors) ? closeSelectors.filter(Boolean) : [];
+        const closeButtons = selectors.length ? Array.from(modal.querySelectorAll(selectors.join(','))) : [];
 
         if (trigger) {
           trigger.addEventListener('click', () => openModal(modal));
@@ -627,12 +674,129 @@
         closeSelectors: ['[data-close-modal="closing-remarks"]']
       });
 
+      const openTasksWarningModal = setupModal({
+        trigger: null,
+        modalId: 'open-tasks-warning-modal',
+        closeSelectors: ['[data-close-modal="open-tasks-warning"]']
+      });
+
       const linkedTaskButtons = Array.from(document.querySelectorAll('[data-open-linked-task]'));
       if (linkedTaskModal && linkedTaskButtons.length) {
         linkedTaskButtons.forEach((button) => {
           button.addEventListener('click', () => openModal(linkedTaskModal));
         });
       }
+
+      const closingTextarea = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-remarks-textarea]') : null;
+      const closingError = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-error]') : null;
+      const closingTicketHint = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-ticket-hint]') : null;
+      const cancelClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-cancel-closing]') : null;
+      const confirmClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-submit-closing]') : null;
+      let closingContext = null;
+
+      const resetClosingModalState = () => {
+        if (closingTextarea) {
+          closingTextarea.value = '';
+        }
+        if (closingError) {
+          closingError.classList.add('hidden');
+        }
+        if (closingTicketHint) {
+          closingTicketHint.textContent = '';
+          closingTicketHint.classList.add('hidden');
+        }
+        closingContext = null;
+      };
+
+      const showClosingModal = (context = {}) => {
+        if (!closingRemarksModal || !closingTextarea) {
+          return;
+        }
+        closingContext = {
+          onConfirm: typeof context.onConfirm === 'function' ? context.onConfirm : null,
+          onCancel: typeof context.onCancel === 'function' ? context.onCancel : null,
+          confirmed: false,
+        };
+        const initialComment = context.initialComment || '';
+        closingTextarea.value = initialComment;
+        if (closingError) {
+          closingError.classList.add('hidden');
+        }
+        if (closingTicketHint) {
+          const ticketSummary = context.ticketSummary || '';
+          if (ticketSummary) {
+            closingTicketHint.textContent = `Ticket ${ticketSummary}`;
+            closingTicketHint.classList.remove('hidden');
+          } else {
+            closingTicketHint.textContent = '';
+            closingTicketHint.classList.add('hidden');
+          }
+        }
+        openModal(closingRemarksModal);
+        window.setTimeout(() => closingTextarea.focus(), 0);
+      };
+
+      if (closingRemarksModal) {
+        closingRemarksModal.addEventListener('modal:closed', () => {
+          if (closingContext && !closingContext.confirmed && typeof closingContext.onCancel === 'function') {
+            closingContext.onCancel();
+          }
+          resetClosingModalState();
+        });
+      }
+
+      if (cancelClosingButton) {
+        cancelClosingButton.addEventListener('click', () => {
+          if (closingRemarksModal) {
+            closeModal(closingRemarksModal);
+          }
+        });
+      }
+
+      if (confirmClosingButton && closingTextarea) {
+        confirmClosingButton.addEventListener('click', () => {
+          if (!closingContext) {
+            if (closingRemarksModal) {
+              closeModal(closingRemarksModal);
+            }
+            return;
+          }
+          const value = closingTextarea.value ? closingTextarea.value.trim() : '';
+          if (!value) {
+            if (closingError) {
+              closingError.classList.remove('hidden');
+            }
+            closingTextarea.focus();
+            return;
+          }
+          if (closingError) {
+            closingError.classList.add('hidden');
+          }
+          closingContext.confirmed = true;
+          if (closingContext.onConfirm) {
+            closingContext.onConfirm(value);
+          }
+          if (closingRemarksModal) {
+            closeModal(closingRemarksModal);
+          }
+        });
+      }
+
+      const openTasksWarningMessage = openTasksWarningModal ? openTasksWarningModal.querySelector('[data-open-tasks-message]') : null;
+      const showOpenTasksWarning = (context = {}) => {
+        if (!openTasksWarningModal) {
+          return;
+        }
+        if (openTasksWarningMessage) {
+          const ticketSummary = context.ticketSummary || '';
+          if (ticketSummary) {
+            openTasksWarningMessage.textContent = `Ticket ${ticketSummary} still has linked tasks in progress. Resolve them before completing the ticket.`;
+          } else {
+            openTasksWarningMessage.textContent = 'This ticket still has linked tasks in progress. Resolve them before completing the ticket.';
+          }
+        }
+        openModal(openTasksWarningModal);
+      };
 
       const channelOptions = Array.from(document.querySelectorAll('[data-channel-option] input[type="radio"]'));
       if (channelOptions.length) {
@@ -732,46 +896,54 @@
         applyFilterFromButton(defaultButton);
       }
 
+      const quickResolveForm = document.querySelector('[data-quick-resolve-form]');
+      const quickResolveCommentInput = quickResolveForm ? quickResolveForm.querySelector('[data-quick-resolve-comment]') : null;
+      const resolveUrlTemplate = quickResolveForm ? quickResolveForm.dataset.resolveUrlTemplate || '' : '';
+      const markResolvedButtons = Array.from(document.querySelectorAll('[data-mark-resolved]'));
+      if (markResolvedButtons.length) {
+        markResolvedButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const ticketId = button.dataset.ticketId || '';
+            if (!ticketId || !resolveUrlTemplate || !quickResolveForm || !quickResolveCommentInput) {
+              return;
+            }
+            const ticketSummary = button.dataset.ticketSummary || '';
+            const hasOpenTasks = (button.dataset.ticketHasOpenTasks || 'false').toLowerCase() === 'true';
+            if (hasOpenTasks) {
+              showOpenTasksWarning({ ticketSummary });
+              return;
+            }
+            const initialComment = quickResolveCommentInput.value || '';
+            showClosingModal({
+              ticketSummary,
+              initialComment,
+              onConfirm: (value) => {
+                quickResolveCommentInput.value = value;
+                const action = resolveUrlTemplate.replace('__TICKET_ID__', encodeURIComponent(ticketId));
+                quickResolveForm.setAttribute('action', action);
+                quickResolveForm.requestSubmit();
+              },
+              onCancel: () => {
+                quickResolveCommentInput.value = '';
+              },
+            });
+          });
+        });
+      }
+
       const statusForm = document.querySelector('[data-ticket-status-form]');
       if (statusForm) {
         const statusSelect = statusForm.querySelector('select[name="status"]');
         const closingCommentInput = statusForm.querySelector('[data-closing-comment-input]');
         const warningBanner = statusForm.querySelector('[data-open-tasks-warning]');
         const hasOpenTasks = (statusForm.dataset.hasOpenTasks || 'false').toLowerCase() === 'true';
-        const closingTextarea = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-remarks-textarea]') : null;
-        const closingError = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-error]') : null;
-        const cancelClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-cancel-closing]') : null;
-        const confirmClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-submit-closing]') : null;
         const originalStatusValue = statusForm.dataset.originalStatus || '';
-        let pendingClosingSubmission = false;
-        let revertStatusOnClose = false;
+        const ticketId = statusForm.dataset.ticketId || '';
+        const ticketSubject = statusForm.dataset.ticketSubject || '';
+        const ticketSummaryParts = [ticketId, ticketSubject].filter((value) => value && value.length);
+        const ticketSummary = ticketSummaryParts.join(' · ');
 
-        const resetClosingModalState = () => {
-          if (revertStatusOnClose && statusSelect && originalStatusValue) {
-            statusSelect.value = originalStatusValue;
-          }
-          pendingClosingSubmission = false;
-          revertStatusOnClose = false;
-          if (closingTextarea) {
-            closingTextarea.value = '';
-          }
-          if (closingError) {
-            closingError.classList.add('hidden');
-          }
-        };
-
-        if (closingRemarksModal) {
-          closingRemarksModal.addEventListener('modal:closed', resetClosingModalState);
-          closingRemarksModal.addEventListener('click', (event) => {
-            if (event.target === closingRemarksModal) {
-              resetClosingModalState();
-            }
-          });
-        }
-
-        if (hasOpenTasks && warningBanner) {
-          warningBanner.classList.remove('hidden');
-        }
+        statusForm.dataset.closingConfirmed = statusForm.dataset.closingConfirmed || 'false';
 
         statusForm.addEventListener('submit', (event) => {
           if (!statusSelect) {
@@ -779,7 +951,7 @@
           }
 
           const selectedStatus = (statusSelect.value || '').toLowerCase();
-          const originalStatus = (statusForm.dataset.originalStatus || '').toLowerCase();
+          const originalStatus = (originalStatusValue || '').toLowerCase();
           const requiresClosing = ['resolved', 'closed'].includes(selectedStatus) && selectedStatus !== originalStatus;
           const closingConfirmed = statusForm.dataset.closingConfirmed === 'true';
 
@@ -790,25 +962,31 @@
               if (warningBanner) {
                 warningBanner.classList.remove('hidden');
               }
-              const original = statusForm.dataset.originalStatus || '';
-              if (original && statusSelect.value !== original) {
-                statusSelect.value = original;
+              if (statusSelect.value !== originalStatusValue) {
+                statusSelect.value = originalStatusValue;
               }
+              showOpenTasksWarning({ ticketSummary });
               return;
             }
 
-            if (!closingRemarksModal || !closingTextarea) {
-              return;
-            }
-
-            pendingClosingSubmission = true;
-            revertStatusOnClose = true;
-            closingTextarea.value = closingCommentInput && closingCommentInput.value ? closingCommentInput.value : '';
-            if (closingError) {
-              closingError.classList.add('hidden');
-            }
-            openModal(closingRemarksModal);
-            window.setTimeout(() => closingTextarea.focus(), 0);
+            const initialComment = closingCommentInput && closingCommentInput.value ? closingCommentInput.value : '';
+            showClosingModal({
+              ticketSummary,
+              initialComment,
+              onConfirm: (value) => {
+                if (closingCommentInput) {
+                  closingCommentInput.value = value;
+                }
+                statusForm.dataset.closingConfirmed = 'true';
+                statusForm.requestSubmit();
+              },
+              onCancel: () => {
+                statusForm.dataset.closingConfirmed = 'false';
+                if (statusSelect && statusSelect.value !== originalStatusValue) {
+                  statusSelect.value = originalStatusValue;
+                }
+              },
+            });
             return;
           }
 
@@ -816,51 +994,6 @@
             statusForm.dataset.closingConfirmed = 'false';
           }
         });
-
-        if (cancelClosingButton) {
-          cancelClosingButton.addEventListener('click', () => {
-            resetClosingModalState();
-            if (closingRemarksModal) {
-              closeModal(closingRemarksModal);
-            }
-          });
-        }
-
-        if (confirmClosingButton && closingTextarea) {
-          confirmClosingButton.addEventListener('click', () => {
-            if (!pendingClosingSubmission) {
-              if (closingRemarksModal) {
-                closeModal(closingRemarksModal);
-              }
-              return;
-            }
-
-            const value = closingTextarea.value ? closingTextarea.value.trim() : '';
-            if (!value) {
-              if (closingError) {
-                closingError.classList.remove('hidden');
-              }
-              closingTextarea.focus();
-              return;
-            }
-
-            if (closingError) {
-              closingError.classList.add('hidden');
-            }
-
-            if (closingCommentInput) {
-              closingCommentInput.value = value;
-            }
-
-            statusForm.dataset.closingConfirmed = 'true';
-            pendingClosingSubmission = false;
-            revertStatusOnClose = false;
-            if (closingRemarksModal) {
-              closeModal(closingRemarksModal);
-            }
-            window.setTimeout(() => statusForm.requestSubmit(), 0);
-          });
-        }
       }
 
       if (ticketDetailModal && ticketDetailModal.dataset.openOnLoad === 'true') {
