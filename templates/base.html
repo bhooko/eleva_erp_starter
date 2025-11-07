@@ -580,7 +580,7 @@
           <span class="label text-[15px] flex-1">Dashboard</span>
         </a>
 
-        {% if current_user.can_view_module('sales') %}
+        {% if current_user.is_authenticated and current_user.can_view_module('sales') %}
           {% set sales_endpoints = [
             'sales_home','sales_clients','sales_clients_create','sales_client_detail',
             'sales_opportunities_pipeline','sales_opportunities_create','sales_opportunity_detail','sales_opportunity_stage'
@@ -612,7 +612,7 @@
           </div>
         {% endif %}
 
-        {% if current_user.can_view_module('operations') %}
+        {% if current_user.is_authenticated and current_user.can_view_module('operations') %}
           {% set project_endpoints = ['projects_pending','projects_list','project_detail','project_task_create','project_templates','project_template_detail'] %}
           <div class="space-y-1">
             <a href="{{ url_for('projects_pending') }}"
@@ -641,7 +641,7 @@
           </div>
         {% endif %}
 
-        {% if current_user.can_view_module('qc') %}
+        {% if current_user.is_authenticated and current_user.can_view_module('qc') %}
           {% set qc_endpoints = [
             'qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign',
             'qc_recent_submissions','forms_list','forms_edit','form_render','submission_view','forms_new','forms_fill'
@@ -673,7 +673,7 @@
           </div>
         {% endif %}
 
-        {% if current_user.can_view_module('srt') %}
+        {% if current_user.is_authenticated and current_user.can_view_module('srt') %}
           {% set srt_endpoints = ['srt_overview','srt_form_templates','srt_sites'] %}
           {% set srt_parent_active = request.endpoint in srt_endpoints %}
           <div class="space-y-1">
@@ -702,7 +702,7 @@
           </div>
         {% endif %}
 
-        {% if current_user.can_view_module('customer_support') %}
+        {% if current_user.is_authenticated and current_user.can_view_module('customer_support') %}
           {% set cs_endpoints = ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home'] %}
           {% set cs_parent_active = request.endpoint in cs_endpoints %}
           <div class="space-y-1">
