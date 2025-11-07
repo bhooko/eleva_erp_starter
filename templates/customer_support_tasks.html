@@ -27,9 +27,9 @@
       </div>
       <div class="flex flex-wrap items-center gap-2" data-ticket-filter-group>
         <button type="button" class="rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800/70" data-ticket-filter="all">All</button>
-        <button type="button" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200" data-ticket-filter="open">Open</button>
-        <button type="button" class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200" data-ticket-filter="in-progress">In progress</button>
-        <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200" data-ticket-filter="resolved">Resolved</button>
+        <button type="button" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200" data-ticket-filter="open" data-ticket-filter-values="open">Open</button>
+        <button type="button" class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200" data-ticket-filter="in-progress" data-ticket-filter-values="in-progress">In progress</button>
+        <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200" data-ticket-filter="closed-resolved" data-ticket-filter-values="resolved,closed">Resolved / Closed</button>
       </div>
     </div>
     <div class="divide-y divide-slate-800/60">
@@ -293,8 +293,9 @@
       </div>
       <div class="flex-1 overflow-y-auto px-6 py-5">
         <div class="grid gap-4 md:grid-cols-2">
-          <form method="post" action="{{ url_for('customer_support_update_ticket', ticket_id=selected_ticket.id) }}" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
+          <form method="post" action="{{ url_for('customer_support_update_ticket', ticket_id=selected_ticket.id) }}" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4" data-ticket-status-form data-original-status="{{ selected_ticket.status }}" data-has-open-tasks="{{ 'true' if has_open_linked_tasks else 'false' }}">
             <h3 class="text-sm font-semibold text-slate-200">Status &amp; ownership</h3>
+            <input type="hidden" name="closing_comment" value="" data-closing-comment-input>
             <div class="mt-3 space-y-3 text-sm text-slate-300">
               <div class="flex items-center justify-between gap-3">
                 <span>Status</span>
@@ -325,6 +326,9 @@
                 <span class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100">{{ selected_ticket.sla.first_response_hours }}h response · {{ selected_ticket.sla.resolution_hours }}h resolution</span>
               </div>
             </div>
+            <p class="mt-3 text-xs text-amber-400 {{ '' if has_open_linked_tasks else 'hidden' }}" data-open-tasks-warning>
+              Linked tasks are still open. Resolve them before marking this ticket as resolved or closed.
+            </p>
             <div class="mt-4 flex justify-end">
               <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
@@ -334,25 +338,57 @@
               </button>
             </div>
           </form>
-          <form method="post" action="{{ url_for('customer_support_post_update', ticket_id=selected_ticket.id) }}" enctype="multipart/form-data" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
-            <h3 class="text-sm font-semibold text-slate-200">Comments</h3>
-            <textarea name="comment" rows="4" class="mt-3 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100" placeholder="Internal comments stay within the team. Use @mentions to notify."></textarea>
-            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <label class="inline-flex items-center gap-2">
-                <input type="checkbox" name="is_external" value="1" class="rounded border border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400">
-                <span>Mark as external update</span>
-              </label>
-              <label for="ticket-update-attachments" class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-emerald-100 hover:border-emerald-400/60 hover:text-emerald-100">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-                </svg>
-                <span>Add attachments</span>
-              </label>
-              <input id="ticket-update-attachments" name="attachments" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" class="sr-only">
-              <span class="text-slate-500">Images, videos or documents up to 200&nbsp;MB each.</span>
-              <button type="submit" class="ml-auto inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/30">Post update</button>
+          <div class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
+            <h3 class="text-sm font-semibold text-slate-200">Ticket context</h3>
+            <div class="mt-3 space-y-3 text-sm text-slate-300">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Category</p>
+                <p class="mt-0.5 text-slate-100">{{ selected_ticket.category }}</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Channel</p>
+                <p class="mt-0.5 text-slate-100">{{ selected_ticket.channel }}</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Priority</p>
+                <p class="mt-0.5 text-slate-100">{{ selected_ticket.priority }}</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Location</p>
+                <p class="mt-0.5 text-slate-100">{{ selected_ticket.get('location') or 'Not specified' }}</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Due by</p>
+                <p class="mt-0.5 text-slate-100">
+                  {% if selected_ticket.get('due_at') %}
+                    {{ selected_ticket.get('due_at').strftime('%d %b %Y %H:%M') }}
+                  {% else %}
+                    Not scheduled
+                  {% endif %}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">SLA commitment</p>
+                <p class="mt-0.5 text-slate-100">{{ selected_ticket.sla.first_response_hours }}h response · {{ selected_ticket.sla.resolution_hours }}h resolution</p>
+              </div>
             </div>
-          </form>
+            {% if ticket_first_update %}
+              <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-900/80 p-3">
+                <p class="text-xs uppercase tracking-wide text-slate-500">First comment</p>
+                <p class="mt-1 text-sm text-slate-300">{{ ticket_first_update.comment or ticket_first_update.detail or 'No description captured yet.' }}</p>
+                <p class="mt-2 text-xs text-slate-500">
+                  {% if ticket_first_update.actor %}
+                    {{ ticket_first_update.actor }}
+                  {% else %}
+                    System
+                  {% endif %}
+                  {% if ticket_first_update.timestamp %}
+                    · {{ ticket_first_update.timestamp.strftime('%d %b %Y · %I:%M %p') }}
+                  {% endif %}
+                </p>
+              </div>
+            {% endif %}
+          </div>
         </div>
 
         <div class="mt-6 grid gap-4 md:grid-cols-2">
@@ -412,6 +448,31 @@
         </div>
 
         <div class="mt-6">
+          <form method="post" action="{{ url_for('customer_support_post_update', ticket_id=selected_ticket.id) }}" enctype="multipart/form-data" class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
+            <h3 class="text-sm font-semibold text-slate-200">Comments</h3>
+            <textarea name="comment" rows="4" class="mt-3 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100" placeholder="Internal comments stay within the team. Use @mentions to notify."></textarea>
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <label class="inline-flex items-center gap-2">
+                <input type="checkbox" name="is_external" value="1" class="rounded border border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400">
+                <span>Mark as external update</span>
+              </label>
+              <p class="basis-full text-[11px] text-slate-500 sm:basis-auto sm:flex-1">
+                External notes are sent to the customer. Leave this unchecked to keep the update internal-only.
+              </p>
+              <label for="ticket-update-attachments" class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-1.5 text-emerald-100 hover:border-emerald-400/60 hover:text-emerald-100">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                </svg>
+                <span>Add attachments</span>
+              </label>
+              <input id="ticket-update-attachments" name="attachments" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" class="sr-only">
+              <span class="text-slate-500">Images, videos or documents up to 200&nbsp;MB each.</span>
+              <button type="submit" class="ml-auto inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/30">Post update</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="mt-6">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <h3 class="text-lg font-semibold text-slate-100">Activity timeline</h3>
             <p class="text-xs uppercase tracking-wide text-slate-500">Most recent first</p>
@@ -443,6 +504,35 @@
             {% endfor %}
           </ol>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="closing-remarks-modal" data-modal class="fixed inset-0 z-[55] hidden items-center justify-center bg-slate-950/70 p-4">
+    <div class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/90 shadow-xl shadow-black/40">
+      <div class="flex items-center justify-between border-b border-slate-800/60 px-6 py-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-100">Add closing remarks</h2>
+          <p class="text-xs text-slate-500">Summarise the resolution before you mark the ticket as resolved or closed.</p>
+        </div>
+        <button type="button" class="rounded-full border border-slate-700/70 bg-slate-900/80 p-2 text-slate-400 hover:text-slate-200" data-close-modal="closing-remarks" aria-label="Cancel closing remarks">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4 px-6 py-5">
+        <textarea rows="4" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Describe what changed, who was informed and any follow-ups." data-closing-remarks-textarea></textarea>
+        <p class="hidden text-sm text-rose-400" data-closing-error>Please add your closing remarks to proceed.</p>
+      </div>
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800/60 bg-slate-900/70 px-6 py-4">
+        <button type="button" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70" data-cancel-closing>Cancel</button>
+        <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30" data-submit-closing>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span>Save &amp; continue</span>
+        </button>
       </div>
     </div>
   </div>
@@ -478,6 +568,7 @@
         modal.classList.remove('flex');
         modal.classList.add('hidden');
         updateBodyScroll();
+        modal.dispatchEvent(new CustomEvent('modal:closed'));
       }
 
       function setupModal({ trigger, modalId, closeSelectors }) {
@@ -530,6 +621,12 @@
         closeSelectors: ['[data-close-modal="linked-task"]']
       });
 
+      const closingRemarksModal = setupModal({
+        trigger: null,
+        modalId: 'closing-remarks-modal',
+        closeSelectors: ['[data-close-modal="closing-remarks"]']
+      });
+
       const linkedTaskButtons = Array.from(document.querySelectorAll('[data-open-linked-task]'));
       if (linkedTaskModal && linkedTaskButtons.length) {
         linkedTaskButtons.forEach((button) => {
@@ -580,22 +677,36 @@
       const emptyState = document.querySelector('[data-ticket-empty-state]');
 
       if (filterButtons.length && ticketRows.length) {
-        const setActiveFilterButton = (activeFilter) => {
+        const activateFilterButton = (activeButton) => {
           filterButtons.forEach((button) => {
-            const isActive = (button.dataset.ticketFilter || 'all') === activeFilter;
+            const isActive = button === activeButton;
             button.classList.toggle('ring-1', isActive);
             button.classList.toggle('ring-emerald-400/60', isActive);
             button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
           });
         };
 
-        const applyFilter = (filter) => {
-          const normalizedFilter = (filter || 'all').toLowerCase();
-          let visibleCount = 0;
+        const applyFilterFromButton = (button) => {
+          if (!button) {
+            return;
+          }
 
+          const filterKey = (button.dataset.ticketFilter || '').toLowerCase();
+          const valueAttr = button.dataset.ticketFilterValues || '';
+          let allowedStatuses = null;
+
+          if (filterKey !== 'all') {
+            const parsed = valueAttr
+              .split(',')
+              .map((value) => value.trim().toLowerCase())
+              .filter((value) => value.length > 0);
+            allowedStatuses = parsed.length ? parsed : [filterKey];
+          }
+
+          let visibleCount = 0;
           ticketRows.forEach((row) => {
             const status = (row.dataset.ticketStatus || '').toLowerCase();
-            const shouldShow = normalizedFilter === 'all' ? true : status === normalizedFilter;
+            const shouldShow = !allowedStatuses ? true : allowedStatuses.includes(status);
             row.classList.toggle('hidden', !shouldShow);
             if (shouldShow) {
               visibleCount += 1;
@@ -606,14 +717,150 @@
             emptyState.classList.toggle('hidden', visibleCount !== 0);
           }
 
-          setActiveFilterButton(normalizedFilter);
+          activateFilterButton(button);
         };
 
         filterButtons.forEach((button) => {
-          button.addEventListener('click', () => applyFilter(button.dataset.ticketFilter || 'all'));
+          button.addEventListener('click', () => applyFilterFromButton(button));
         });
 
-        applyFilter('all');
+        const defaultButton =
+          filterButtons.find((button) => (button.dataset.ticketFilter || '').toLowerCase() === 'open') ||
+          filterButtons.find((button) => (button.dataset.ticketFilter || '').toLowerCase() === 'all') ||
+          filterButtons[0];
+
+        applyFilterFromButton(defaultButton);
+      }
+
+      const statusForm = document.querySelector('[data-ticket-status-form]');
+      if (statusForm) {
+        const statusSelect = statusForm.querySelector('select[name="status"]');
+        const closingCommentInput = statusForm.querySelector('[data-closing-comment-input]');
+        const warningBanner = statusForm.querySelector('[data-open-tasks-warning]');
+        const hasOpenTasks = (statusForm.dataset.hasOpenTasks || 'false').toLowerCase() === 'true';
+        const closingTextarea = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-remarks-textarea]') : null;
+        const closingError = closingRemarksModal ? closingRemarksModal.querySelector('[data-closing-error]') : null;
+        const cancelClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-cancel-closing]') : null;
+        const confirmClosingButton = closingRemarksModal ? closingRemarksModal.querySelector('[data-submit-closing]') : null;
+        const originalStatusValue = statusForm.dataset.originalStatus || '';
+        let pendingClosingSubmission = false;
+        let revertStatusOnClose = false;
+
+        const resetClosingModalState = () => {
+          if (revertStatusOnClose && statusSelect && originalStatusValue) {
+            statusSelect.value = originalStatusValue;
+          }
+          pendingClosingSubmission = false;
+          revertStatusOnClose = false;
+          if (closingTextarea) {
+            closingTextarea.value = '';
+          }
+          if (closingError) {
+            closingError.classList.add('hidden');
+          }
+        };
+
+        if (closingRemarksModal) {
+          closingRemarksModal.addEventListener('modal:closed', resetClosingModalState);
+          closingRemarksModal.addEventListener('click', (event) => {
+            if (event.target === closingRemarksModal) {
+              resetClosingModalState();
+            }
+          });
+        }
+
+        if (hasOpenTasks && warningBanner) {
+          warningBanner.classList.remove('hidden');
+        }
+
+        statusForm.addEventListener('submit', (event) => {
+          if (!statusSelect) {
+            return;
+          }
+
+          const selectedStatus = (statusSelect.value || '').toLowerCase();
+          const originalStatus = (statusForm.dataset.originalStatus || '').toLowerCase();
+          const requiresClosing = ['resolved', 'closed'].includes(selectedStatus) && selectedStatus !== originalStatus;
+          const closingConfirmed = statusForm.dataset.closingConfirmed === 'true';
+
+          if (requiresClosing && !closingConfirmed) {
+            event.preventDefault();
+
+            if (hasOpenTasks) {
+              if (warningBanner) {
+                warningBanner.classList.remove('hidden');
+              }
+              const original = statusForm.dataset.originalStatus || '';
+              if (original && statusSelect.value !== original) {
+                statusSelect.value = original;
+              }
+              return;
+            }
+
+            if (!closingRemarksModal || !closingTextarea) {
+              return;
+            }
+
+            pendingClosingSubmission = true;
+            revertStatusOnClose = true;
+            closingTextarea.value = closingCommentInput && closingCommentInput.value ? closingCommentInput.value : '';
+            if (closingError) {
+              closingError.classList.add('hidden');
+            }
+            openModal(closingRemarksModal);
+            window.setTimeout(() => closingTextarea.focus(), 0);
+            return;
+          }
+
+          if (closingConfirmed) {
+            statusForm.dataset.closingConfirmed = 'false';
+          }
+        });
+
+        if (cancelClosingButton) {
+          cancelClosingButton.addEventListener('click', () => {
+            resetClosingModalState();
+            if (closingRemarksModal) {
+              closeModal(closingRemarksModal);
+            }
+          });
+        }
+
+        if (confirmClosingButton && closingTextarea) {
+          confirmClosingButton.addEventListener('click', () => {
+            if (!pendingClosingSubmission) {
+              if (closingRemarksModal) {
+                closeModal(closingRemarksModal);
+              }
+              return;
+            }
+
+            const value = closingTextarea.value ? closingTextarea.value.trim() : '';
+            if (!value) {
+              if (closingError) {
+                closingError.classList.remove('hidden');
+              }
+              closingTextarea.focus();
+              return;
+            }
+
+            if (closingError) {
+              closingError.classList.add('hidden');
+            }
+
+            if (closingCommentInput) {
+              closingCommentInput.value = value;
+            }
+
+            statusForm.dataset.closingConfirmed = 'true';
+            pendingClosingSubmission = false;
+            revertStatusOnClose = false;
+            if (closingRemarksModal) {
+              closeModal(closingRemarksModal);
+            }
+            window.setTimeout(() => statusForm.requestSubmit(), 0);
+          });
+        }
       }
 
       if (ticketDetailModal && ticketDetailModal.dataset.openOnLoad === 'true') {
