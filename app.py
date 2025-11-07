@@ -629,6 +629,22 @@ def _get_customer_support_ticket(ticket_id):
     return next((ticket for ticket in CUSTOMER_SUPPORT_TICKETS if ticket["id"] == ticket_id), None)
 
 
+def _ticket_has_open_linked_tasks(ticket):
+    if not ticket:
+        return False
+
+    closing_statuses = {"closed", "resolved", "completed", "done", "cancelled"}
+    for task in ticket.get("linked_tasks", []) or []:
+        status = (task.get("status") or "").strip().lower()
+        if status and status in closing_statuses:
+            continue
+        if status:
+            return True
+        if not status:
+            return True
+    return False
+
+
 def _resolve_customer_support_channel_label(channel_value):
     if not channel_value:
         return None
@@ -759,7 +775,6 @@ def _handle_customer_support_ticket_creation():
     category_id = (request.form.get("category") or "").strip()
     channel_value = (request.form.get("channel") or "").strip()
     sla_priority_id = (request.form.get("sla_priority") or "").strip()
-    priority = (request.form.get("priority") or "").strip() or "Medium"
     assignee = (request.form.get("assignee") or "").strip()
     due_raw = (request.form.get("due_datetime") or "").strip()
 
@@ -785,10 +800,6 @@ def _handle_customer_support_ticket_creation():
     channel_label = _resolve_customer_support_channel_label(channel_value)
     if channel_value and not channel_label:
         errors.append("Choose a valid ticket channel.")
-
-    priority_options = {"Low", "Medium", "High", "Critical"}
-    if priority not in priority_options:
-        errors.append("Select a valid ticket priority.")
 
     sla_preset = None
     if sla_priority_id:
@@ -833,7 +844,7 @@ def _handle_customer_support_ticket_creation():
         "contact_email": contact_email or "",
         "category": category_label or category_id,
         "channel": channel_label or channel_value,
-        "priority": priority,
+        "priority": "Medium",
         "status": "Open",
         "assignee": assignee or "Unassigned",
         "created_at": created_at,
@@ -6161,6 +6172,8 @@ def customer_support_tasks():
     attachments = []
     linked_tasks = []
     open_linked_task_modal = request.args.get("open_linked_task") == "1"
+    ticket_first_update = None
+    has_open_linked_tasks = False
     if selected_ticket:
         timeline = sorted(
             selected_ticket.get("timeline", []),
@@ -6169,6 +6182,19 @@ def customer_support_tasks():
         )
         attachments = selected_ticket.get("attachments", [])
         linked_tasks = selected_ticket.get("linked_tasks", [])
+        if linked_tasks:
+            has_open_linked_tasks = _ticket_has_open_linked_tasks(selected_ticket)
+
+        timeline_chronological = sorted(
+            selected_ticket.get("timeline", []),
+            key=lambda event: event.get("timestamp"),
+        )
+        for entry in timeline_chronological:
+            if entry.get("comment"):
+                ticket_first_update = entry
+                break
+        if ticket_first_update is None and timeline_chronological:
+            ticket_first_update = timeline_chronological[0]
 
     return render_template(
         "customer_support_tasks.html",
@@ -6177,6 +6203,7 @@ def customer_support_tasks():
         timeline=timeline,
         attachments=attachments,
         linked_tasks=linked_tasks,
+        ticket_first_update=ticket_first_update,
         support_categories=CUSTOMER_SUPPORT_CATEGORIES,
         channels=CUSTOMER_SUPPORT_CHANNELS,
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
@@ -6185,6 +6212,7 @@ def customer_support_tasks():
         team_members=_customer_support_team_members(),
         open_ticket_modal=bool(selected_ticket),
         open_linked_task_modal=open_linked_task_modal,
+        has_open_linked_tasks=has_open_linked_tasks,
     )
 
 
@@ -6258,6 +6286,7 @@ def customer_support_update_ticket(ticket_id):
     status = (request.form.get("status") or ticket.get("status") or "Open").strip()
     priority = (request.form.get("priority") or ticket.get("priority") or "Medium").strip()
     assignee = (request.form.get("assignee") or ticket.get("assignee") or "Unassigned").strip()
+    closing_comment = (request.form.get("closing_comment") or "").strip()
 
     allowed_status = {"Open", "In Progress", "Resolved", "Closed"}
     allowed_priority = {"Low", "Medium", "High", "Critical"}
@@ -6274,6 +6303,18 @@ def customer_support_update_ticket(ticket_id):
     if errors:
         for message in errors:
             flash(message, "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    current_status = (ticket.get("status") or "").strip().lower()
+    new_status = status.lower()
+    requires_closing_comment = new_status in {"resolved", "closed"} and new_status != current_status
+
+    if requires_closing_comment and _ticket_has_open_linked_tasks(ticket):
+        flash("Resolve or close all linked tasks before marking the ticket resolved or closed.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    if requires_closing_comment and not closing_comment:
+        flash("Add closing remarks before completing the ticket.", "error")
         return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
     changes = []
@@ -6303,6 +6344,18 @@ def customer_support_update_ticket(ticket_id):
             "detail": "; ".join(changes),
         }
     )
+
+    if closing_comment:
+        ticket.setdefault("timeline", []).append(
+            {
+                "timestamp": datetime.datetime.utcnow(),
+                "type": "comment",
+                "label": "Closing remarks",
+                "visibility": "internal",
+                "actor": actor_name,
+                "comment": closing_comment,
+            }
+        )
 
     flash("Ticket details updated successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
