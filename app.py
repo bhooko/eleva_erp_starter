@@ -629,6 +629,35 @@ def _get_customer_support_ticket(ticket_id):
     return next((ticket for ticket in CUSTOMER_SUPPORT_TICKETS if ticket["id"] == ticket_id), None)
 
 
+def _resolve_customer_support_channel_label(channel_value):
+    if not channel_value:
+        return None
+
+    lowered = channel_value.lower()
+    for channel in CUSTOMER_SUPPORT_CHANNELS:
+        channel_id = (channel.get("id") or "").lower()
+        channel_label = (channel.get("label") or "").lower()
+        if lowered in {channel_id, channel_label}:
+            return channel.get("label")
+    return None
+
+
+def _generate_customer_support_ticket_id():
+    existing_numbers = []
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        match = re.match(r"CS-(\d+)$", str(ticket.get("id") or ""))
+        if match:
+            try:
+                existing_numbers.append(int(match.group(1)))
+            except ValueError:
+                continue
+
+    next_number = (max(existing_numbers) + 1) if existing_numbers else 1001
+    while any(ticket.get("id") == f"CS-{next_number}" for ticket in CUSTOMER_SUPPORT_TICKETS):
+        next_number += 1
+    return f"CS-{next_number}"
+
+
 def _customer_support_summary():
     summary = {
         "Open": 0,
@@ -714,6 +743,127 @@ def _customer_support_filter_calls(category=None, status=None, search=None):
         ]
 
     return sorted(records, key=lambda item: item.get("logged_at"), reverse=True)
+
+
+def _handle_customer_support_ticket_creation():
+    form_name = (request.form.get("form_name") or "").strip().lower()
+    if form_name != "create_ticket":
+        return None
+
+    customer = (request.form.get("customer") or "").strip()
+    contact_name = (request.form.get("contact_name") or "").strip()
+    contact_phone = (request.form.get("contact_phone") or "").strip()
+    contact_email = (request.form.get("contact_email") or "").strip()
+    location = (request.form.get("location") or "").strip()
+    subject = (request.form.get("subject") or "").strip()
+    category_id = (request.form.get("category") or "").strip()
+    channel_value = (request.form.get("channel") or "").strip()
+    sla_priority_id = (request.form.get("sla_priority") or "").strip()
+    priority = (request.form.get("priority") or "").strip() or "Medium"
+    assignee = (request.form.get("assignee") or "").strip()
+    due_raw = (request.form.get("due_datetime") or "").strip()
+
+    errors = []
+    if not customer:
+        errors.append("Enter the customer name for the ticket.")
+    if not subject:
+        errors.append("Provide a summary of the customer issue.")
+    if not category_id:
+        errors.append("Select a ticket category.")
+    if not channel_value:
+        errors.append("Select the intake channel for the ticket.")
+
+    category_label = None
+    if category_id:
+        category_label = next(
+            (item.get("label") for item in CUSTOMER_SUPPORT_CATEGORIES if item.get("id") == category_id),
+            None,
+        )
+        if not category_label:
+            errors.append("Choose a valid ticket category.")
+
+    channel_label = _resolve_customer_support_channel_label(channel_value)
+    if channel_value and not channel_label:
+        errors.append("Choose a valid ticket channel.")
+
+    priority_options = {"Low", "Medium", "High", "Critical"}
+    if priority not in priority_options:
+        errors.append("Select a valid ticket priority.")
+
+    sla_preset = None
+    if sla_priority_id:
+        sla_preset = next(
+            (preset for preset in CUSTOMER_SUPPORT_SLA_PRESETS if preset.get("id") == sla_priority_id),
+            None,
+        )
+    if not sla_preset and CUSTOMER_SUPPORT_SLA_PRESETS:
+        sla_preset = CUSTOMER_SUPPORT_SLA_PRESETS[0]
+
+    due_at = None
+    if due_raw:
+        try:
+            due_at = datetime.datetime.strptime(due_raw, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            errors.append("Enter the due date in YYYY-MM-DD HH:MM format.")
+
+    if errors:
+        for message in errors:
+            flash(message, "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    ticket_id = _generate_customer_support_ticket_id()
+    created_at = datetime.datetime.utcnow()
+    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+
+    timeline_detail_parts = []
+    if channel_label:
+        timeline_detail_parts.append(f"Channel: {channel_label}")
+    if location:
+        timeline_detail_parts.append(f"Location: {location}")
+    if subject:
+        timeline_detail_parts.append(subject)
+    timeline_detail = " · ".join(part for part in timeline_detail_parts if part)
+
+    ticket_record = {
+        "id": ticket_id,
+        "subject": subject,
+        "customer": customer,
+        "contact_name": contact_name or "",
+        "contact_phone": contact_phone or "",
+        "contact_email": contact_email or "",
+        "category": category_label or category_id,
+        "channel": channel_label or channel_value,
+        "priority": priority,
+        "status": "Open",
+        "assignee": assignee or "Unassigned",
+        "created_at": created_at,
+        "updated_at": created_at,
+        "sla": {
+            "first_response_hours": sla_preset.get("first_response_hours", 0) if sla_preset else 0,
+            "resolution_hours": sla_preset.get("resolution_hours", 0) if sla_preset else 0,
+        },
+        "attachments": [],
+        "timeline": [
+            {
+                "timestamp": created_at,
+                "type": "status",
+                "label": "Ticket logged",
+                "visibility": "external",
+                "actor": actor_name,
+                "detail": timeline_detail or "Ticket created manually.",
+            }
+        ],
+        "linked_tasks": [],
+    }
+
+    if location:
+        ticket_record["location"] = location
+    if due_at:
+        ticket_record["due_at"] = due_at
+
+    CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
+    flash(f"Ticket {ticket_id} created successfully.", "success")
+    return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
 
 def _normalise_srt_schema(raw_schema):
@@ -5991,10 +6141,14 @@ def customer_support_overview():
     )
 
 
-@app.route("/customer-support/tasks")
+@app.route("/customer-support/tasks", methods=["GET", "POST"])
 @login_required
 def customer_support_tasks():
     _module_visibility_required("customer_support")
+    if request.method == "POST":
+        response = _handle_customer_support_ticket_creation()
+        if response is not None:
+            return response
     tickets = sorted(
         CUSTOMER_SUPPORT_TICKETS,
         key=lambda ticket: ticket.get("updated_at") or ticket.get("created_at"),
@@ -6152,6 +6306,24 @@ def customer_support_update_ticket(ticket_id):
 
     flash("Ticket details updated successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+
+@app.route("/customer-support/tickets/<ticket_id>/delete", methods=["POST"])
+@login_required
+def customer_support_delete_ticket(ticket_id):
+    _module_visibility_required("customer_support")
+    if not current_user.is_admin:
+        flash("You do not have permission to delete tickets.", "error")
+        return redirect(url_for("customer_support_tasks", ticket=ticket_id))
+
+    ticket = _get_customer_support_ticket(ticket_id)
+    if not ticket:
+        flash("The requested ticket could not be found.", "error")
+        return redirect(url_for("customer_support_tasks"))
+
+    CUSTOMER_SUPPORT_TICKETS[:] = [item for item in CUSTOMER_SUPPORT_TICKETS if item.get("id") != ticket_id]
+    flash(f"Ticket {ticket_id} deleted successfully.", "success")
+    return redirect(url_for("customer_support_tasks"))
 
 
 @app.route("/customer-support/tickets/<ticket_id>/comment", methods=["POST"])
