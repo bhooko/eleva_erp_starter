@@ -290,6 +290,14 @@ CUSTOMER_SUPPORT_CHANNELS = [
     {"id": "whatsapp", "label": "WhatsApp", "icon": "💬"},
 ]
 
+CUSTOMER_SUPPORT_AMC_SITES = [
+    {"id": "nova-residency", "label": "Nova Residency", "client": "Silverline Developers"},
+    {"id": "galaxy-towers", "label": "Galaxy Towers", "client": "Galaxy Developers"},
+    {"id": "coastal-business-park", "label": "Coastal Business Park", "client": "Coastal Holdings"},
+    {"id": "harbour-view-tower", "label": "Harbour View Tower", "client": "Bluewater Properties"},
+    {"id": "metro-arcade", "label": "Metro Arcade", "client": "Metro Realty"},
+]
+
 CUSTOMER_SUPPORT_SLA_PRESETS = [
     {
         "id": "standard",
@@ -323,6 +331,7 @@ CUSTOMER_SUPPORT_TICKETS = [
         "id": "CS-1045",
         "subject": "Door sensor fault at Nova Residency",
         "customer": "Nova Residency",
+        "remarks": "Door sensor triggering intermittently causing ride interruptions during peak hours.",
         "contact_name": "Rakesh Pawar",
         "contact_phone": generate_random_phone(),
         "contact_email": generate_random_email(),
@@ -381,11 +390,17 @@ CUSTOMER_SUPPORT_TICKETS = [
                 "due_date": datetime.date(2024, 6, 21),
             }
         ],
+        "amc_site": {
+            "id": "nova-residency",
+            "label": "Nova Residency",
+            "client": "Silverline Developers",
+        },
     },
     {
         "id": "CS-1032",
         "subject": "AMC renewal quote follow-up",
         "customer": "Galaxy Towers",
+        "remarks": "Client evaluating 3-year AMC pricing; awaiting confirmation from finance team.",
         "contact_name": "Natasha Rodrigues",
         "contact_phone": generate_random_phone(),
         "contact_email": generate_random_email(),
@@ -436,6 +451,7 @@ CUSTOMER_SUPPORT_TICKETS = [
         "id": "CS-1018",
         "subject": "Lift car voice announcement glitch",
         "customer": "Coastal Business Park",
+        "remarks": "Announcement module crackles after third floor call – issue observed after last firmware update.",
         "contact_name": "Faheem Khan",
         "contact_phone": generate_random_phone(),
         "contact_email": generate_random_email(),
@@ -475,11 +491,17 @@ CUSTOMER_SUPPORT_TICKETS = [
             },
         ],
         "linked_tasks": [],
+        "amc_site": {
+            "id": "coastal-business-park",
+            "label": "Coastal Business Park",
+            "client": "Coastal Holdings",
+        },
     },
     {
         "id": "CS-1004",
         "subject": "Design clarification for duplex lift",
         "customer": "Blue Horizon Villas",
+        "remarks": "Shared revised cabin layout and clarified pit depth requirements for duplex installation.",
         "contact_name": "Nidhi Singh",
         "contact_phone": generate_random_phone(),
         "contact_email": generate_random_email(),
@@ -658,6 +680,17 @@ def _resolve_customer_support_channel_label(channel_value):
     return None
 
 
+def _resolve_customer_support_amc_site(site_id):
+    if not site_id:
+        return None
+
+    lowered = site_id.lower()
+    for site in CUSTOMER_SUPPORT_AMC_SITES:
+        if lowered == (site.get("id") or "").lower():
+            return site
+    return None
+
+
 def _generate_customer_support_ticket_id():
     existing_numbers = []
     for ticket in CUSTOMER_SUPPORT_TICKETS:
@@ -698,6 +731,25 @@ def _customer_support_summary():
     }
 
 
+def _calculate_ticket_sla_due(ticket):
+    if not isinstance(ticket, dict):
+        return None
+
+    if ticket.get("due_at"):
+        return ticket.get("due_at")
+
+    sla = ticket.get("sla") or {}
+    created_at = ticket.get("created_at")
+    resolution_hours = sla.get("resolution_hours")
+    if created_at and resolution_hours:
+        try:
+            hours = float(resolution_hours)
+        except (TypeError, ValueError):
+            return None
+        return created_at + datetime.timedelta(hours=hours)
+    return None
+
+
 def _customer_support_team_members():
     members = set(CUSTOMER_SUPPORT_DEFAULT_TEAM)
     for ticket in CUSTOMER_SUPPORT_TICKETS:
@@ -727,6 +779,42 @@ def _infer_attachment_type(filename, mimetype=None):
     if ext in {".mp4", ".mov", ".avi", ".mkv", ".webm"}:
         return "video"
     return "file"
+
+
+def _save_customer_support_attachments(files):
+    upload_root = app.config["UPLOAD_FOLDER"]
+    os.makedirs(upload_root, exist_ok=True)
+
+    saved = []
+    timestamp_prefix = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+
+    for index, file in enumerate(files or []):
+        if not file or not file.filename:
+            continue
+
+        original_name = secure_filename(file.filename)
+        if not original_name:
+            continue
+
+        dest_name = f"{timestamp_prefix}_{index}_{original_name}"
+        dest_path = os.path.join(upload_root, dest_name)
+
+        try:
+            file.save(dest_path)
+        except Exception:
+            flash(f"Could not save attachment '{original_name}'.", "error")
+            continue
+
+        attachment_type = _infer_attachment_type(original_name, getattr(file, "mimetype", None))
+        saved.append(
+            {
+                "label": original_name,
+                "type": attachment_type,
+                "url": url_for("static", filename=f"uploads/{dest_name}"),
+            }
+        )
+
+    return saved
 
 
 def _customer_support_filter_calls(category=None, status=None, search=None):
@@ -773,10 +861,13 @@ def _handle_customer_support_ticket_creation():
     location = (request.form.get("location") or "").strip()
     subject = (request.form.get("subject") or "").strip()
     category_id = (request.form.get("category") or "").strip()
+    amc_site_id = (request.form.get("amc_site") or "").strip()
     channel_value = (request.form.get("channel") or "").strip()
     sla_priority_id = (request.form.get("sla_priority") or "").strip()
     assignee = (request.form.get("assignee") or "").strip()
     due_raw = (request.form.get("due_datetime") or "").strip()
+    remarks = (request.form.get("remarks") or "").strip()
+    uploaded_files = request.files.getlist("attachments") or []
 
     errors = []
     if not customer:
@@ -796,6 +887,15 @@ def _handle_customer_support_ticket_creation():
         )
         if not category_label:
             errors.append("Choose a valid ticket category.")
+
+    amc_site_record = None
+    if category_id.lower() == "support-amc".lower():
+        if not amc_site_id:
+            errors.append("Select the AMC site for support AMC tickets.")
+        else:
+            amc_site_record = _resolve_customer_support_amc_site(amc_site_id)
+            if not amc_site_record:
+                errors.append("Choose a valid AMC site from the list.")
 
     channel_label = _resolve_customer_support_channel_label(channel_value)
     if channel_value and not channel_label:
@@ -831,9 +931,15 @@ def _handle_customer_support_ticket_creation():
         timeline_detail_parts.append(f"Channel: {channel_label}")
     if location:
         timeline_detail_parts.append(f"Location: {location}")
+    if amc_site_record:
+        timeline_detail_parts.append(f"AMC site: {amc_site_record.get('label')}")
     if subject:
         timeline_detail_parts.append(subject)
+    if remarks:
+        timeline_detail_parts.append(remarks)
     timeline_detail = " · ".join(part for part in timeline_detail_parts if part)
+
+    attachments_added = _save_customer_support_attachments(uploaded_files)
 
     ticket_record = {
         "id": ticket_id,
@@ -853,7 +959,7 @@ def _handle_customer_support_ticket_creation():
             "first_response_hours": sla_preset.get("first_response_hours", 0) if sla_preset else 0,
             "resolution_hours": sla_preset.get("resolution_hours", 0) if sla_preset else 0,
         },
-        "attachments": [],
+        "attachments": attachments_added,
         "timeline": [
             {
                 "timestamp": created_at,
@@ -871,6 +977,14 @@ def _handle_customer_support_ticket_creation():
         ticket_record["location"] = location
     if due_at:
         ticket_record["due_at"] = due_at
+    if remarks:
+        ticket_record["remarks"] = remarks
+    if amc_site_record:
+        ticket_record["amc_site"] = {
+            "id": amc_site_record.get("id"),
+            "label": amc_site_record.get("label"),
+            "client": amc_site_record.get("client"),
+        }
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
     flash(f"Ticket {ticket_id} created successfully.", "success")
@@ -6160,11 +6274,17 @@ def customer_support_tasks():
         response = _handle_customer_support_ticket_creation()
         if response is not None:
             return response
-    tickets = sorted(
-        CUSTOMER_SUPPORT_TICKETS,
-        key=lambda ticket: ticket.get("updated_at") or ticket.get("created_at"),
-        reverse=True,
-    )
+    now = datetime.datetime.utcnow()
+    tickets = []
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        sla_due_at = _calculate_ticket_sla_due(ticket)
+        ticket["_sla_due_at"] = sla_due_at
+        ticket["_sla_due_iso"] = sla_due_at.isoformat() if sla_due_at else ""
+        ticket["_sla_due_display"] = sla_due_at.strftime("%d %b %Y %H:%M") if sla_due_at else "No SLA"
+        ticket["_sla_seconds_remaining"] = (sla_due_at - now).total_seconds() if sla_due_at else None
+        tickets.append(ticket)
+
+    tickets.sort(key=lambda ticket: ticket.get("_sla_due_at") or datetime.datetime.max)
     ticket_open_task_map = {
         ticket.get("id"): _ticket_has_open_linked_tasks(ticket) for ticket in tickets
     }
@@ -6222,6 +6342,10 @@ def customer_support_tasks():
         has_open_linked_tasks=has_open_linked_tasks,
         ticket_open_task_map=ticket_open_task_map,
         active_support_users=active_support_users,
+        amc_sites=sorted(
+            CUSTOMER_SUPPORT_AMC_SITES,
+            key=lambda item: (item.get("label") or "").lower(),
+        ),
     )
 
 
@@ -6477,30 +6601,7 @@ def customer_support_post_update(ticket_id):
         flash("Add a comment or attach at least one file before posting the update.", "error")
         return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
-    attachments_added = []
-    upload_root = app.config["UPLOAD_FOLDER"]
-    os.makedirs(upload_root, exist_ok=True)
-
-    for file in valid_files:
-        original_name = secure_filename(file.filename)
-        if not original_name:
-            continue
-        dest_name = f"{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
-        dest_path = os.path.join(upload_root, dest_name)
-        try:
-            file.save(dest_path)
-        except Exception:
-            flash(f"Could not save attachment '{original_name}'.", "error")
-            continue
-
-        attachment_type = _infer_attachment_type(original_name, getattr(file, "mimetype", None))
-        attachments_added.append(
-            {
-                "label": original_name,
-                "type": attachment_type,
-                "url": url_for("static", filename=f"uploads/{dest_name}"),
-            }
-        )
+    attachments_added = _save_customer_support_attachments(valid_files)
 
     if not comment and not attachments_added:
         flash("No valid attachments were uploaded.", "error")

@@ -23,7 +23,7 @@
     <div class="flex flex-col gap-3 border-b border-slate-800/60 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <h2 class="text-lg font-semibold text-slate-100">Ticket queue</h2>
-        <p class="text-sm text-slate-400">Sorted by recent updates. Use the view action to open the full timeline.</p>
+        <p class="text-sm text-slate-400">Sorted by SLA deadline (soonest first). Use the view action to open the full timeline.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2" data-ticket-filter-group>
         <button type="button" class="rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800/70" data-ticket-filter="all">All</button>
@@ -32,20 +32,26 @@
         <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200" data-ticket-filter="closed-resolved" data-ticket-filter-values="resolved,closed">Resolved / Closed</button>
       </div>
     </div>
-    <div class="divide-y divide-slate-800/60">
+    <div class="space-y-4 px-4 py-4 sm:px-6">
       {% for ticket in tickets %}
         {% set ticket_status_slug = ticket.status.lower().replace(' ', '-') %}
-        <div class="flex flex-col gap-3 px-6 py-4 transition hover:bg-slate-800/40" data-ticket-row data-ticket-status="{{ ticket_status_slug }}">
-          <div class="flex items-center justify-between gap-4">
+        {% set has_open_tasks = ticket_open_task_map.get(ticket.id, False) %}
+        <div class="flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/70 px-5 py-4 transition hover:bg-slate-800/50" data-ticket-row data-ticket-status="{{ ticket_status_slug }}">
+          <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="text-sm font-semibold text-slate-100">{{ ticket.id }} · {{ ticket.subject }}</div>
-            <span class="text-xs text-slate-500">{{ (ticket.updated_at or ticket.created_at).strftime('%d %b %H:%M') }}</span>
+            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span class="rounded-full bg-slate-900/60 px-3 py-1 text-[11px] text-slate-300">Due {{ ticket._sla_due_display }}</span>
+              <span class="text-[11px] text-slate-500">Updated {{ (ticket.updated_at or ticket.created_at).strftime('%d %b %H:%M') }}</span>
+              <span class="rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs text-emerald-200" data-sla-countdown data-sla-deadline="{{ ticket._sla_due_iso }}">Calculating…</span>
+            </div>
           </div>
-          {% set has_open_tasks = ticket_open_task_map.get(ticket.id, False) %}
           <div class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.category }}</span>
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.priority }} priority</span>
-            <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.channel }}</span>
             <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.status }}</span>
+            {% if ticket.customer %}
+              <span class="rounded-full bg-slate-800/80 px-3 py-1">{{ ticket.customer }}</span>
+            {% endif %}
             <span>Owner: {{ ticket.assignee }}</span>
             <div class="ml-auto flex items-center gap-2">
               {% if ticket.status not in ['Resolved', 'Closed'] %}
@@ -66,10 +72,10 @@
           </div>
         </div>
       {% else %}
-        <div class="px-6 py-10 text-center text-sm text-slate-400">No tickets logged.</div>
+        <div class="px-2 py-10 text-center text-sm text-slate-400 sm:px-6">No tickets logged.</div>
       {% endfor %}
       {% if tickets %}
-        <div class="hidden px-6 py-6 text-center text-sm text-slate-400" data-ticket-empty-state>No tickets match this filter.</div>
+        <div class="hidden px-2 py-6 text-center text-sm text-slate-400 sm:px-6" data-ticket-empty-state>No tickets match this filter.</div>
       {% endif %}
     </div>
   </div>
@@ -95,36 +101,28 @@
         <input type="hidden" name="form_name" value="create_ticket">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="text-xs uppercase tracking-wide text-slate-500">Customer name</label>
-            <input name="customer" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Customer or site" required />
-          </div>
-          <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Contact person</label>
             <input name="contact_name" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Caller name" />
           </div>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Phone</label>
             <input name="contact_phone" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="+91-98765-43210" />
           </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Email</label>
             <input name="contact_email" type="email" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="name@example.com" />
           </div>
-        </div>
-        <div>
-          <label class="text-xs uppercase tracking-wide text-slate-500">Location</label>
-          <input name="location" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Site or branch location" />
-        </div>
-        <div>
-          <label class="text-xs uppercase tracking-wide text-slate-500">Ticket summary</label>
-          <textarea name="subject" rows="3" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Describe the customer issue" required></textarea>
+          <div>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Location</label>
+            <input name="location" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Site or branch location" />
+          </div>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Category</label>
-            <select name="category" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" required>
+            <select name="category" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-ticket-category required>
               <option value="" selected disabled>Select category</option>
               {% for category in support_categories %}
                 <option value="{{ category.id }}" data-category-label="{{ category.label }}">{{ category.label }}</option>
@@ -144,6 +142,28 @@
             </div>
           </div>
         </div>
+        <div class="hidden rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200" data-amc-site-field>
+          <label class="text-xs uppercase tracking-wide text-slate-500">AMC site</label>
+          <select name="amc_site" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-amc-site-select>
+            <option value="" selected disabled>Select AMC site</option>
+            {% for site in amc_sites %}
+              <option value="{{ site.id }}">{{ site.label }}{% if site.client %} · {{ site.client }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <p class="mt-2 text-[11px] text-slate-500">Only required for Support – AMC tickets.</p>
+        </div>
+        <div>
+          <label class="text-xs uppercase tracking-wide text-slate-500">Customer name</label>
+          <input name="customer" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Customer or site" required />
+        </div>
+        <div>
+          <label class="text-xs uppercase tracking-wide text-slate-500">Ticket summary</label>
+          <textarea name="subject" rows="3" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Describe the customer issue" required></textarea>
+        </div>
+        <div>
+          <label class="text-xs uppercase tracking-wide text-slate-500">Ticket remarks</label>
+          <textarea name="remarks" rows="3" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Add detailed notes or follow-up context"></textarea>
+        </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">SLA Priority</label>
@@ -155,23 +175,14 @@
             </select>
           </div>
           <div>
-            <label class="text-xs uppercase tracking-wide text-slate-500">Ticket priority</label>
-            <select name="priority" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" required>
-              <option value="" selected disabled>Select ticket priority</option>
-              {% for option in priority_options %}
-                <option value="{{ option }}">{{ option }}</option>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
+            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+              <option value="" selected disabled>Select team member</option>
+              {% for member in team_members %}
+                <option value="{{ member }}">{{ member }}</option>
               {% endfor %}
             </select>
           </div>
-        </div>
-        <div>
-          <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
-          <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
-            <option value="" selected disabled>Select team member</option>
-            {% for member in team_members %}
-              <option value="{{ member }}">{{ member }}</option>
-            {% endfor %}
-          </select>
         </div>
         <div>
           <label class="text-xs uppercase tracking-wide text-slate-500">Due/SLA date</label>
@@ -179,13 +190,15 @@
         </div>
         <div>
           <label class="text-xs uppercase tracking-wide text-slate-500">Attachments</label>
-          <div class="mt-1 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400">
+          <div class="mt-1 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400 transition hover:border-emerald-400/60" data-attachment-dropzone tabindex="0" role="button" aria-label="Upload ticket attachments">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-8 w-8 text-slate-500">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            <p>Drop files or browse to attach images &amp; videos</p>
-            <input type="file" multiple class="hidden">
+            <p data-attachment-instructions>Drop files or click to browse images &amp; videos</p>
+            <ul class="hidden w-full text-left text-xs text-slate-300" data-attachment-preview></ul>
+            <input name="attachments" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" class="hidden" data-attachment-input>
           </div>
+          <p class="mt-1 text-[11px] text-slate-500">Images, videos or documents up to 200&nbsp;MB each.</p>
         </div>
         <div class="flex items-center justify-end gap-3">
           <button type="reset" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Reset</button>
@@ -287,6 +300,12 @@
             {% if selected_ticket.contact_email %} · {{ selected_ticket.contact_email }}{% endif %}
             {% if selected_ticket.location %} · {{ selected_ticket.location }}{% endif %}
           </p>
+          {% if selected_ticket.amc_site %}
+            <p class="mt-1 text-xs text-slate-500">AMC site · {{ selected_ticket.amc_site.label }}{% if selected_ticket.amc_site.client %} · {{ selected_ticket.amc_site.client }}{% endif %}</p>
+          {% endif %}
+          {% if selected_ticket.remarks %}
+            <p class="mt-2 text-sm text-slate-300 leading-relaxed">{{ selected_ticket.remarks }}</p>
+          {% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Created {{ selected_ticket.created_at.strftime('%d %b %Y %H:%M') }}</span>
@@ -374,6 +393,12 @@
                 <p class="text-xs uppercase tracking-wide text-slate-500">Location</p>
                 <p class="mt-0.5 text-slate-100">{{ selected_ticket.get('location') or 'Not specified' }}</p>
               </div>
+              {% if selected_ticket.amc_site %}
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-500">AMC site</p>
+                  <p class="mt-0.5 text-slate-100">{{ selected_ticket.amc_site.label }}{% if selected_ticket.amc_site.client %} · {{ selected_ticket.amc_site.client }}{% endif %}</p>
+                </div>
+              {% endif %}
               <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Due by</p>
                 <p class="mt-0.5 text-slate-100">
@@ -388,6 +413,12 @@
                 <p class="text-xs uppercase tracking-wide text-slate-500">SLA commitment</p>
                 <p class="mt-0.5 text-slate-100">{{ selected_ticket.sla.first_response_hours }}h response · {{ selected_ticket.sla.resolution_hours }}h resolution</p>
               </div>
+              {% if selected_ticket.remarks %}
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-500">Ticket remarks</p>
+                  <p class="mt-0.5 leading-relaxed text-slate-300">{{ selected_ticket.remarks }}</p>
+                </div>
+              {% endif %}
             </div>
             {% if ticket_first_update %}
               <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-900/80 p-3">
@@ -798,6 +829,8 @@
         openModal(openTasksWarningModal);
       };
 
+      const addTicketForm = document.querySelector('#add-ticket-modal form');
+
       const channelOptions = Array.from(document.querySelectorAll('[data-channel-option] input[type="radio"]'));
       if (channelOptions.length) {
         const refreshChannelState = () => {
@@ -830,10 +863,159 @@
 
         refreshChannelState();
 
-        const addTicketForm = document.querySelector('#add-ticket-modal form');
         if (addTicketForm) {
           addTicketForm.addEventListener('reset', () => window.setTimeout(refreshChannelState, 0));
         }
+      }
+
+      const categorySelect = document.querySelector('[data-ticket-category]');
+      const amcSiteField = document.querySelector('[data-amc-site-field]');
+      const amcSiteSelect = amcSiteField ? amcSiteField.querySelector('[data-amc-site-select]') : null;
+
+      const refreshAmcSiteVisibility = () => {
+        if (!amcSiteField) {
+          return;
+        }
+        const value = (categorySelect && categorySelect.value ? categorySelect.value : '').toLowerCase();
+        const isSupportAmc = value === 'support-amc';
+        amcSiteField.classList.toggle('hidden', !isSupportAmc);
+        if (amcSiteSelect) {
+          if (isSupportAmc) {
+            amcSiteSelect.removeAttribute('disabled');
+            amcSiteSelect.setAttribute('required', 'required');
+          } else {
+            amcSiteSelect.setAttribute('disabled', 'disabled');
+            amcSiteSelect.removeAttribute('required');
+            amcSiteSelect.value = '';
+          }
+        }
+      };
+
+      if (categorySelect) {
+        categorySelect.addEventListener('change', refreshAmcSiteVisibility);
+      }
+      refreshAmcSiteVisibility();
+
+      if (addTicketForm) {
+        addTicketForm.addEventListener('reset', () => {
+          window.setTimeout(() => {
+            if (amcSiteSelect) {
+              amcSiteSelect.value = '';
+            }
+            refreshAmcSiteVisibility();
+          }, 0);
+        });
+      }
+
+      const attachmentZones = Array.from(document.querySelectorAll('[data-attachment-dropzone]'));
+      if (attachmentZones.length) {
+        const formatDefaultInstruction = () => 'Drop files or click to browse images & videos';
+
+        attachmentZones.forEach((zone) => {
+          const input = zone.querySelector('[data-attachment-input]');
+          const instructions = zone.querySelector('[data-attachment-instructions]');
+          const previewList = zone.querySelector('[data-attachment-preview]');
+          if (!input) {
+            return;
+          }
+
+          const resetPreview = () => {
+            if (previewList) {
+              previewList.innerHTML = '';
+              previewList.classList.add('hidden');
+            }
+            if (instructions) {
+              instructions.textContent = formatDefaultInstruction();
+            }
+          };
+
+          const updatePreview = (fileList) => {
+            const files = Array.from(fileList || input.files || []);
+            if (!previewList) {
+              if (instructions) {
+                instructions.textContent = files.length
+                  ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
+                  : formatDefaultInstruction();
+              }
+              return;
+            }
+
+            previewList.innerHTML = '';
+            if (!files.length) {
+              previewList.classList.add('hidden');
+              if (instructions) {
+                instructions.textContent = formatDefaultInstruction();
+              }
+              return;
+            }
+
+            files.forEach((file) => {
+              const item = document.createElement('li');
+              item.textContent = file.name;
+              previewList.appendChild(item);
+            });
+            previewList.classList.remove('hidden');
+            if (instructions) {
+              instructions.textContent = `${files.length} file${files.length === 1 ? '' : 's'} selected`;
+            }
+          };
+
+          zone.addEventListener('click', (event) => {
+            if (event.target !== input) {
+              input.click();
+            }
+          });
+
+          zone.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              input.click();
+            }
+          });
+
+          zone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            zone.classList.add('border-emerald-400/60');
+            zone.classList.add('bg-slate-900/80');
+          });
+
+          zone.addEventListener('dragleave', (event) => {
+            event.preventDefault();
+            zone.classList.remove('border-emerald-400/60');
+            zone.classList.remove('bg-slate-900/80');
+          });
+
+          zone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            zone.classList.remove('border-emerald-400/60');
+            zone.classList.remove('bg-slate-900/80');
+            if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) {
+              return;
+            }
+
+            const droppedFiles = event.dataTransfer.files;
+            if (typeof DataTransfer !== 'undefined') {
+              const dataTransfer = new DataTransfer();
+              Array.from(droppedFiles).forEach((file) => dataTransfer.items.add(file));
+              input.files = dataTransfer.files;
+              updatePreview(dataTransfer.files);
+            } else {
+              input.files = droppedFiles;
+              updatePreview(droppedFiles);
+            }
+          });
+
+          input.addEventListener('change', () => updatePreview());
+
+          if (addTicketForm) {
+            addTicketForm.addEventListener('reset', () => {
+              window.setTimeout(() => {
+                input.value = '';
+                resetPreview();
+              }, 0);
+            });
+          }
+        });
       }
 
       const filterButtons = Array.from(document.querySelectorAll('[data-ticket-filter]'));
@@ -894,6 +1076,103 @@
           filterButtons[0];
 
         applyFilterFromButton(defaultButton);
+      }
+
+      const countdownBadges = Array.from(document.querySelectorAll('[data-sla-countdown]'));
+      if (countdownBadges.length) {
+        const formatDuration = (milliseconds) => {
+          const totalSeconds = Math.max(0, Math.floor(Math.abs(milliseconds) / 1000));
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          if (hours > 0) {
+            return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
+          }
+          return `${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+        };
+
+        const updateCountdowns = () => {
+          const now = Date.now();
+          countdownBadges.forEach((badge) => {
+            const deadlineIso = badge.dataset.slaDeadline || '';
+            const row = badge.closest('[data-ticket-row]');
+            const status = (row && row.dataset.ticketStatus ? row.dataset.ticketStatus : '').toLowerCase();
+            const isClosed = ['resolved', 'closed'].includes(status);
+
+            if (isClosed) {
+              badge.textContent = 'Completed';
+              badge.classList.remove('text-emerald-200');
+              badge.classList.remove('text-rose-200');
+              badge.classList.add('text-slate-300');
+              if (row) {
+                row.classList.remove('border-rose-500/60');
+                row.classList.add('border-slate-800/60');
+                row.classList.remove('bg-rose-500/10');
+                row.classList.add('bg-slate-900/70');
+              }
+              return;
+            }
+
+            if (!deadlineIso) {
+              badge.textContent = 'No SLA deadline';
+              badge.classList.remove('text-rose-200');
+              badge.classList.remove('text-slate-300');
+              badge.classList.add('text-emerald-200');
+              if (row) {
+                row.classList.remove('border-rose-500/60');
+                row.classList.add('border-slate-800/60');
+                row.classList.remove('bg-rose-500/10');
+                row.classList.add('bg-slate-900/70');
+              }
+              return;
+            }
+
+            const deadline = new Date(deadlineIso);
+            if (Number.isNaN(deadline.getTime())) {
+              badge.textContent = 'No SLA deadline';
+              badge.classList.remove('text-rose-200');
+              badge.classList.remove('text-slate-300');
+              badge.classList.add('text-emerald-200');
+              if (row) {
+                row.classList.remove('border-rose-500/60');
+                row.classList.add('border-slate-800/60');
+                row.classList.remove('bg-rose-500/10');
+                row.classList.add('bg-slate-900/70');
+              }
+              return;
+            }
+
+            const diff = deadline.getTime() - now;
+            const isOverdue = diff <= 0;
+            const isUrgent = diff > 0 && diff <= 60 * 60 * 1000;
+
+            if (isOverdue) {
+              if (Math.abs(diff) < 1000) {
+                badge.textContent = 'Due now';
+              } else {
+                badge.textContent = `Overdue by ${formatDuration(diff)}`;
+              }
+            } else if (diff <= 10 * 1000) {
+              badge.textContent = 'Due now';
+            } else {
+              badge.textContent = `${formatDuration(diff)} remaining`;
+            }
+
+            badge.classList.toggle('text-emerald-200', !isUrgent && !isOverdue);
+            badge.classList.toggle('text-rose-200', isUrgent || isOverdue);
+            badge.classList.toggle('text-slate-300', false);
+
+            if (row) {
+              row.classList.toggle('border-rose-500/60', isUrgent || isOverdue);
+              row.classList.toggle('border-slate-800/60', !(isUrgent || isOverdue));
+              row.classList.toggle('bg-rose-500/10', isOverdue);
+              row.classList.toggle('bg-slate-900/70', !isOverdue);
+            }
+          });
+        };
+
+        updateCountdowns();
+        window.setInterval(updateCountdowns, 1000);
       }
 
       const quickResolveForm = document.querySelector('[data-quick-resolve-form]');
