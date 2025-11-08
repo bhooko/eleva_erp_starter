@@ -85,8 +85,8 @@
   </section>
 
 
-  <section class="space-y-4" id="users">
-    <header class="flex flex-wrap items-center justify-between gap-3">
+  <section class="elev-card fade-in p-6 space-y-6" id="users">
+    <header class="section-header flex flex-wrap items-center justify-between gap-3 -mx-6 -mt-6 px-6 py-4 rounded-t-[20px]">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Existing Users</h2>
         <p class="text-sm text-slate-400">Update profile information, reset credentials, or deactivate accounts.</p>
@@ -94,8 +94,8 @@
       <span class="text-xs text-slate-500 uppercase tracking-wide">{{ users|length }} users</span>
     </header>
     {% if users %}
-      <div class="overflow-x-auto rounded-2xl border border-slate-800">
-        <table class="min-w-full divide-y divide-slate-800 text-sm">
+      <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/30">
+        <table class="table-enhanced min-w-full divide-y divide-slate-800 text-sm">
           <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th scope="col" class="px-4 py-3 text-left font-semibold">Name</th>
@@ -109,7 +109,7 @@
           </thead>
           <tbody class="divide-y divide-slate-800 bg-slate-950/40">
             {% for user in users %}
-              <tr class="transition hover:bg-slate-900/40">
+              <tr class="transition-colors">
                 <td class="px-4 py-3 font-medium text-slate-100">
                   {{ user.display_name or user.username }}
                   <div class="text-xs text-slate-400">
@@ -284,8 +284,8 @@
         </div>
       </div>
     {% endfor %}
-  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6" id="departments">
-    <header class="flex flex-wrap items-start justify-between gap-3">
+  <section class="elev-card fade-in p-6 space-y-6" id="departments">
+    <header class="section-header flex flex-wrap items-start justify-between gap-3 -mx-6 -mt-6 px-6 py-4 rounded-t-[20px]">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Departments</h2>
         <p class="text-sm text-slate-400">Outline the structure of your organisation and nest departments as needed.</p>
@@ -301,7 +301,7 @@
         Collapse
       </button>
     </header>
-    <div id="departments-content" class="mt-6 space-y-6" data-section-content>
+    <div id="departments-content" class="space-y-6" data-section-content>
     <form method="post" action="{{ url_for('admin_departments_create') }}" class="grid gap-4 md:grid-cols-2">
       <div class="space-y-1">
         <label class="text-sm text-slate-300">Name</label>
@@ -455,8 +455,8 @@
   </section>
 
 
-  <section class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6" id="positions">
-    <header class="flex flex-wrap items-start justify-between gap-3">
+  <section class="elev-card fade-in p-6 space-y-6" id="positions">
+    <header class="section-header flex flex-wrap items-start justify-between gap-3 -mx-6 -mt-6 px-6 py-4 rounded-t-[20px]">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Positions</h2>
         <p class="text-sm text-slate-400">Define roles within departments and connect reporting lines.</p>
@@ -472,43 +472,58 @@
         Collapse
       </button>
     </header>
-    <div id="positions-content" class="mt-6 space-y-6" data-section-content>
-    <form method="post" action="{{ url_for('admin_positions_create') }}" class="grid gap-4 md:grid-cols-2">
-      <div class="space-y-1">
-        <label class="text-sm text-slate-300">Title</label>
-        <input name="title" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Installation Manager" />
+    <div id="positions-content" class="space-y-6" data-section-content>
+      <div class="flex justify-end">
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-500/20 transition hover:shadow-emerald-500/30 hover:bg-emerald-500"
+                data-form-toggle
+                data-target="positions-create-panel"
+                data-open-label="+ New position"
+                data-close-label="Hide form"
+                data-initial-state="open"
+                aria-controls="positions-create-panel"
+                aria-expanded="true">
+          + New position
+        </button>
       </div>
-      <div class="space-y-1">
-        <label class="text-sm text-slate-300">Department</label>
-        <select name="department_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
-          <option value="">No department</option>
-          {% for dept in department_options %}
-            <option value="{{ dept.id }}">{{ dept.full_name }}</option>
-          {% endfor %}
-        </select>
+      <div id="positions-create-panel" class="hidden collapsible-card space-y-4">
+        <form method="post" action="{{ url_for('admin_positions_create') }}" class="grid gap-4 md:grid-cols-2">
+          <div class="space-y-1">
+            <label class="text-sm text-slate-300">Title</label>
+            <input name="title" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Installation Manager" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm text-slate-300">Department</label>
+            <select name="department_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+              <option value="">No department</option>
+              {% for dept in department_options %}
+                <option value="{{ dept.id }}">{{ dept.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="md:col-span-2 space-y-1">
+            <label class="text-sm text-slate-300">Reports to</label>
+            <select name="reports_to_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+              <option value="">No direct manager</option>
+              {% for pos in position_options %}
+                <option value="{{ pos.id }}">{{ pos.display_label }}</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs text-slate-500">Tip: Department heads should report to the Management team.</p>
+          </div>
+          <div class="md:col-span-2 flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
+              Active
+            </label>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Add position</button>
+          </div>
+        </form>
       </div>
-      <div class="md:col-span-2 space-y-1">
-        <label class="text-sm text-slate-300">Reports to</label>
-        <select name="reports_to_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
-          <option value="">No direct manager</option>
-          {% for pos in position_options %}
-            <option value="{{ pos.id }}">{{ pos.display_label }}</option>
-          {% endfor %}
-        </select>
-        <p class="text-xs text-slate-500">Tip: Department heads should report to the Management team.</p>
-      </div>
-      <div class="md:col-span-2 flex items-center justify-between">
-        <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
-          Active
-        </label>
-        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Add position</button>
-      </div>
-    </form>
-    <div class="space-y-4">
+      <div class="space-y-4">
       {% if positions %}
-        <div class="overflow-x-auto rounded-2xl border border-slate-800">
-          <table class="min-w-full divide-y divide-slate-800 text-sm">
+        <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/30">
+          <table class="table-enhanced min-w-full divide-y divide-slate-800 text-sm">
             <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Title</th>
@@ -520,7 +535,7 @@
             </thead>
             <tbody class="divide-y divide-slate-800 bg-slate-950/40">
               {% for pos in positions %}
-                <tr class="transition hover:bg-slate-900/40">
+                <tr class="transition-colors">
                   <td class="px-4 py-3 font-medium text-slate-100">{{ pos.title }}</td>
                   <td class="px-4 py-3 text-slate-300">
                     {% if pos.department %}
@@ -553,7 +568,7 @@
       {% else %}
         <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No positions defined yet.</div>
       {% endif %}
-    </div>
+      </div>
 
     {% for pos in positions %}
       <form id="delete-position-{{ pos.id }}" method="post" action="{{ url_for('admin_positions_delete', position_id=pos.id) }}" data-confirm="Are you sure you want to delete the '{{ pos.title }}' position?"></form>
