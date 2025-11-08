@@ -129,7 +129,7 @@
               {% endfor %}
             </select>
           </div>
-          <div>
+          <div data-channel-field>
             <label class="text-xs uppercase tracking-wide text-slate-500">Channel</label>
             <div class="mt-1 grid grid-cols-3 gap-2">
               {% for channel in channels %}
@@ -140,6 +140,7 @@
                 </label>
               {% endfor %}
             </div>
+            <p class="mt-2 hidden text-xs text-rose-300" data-channel-error>Select a ticket channel to continue.</p>
           </div>
         </div>
         <div class="hidden rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200" data-amc-site-field>
@@ -831,21 +832,34 @@
 
       const addTicketForm = document.querySelector('#add-ticket-modal form');
 
+      const channelField = document.querySelector('[data-channel-field]');
+      const channelErrorMessage = channelField ? channelField.querySelector('[data-channel-error]') : null;
       const channelOptions = Array.from(document.querySelectorAll('[data-channel-option] input[type="radio"]'));
       if (channelOptions.length) {
         const refreshChannelState = () => {
+          let hasSelection = false;
           channelOptions.forEach((input) => {
             const container = input.closest('[data-channel-option]');
             if (!container) {
               return;
             }
             const isChecked = input.checked;
+            hasSelection = hasSelection || isChecked;
             container.classList.toggle('border-emerald-400/60', isChecked);
             container.classList.toggle('bg-emerald-500/10', isChecked);
             container.classList.toggle('ring-1', isChecked);
             container.classList.toggle('ring-emerald-400/60', isChecked);
             container.setAttribute('aria-pressed', isChecked ? 'true' : 'false');
           });
+
+          if (hasSelection) {
+            if (channelField) {
+              channelField.classList.remove('ring-1', 'ring-rose-500/60');
+            }
+            if (channelErrorMessage) {
+              channelErrorMessage.classList.add('hidden');
+            }
+          }
         };
 
         channelOptions.forEach((input) => {
@@ -864,7 +878,42 @@
         refreshChannelState();
 
         if (addTicketForm) {
-          addTicketForm.addEventListener('reset', () => window.setTimeout(refreshChannelState, 0));
+          addTicketForm.addEventListener('reset', () => {
+            window.setTimeout(() => {
+              if (channelField) {
+                channelField.classList.remove('ring-1', 'ring-rose-500/60');
+              }
+              if (channelErrorMessage) {
+                channelErrorMessage.classList.add('hidden');
+              }
+              refreshChannelState();
+            }, 0);
+          });
+
+          addTicketForm.addEventListener('submit', (event) => {
+            const hasChannelSelection = channelOptions.some((input) => input.checked);
+            if (!hasChannelSelection) {
+              event.preventDefault();
+              if (channelField) {
+                channelField.classList.add('ring-1', 'ring-rose-500/60');
+                channelField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              if (channelErrorMessage) {
+                channelErrorMessage.classList.remove('hidden');
+              }
+              const firstOption = channelOptions[0];
+              if (firstOption && typeof firstOption.focus === 'function') {
+                firstOption.focus();
+              }
+            } else {
+              if (channelField) {
+                channelField.classList.remove('ring-1', 'ring-rose-500/60');
+              }
+              if (channelErrorMessage) {
+                channelErrorMessage.classList.add('hidden');
+              }
+            }
+          });
         }
       }
 
