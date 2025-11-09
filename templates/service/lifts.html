@@ -45,7 +45,9 @@
         <tbody class="divide-y divide-slate-800/80 text-slate-200">
           {% for lift in lifts %}
             <tr class="hover:bg-slate-800/40">
-              <td class="px-4 py-3 font-semibold text-theme-primary">{{ lift.lift_code }}</td>
+              <td class="px-4 py-3 font-semibold text-theme-primary">
+                <button type="button" data-lift-open="{{ lift.id }}" class="text-left font-semibold text-theme-primary transition hover:text-emerald-200">{{ lift.lift_code }}</button>
+              </td>
               <td class="px-4 py-3">
                 {% if lift.customer %}
                   <a href="{{ url_for('service_customer_detail', customer_id=lift.customer.id) }}" class="font-semibold text-emerald-200 hover:text-emerald-100">{{ lift.customer.company_name }}</a>
@@ -62,7 +64,10 @@
               <td class="px-4 py-3">{{ lift.last_service_date.strftime('%d %b %Y') if lift.last_service_date else '—' }}</td>
               <td class="px-4 py-3">{{ lift.next_service_due.strftime('%d %b %Y') if lift.next_service_due else '—' }}</td>
               <td class="px-4 py-3">
-                <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70">Edit</a>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" data-lift-open="{{ lift.id }}" class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20">View</button>
+                  <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-200 transition hover:bg-slate-800/70">Edit</a>
+                </div>
               </td>
             </tr>
           {% else %}
@@ -75,6 +80,22 @@
     </div>
   </div>
 </div>
+
+{% if lift_payloads %}
+  {% for lift_payload in lift_payloads %}
+    <template id="liftDetailTemplate-{{ lift_payload.id }}">
+      {% with payload=lift_payload %}
+        {% include "partials/lift_modal_content.html" %}
+      {% endwith %}
+    </template>
+  {% endfor %}
+{% endif %}
+
+<dialog id="liftDetailModal" class="modal-dialog">
+  <div class="w-full max-w-5xl rounded-2xl border border-slate-800 bg-slate-950/95 p-6 text-sm text-slate-100">
+    <div data-lift-modal-body class="space-y-6"></div>
+  </div>
+</dialog>
 
 <dialog id="liftCreateModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lifts_create') }}" class="w-full max-w-4xl space-y-6 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
@@ -284,6 +305,67 @@
     </div>
   </form>
 </dialog>
+
+<script>
+  (function() {
+    const modal = document.getElementById('liftDetailModal');
+    if (!modal) {
+      return;
+    }
+    const body = modal.querySelector('[data-lift-modal-body]');
+
+    function closeModal() {
+      if (typeof modal.close === 'function') {
+        modal.close();
+      } else {
+        modal.classList.remove('open');
+      }
+    }
+
+    function openModal(liftId) {
+      if (!body) {
+        return;
+      }
+      const template = document.getElementById(`liftDetailTemplate-${liftId}`);
+      if (!template) {
+        return;
+      }
+      body.innerHTML = '';
+      body.appendChild(template.content.cloneNode(true));
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        modal.classList.add('open');
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      const openTrigger = event.target.closest('[data-lift-open]');
+      if (openTrigger) {
+        event.preventDefault();
+        openModal(openTrigger.getAttribute('data-lift-open'));
+        return;
+      }
+
+      const closeTrigger = event.target.closest('#liftDetailModal [data-modal-close]');
+      if (closeTrigger) {
+        event.preventDefault();
+        closeModal();
+      }
+    });
+
+    modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 
 <script>
   (function() {

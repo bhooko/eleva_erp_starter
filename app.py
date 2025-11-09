@@ -639,6 +639,396 @@ SERVICE_AUTOMATIONS = {
 }
 
 
+DEFAULT_LIFT_INSIGHT = {
+    "lifetime_value": {
+        "total_breakdowns_this_year": 0,
+        "last_year_breakdowns": 0,
+        "total_amc_value": 0,
+        "total_repair_revenue": 0,
+        "total_cost": 0,
+        "net_lifetime_profitability": 0,
+    },
+    "amc": {
+        "status": "Not captured",
+        "type": "Not captured",
+        "start": None,
+        "end": None,
+        "contract_value": 0,
+        "payment_terms": "—",
+        "services_per_year": 0,
+        "pending_services_count": 0,
+        "service_owner": "—",
+        "service_contact": "—",
+        "renewal_history": [],
+        "attachments": [],
+    },
+    "machine": {
+        "make": "—",
+        "model": "—",
+        "serial": "—",
+    },
+    "drive_type": "—",
+    "controller_type": "—",
+    "door_configuration": None,
+    "commissioned_date": None,
+    "floors_served": None,
+    "breakdowns": [],
+    "uploads": {
+        "documents": [],
+        "media": [],
+        "other": [],
+    },
+    "timeline": [],
+    "site_name": None,
+}
+
+
+LIFT_INSIGHT_LIBRARY = {
+    "G300": {
+        "site_name": "Galaxy Residency Tower B",
+        "floors_served": "Ground + 12",
+        "commissioned_date": datetime.date(2021, 2, 15),
+        "drive_type": "Gearless",
+        "controller_type": "Siemens T3000",
+        "door_configuration": "Automatic center-opening doors",
+        "machine": {
+            "make": "Eleva Motors",
+            "model": "EMX-200",
+            "serial": "EMX200-8842",
+        },
+        "lifetime_value": {
+            "total_breakdowns_this_year": 3,
+            "last_year_breakdowns": 5,
+            "total_amc_value": 780000,
+            "total_repair_revenue": 210000,
+            "total_cost": 430000,
+            "net_lifetime_profitability": 560000,
+        },
+        "amc": {
+            "status": "Active",
+            "type": "Comprehensive",
+            "start": datetime.date(2024, 4, 1),
+            "end": datetime.date(2025, 3, 31),
+            "contract_value": 420000,
+            "payment_terms": "Quarterly in advance",
+            "services_per_year": 12,
+            "pending_services_count": 2,
+            "service_owner": "Sonia D'Souza",
+            "service_contact": "+91-98220 11223",
+            "renewal_history": [
+                {
+                    "period": "FY 2023-24",
+                    "value": 400000,
+                    "renewed_on": datetime.date(2023, 3, 28),
+                },
+                {
+                    "period": "FY 2022-23",
+                    "value": 375000,
+                    "renewed_on": datetime.date(2022, 3, 24),
+                },
+            ],
+            "attachments": [
+                {
+                    "label": "Signed AMC FY24-25",
+                    "filename": "AMC_FY25_G300.pdf",
+                    "url": "#",
+                },
+                {
+                    "label": "Service schedule FY25",
+                    "filename": "ServiceScheduleFY25.xlsx",
+                    "url": "#",
+                },
+            ],
+        },
+        "breakdowns": [
+            {
+                "issue": "Door close sensor fault",
+                "technician": "Ramesh Pawar",
+                "response_hours": 2,
+                "resolution_hours": 6,
+                "fault_type": "Door",
+                "spares": ["Door sensor kit", "Relay module"],
+                "status": "Resolved",
+                "media": ["Door sensor photos"],
+                "call_reference": "CALL-2025-028",
+            },
+            {
+                "issue": "Overload sensor intermittently triggering",
+                "technician": "Sneha Kulkarni",
+                "response_hours": 3,
+                "resolution_hours": 4,
+                "fault_type": "Controller",
+                "spares": ["Load cell calibrator"],
+                "status": "Under Observation",
+                "media": ["Calibration report"],
+                "call_reference": "CALL-2025-012",
+            },
+        ],
+        "uploads": {
+            "documents": [
+                {
+                    "label": "GA Drawing",
+                    "filename": "G300_GA.pdf",
+                    "description": "Issued by design team on 12 Feb 2021",
+                    "updated": datetime.date(2021, 2, 12),
+                    "url": "#",
+                },
+                {
+                    "label": "Commissioning Certificate",
+                    "filename": "G300_Commissioning.pdf",
+                    "description": "Signed by client operations",
+                    "updated": datetime.date(2021, 2, 18),
+                    "url": "#",
+                },
+                {
+                    "label": "AMC Contract FY25",
+                    "filename": "G300_AMC_FY25.pdf",
+                    "description": "Fully executed contract",
+                    "updated": datetime.date(2024, 3, 28),
+                    "url": "#",
+                },
+            ],
+            "other": [
+                {
+                    "label": "Machine room photos",
+                    "filename": "G300_MachineRoom.zip",
+                    "description": "Photos captured post preventive visit",
+                    "updated": datetime.date(2024, 8, 4),
+                    "url": "#",
+                }
+            ],
+        },
+        "timeline": [
+            {
+                "date": datetime.date(2025, 1, 22),
+                "title": "Preventive service completed",
+                "detail": "Full checklist completed with no major findings.",
+                "category": "Service",
+            },
+            {
+                "date": datetime.date(2024, 11, 12),
+                "title": "Breakdown resolved",
+                "detail": "Door sensor replaced and calibrated.",
+                "category": "Breakdown",
+            },
+            {
+                "date": datetime.date(2024, 4, 1),
+                "title": "AMC renewed",
+                "detail": "Comprehensive AMC renewed for FY25.",
+                "category": "AMC",
+            },
+        ],
+    },
+    "G084": {
+        "site_name": "Kilowott Logistics Hub",
+        "floors_served": "Basement + 2",
+        "commissioned_date": datetime.date(2020, 9, 10),
+        "drive_type": "Geared",
+        "controller_type": "Omkar Logic S300",
+        "door_configuration": "Manual swing doors",
+        "machine": {
+            "make": "Sharp Motor",
+            "model": "SM-1500",
+            "serial": "SM1500-4421",
+        },
+        "lifetime_value": {
+            "total_breakdowns_this_year": 2,
+            "last_year_breakdowns": 1,
+            "total_amc_value": 540000,
+            "total_repair_revenue": 95000,
+            "total_cost": 285000,
+            "net_lifetime_profitability": 350000,
+        },
+        "amc": {
+            "status": "Active",
+            "type": "Non-comprehensive",
+            "start": datetime.date(2024, 7, 1),
+            "end": datetime.date(2025, 6, 30),
+            "contract_value": 310000,
+            "payment_terms": "Bi-annual milestones",
+            "services_per_year": 6,
+            "pending_services_count": 1,
+            "service_owner": "Prakash Naik",
+            "service_contact": "+91-99224 88990",
+            "renewal_history": [
+                {
+                    "period": "FY 2023-24",
+                    "value": 295000,
+                    "renewed_on": datetime.date(2023, 6, 26),
+                }
+            ],
+            "attachments": [
+                {
+                    "label": "AMC Scope FY25",
+                    "filename": "Kilowott_AMC_Scope.pdf",
+                    "url": "#",
+                }
+            ],
+        },
+        "breakdowns": [
+            {
+                "issue": "Goods lift stopped between floors",
+                "technician": "Vishal Patil",
+                "response_hours": 1.5,
+                "resolution_hours": 3,
+                "fault_type": "Mechanical",
+                "spares": ["Brake shoe set"],
+                "status": "Resolved",
+                "media": ["Interlock alignment video"],
+                "call_reference": "CALL-2025-019",
+            }
+        ],
+        "uploads": {
+            "documents": [
+                {
+                    "label": "GA Drawing",
+                    "filename": "G084_GA.pdf",
+                    "description": "Original handover drawing",
+                    "updated": datetime.date(2020, 8, 25),
+                    "url": "#",
+                },
+                {
+                    "label": "AMC Contract FY25",
+                    "filename": "G084_AMC.pdf",
+                    "description": "Signed non-comprehensive contract",
+                    "updated": datetime.date(2024, 6, 26),
+                    "url": "#",
+                },
+            ],
+            "other": [
+                {
+                    "label": "Spare parts quotations",
+                    "filename": "G084_Quotes.pdf",
+                    "description": "Quotes shared during Oct 2024 breakdown",
+                    "updated": datetime.date(2024, 10, 12),
+                    "url": "#",
+                }
+            ],
+        },
+        "timeline": [
+            {
+                "date": datetime.date(2024, 10, 14),
+                "title": "Breakdown task closed",
+                "detail": "Brake shoe set replaced and tested.",
+                "category": "Breakdown",
+            },
+            {
+                "date": datetime.date(2024, 7, 5),
+                "title": "AMC kick-off",
+                "detail": "Kick-off walkthrough completed with client.",
+                "category": "AMC",
+            },
+            {
+                "date": datetime.date(2024, 5, 2),
+                "title": "Quarterly billing",
+                "detail": "Invoice raised for Q1 services.",
+                "category": "Finance",
+            },
+        ],
+    },
+    "G044": {
+        "site_name": "Satguru Apartments",
+        "floors_served": "Ground + 2",
+        "commissioned_date": datetime.date(2019, 12, 1),
+        "drive_type": "Hydraulic",
+        "controller_type": "Omkar Classic",
+        "door_configuration": "Automatic telescopic doors",
+        "machine": {
+            "make": "GMV",
+            "model": "GMV-HP45",
+            "serial": "GMVHP45-1022",
+        },
+        "lifetime_value": {
+            "total_breakdowns_this_year": 1,
+            "last_year_breakdowns": 2,
+            "total_amc_value": 120000,
+            "total_repair_revenue": 60000,
+            "total_cost": 95000,
+            "net_lifetime_profitability": 85000,
+        },
+        "amc": {
+            "status": "AMC Expired",
+            "type": "Call basis",
+            "start": datetime.date(2022, 1, 1),
+            "end": datetime.date(2023, 1, 1),
+            "contract_value": 90000,
+            "payment_terms": "Per visit billing",
+            "services_per_year": 4,
+            "pending_services_count": 0,
+            "service_owner": "Service Desk",
+            "service_contact": "+91-83224 70011",
+            "renewal_history": [
+                {
+                    "period": "FY 2021-22",
+                    "value": 85000,
+                    "renewed_on": datetime.date(2021, 12, 18),
+                }
+            ],
+            "attachments": [
+                {
+                    "label": "Last AMC contract",
+                    "filename": "G044_AMC_2022.pdf",
+                    "url": "#",
+                }
+            ],
+        },
+        "breakdowns": [
+            {
+                "issue": "Oil leakage near pump unit",
+                "technician": "Raju Sawant",
+                "response_hours": 4,
+                "resolution_hours": 9,
+                "fault_type": "Hydraulic",
+                "spares": ["Hydraulic hose", "Oil top-up"],
+                "status": "Resolved",
+                "media": ["Leakage photos"],
+                "call_reference": "CALL-2024-198",
+            }
+        ],
+        "uploads": {
+            "documents": [
+                {
+                    "label": "GA Drawing",
+                    "filename": "G044_GA.pdf",
+                    "description": "Layout updated after lobby renovation",
+                    "updated": datetime.date(2022, 5, 18),
+                    "url": "#",
+                }
+            ],
+            "other": [
+                {
+                    "label": "Site photos",
+                    "filename": "G044_SitePhotos.zip",
+                    "description": "Site conditions captured before AMC expiry",
+                    "updated": datetime.date(2023, 12, 12),
+                    "url": "#",
+                }
+            ],
+        },
+        "timeline": [
+            {
+                "date": datetime.date(2024, 7, 22),
+                "title": "Breakdown visit",
+                "detail": "Hydraulic hose replaced and tested.",
+                "category": "Breakdown",
+            },
+            {
+                "date": datetime.date(2023, 2, 15),
+                "title": "AMC expired",
+                "detail": "Client opted for call-basis visits post expiry.",
+                "category": "AMC",
+            },
+            {
+                "date": datetime.date(2021, 12, 18),
+                "title": "AMC renewed",
+                "detail": "Annual AMC renewed for FY22.",
+                "category": "AMC",
+            },
+        ],
+    },
+}
+
+
 CUSTOMER_SUPPORT_CATEGORIES = [
     {
         "id": "sales-ni",
@@ -2008,6 +2398,232 @@ def normalize_lifecycle_stage(value):
     if value not in SALES_CLIENT_LIFECYCLE_STAGES:
         return SALES_CLIENT_LIFECYCLE_STAGES[0]
     return value
+
+
+def merge_nested_dict(base, updates):
+    if not updates:
+        return base
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            merge_nested_dict(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def format_service_date(value):
+    if not value:
+        return "—"
+    if isinstance(value, datetime.datetime):
+        value = value.date()
+    return value.strftime("%d %b %Y")
+
+
+def format_duration_hours(value):
+    if value is None:
+        return "—"
+    try:
+        hours = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if hours.is_integer():
+        return f"{int(hours)} hrs"
+    return f"{hours:.1f} hrs"
+
+
+def is_lift_open(lift):
+    status = (lift.status or "").strip().lower()
+    return not status or status not in {"inactive", "scrapped", "decommissioned"}
+
+
+def build_lift_payload(lift):
+    insight_config = copy.deepcopy(DEFAULT_LIFT_INSIGHT)
+    merge_nested_dict(insight_config, LIFT_INSIGHT_LIBRARY.get(lift.lift_code, {}))
+
+    customer = lift.customer
+    site_lines = []
+    if insight_config.get("site_name"):
+        site_lines.append(insight_config["site_name"])
+    elif lift.site_address_line1:
+        site_lines.append(lift.site_address_line1)
+    elif customer and customer.company_name:
+        site_lines.append(customer.company_name)
+
+    if lift.site_address_line2:
+        site_lines.append(lift.site_address_line2)
+
+    location_parts = [part for part in [lift.city, lift.state, lift.pincode] if part]
+    if location_parts:
+        site_lines.append(", ".join(location_parts))
+    if lift.country:
+        if not location_parts:
+            site_lines.append(lift.country)
+        else:
+            last_line = site_lines[-1] if site_lines else ""
+            if lift.country not in last_line:
+                site_lines.append(lift.country)
+
+    customer_lines = []
+    if customer and customer.company_name:
+        customer_lines.append(customer.company_name)
+    contact_bits = []
+    if customer and customer.contact_person:
+        contact_bits.append(customer.contact_person)
+    if customer and customer.mobile:
+        contact_bits.append(customer.mobile)
+    elif customer and customer.phone:
+        contact_bits.append(customer.phone)
+    if contact_bits:
+        customer_lines.append(" · ".join(contact_bits))
+    if customer and customer.email:
+        customer_lines.append(customer.email)
+
+    machine_details = insight_config.get("machine", {}) or {}
+    machine_make = machine_details.get("make") or (lift.machine_brand or "—")
+    machine_model = machine_details.get("model") or "—"
+    machine_serial = machine_details.get("serial") or "—"
+
+    lifetime_value = insight_config.get("lifetime_value", {}) or {}
+    lifetime_metrics = [
+        {
+            "label": "Total Breakdowns this year",
+            "display": str(lifetime_value.get("total_breakdowns_this_year", 0)),
+        },
+        {
+            "label": "Last years breakdowns",
+            "display": str(lifetime_value.get("last_year_breakdowns", 0)),
+        },
+        {
+            "label": "Total AMC Value till Date",
+            "display": format_currency(lifetime_value.get("total_amc_value", 0)),
+        },
+        {
+            "label": "Total Repair Revenue till Date",
+            "display": format_currency(lifetime_value.get("total_repair_revenue", 0)),
+        },
+        {
+            "label": "Total Cost (spares, labour, AMC visits)",
+            "display": format_currency(lifetime_value.get("total_cost", 0)),
+        },
+        {
+            "label": "Net Lifetime Profitability",
+            "display": format_currency(lifetime_value.get("net_lifetime_profitability", 0)),
+        },
+    ]
+
+    amc_config = insight_config.get("amc", {}) or {}
+    amc_start = amc_config.get("start") or lift.amc_start
+    amc_end = amc_config.get("end") or lift.amc_end
+
+    amc_payload = {
+        "status": (lift.amc_status or amc_config.get("status") or "—"),
+        "type": amc_config.get("type") or "—",
+        "start_display": format_service_date(amc_start),
+        "end_display": format_service_date(amc_end),
+        "contract_value_display": format_currency(amc_config.get("contract_value", 0)),
+        "payment_terms": amc_config.get("payment_terms") or "—",
+        "services_per_year": amc_config.get("services_per_year", 0),
+        "pending_services_count": amc_config.get("pending_services_count", 0),
+        "service_owner": amc_config.get("service_owner") or "—",
+        "service_contact": amc_config.get("service_contact") or "—",
+        "renewal_history": [
+            {
+                "period": item.get("period", "—"),
+                "value_display": format_currency(item.get("value", 0)),
+                "renewed_on_display": format_service_date(item.get("renewed_on")),
+            }
+            for item in amc_config.get("renewal_history", [])
+        ],
+        "attachments": [
+            {
+                "label": item.get("label", "Document"),
+                "filename": item.get("filename"),
+                "url": item.get("url") or "#",
+            }
+            for item in amc_config.get("attachments", [])
+        ],
+    }
+
+    uploads_config = insight_config.get("uploads", {}) or {}
+    documents = [
+        {
+            "label": item.get("label", "Document"),
+            "filename": item.get("filename"),
+            "description": item.get("description"),
+            "updated_display": format_service_date(item.get("updated")),
+            "url": item.get("url") or "#",
+        }
+        for item in uploads_config.get("documents", [])
+    ]
+
+    additional_uploads = []
+    for bucket in ("media", "other"):
+        for item in uploads_config.get(bucket, []) or []:
+            additional_uploads.append(
+                {
+                    "label": item.get("label", "Attachment"),
+                    "filename": item.get("filename"),
+                    "description": item.get("description"),
+                    "updated_display": format_service_date(item.get("updated")),
+                    "url": item.get("url") or "#",
+                }
+            )
+
+    breakdowns = [
+        {
+            "issue": item.get("issue", "—"),
+            "technician": item.get("technician", "—"),
+            "response": format_duration_hours(item.get("response_hours")),
+            "resolution": format_duration_hours(item.get("resolution_hours")),
+            "fault_type": item.get("fault_type", "—"),
+            "spares": ", ".join(item.get("spares", []) or []) or "—",
+            "status": item.get("status", "—"),
+            "media": ", ".join(item.get("media", []) or []) or "—",
+            "call_reference": item.get("call_reference", "—"),
+        }
+        for item in insight_config.get("breakdowns", [])
+    ]
+
+    timeline_entries = [
+        {
+            "date_display": format_service_date(item.get("date")),
+            "title": item.get("title", "—"),
+            "detail": item.get("detail", ""),
+            "category": item.get("category", "Update"),
+        }
+        for item in insight_config.get("timeline", [])
+    ]
+
+    payload = {
+        "id": lift.id,
+        "lift_code": lift.lift_code,
+        "external_lift_id": lift.external_lift_id or "—",
+        "status": lift.status or "—",
+        "site_lines": site_lines or ["—"],
+        "customer_lines": customer_lines or ["—"],
+        "lift_type": lift.lift_type or "—",
+        "drive_type": insight_config.get("drive_type") or "—",
+        "controller_type": insight_config.get("controller_type") or "—",
+        "controller_brand": lift.controller_brand or "—",
+        "door_type": lift.door_type or "—",
+        "door_configuration": insight_config.get("door_configuration") or (lift.door_type or "—"),
+        "floors_served": insight_config.get("floors_served") or (lift.building_floors or "—"),
+        "capacity_display": lift.capacity_display or (f"{lift.capacity_persons} persons / {lift.capacity_kg} kg" if lift.capacity_persons and lift.capacity_kg else "—"),
+        "speed_display": f"{lift.speed_mps:.2f} m/s" if lift.speed_mps is not None else "—",
+        "machine_make": machine_make,
+        "machine_model": machine_model,
+        "machine_serial": machine_serial,
+        "install_date_display": format_service_date(lift.install_date),
+        "commissioned_date_display": format_service_date(insight_config.get("commissioned_date") or lift.install_date),
+        "documents": documents,
+        "other_uploads": additional_uploads,
+        "amc": amc_payload,
+        "breakdowns": breakdowns,
+        "timeline": timeline_entries,
+        "lifetime_metrics": lifetime_metrics,
+    }
+
+    return payload
 
 
 def log_sales_activity(parent_type, parent_id, title, notes=None, actor=None):
@@ -7593,10 +8209,17 @@ def service_customers():
         )
 
     customers = query.order_by(func.lower(Customer.company_name)).all()
+    lift_payload_map = {}
+    for customer in customers:
+        open_lifts = [lift for lift in customer.lifts if is_lift_open(lift)]
+        customer.open_lifts = open_lifts
+        for lift in open_lifts:
+            lift_payload_map[str(lift.id)] = build_lift_payload(lift)
     return render_template(
         "service/customers.html",
         customers=customers,
         search_query=search_query,
+        lift_payload_map=lift_payload_map,
     )
 
 
@@ -7665,10 +8288,14 @@ def service_customer_detail(customer_id):
         .all()
     )
 
+    customer.open_lifts = [lift for lift in lifts if is_lift_open(lift)]
+    lift_payload_map = {str(lift.id): build_lift_payload(lift) for lift in lifts}
+
     return render_template(
         "service/customer_detail.html",
         customer=customer,
         lifts=lifts,
+        lift_payload_map=lift_payload_map,
     )
 
 
@@ -7753,12 +8380,14 @@ def service_lifts():
 
     lifts = query.order_by(func.lower(Lift.lift_code)).all()
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+    lift_payloads = [build_lift_payload(lift) for lift in lifts]
 
     return render_template(
         "service/lifts.html",
         lifts=lifts,
         customers=customers,
         search_query=search_query,
+        lift_payloads=lift_payloads,
     )
 
 
