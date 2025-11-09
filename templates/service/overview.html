@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Service Overview{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-theme-primary">Service Command Center</h1>
+      <p class="text-sm text-slate-400">Single landing page bringing live KPIs, charts and preventive calendar into one view.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for filter in filters %}
+        <button type="button"
+                class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800">
+          {{ filter }}
+        </button>
+      {% endfor %}
+    </div>
+  </header>
+
+  <section>
+    <h2 class="text-lg font-semibold text-slate-200 mb-3">Performance KPIs</h2>
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {% for kpi in kpis %}
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <p class="text-xs uppercase tracking-wide text-slate-500">{{ kpi.label }}</p>
+          <p class="mt-2 text-3xl font-semibold text-theme-primary">{{ kpi.value }}</p>
+          <p class="mt-2 text-xs text-slate-400">{{ kpi.descriptor }}</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-xs font-medium text-{{ kpi.tone }}-300">
+            <span class="w-2 h-2 rounded-full bg-{{ kpi.tone }}-400/80"></span>
+            Healthy signal
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="grid gap-6 xl:grid-cols-3">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 xl:col-span-2">
+      <div class="border-b border-slate-800/70 px-6 py-4">
+        <h3 class="text-base font-semibold text-slate-100">Live charts</h3>
+        <p class="text-xs text-slate-400">Key indicators refresh when tickets convert to tasks or closures happen.</p>
+      </div>
+      <div class="grid gap-6 p-6 lg:grid-cols-2">
+        <div>
+          <h4 class="text-sm font-medium text-slate-300 mb-2">Complaints by category</h4>
+          <ul class="space-y-2">
+            {% for item in chart_sets.complaints_by_category %}
+              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                <span class="text-slate-300">{{ item.label }}</span>
+                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-sm font-medium text-slate-300 mb-2">Tasks by status</h4>
+          <ul class="space-y-2">
+            {% for item in chart_sets.tasks_by_status %}
+              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                <span class="text-slate-300">{{ item.label }}</span>
+                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-sm font-medium text-slate-300 mb-2">Parts consumption (month)</h4>
+          <ul class="space-y-2">
+            {% for item in chart_sets.parts_consumption %}
+              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                <span class="text-slate-300">{{ item.label }}</span>
+                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-sm font-medium text-slate-300 mb-2">Technician workload</h4>
+          <ul class="space-y-2">
+            {% for item in chart_sets.technician_workload %}
+              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                <span class="text-slate-300">{{ item.label }}</span>
+                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60">
+      <div class="border-b border-slate-800/70 px-6 py-4">
+        <h3 class="text-base font-semibold text-slate-100">Preventive & scheduled calendar</h3>
+        <p class="text-xs text-slate-400">Auto-generated from preventive planner and linked calls.</p>
+      </div>
+      <ul class="divide-y divide-slate-800/60">
+        {% for item in calendar_items %}
+          <li class="px-6 py-4">
+            <div class="flex items-center justify-between text-sm">
+              <span class="font-medium text-slate-200">{{ item.label }}</span>
+              <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">{{ item.type }}</span>
+            </div>
+            <p class="mt-2 text-xs text-slate-400">{{ item.date }}{% if item.delta %} · {{ item.delta }}{% endif %}</p>
+          </li>
+        {% else %}
+          <li class="px-6 py-6 text-center text-xs text-slate-400">No upcoming visits logged.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
+    <div class="flex flex-col gap-2 border-b border-slate-800/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 class="text-base font-semibold text-slate-100">Technician performance</h3>
+        <p class="text-xs text-slate-400">Drill into individual histories, parts usage and rating feedback.</p>
+      </div>
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-xs text-slate-300 hover:text-white">Export snapshot</button>
+    </div>
+    <div class="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-3">
+      {% for technician in technicians %}
+        <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-5 space-y-3">
+          <header>
+            <h4 class="text-sm font-semibold text-slate-200">{{ technician.name }}</h4>
+            <div class="flex items-center gap-1 text-xs text-amber-300">
+              <span aria-hidden="true">{{ "★" * technician.rating_stars }}</span>
+              <span class="ml-1 text-slate-400">({{ technician.rating }})</span>
+            </div>
+          </header>
+          <dl class="grid grid-cols-2 gap-3 text-xs text-slate-300">
+            <div>
+              <dt class="text-slate-500">Tasks closed</dt>
+              <dd class="font-semibold text-theme-primary">{{ technician.tasks_closed }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-500">First-time-fix</dt>
+              <dd class="font-semibold text-emerald-300">{{ technician.first_time_fix_rate }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-500">On-time %</dt>
+              <dd class="font-semibold text-sky-300">{{ technician.on_time }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-500">Avg travel</dt>
+              <dd class="font-semibold text-slate-200">{{ technician.travel_time }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-500">Avg repair</dt>
+              <dd class="font-semibold text-slate-200">{{ technician.repair_time }}</dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-slate-500">Customer rating</dt>
+              <dd class="mt-1 flex items-center gap-1 text-sm text-emerald-300">
+                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 text-xs font-semibold">{{ technician.rating }}</span>
+                <span class="text-slate-400">Latest survey trend steady</span>
+              </dd>
+            </div>
+          </dl>
+          <footer>
+            <button type="button" class="w-full rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white">View history & parts</button>
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

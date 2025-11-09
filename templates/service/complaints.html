@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Complaints Intake{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-theme-primary">Complaints Inbox</h1>
+      <p class="text-sm text-slate-400">View-only feed of complaints originating from Customer Support or field escalation.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:text-white">Filter categories</button>
+      <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">Download log</button>
+    </div>
+  </header>
+
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
+    <div class="border-b border-slate-800/70 px-6 py-4">
+      <h2 class="text-base font-semibold text-slate-100">Complaint feed</h2>
+      <p class="text-xs text-slate-400">Classification happens upstream in Customer Support; Service consumes the converted tasks.</p>
+    </div>
+    <div class="divide-y divide-slate-800/70">
+      {% for complaint in complaints %}
+        <article class="px-6 py-5">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500">{{ complaint.source }}</p>
+              <h3 class="text-lg font-semibold text-slate-200">{{ complaint.id }}</h3>
+              <p class="text-sm text-slate-400">Category: {{ complaint.category }} · Priority: {{ complaint.priority }}</p>
+              <p class="text-xs text-slate-400">Location: {{ complaint.location }} · Lift: {{ complaint.lift }}</p>
+            </div>
+            <div class="text-xs text-slate-300">
+              <p>Status: <span class="font-semibold text-theme-primary">{{ complaint.status }}</span></p>
+              {% if complaint.linked_task %}
+                <p>Linked service task <span class="font-semibold text-emerald-300">{{ complaint.linked_task }}</span></p>
+              {% else %}
+                <p class="text-amber-300">Awaiting conversion</p>
+              {% endif %}
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 text-xs text-slate-300 lg:grid-cols-2">
+            <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
+              <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversion flow</h4>
+              <p class="mt-2 text-slate-300">AMC support tickets convert automatically with SLA + audio preserved.</p>
+              <p class="mt-1 text-slate-300">Non-AMC complaints trigger chargeable task, ping Sales for estimate if needed.</p>
+            </div>
+            <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
+              <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ownership</h4>
+              <p class="mt-2 text-slate-300">Technicians only interact post-conversion; classification stays within Customer Support.</p>
+              <p class="mt-1 text-slate-300">Service retains visibility for routing and to audit repeated incidents by category.</p>
+            </div>
+          </div>
+        </article>
+      {% else %}
+        <p class="px-6 py-8 text-center text-sm text-slate-400">No complaints visible to Service right now.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
