@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Lift {{ lift.lift_code }}{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-400"><a href="{{ url_for('service_lifts') }}" class="text-emerald-200 hover:text-emerald-100">Lifts</a> · Edit</p>
+      <h1 class="text-2xl font-semibold text-theme-primary">Lift {{ lift.lift_code }}</h1>
+      <p class="text-sm text-slate-400">{{ lift.lift_type or 'Type not set' }} · {{ lift.capacity_display or 'Capacity not set' }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('service_lifts') }}" class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Back to lifts</a>
+      <button type="button" data-modal-open="customer-create-from-lift" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">New customer</button>
+    </div>
+  </header>
+
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="space-y-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-sm text-slate-100">
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
+        <input name="lift_code" value="{{ lift.lift_code }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
+        <input name="external_lift_id" value="{{ lift.external_lift_id or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <div class="space-y-2 md:col-span-2">
+        <div class="flex items-center justify-between">
+          <label class="flex-1 space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
+            <input id="liftCustomerCode" name="customer_code" value="{{ lift.customer_code or '' }}" list="customerOptions" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" {% if lift.customer_code %}readonly{% endif %} />
+          </label>
+          <button type="button" data-action="enable-customer" class="ml-3 mt-6 rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800/70">Relink customer</button>
+        </div>
+        <datalist id="customerOptions">
+          {% for customer in customers %}
+            <option value="{{ customer.customer_code }}" label="{{ customer.company_name }}"></option>
+          {% endfor %}
+        </datalist>
+        <p class="text-xs text-slate-500">Click "Relink customer" to search and assign a different customer.</p>
+      </div>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Site address line 1</span>
+        <input name="site_address_line1" value="{{ lift.site_address_line1 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Site address line 2</span>
+        <input name="site_address_line2" value="{{ lift.site_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
+        <input name="city" value="{{ lift.city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
+        <input name="state" value="{{ lift.state or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
+        <input name="pincode" value="{{ lift.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
+        <input name="country" value="{{ lift.country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
+        <input name="route" value="{{ lift.route or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building floors</span>
+        <input name="building_floors" value="{{ lift.building_floors or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
+        <input name="lift_type" value="{{ lift.lift_type or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>
+        <input name="capacity_persons" type="number" min="0" value="{{ lift.capacity_persons if lift.capacity_persons is not none else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (kg)</span>
+        <input name="capacity_kg" type="number" min="0" value="{{ lift.capacity_kg if lift.capacity_kg is not none else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Speed (m/s)</span>
+        <input name="speed_mps" step="0.01" value="{{ '%.2f'|format(lift.speed_mps) if lift.speed_mps is not none else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine type</span>
+        <input name="machine_type" value="{{ lift.machine_type or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine brand</span>
+        <input name="machine_brand" value="{{ lift.machine_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Controller brand</span>
+        <input name="controller_brand" value="{{ lift.controller_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door type</span>
+        <input name="door_type" value="{{ lift.door_type or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door brand</span>
+        <input name="door_brand" value="{{ lift.door_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Cabin finish</span>
+        <input name="cabin_finish" value="{{ lift.cabin_finish or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Power supply</span>
+        <input name="power_supply" value="{{ lift.power_supply or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Install date</span>
+        <input type="date" name="install_date" value="{{ lift.install_date.isoformat() if lift.install_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty expiry</span>
+        <input type="date" name="warranty_expiry" value="{{ lift.warranty_expiry.isoformat() if lift.warranty_expiry else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC status</span>
+        <input name="amc_status" value="{{ lift.amc_status or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC start</span>
+        <input type="date" name="amc_start" value="{{ lift.amc_start.isoformat() if lift.amc_start else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC end</span>
+        <input type="date" name="amc_end" value="{{ lift.amc_end.isoformat() if lift.amc_end else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">QR code URL</span>
+        <input type="url" name="qr_code_url" value="{{ lift.qr_code_url or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</span>
+        <input name="status" value="{{ lift.status or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Last service date</span>
+        <input type="date" name="last_service_date" value="{{ lift.last_service_date.isoformat() if lift.last_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next service due</span>
+        <input type="date" name="next_service_due" value="{{ lift.next_service_due.isoformat() if lift.next_service_due else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+    </div>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</span>
+      <textarea name="notes" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">{{ lift.notes or '' }}</textarea>
+    </label>
+    <div class="flex items-center justify-end gap-2">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save lift</button>
+    </div>
+  </form>
+</div>
+
+<dialog id="customerFromLiftModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_customers_create') }}" class="w-full max-w-3xl space-y-6 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Create customer</h2>
+        <p class="text-xs text-slate-400">Add a new customer and then relink the lift.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
+        <input name="customer_code" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="CUS0006" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>
+        <input name="company_name" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Acme Pvt. Ltd." />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact person</span>
+        <input name="contact_person" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Email</span>
+        <input type="email" name="email" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Phone</span>
+        <input name="phone" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mobile</span>
+        <input name="mobile" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
+        <input name="route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="R1 / R2 / M1" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Sector</span>
+        <input name="sector" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Residential / Commercial" />
+      </label>
+    </div>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</span>
+      <textarea name="notes" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2"></textarea>
+    </label>
+    <div class="flex items-center justify-end gap-2">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Create customer</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  (function() {
+    const customerField = document.getElementById('liftCustomerCode');
+    const enableButton = document.querySelector('[data-action="enable-customer"]');
+    if (customerField && enableButton) {
+      enableButton.addEventListener('click', () => {
+        customerField.removeAttribute('readonly');
+        customerField.focus();
+      });
+    }
+    function setupModal(openSelector, modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      document.querySelectorAll(openSelector).forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+          if (typeof modal.showModal === 'function') {
+            modal.showModal();
+          } else {
+            modal.classList.add('open');
+          }
+        });
+      });
+      modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (typeof modal.close === 'function') {
+            modal.close();
+          } else {
+            modal.classList.remove('open');
+          }
+        });
+      });
+    }
+    setupModal('[data-modal-open="customer-create-from-lift"]', 'customerFromLiftModal');
+  })();
+</script>
+{% endblock %}

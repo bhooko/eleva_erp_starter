@@ -17,6 +17,7 @@ from collections import OrderedDict
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import joinedload
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -57,6 +58,58 @@ def generate_random_email(domains=None):
 def generate_linked_task_id():
     """Generate a short, human-friendly identifier for linked tasks."""
     return f"TASK-{uuid.uuid4().hex[:6].upper()}"
+
+
+def parse_optional_date(value):
+    if not value:
+        return None
+    if isinstance(value, datetime.date):
+        return value
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def clean_str(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return value
+
+
+def parse_int_field(value, label):
+    value = clean_str(value)
+    if value is None:
+        return None, None
+    try:
+        return int(value), None
+    except (TypeError, ValueError):
+        return None, f"{label} must be a whole number."
+
+
+def parse_float_field(value, label):
+    value = clean_str(value)
+    if value is None:
+        return None, None
+    try:
+        return float(value), None
+    except (TypeError, ValueError):
+        return None, f"{label} must be a number."
+
+
+def parse_date_field(value, label):
+    value = clean_str(value)
+    if not value:
+        return None, None
+    if isinstance(value, str) and value.lower() == "none":
+        return None, None
+    parsed = parse_optional_date(value)
+    if not parsed:
+        return None, f"{label} must be in YYYY-MM-DD format."
+    return parsed, None
 
 
 # ---------------------- QC Profile choices (visible in UI) ----------------------
@@ -432,71 +485,6 @@ SERVICE_TASKS = [
         "requires_media": False,
         "parts_used": [
             {"name": "Brake shoe", "qty": 2},
-        ],
-    },
-]
-
-
-SERVICE_CUSTOMERS = [
-    {
-        "name": "Vision Buildcon",
-        "site": "Metro Heights",
-        "contacts": ["Anita Rao", "Satish Kulkarni"],
-        "geo": "15.4909, 73.8278",
-        "linked_lifts": 6,
-        "active_amc": 1,
-        "expired_amc": 0,
-        "open_tasks": 3,
-        "feedback": 4.5,
-    },
-    {
-        "name": "Blue Horizon LLP",
-        "site": "Oceanic Towers",
-        "contacts": ["Farhan Mistry"],
-        "geo": "18.5204, 73.8567",
-        "linked_lifts": 4,
-        "active_amc": 1,
-        "expired_amc": 1,
-        "open_tasks": 2,
-        "feedback": 4.2,
-    },
-]
-
-
-SERVICE_LIFTS = [
-    {
-        "code": "LFT-MH-09",
-        "type": "MRL",
-        "capacity": "13 passengers",
-        "speed": "1.5 m/s",
-        "stops": 18,
-        "controller": "SigmaLogic X",
-        "commissioned": datetime.date(2020, 5, 22),
-        "last_service": datetime.date(2024, 6, 18),
-        "next_due": datetime.date(2024, 7, 18),
-        "safety_devices": ["Governor", "A3 monitoring", "Overload sensor"],
-        "sla": "Gold AMC",
-        "contract": "AMC-2024-198",
-        "history": [
-            {"date": datetime.date(2024, 6, 18), "event": "Preventive service", "parts": ["Lubricant kit"]},
-            {"date": datetime.date(2024, 5, 4), "event": "Door sensor replace", "parts": ["Door sensor"]},
-        ],
-    },
-    {
-        "code": "LFT-OC-02",
-        "type": "Hydraulic",
-        "capacity": "10 passengers",
-        "speed": "1.0 m/s",
-        "stops": 12,
-        "controller": "Elevate Prime",
-        "commissioned": datetime.date(2018, 9, 12),
-        "last_service": datetime.date(2024, 6, 25),
-        "next_due": datetime.date(2024, 7, 25),
-        "safety_devices": ["Emergency lowering", "Buffer switch"],
-        "sla": "Comprehensive AMC",
-        "contract": "AMC-2024-112",
-        "history": [
-            {"date": datetime.date(2024, 6, 25), "event": "Breakdown resolved", "parts": ["Hydraulic fluid"]},
         ],
     },
 ]
@@ -3057,6 +3045,107 @@ class QCWorkLog(db.Model):
     actor = db.relationship("User")
 
 
+class Customer(db.Model):
+    __tablename__ = "customer"
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_code = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    company_name = db.Column(db.String(255), nullable=False)
+    contact_person = db.Column(db.String(255), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    mobile = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(255), nullable=True)
+    gst_no = db.Column(db.String(40), nullable=True)
+    billing_address_line1 = db.Column(db.String(255), nullable=True)
+    billing_address_line2 = db.Column(db.String(255), nullable=True)
+    city = db.Column(db.String(120), nullable=True)
+    state = db.Column(db.String(120), nullable=True)
+    pincode = db.Column(db.String(20), nullable=True)
+    country = db.Column(db.String(120), nullable=True)
+    route = db.Column(db.String(20), nullable=True)
+    sector = db.Column(db.String(60), nullable=True)
+    branch = db.Column(db.String(120), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    lifts = db.relationship(
+        "Lift",
+        back_populates="customer",
+        foreign_keys="Lift.customer_code",
+        primaryjoin="Customer.customer_code==Lift.customer_code",
+    )
+
+    def display_name(self):
+        return f"{self.customer_code} – {self.company_name}" if self.company_name else self.customer_code
+
+
+class Lift(db.Model):
+    __tablename__ = "lift"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lift_code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    external_lift_id = db.Column(db.String(100), nullable=True)
+    customer_code = db.Column(db.String(32), db.ForeignKey("customer.customer_code"), nullable=True, index=True)
+    site_address_line1 = db.Column(db.String(255), nullable=True)
+    site_address_line2 = db.Column(db.String(255), nullable=True)
+    city = db.Column(db.String(120), nullable=True)
+    state = db.Column(db.String(120), nullable=True)
+    pincode = db.Column(db.String(20), nullable=True)
+    country = db.Column(db.String(120), nullable=True)
+    route = db.Column(db.String(20), nullable=True)
+    building_floors = db.Column(db.String(40), nullable=True)
+    lift_type = db.Column(db.String(40), nullable=True)
+    capacity_persons = db.Column(db.Integer, nullable=True)
+    capacity_kg = db.Column(db.Integer, nullable=True)
+    speed_mps = db.Column(db.Float, nullable=True)
+    machine_type = db.Column(db.String(40), nullable=True)
+    machine_brand = db.Column(db.String(120), nullable=True)
+    controller_brand = db.Column(db.String(120), nullable=True)
+    door_type = db.Column(db.String(120), nullable=True)
+    door_brand = db.Column(db.String(120), nullable=True)
+    cabin_finish = db.Column(db.String(120), nullable=True)
+    power_supply = db.Column(db.String(40), nullable=True)
+    install_date = db.Column(db.Date, nullable=True)
+    warranty_expiry = db.Column(db.Date, nullable=True)
+    amc_status = db.Column(db.String(40), nullable=True)
+    amc_start = db.Column(db.Date, nullable=True)
+    amc_end = db.Column(db.Date, nullable=True)
+    qr_code_url = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(40), nullable=True)
+    last_service_date = db.Column(db.Date, nullable=True)
+    next_service_due = db.Column(db.Date, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    capacity_display = db.Column(db.String(120), nullable=True)
+
+    customer = db.relationship(
+        "Customer",
+        back_populates="lifts",
+        foreign_keys=[customer_code],
+    )
+
+    def set_capacity_display(self):
+        if self.capacity_persons and self.capacity_kg:
+            self.capacity_display = f"{self.capacity_persons} persons / {self.capacity_kg} kg"
+        elif self.capacity_persons:
+            self.capacity_display = f"{self.capacity_persons} persons"
+        elif self.capacity_kg:
+            self.capacity_display = f"{self.capacity_kg} kg"
+        else:
+            self.capacity_display = None
+
 @login_manager.user_loader
 def load_user(user_id):
     # Ensure that any pending bootstrap/migration tasks run before we try to
@@ -3396,6 +3485,8 @@ def ensure_tables():
         SalesOpportunityFile.__table__,
         SalesOpportunityEngagement.__table__,
         SalesOpportunityItem.__table__,
+        Customer.__table__,
+        Lift.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -3593,6 +3684,342 @@ def bootstrap_db():
                 title="Intro note",
                 notes="Add your updates here to keep the timeline current.",
             ))
+
+    if Customer.query.count() == 0:
+        seed_customers = [
+            {
+                "customer_code": "CUS0001",
+                "company_name": "St. Marys Convent",
+                "contact_person": "Sister Maria Snehala",
+                "phone": True,
+                "mobile": True,
+                "email": True,
+                "gst_no": "27ABCDE1234F1Z5",
+                "billing_address_line1": "Convent Road",
+                "billing_address_line2": "Near Church",
+                "city": "Mapusa",
+                "state": "Goa",
+                "pincode": "403507",
+                "country": "India",
+                "route": "R1",
+                "sector": "Private",
+                "branch": "Goa",
+                "notes": "Preferred morning visits",
+            },
+            {
+                "customer_code": "CUS0002",
+                "company_name": "Kilowott Agency Pvt. Ltd.",
+                "contact_person": "Operations Desk",
+                "phone": True,
+                "mobile": True,
+                "email": True,
+                "gst_no": "27AAACK1234A1ZL",
+                "billing_address_line1": "702 Tech Park",
+                "billing_address_line2": "Andheri East",
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "pincode": "400059",
+                "country": "India",
+                "route": "M1",
+                "sector": "Commercial",
+                "branch": "Mumbai",
+                "notes": "Key account",
+            },
+            {
+                "customer_code": "CUS0003",
+                "company_name": "Satguru Apartments Society",
+                "contact_person": "Secretary",
+                "phone": True,
+                "mobile": True,
+                "email": True,
+                "gst_no": "27ABCSG5678C1ZE",
+                "billing_address_line1": "Satguru Apts",
+                "billing_address_line2": "Near Community Hall",
+                "city": "Panjim",
+                "state": "Goa",
+                "pincode": "403001",
+                "country": "India",
+                "route": "R2",
+                "sector": "Residential",
+                "branch": "Goa",
+                "notes": "Call watchman before visit",
+            },
+            {
+                "customer_code": "CUS0004",
+                "company_name": "Jonathan Fernandes",
+                "contact_person": "Jonathan Fernandes",
+                "phone": False,
+                "mobile": True,
+                "email": True,
+                "gst_no": "27AJKPF8901B1ZV",
+                "billing_address_line1": "H.No 123",
+                "billing_address_line2": "Near Garden",
+                "city": "Porvorim",
+                "state": "Goa",
+                "pincode": "403501",
+                "country": "India",
+                "route": "R1",
+                "sector": "Residential",
+                "branch": "Goa",
+                "notes": None,
+            },
+            {
+                "customer_code": "CUS0005",
+                "company_name": "Mr. Anirudh",
+                "contact_person": "Mr. Anirudh",
+                "phone": False,
+                "mobile": True,
+                "email": True,
+                "gst_no": "27AANPA1111C1ZQ",
+                "billing_address_line1": "B-504 Seaside Residency",
+                "billing_address_line2": "Juhu Tara Road",
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "pincode": "400049",
+                "country": "India",
+                "route": "M1",
+                "sector": "Residential",
+                "branch": "Mumbai",
+                "notes": None,
+            },
+        ]
+
+        for entry in seed_customers:
+            customer = Customer(
+                customer_code=entry["customer_code"],
+                company_name=entry["company_name"],
+                contact_person=entry.get("contact_person"),
+                phone=generate_random_phone() if entry.get("phone") else None,
+                mobile=generate_random_phone() if entry.get("mobile") else None,
+                email=generate_random_email() if entry.get("email") else None,
+                gst_no=entry.get("gst_no"),
+                billing_address_line1=entry.get("billing_address_line1"),
+                billing_address_line2=entry.get("billing_address_line2"),
+                city=entry.get("city"),
+                state=entry.get("state"),
+                pincode=entry.get("pincode"),
+                country=entry.get("country"),
+                route=entry.get("route"),
+                sector=entry.get("sector"),
+                branch=entry.get("branch"),
+                notes=entry.get("notes"),
+            )
+            db.session.add(customer)
+
+        db.session.flush()
+
+    if Lift.query.count() == 0:
+        seed_lifts = [
+            {
+                "lift_code": "G192",
+                "external_lift_id": "268819",
+                "customer_code": "CUS0001",
+                "site_address_line1": "Convent Road",
+                "site_address_line2": "Near Church",
+                "city": "Mapusa",
+                "state": "Goa",
+                "pincode": "403507",
+                "country": "India",
+                "route": "R1",
+                "building_floors": "G+4",
+                "lift_type": "Hydraulic",
+                "capacity_persons": 10,
+                "capacity_kg": 800,
+                "speed_mps": 0.7,
+                "machine_type": "Hydraulic",
+                "machine_brand": "GMV",
+                "controller_brand": "Omkar",
+                "door_type": "Automatic Telescopic Opening (ATO)",
+                "door_brand": "Eleva",
+                "cabin_finish": "SS",
+                "power_supply": "3-phase",
+                "install_date": "2023-05-20",
+                "warranty_expiry": "2024-05-20",
+                "amc_status": "Active",
+                "amc_start": "2024-06-01",
+                "amc_end": "2025-05-31",
+                "qr_code_url": "https://example.com/q/G192",
+                "status": "Active",
+                "last_service_date": "2025-10-10",
+                "next_service_due": "2026-01-08",
+                "notes": "Sister Maria Snehala",
+            },
+            {
+                "lift_code": "G208",
+                "external_lift_id": "266601",
+                "customer_code": "CUS0005",
+                "site_address_line1": "B-504 Seaside Residency",
+                "site_address_line2": "Juhu Tara Road",
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "pincode": "400049",
+                "country": "India",
+                "route": "M1",
+                "building_floors": "G+1",
+                "lift_type": "MRL",
+                "capacity_persons": 2,
+                "capacity_kg": 170,
+                "speed_mps": 0.5,
+                "machine_type": "GEARLESS",
+                "machine_brand": "Eleva",
+                "controller_brand": "Omkar",
+                "door_type": "Automatic Telescopic Opening (ATO)",
+                "door_brand": "Eleva",
+                "cabin_finish": "Glass",
+                "power_supply": "1-phase",
+                "install_date": "2024-03-12",
+                "warranty_expiry": "2025-03-12",
+                "amc_status": "None",
+                "amc_start": None,
+                "amc_end": None,
+                "qr_code_url": "https://example.com/q/G208",
+                "status": "Active",
+                "last_service_date": "2025-09-25",
+                "next_service_due": "2026-01-19",
+                "notes": None,
+            },
+            {
+                "lift_code": "G167",
+                "external_lift_id": "262305",
+                "customer_code": "CUS0004",
+                "site_address_line1": "H.No 123",
+                "site_address_line2": "Near Garden",
+                "city": "Porvorim",
+                "state": "Goa",
+                "pincode": "403501",
+                "country": "India",
+                "route": "R1",
+                "building_floors": "G+3",
+                "lift_type": "MR",
+                "capacity_persons": 6,
+                "capacity_kg": 408,
+                "speed_mps": 0.5,
+                "machine_type": "Hydraulic",
+                "machine_brand": "Kleemann",
+                "controller_brand": "Omkar",
+                "door_type": "Automatic Telescopic Opening (ATO)",
+                "door_brand": "Eleva",
+                "cabin_finish": "SS",
+                "power_supply": "3-phase",
+                "install_date": "2022-11-05",
+                "warranty_expiry": "2023-11-05",
+                "amc_status": "Expired",
+                "amc_start": "2022-11-05",
+                "amc_end": "2023-11-04",
+                "qr_code_url": "https://example.com/q/G167",
+                "status": "Active",
+                "last_service_date": "2025-08-16",
+                "next_service_due": "2025-11-30",
+                "notes": None,
+            },
+            {
+                "lift_code": "G084",
+                "external_lift_id": "262022",
+                "customer_code": "CUS0002",
+                "site_address_line1": "702 Tech Park",
+                "site_address_line2": "Andheri East",
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "pincode": "400059",
+                "country": "India",
+                "route": "M1",
+                "building_floors": "G+2",
+                "lift_type": "Goods",
+                "capacity_persons": 0,
+                "capacity_kg": 1500,
+                "speed_mps": 0.5,
+                "machine_type": "GEARED",
+                "machine_brand": "Sharp Motor",
+                "controller_brand": "Omkar",
+                "door_type": "Manual",
+                "door_brand": "Eleva",
+                "cabin_finish": "SS",
+                "power_supply": "3-phase",
+                "install_date": "2021-08-21",
+                "warranty_expiry": "2022-08-21",
+                "amc_status": "Active",
+                "amc_start": "2024-07-01",
+                "amc_end": "2025-06-30",
+                "qr_code_url": "https://example.com/q/G084",
+                "status": "Active",
+                "last_service_date": "2025-10-30",
+                "next_service_due": "2026-01-28",
+                "notes": "Kilowott is separate customer",
+            },
+            {
+                "lift_code": "G044",
+                "external_lift_id": "262050",
+                "customer_code": "CUS0003",
+                "site_address_line1": "Satguru Apts",
+                "site_address_line2": "Near Community Hall",
+                "city": "Panjim",
+                "state": "Goa",
+                "pincode": "403001",
+                "country": "India",
+                "route": "R2",
+                "building_floors": "G+2",
+                "lift_type": "Passenger",
+                "capacity_persons": 6,
+                "capacity_kg": 408,
+                "speed_mps": 0.5,
+                "machine_type": "Hydraulic",
+                "machine_brand": "GMV",
+                "controller_brand": "Omkar",
+                "door_type": "Automatic Telescopic Opening (ATO)",
+                "door_brand": "Eleva",
+                "cabin_finish": "Rose Gold SS",
+                "power_supply": "3-phase",
+                "install_date": "2020-01-10",
+                "warranty_expiry": "2021-01-10",
+                "amc_status": "None",
+                "amc_start": None,
+                "amc_end": None,
+                "qr_code_url": "https://example.com/q/G044",
+                "status": "Inactive",
+                "last_service_date": None,
+                "next_service_due": None,
+                "notes": "Satguru separate from Guru Naik",
+            },
+        ]
+
+        for entry in seed_lifts:
+            lift = Lift(
+                lift_code=entry["lift_code"],
+                external_lift_id=entry.get("external_lift_id"),
+                customer_code=entry.get("customer_code"),
+                site_address_line1=entry.get("site_address_line1"),
+                site_address_line2=entry.get("site_address_line2"),
+                city=entry.get("city"),
+                state=entry.get("state"),
+                pincode=entry.get("pincode"),
+                country=entry.get("country"),
+                route=entry.get("route"),
+                building_floors=entry.get("building_floors"),
+                lift_type=entry.get("lift_type"),
+                capacity_persons=entry.get("capacity_persons"),
+                capacity_kg=entry.get("capacity_kg"),
+                speed_mps=entry.get("speed_mps"),
+                machine_type=entry.get("machine_type"),
+                machine_brand=entry.get("machine_brand"),
+                controller_brand=entry.get("controller_brand"),
+                door_type=entry.get("door_type"),
+                door_brand=entry.get("door_brand"),
+                cabin_finish=entry.get("cabin_finish"),
+                power_supply=entry.get("power_supply"),
+                install_date=parse_optional_date(entry.get("install_date")),
+                warranty_expiry=parse_optional_date(entry.get("warranty_expiry")),
+                amc_status=entry.get("amc_status"),
+                amc_start=parse_optional_date(entry.get("amc_start")),
+                amc_end=parse_optional_date(entry.get("amc_end")),
+                qr_code_url=entry.get("qr_code_url"),
+                status=entry.get("status"),
+                last_service_date=parse_optional_date(entry.get("last_service_date")),
+                next_service_due=parse_optional_date(entry.get("next_service_due")),
+                notes=entry.get("notes"),
+                last_updated_by=admin_user.id if admin_user else None,
+            )
+            lift.set_capacity_display()
+            db.session.add(lift)
 
     db.session.commit()
     synchronize_dependency_links()
@@ -7146,43 +7573,448 @@ def service_tasks():
 @login_required
 def service_customers():
     _module_visibility_required("service")
-    customers = []
-    for customer in SERVICE_CUSTOMERS:
-        customers.append(
-            {
-                **customer,
-                "contacts_display": ", ".join(customer.get("contacts") or []),
-            }
+    search_query = (request.args.get("q") or "").strip()
+
+    query = Customer.query.options(joinedload(Customer.lifts))
+    if search_query:
+        like = f"%{search_query.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Customer.customer_code).like(like),
+                func.lower(Customer.company_name).like(like),
+                func.lower(Customer.contact_person).like(like),
+                func.lower(Customer.city).like(like),
+                func.lower(Customer.state).like(like),
+                func.lower(Customer.route).like(like),
+                func.lower(Customer.branch).like(like),
+                func.lower(Customer.sector).like(like),
+                func.lower(Customer.notes).like(like),
+            )
         )
-    return render_template("service/customers.html", customers=customers)
+
+    customers = query.order_by(func.lower(Customer.company_name)).all()
+    return render_template(
+        "service/customers.html",
+        customers=customers,
+        search_query=search_query,
+    )
+
+
+@app.route("/service/customers/create", methods=["POST"])
+@login_required
+def service_customers_create():
+    _module_visibility_required("service")
+
+    redirect_url = request.form.get("next") or url_for("service_customers")
+
+    customer_code = clean_str(request.form.get("customer_code"))
+    company_name = clean_str(request.form.get("company_name"))
+
+    if not customer_code or not company_name:
+        flash("Customer code and company name are required.", "error")
+        return redirect(redirect_url)
+
+    customer_code = customer_code.upper()
+
+    existing = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
+    if existing:
+        flash("Another customer already uses that customer code.", "error")
+        return redirect(redirect_url)
+
+    customer = Customer(
+        customer_code=customer_code,
+        company_name=company_name,
+        contact_person=clean_str(request.form.get("contact_person")),
+        phone=clean_str(request.form.get("phone")),
+        mobile=clean_str(request.form.get("mobile")),
+        email=clean_str(request.form.get("email")),
+        gst_no=clean_str(request.form.get("gst_no")),
+        billing_address_line1=clean_str(request.form.get("billing_address_line1")),
+        billing_address_line2=clean_str(request.form.get("billing_address_line2")),
+        city=clean_str(request.form.get("city")),
+        state=clean_str(request.form.get("state")),
+        pincode=clean_str(request.form.get("pincode")),
+        country=clean_str(request.form.get("country")),
+        route=clean_str(request.form.get("route")),
+        sector=clean_str(request.form.get("sector")),
+        branch=clean_str(request.form.get("branch")),
+        notes=clean_str(request.form.get("notes")),
+    )
+
+    db.session.add(customer)
+    db.session.commit()
+
+    flash(f"Customer {customer.customer_code} created.", "success")
+    return redirect(redirect_url)
+
+
+@app.route("/service/customers/<int:customer_id>")
+@login_required
+def service_customer_detail(customer_id):
+    _module_visibility_required("service")
+
+    customer = db.session.get(Customer, customer_id)
+    if not customer:
+        flash("Customer not found.", "error")
+        return redirect(url_for("service_customers"))
+
+    lifts = (
+        Lift.query.filter_by(customer_code=customer.customer_code)
+        .order_by(func.lower(Lift.lift_code))
+        .options(joinedload(Lift.customer))
+        .all()
+    )
+
+    return render_template(
+        "service/customer_detail.html",
+        customer=customer,
+        lifts=lifts,
+    )
+
+
+@app.route("/service/customers/<int:customer_id>/update", methods=["POST"])
+@login_required
+def service_customer_update(customer_id):
+    _module_visibility_required("service")
+
+    customer = db.session.get(Customer, customer_id)
+    if not customer:
+        flash("Customer not found.", "error")
+        return redirect(url_for("service_customers"))
+
+    customer_code_raw = clean_str(request.form.get("customer_code"))
+    company_name = clean_str(request.form.get("company_name"))
+
+    if not customer_code_raw or not company_name:
+        flash("Customer code and company name are required.", "error")
+        return redirect(url_for("service_customer_detail", customer_id=customer.id))
+
+    new_code = customer_code_raw.upper()
+    if new_code != customer.customer_code:
+        duplicate = Customer.query.filter(
+            func.lower(Customer.customer_code) == new_code.lower(),
+            Customer.id != customer.id,
+        ).first()
+        if duplicate:
+            flash("Another customer already uses that customer code.", "error")
+            return redirect(url_for("service_customer_detail", customer_id=customer.id))
+
+        old_code = customer.customer_code
+        for lift in Lift.query.filter_by(customer_code=old_code).all():
+            lift.customer_code = new_code
+
+        customer.customer_code = new_code
+
+    customer.company_name = company_name
+    customer.contact_person = clean_str(request.form.get("contact_person"))
+    customer.phone = clean_str(request.form.get("phone"))
+    customer.mobile = clean_str(request.form.get("mobile"))
+    customer.email = clean_str(request.form.get("email"))
+    customer.gst_no = clean_str(request.form.get("gst_no"))
+    customer.billing_address_line1 = clean_str(request.form.get("billing_address_line1"))
+    customer.billing_address_line2 = clean_str(request.form.get("billing_address_line2"))
+    customer.city = clean_str(request.form.get("city"))
+    customer.state = clean_str(request.form.get("state"))
+    customer.pincode = clean_str(request.form.get("pincode"))
+    customer.country = clean_str(request.form.get("country"))
+    customer.route = clean_str(request.form.get("route"))
+    customer.sector = clean_str(request.form.get("sector"))
+    customer.branch = clean_str(request.form.get("branch"))
+    customer.notes = clean_str(request.form.get("notes"))
+
+    db.session.commit()
+
+    flash("Customer updated.", "success")
+    return redirect(url_for("service_customer_detail", customer_id=customer.id))
 
 
 @app.route("/service/lifts")
 @login_required
 def service_lifts():
     _module_visibility_required("service")
-    lifts = []
-    for lift in SERVICE_LIFTS:
-        history = []
-        for entry in lift.get("history", []):
-            history.append(
-                {
-                    "date": entry.get("date").strftime("%d %b %Y") if isinstance(entry.get("date"), datetime.date) else "—",
-                    "event": entry.get("event"),
-                    "parts": ", ".join(entry.get("parts") or []),
-                }
+
+    search_query = (request.args.get("q") or "").strip()
+    query = Lift.query.options(joinedload(Lift.customer))
+
+    if search_query:
+        like = f"%{search_query.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Lift.lift_code).like(like),
+                func.lower(Lift.customer_code).like(like),
+                func.lower(Lift.city).like(like),
+                func.lower(Lift.state).like(like),
+                func.lower(Lift.route).like(like),
+                func.lower(Lift.lift_type).like(like),
+                func.lower(Lift.status).like(like),
+                func.lower(Lift.notes).like(like),
             )
-        lifts.append(
-            {
-                **lift,
-                "commissioned_display": lift.get("commissioned").strftime("%d %b %Y") if isinstance(lift.get("commissioned"), datetime.date) else "—",
-                "last_service_display": lift.get("last_service").strftime("%d %b %Y") if isinstance(lift.get("last_service"), datetime.date) else "—",
-                "next_due_display": lift.get("next_due").strftime("%d %b %Y") if isinstance(lift.get("next_due"), datetime.date) else "—",
-                "history": history,
-                "safety_display": ", ".join(lift.get("safety_devices") or []),
-            }
         )
-    return render_template("service/lifts.html", lifts=lifts)
+
+    lifts = query.order_by(func.lower(Lift.lift_code)).all()
+    customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+
+    return render_template(
+        "service/lifts.html",
+        lifts=lifts,
+        customers=customers,
+        search_query=search_query,
+    )
+
+
+@app.route("/service/lifts/create", methods=["POST"])
+@login_required
+def service_lifts_create():
+    _module_visibility_required("service")
+
+    redirect_url = request.form.get("next") or url_for("service_lifts")
+
+    lift_code = clean_str(request.form.get("lift_code"))
+    if not lift_code:
+        flash("Lift code is required.", "error")
+        return redirect(redirect_url)
+    lift_code = lift_code.upper()
+
+    existing = Lift.query.filter(func.lower(Lift.lift_code) == lift_code.lower()).first()
+    if existing:
+        flash("Another lift already uses that lift code.", "error")
+        return redirect(redirect_url)
+
+    customer_code_input = clean_str(request.form.get("customer_code"))
+    customer_code = None
+    if customer_code_input:
+        customer_code = customer_code_input.upper()
+        customer = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
+        if not customer:
+            flash("Select a valid customer from the list or create a new customer.", "error")
+            return redirect(redirect_url)
+    else:
+        customer = None
+
+    capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    capacity_kg, error = parse_int_field(request.form.get("capacity_kg"), "Capacity (kg)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    speed_mps, error = parse_float_field(request.form.get("speed_mps"), "Speed (m/s)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    install_date, error = parse_date_field(request.form.get("install_date"), "Install date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    warranty_expiry, error = parse_date_field(request.form.get("warranty_expiry"), "Warranty expiry")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    amc_start, error = parse_date_field(request.form.get("amc_start"), "AMC start")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    amc_end, error = parse_date_field(request.form.get("amc_end"), "AMC end")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    last_service_date, error = parse_date_field(request.form.get("last_service_date"), "Last service date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    next_service_due, error = parse_date_field(request.form.get("next_service_due"), "Next service due date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    lift = Lift(
+        lift_code=lift_code,
+        external_lift_id=clean_str(request.form.get("external_lift_id")),
+        customer_code=customer_code,
+        site_address_line1=clean_str(request.form.get("site_address_line1")),
+        site_address_line2=clean_str(request.form.get("site_address_line2")),
+        city=clean_str(request.form.get("city")),
+        state=clean_str(request.form.get("state")),
+        pincode=clean_str(request.form.get("pincode")),
+        country=clean_str(request.form.get("country")),
+        route=clean_str(request.form.get("route")),
+        building_floors=clean_str(request.form.get("building_floors")),
+        lift_type=clean_str(request.form.get("lift_type")),
+        capacity_persons=capacity_persons,
+        capacity_kg=capacity_kg,
+        speed_mps=speed_mps,
+        machine_type=clean_str(request.form.get("machine_type")),
+        machine_brand=clean_str(request.form.get("machine_brand")),
+        controller_brand=clean_str(request.form.get("controller_brand")),
+        door_type=clean_str(request.form.get("door_type")),
+        door_brand=clean_str(request.form.get("door_brand")),
+        cabin_finish=clean_str(request.form.get("cabin_finish")),
+        power_supply=clean_str(request.form.get("power_supply")),
+        install_date=install_date,
+        warranty_expiry=warranty_expiry,
+        amc_status=clean_str(request.form.get("amc_status")),
+        amc_start=amc_start,
+        amc_end=amc_end,
+        qr_code_url=clean_str(request.form.get("qr_code_url")),
+        status=clean_str(request.form.get("status")),
+        last_service_date=last_service_date,
+        next_service_due=next_service_due,
+        notes=clean_str(request.form.get("notes")),
+        last_updated_by=current_user.id if current_user.is_authenticated else None,
+    )
+    lift.set_capacity_display()
+
+    db.session.add(lift)
+    db.session.commit()
+
+    flash(f"Lift {lift.lift_code} created.", "success")
+    return redirect(redirect_url)
+
+
+@app.route("/service/lifts/<int:lift_id>/edit")
+@login_required
+def service_lift_edit(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+    return render_template("service/lift_edit.html", lift=lift, customers=customers)
+
+
+@app.route("/service/lifts/<int:lift_id>/update", methods=["POST"])
+@login_required
+def service_lift_update(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
+
+    lift_code = clean_str(request.form.get("lift_code"))
+    if not lift_code:
+        flash("Lift code is required.", "error")
+        return redirect(redirect_url)
+    new_code = lift_code.upper()
+
+    if new_code != lift.lift_code:
+        duplicate = Lift.query.filter(
+            func.lower(Lift.lift_code) == new_code.lower(),
+            Lift.id != lift.id,
+        ).first()
+        if duplicate:
+            flash("Another lift already uses that lift code.", "error")
+            return redirect(redirect_url)
+        lift.lift_code = new_code
+
+    customer_code_input = clean_str(request.form.get("customer_code"))
+    if customer_code_input:
+        new_customer_code = customer_code_input.upper()
+        customer = Customer.query.filter(func.lower(Customer.customer_code) == new_customer_code.lower()).first()
+        if not customer:
+            flash("Select a valid customer from the list or create a new customer.", "error")
+            return redirect(redirect_url)
+        lift.customer_code = new_customer_code
+    else:
+        lift.customer_code = None
+
+    capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    capacity_kg, error = parse_int_field(request.form.get("capacity_kg"), "Capacity (kg)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    speed_mps, error = parse_float_field(request.form.get("speed_mps"), "Speed (m/s)")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    install_date, error = parse_date_field(request.form.get("install_date"), "Install date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    warranty_expiry, error = parse_date_field(request.form.get("warranty_expiry"), "Warranty expiry")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    amc_start, error = parse_date_field(request.form.get("amc_start"), "AMC start")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    amc_end, error = parse_date_field(request.form.get("amc_end"), "AMC end")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    last_service_date, error = parse_date_field(request.form.get("last_service_date"), "Last service date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    next_service_due, error = parse_date_field(request.form.get("next_service_due"), "Next service due date")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    lift.external_lift_id = clean_str(request.form.get("external_lift_id"))
+    lift.site_address_line1 = clean_str(request.form.get("site_address_line1"))
+    lift.site_address_line2 = clean_str(request.form.get("site_address_line2"))
+    lift.city = clean_str(request.form.get("city"))
+    lift.state = clean_str(request.form.get("state"))
+    lift.pincode = clean_str(request.form.get("pincode"))
+    lift.country = clean_str(request.form.get("country"))
+    lift.route = clean_str(request.form.get("route"))
+    lift.building_floors = clean_str(request.form.get("building_floors"))
+    lift.lift_type = clean_str(request.form.get("lift_type"))
+    lift.capacity_persons = capacity_persons
+    lift.capacity_kg = capacity_kg
+    lift.speed_mps = speed_mps
+    lift.machine_type = clean_str(request.form.get("machine_type"))
+    lift.machine_brand = clean_str(request.form.get("machine_brand"))
+    lift.controller_brand = clean_str(request.form.get("controller_brand"))
+    lift.door_type = clean_str(request.form.get("door_type"))
+    lift.door_brand = clean_str(request.form.get("door_brand"))
+    lift.cabin_finish = clean_str(request.form.get("cabin_finish"))
+    lift.power_supply = clean_str(request.form.get("power_supply"))
+    lift.install_date = install_date
+    lift.warranty_expiry = warranty_expiry
+    lift.amc_status = clean_str(request.form.get("amc_status"))
+    lift.amc_start = amc_start
+    lift.amc_end = amc_end
+    lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
+    lift.status = clean_str(request.form.get("status"))
+    lift.last_service_date = last_service_date
+    lift.next_service_due = next_service_due
+    lift.notes = clean_str(request.form.get("notes"))
+    lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+    lift.set_capacity_display()
+
+    db.session.commit()
+
+    flash("Lift details updated.", "success")
+    return redirect(url_for("service_lift_edit", lift_id=lift.id))
 
 
 @app.route("/service/complaints")

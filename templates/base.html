@@ -636,6 +636,32 @@
       .stage-node { animation: none; }
       .stage-connector::before { transition: none; animation: none; }
     }
+
+    .modal-dialog {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .modal-dialog::backdrop {
+      backdrop-filter: blur(6px);
+      background: rgba(15, 23, 42, 0.55);
+    }
+
+    .modal-dialog.open {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+    }
+
+    .modal-dialog.open > * {
+      margin: auto;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-200">
@@ -762,13 +788,13 @@
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_tasks' else '' }}">
                 <span class="label">Service Tasks</span>
               </a>
-              <a href="{{ url_for('service_customers') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_customers' else '' }}">
-                <span class="label">Customer Details</span>
+                <a href="{{ url_for('service_customers') }}"
+                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_customers' else '' }}">
+                  <span class="label">Customers</span>
               </a>
               <a href="{{ url_for('service_lifts') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_lifts' else '' }}">
-                <span class="label">Lift Details</span>
+                <span class="label">Lifts</span>
               </a>
               <a href="{{ url_for('service_complaints') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_complaints' else '' }}">
