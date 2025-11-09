@@ -57,7 +57,17 @@
               <td class="px-4 py-3">{{ customer.sector or '—' }}</td>
               <td class="px-4 py-3">{{ customer.branch or '—' }}</td>
               <td class="px-4 py-3">{{ customer.city or '—' }}</td>
-              <td class="px-4 py-3 text-center font-semibold text-emerald-200">{{ customer.lifts|length }}</td>
+              <td class="px-4 py-3 text-center">
+                <button
+                  type="button"
+                  data-customer-lifts="{{ customer.id }}"
+                  data-customer-name="{{ customer.company_name }}"
+                  data-customer-open-count="{{ customer.open_lifts|length }}"
+                  class="inline-flex min-w-[3rem] items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+                >
+                  {{ customer.lifts|length }}
+                </button>
+              </td>
               <td class="px-4 py-3">
                 <a href="{{ url_for('service_customer_detail', customer_id=customer.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70">Open</a>
               </td>
@@ -72,6 +82,65 @@
     </div>
   </div>
 </div>
+
+{% for customer in customers %}
+  <template id="customerLiftList-{{ customer.id }}">
+    <div class="space-y-3">
+      {% if customer.open_lifts %}
+        <ul class="space-y-2">
+          {% for lift in customer.open_lifts %}
+            <li class="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div class="text-sm font-semibold text-slate-100">{{ lift.lift_code }}</div>
+                <div class="text-xs text-slate-400">
+                  {{ lift.city or '—' }}
+                  {% if lift.status %}
+                    · {{ lift.status }}
+                  {% endif %}
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" data-lift-open="{{ lift.id }}" class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20">View</button>
+                <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-200 transition hover:bg-slate-800/70">Edit</a>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-sm text-slate-400">No open lifts linked to this customer.</p>
+      {% endif %}
+    </div>
+  </template>
+{% endfor %}
+
+{% if lift_payload_map %}
+  {% for lift_payload in lift_payload_map.values() %}
+    <template id="liftDetailTemplate-{{ lift_payload.id }}">
+      {% with payload=lift_payload %}
+        {% include "partials/lift_modal_content.html" %}
+      {% endwith %}
+    </template>
+  {% endfor %}
+{% endif %}
+
+<dialog id="customerLiftListModal" class="modal-dialog">
+  <div class="w-full max-w-3xl space-y-4 rounded-2xl border border-slate-800 bg-slate-950/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary" data-customer-lift-title>Open lifts</h2>
+        <p class="text-xs text-slate-400" data-customer-lift-count></p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <div data-customer-lift-list class="space-y-3"></div>
+  </div>
+</dialog>
+
+<dialog id="liftDetailModal" class="modal-dialog">
+  <div class="w-full max-w-5xl rounded-2xl border border-slate-800 bg-slate-950/95 p-6 text-sm text-slate-100">
+    <div data-lift-modal-body class="space-y-6"></div>
+  </div>
+</dialog>
 
 <dialog id="customerCreateModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_customers_create') }}" class="w-full max-w-3xl space-y-6 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
@@ -160,6 +229,150 @@
     </div>
   </form>
 </dialog>
+
+<script>
+  (function() {
+    const modal = document.getElementById('liftDetailModal');
+    if (!modal) {
+      return;
+    }
+    const body = modal.querySelector('[data-lift-modal-body]');
+
+    function closeModal() {
+      if (typeof modal.close === 'function') {
+        modal.close();
+      } else {
+        modal.classList.remove('open');
+      }
+    }
+
+    function openModal(liftId) {
+      if (!body) {
+        return;
+      }
+      const template = document.getElementById(`liftDetailTemplate-${liftId}`);
+      if (!template) {
+        return;
+      }
+      body.innerHTML = '';
+      body.appendChild(template.content.cloneNode(true));
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        modal.classList.add('open');
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      const openTrigger = event.target.closest('[data-lift-open]');
+      if (openTrigger) {
+        event.preventDefault();
+        openModal(openTrigger.getAttribute('data-lift-open'));
+        return;
+      }
+
+      const closeTrigger = event.target.closest('#liftDetailModal [data-modal-close]');
+      if (closeTrigger) {
+        event.preventDefault();
+        closeModal();
+      }
+    });
+
+    modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+  })();
+</script>
+
+<script>
+  (function() {
+    const modal = document.getElementById('customerLiftListModal');
+    if (!modal) {
+      return;
+    }
+
+    const listContainer = modal.querySelector('[data-customer-lift-list]');
+    const titleNode = modal.querySelector('[data-customer-lift-title]');
+    const countNode = modal.querySelector('[data-customer-lift-count]');
+
+    function formatCountLabel(count) {
+      if (count <= 0) {
+        return 'No open lifts currently linked.';
+      }
+      return `${count} open lift${count === 1 ? '' : 's'} for this customer.`;
+    }
+
+    function closeModal() {
+      if (typeof modal.close === 'function') {
+        modal.close();
+      } else {
+        modal.classList.remove('open');
+      }
+    }
+
+    function openModal(customerId, customerName, openCount) {
+      if (!listContainer) {
+        return;
+      }
+      const template = document.getElementById(`customerLiftList-${customerId}`);
+      if (!template) {
+        return;
+      }
+
+      listContainer.innerHTML = '';
+      listContainer.appendChild(template.content.cloneNode(true));
+
+      if (titleNode) {
+        titleNode.textContent = `Open lifts – ${customerName}`;
+      }
+      if (countNode) {
+        countNode.textContent = formatCountLabel(openCount);
+      }
+
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        modal.classList.add('open');
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-customer-lifts]');
+      if (trigger) {
+        event.preventDefault();
+        const customerId = trigger.getAttribute('data-customer-lifts');
+        const customerName = trigger.getAttribute('data-customer-name') || 'Customer';
+        const openCount = parseInt(trigger.getAttribute('data-customer-open-count') || '0', 10);
+        openModal(customerId, customerName, Number.isNaN(openCount) ? 0 : openCount);
+        return;
+      }
+
+      const closeTrigger = event.target.closest('#customerLiftListModal [data-modal-close]');
+      if (closeTrigger) {
+        event.preventDefault();
+        closeModal();
+      }
+    });
+
+    modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 
 <script>
   (function() {

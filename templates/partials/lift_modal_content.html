@@ -1,0 +1,309 @@
+<div class="space-y-8">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-400">Lift · {{ payload.lift_code }}</p>
+      <h2 class="text-xl font-semibold text-theme-primary">
+        {% if payload.site_lines %}
+          {{ payload.site_lines[0] }}
+        {% else %}
+          Lift details
+        {% endif %}
+      </h2>
+      <div class="mt-2 space-y-1 text-xs text-slate-400">
+        {% for line in payload.site_lines[1:] %}
+          <div>{{ line }}</div>
+        {% endfor %}
+        {% for line in payload.customer_lines %}
+          <div>{{ line }}</div>
+        {% endfor %}
+        <div>External ID: {{ payload.external_lift_id }}</div>
+      </div>
+    </div>
+    <div class="flex flex-col items-end gap-3 text-right text-xs text-slate-400">
+      <div>
+        <span class="font-semibold text-slate-100">Lift status:</span>
+        <span class="text-emerald-200">{{ payload.status }}</span>
+      </div>
+      <div>
+        <span class="font-semibold text-slate-100">AMC status:</span>
+        <span class="text-emerald-200">{{ payload.amc.status }}</span>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+  </div>
+
+  <section class="space-y-3">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Lifetime value</h3>
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {% for metric in payload.lifetime_metrics %}
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-400">{{ metric.label }}</p>
+          <p class="mt-2 text-lg font-semibold text-emerald-200">{{ metric.display }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Lift details</h3>
+    </div>
+    <dl class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Lift Code / ID</dt>
+        <dd class="text-sm text-slate-100">{{ payload.lift_code }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
+        <dd class="text-sm text-slate-100">{{ payload.lift_type }}</dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Site Name &amp; Address</dt>
+        <dd class="space-y-1 text-sm text-slate-100">
+          {% for line in payload.site_lines %}
+            <div>{{ line }}</div>
+          {% else %}
+            <div>—</div>
+          {% endfor %}
+        </dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Customer / Builder Name &amp; Contact</dt>
+        <dd class="space-y-1 text-sm text-slate-100">
+          {% for line in payload.customer_lines %}
+            <div>{{ line }}</div>
+          {% else %}
+            <div>—</div>
+          {% endfor %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (Persons / Kg)</dt>
+        <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Speed (m/s)</dt>
+        <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Floors served</dt>
+        <dd class="text-sm text-slate-100">{{ payload.floors_served }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Controller Type &amp; Brand</dt>
+        <dd class="text-sm text-slate-100">{{ payload.controller_type }} · {{ payload.controller_brand }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Door Type</dt>
+        <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Door Configuration</dt>
+        <dd class="text-sm text-slate-100">{{ payload.door_configuration }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Drive Type</dt>
+        <dd class="text-sm text-slate-100">{{ payload.drive_type }}</dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Machine Details</dt>
+        <dd class="text-sm text-slate-100">{{ payload.machine_make }} · {{ payload.machine_model }} · Serial {{ payload.machine_serial }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Installed Date</dt>
+        <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Commissioned Date</dt>
+        <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">AMC details</h3>
+    </div>
+    <dl class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.status }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">AMC Type</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.type }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">AMC Start Date</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.start_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">AMC End Date</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.end_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Contract Value</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.contract_value_display }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Payment Terms</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.payment_terms }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Services per Year</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.services_per_year }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Pending Services Count</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.pending_services_count }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Service Owner Name</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.service_owner }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Service contact no</dt>
+        <dd class="text-sm text-slate-100">{{ payload.amc.service_contact }}</dd>
+      </div>
+    </dl>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">AMC Renewal History</h4>
+        <ul class="mt-2 space-y-2 text-xs text-slate-300">
+          {% for history in payload.amc.renewal_history %}
+            <li>
+              <div class="font-semibold text-slate-200">{{ history.period }}</div>
+              <div>{{ history.value_display }} · Renewed {{ history.renewed_on_display }}</div>
+            </li>
+          {% else %}
+            <li>No renewal history captured.</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">Attachments</h4>
+        <ul class="mt-2 space-y-2 text-xs text-slate-300">
+          {% for attachment in payload.amc.attachments %}
+            <li>
+              <a href="{{ attachment.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100">{{ attachment.label }}</a>
+              {% if attachment.filename %}
+                <span class="block text-slate-400">{{ attachment.filename }}</span>
+              {% endif %}
+            </li>
+          {% else %}
+            <li>No AMC attachments uploaded.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Breakdown / Complaint History</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800 text-sm">
+        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-4 py-3 text-left">Issues Reported</th>
+            <th class="px-4 py-3 text-left">Assigned Technician</th>
+            <th class="px-4 py-3 text-left">Response / Resolution</th>
+            <th class="px-4 py-3 text-left">Fault Type</th>
+            <th class="px-4 py-3 text-left">Spare Parts Used</th>
+            <th class="px-4 py-3 text-left">Status</th>
+            <th class="px-4 py-3 text-left">Photos / Media</th>
+            <th class="px-4 py-3 text-left">Linked Call Record</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/80 text-slate-200">
+          {% for row in payload.breakdowns %}
+            <tr>
+              <td class="px-4 py-3">{{ row.issue }}</td>
+              <td class="px-4 py-3">{{ row.technician }}</td>
+              <td class="px-4 py-3">{{ row.response }} / {{ row.resolution }}</td>
+              <td class="px-4 py-3">{{ row.fault_type }}</td>
+              <td class="px-4 py-3">{{ row.spares }}</td>
+              <td class="px-4 py-3">{{ row.status }}</td>
+              <td class="px-4 py-3">{{ row.media }}</td>
+              <td class="px-4 py-3">{{ row.call_reference }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="8" class="px-4 py-4 text-center text-sm text-slate-400">No breakdown records captured for this lift.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Uploads</h3>
+    </div>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">Drawing / Document Uploads</h4>
+        <ul class="mt-2 space-y-2 text-xs text-slate-300">
+          {% for document in payload.documents %}
+            <li>
+              <a href="{{ document.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100">{{ document.label }}</a>
+              {% if document.filename %}
+                <div>{{ document.filename }}</div>
+              {% endif %}
+              {% if document.description %}
+                <div class="text-slate-400">{{ document.description }}</div>
+              {% endif %}
+              <div class="text-slate-500">Updated {{ document.updated_display }}</div>
+            </li>
+          {% else %}
+            <li>No documents uploaded yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">Other uploads</h4>
+        <ul class="mt-2 space-y-2 text-xs text-slate-300">
+          {% for attachment in payload.other_uploads %}
+            <li>
+              <a href="{{ attachment.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100">{{ attachment.label }}</a>
+              {% if attachment.filename %}
+                <div>{{ attachment.filename }}</div>
+              {% endif %}
+              {% if attachment.description %}
+                <div class="text-slate-400">{{ attachment.description }}</div>
+              {% endif %}
+              <div class="text-slate-500">Updated {{ attachment.updated_display }}</div>
+            </li>
+          {% else %}
+            <li>No additional uploads available.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Timeline / Activity Log</h3>
+    </div>
+    <ul class="space-y-3">
+      {% for entry in payload.timeline %}
+        <li class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-2 text-xs uppercase tracking-wide text-emerald-200">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 text-[11px] font-semibold">{{ entry.category[0] if entry.category }}</span>
+              <span>{{ entry.category }}</span>
+            </div>
+            <div class="text-xs text-slate-400">{{ entry.date_display }}</div>
+          </div>
+          <div class="mt-2 text-sm font-semibold text-slate-100">{{ entry.title }}</div>
+          <p class="mt-1 text-sm text-slate-300">{{ entry.detail }}</p>
+        </li>
+      {% else %}
+        <li class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">No activity has been recorded for this lift yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
