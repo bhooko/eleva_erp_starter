@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Service Automations{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-theme-primary">Cross-Module Automations</h1>
+      <p class="text-sm text-slate-400">Keep Customer Support, Service and Inventory in lockstep with automated hand-offs.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:text-white">Automation audit</button>
+      <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">Create automation</button>
+    </div>
+  </header>
+
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
+    <div class="border-b border-slate-800/70 px-6 py-4">
+      <h2 class="text-base font-semibold text-slate-100">Connected flow map</h2>
+      <p class="text-xs text-slate-400">Service tasks update overview metrics, inventory levels and Sales alerts instantly.</p>
+    </div>
+    <div class="grid gap-4 p-6 md:grid-cols-2">
+      {% for flow in flows %}
+        <article class="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4 text-sm text-slate-300">
+          <p class="text-xs uppercase tracking-wide text-slate-500">{{ flow.from }} → {{ flow.to }}</p>
+          <p class="mt-2 text-slate-200">{{ flow.summary }}</p>
+        </article>
+      {% else %}
+        <p class="text-sm text-slate-400">No automations configured yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-2">
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-base font-semibold text-slate-100">Roles &amp; permissions</h2>
+      <p class="text-xs text-slate-400">Admin, Service Manager and Technician each see tailored access.</p>
+      <div class="mt-4 space-y-3">
+        {% for role in roles %}
+          <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-4">
+            <p class="text-sm font-semibold text-slate-200">{{ role.role }}</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-300">
+              {% for capability in role.capabilities %}
+                <li>• {{ capability }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-base font-semibold text-slate-100">No-code configuration</h2>
+      <p class="text-xs text-slate-400">Service admins tweak categories, SLAs, statuses and dashboard widgets without code.</p>
+      <ul class="mt-3 space-y-2 text-sm text-slate-300">
+        {% for option in config_options %}
+          <li class="rounded-xl border border-slate-800/70 bg-slate-900/70 px-3 py-2">{{ option }}</li>
+        {% else %}
+          <li class="text-slate-500">No configurable options found.</li>
+        {% endfor %}
+      </ul>
+    </article>
+  </section>
+</div>
+{% endblock %}

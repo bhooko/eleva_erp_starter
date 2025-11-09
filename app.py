@@ -88,6 +88,20 @@ DEPARTMENT_BRANCHES = ["Goa", "Maharashtra"]
 
 WORKSPACE_MODULES = [
     {
+        "key": "customer_support",
+        "label": "Customer Support",
+        "description": "Support overview, ticket triage and linked tasks.",
+        "visibility_label": "Show Customer Support workspace",
+        "assignment_label": "Allow Customer Support ownership",
+    },
+    {
+        "key": "service",
+        "label": "Service",
+        "description": "Post-installation service delivery, tasks and maintenance orchestration.",
+        "visibility_label": "Show Service workspace",
+        "assignment_label": "Allow Service task assignment",
+    },
+    {
         "key": "sales",
         "label": "Sales",
         "description": "Pipeline, clients and revenue forecasting dashboards.",
@@ -102,13 +116,6 @@ WORKSPACE_MODULES = [
         "assignment_label": "Allow Operations task assignment",
     },
     {
-        "key": "qc",
-        "label": "Quality Control",
-        "description": "QC boards, task tracking and submission reviews.",
-        "visibility_label": "Show QC workspace",
-        "assignment_label": "Allow QC task assignment",
-    },
-    {
         "key": "srt",
         "label": "SRT",
         "description": "Service Response Team dashboards and templates.",
@@ -116,11 +123,11 @@ WORKSPACE_MODULES = [
         "assignment_label": "Allow SRT ownership",
     },
     {
-        "key": "customer_support",
-        "label": "Customer Support",
-        "description": "Support overview, ticket triage and linked tasks.",
-        "visibility_label": "Show Customer Support workspace",
-        "assignment_label": "Allow Customer Support ownership",
+        "key": "qc",
+        "label": "Quality Control",
+        "description": "QC boards, task tracking and submission reviews.",
+        "visibility_label": "Show QC workspace",
+        "assignment_label": "Allow QC task assignment",
     },
 ]
 
@@ -240,6 +247,406 @@ SRT_TASK_ACTIVITY = {
             "detail": "Scheduled vibration audit post service.",
             "actor": "Sneha Kulkarni",
         }
+    ],
+}
+
+
+SERVICE_OVERVIEW_DATA = {
+    "kpis": [
+        {
+            "label": "Open service tasks",
+            "value": 42,
+            "descriptor": "Across AMC + non-AMC",
+            "tone": "emerald",
+        },
+        {
+            "label": "Overdue visits",
+            "value": 9,
+            "descriptor": "Beyond scheduled window",
+            "tone": "rose",
+        },
+        {
+            "label": "Breakdowns this month",
+            "value": 14,
+            "descriptor": "4 repeat incidents",
+            "tone": "amber",
+        },
+        {
+            "label": "AMC due (30 days)",
+            "value": 7,
+            "descriptor": "Renewal follow-ups",
+            "tone": "sky",
+        },
+        {
+            "label": "First-time-fix rate",
+            "value": "87%",
+            "descriptor": "Target 90%",
+            "tone": "emerald",
+        },
+        {
+            "label": "Avg response time",
+            "value": "2h 40m",
+            "descriptor": "Down 18 mins",
+            "tone": "sky",
+        },
+        {
+            "label": "Avg closure time",
+            "value": "1.8 days",
+            "descriptor": "Improved 12%",
+            "tone": "emerald",
+        },
+    ],
+    "charts": {
+        "complaints_by_category": [
+            {"label": "Door", "value": 18},
+            {"label": "Leveling", "value": 12},
+            {"label": "Noise", "value": 7},
+            {"label": "Breakdown", "value": 14},
+            {"label": "Other", "value": 6},
+        ],
+        "tasks_by_status": [
+            {"label": "Open", "value": 16},
+            {"label": "In Progress", "value": 11},
+            {"label": "Paused", "value": 4},
+            {"label": "Waiting for Parts", "value": 5},
+            {"label": "Completed", "value": 6},
+        ],
+        "parts_consumption": [
+            {"label": "May", "value": 58},
+            {"label": "Jun", "value": 72},
+            {"label": "Jul", "value": 64},
+        ],
+        "technician_workload": [
+            {"label": "Ravi Kumar", "value": 12},
+            {"label": "Sneha Kulkarni", "value": 10},
+            {"label": "Arjun Desai", "value": 9},
+            {"label": "Meera Patil", "value": 8},
+        ],
+    },
+    "calendar": [
+        {
+            "date": datetime.date(2024, 7, 18),
+            "label": "Preventive - Metro Heights",
+            "type": "Preventive",
+        },
+        {
+            "date": datetime.date(2024, 7, 19),
+            "label": "Scheduled Call - Harbour View",
+            "type": "Scheduled",
+        },
+        {
+            "date": datetime.date(2024, 7, 21),
+            "label": "AMC Visit - Oceanic Towers",
+            "type": "AMC",
+        },
+    ],
+    "filters": [
+        "Branch",
+        "Technician",
+        "Lift type",
+        "AMC/Non-AMC",
+        "Priority",
+    ],
+    "technicians": [
+        {
+            "name": "Ravi Kumar",
+            "tasks_closed": 28,
+            "first_time_fix_rate": "90%",
+            "on_time": "92%",
+            "travel_time": "38m",
+            "repair_time": "1.6h",
+            "rating": 4.7,
+        },
+        {
+            "name": "Sneha Kulkarni",
+            "tasks_closed": 24,
+            "first_time_fix_rate": "85%",
+            "on_time": "88%",
+            "travel_time": "42m",
+            "repair_time": "1.9h",
+            "rating": 4.6,
+        },
+        {
+            "name": "Arjun Desai",
+            "tasks_closed": 19,
+            "first_time_fix_rate": "82%",
+            "on_time": "84%",
+            "travel_time": "55m",
+            "repair_time": "2.1h",
+            "rating": 4.3,
+        },
+    ],
+}
+
+
+SERVICE_TASKS = [
+    {
+        "id": "SV-1042",
+        "site": "Metro Heights",
+        "client": "Vision Buildcon",
+        "lift_id": "LFT-MH-09",
+        "call_type": "AMC Visit",
+        "priority": "High",
+        "technicians": ["Ravi Kumar"],
+        "schedule_window": "18 Jul · 10:00-12:00",
+        "sla": "Respond within 4h",
+        "status": "In Progress",
+        "worklog": [
+            {"label": "Arrived on site", "time": "09:55"},
+            {"label": "Checklist updated", "time": "11:10"},
+        ],
+        "requires_media": True,
+        "parts_used": [
+            {"name": "Door sensor", "qty": 1},
+        ],
+    },
+    {
+        "id": "SV-1043",
+        "site": "Oceanic Towers",
+        "client": "Blue Horizon LLP",
+        "lift_id": "LFT-OC-02",
+        "call_type": "Breakdown",
+        "priority": "Critical",
+        "technicians": ["Sneha Kulkarni", "Support Tech"],
+        "schedule_window": "18 Jul · 24x7",
+        "sla": "Respond within 2h",
+        "status": "Open",
+        "worklog": [],
+        "requires_media": True,
+        "parts_used": [],
+    },
+    {
+        "id": "SV-1034",
+        "site": "Harbour View",
+        "client": "West Coast Realty",
+        "lift_id": "LFT-HB-03",
+        "call_type": "Repair",
+        "priority": "Medium",
+        "technicians": ["Arjun Desai"],
+        "schedule_window": "19 Jul · 14:00-16:00",
+        "sla": "Close within 48h",
+        "status": "Waiting for Parts",
+        "worklog": [
+            {"label": "Diagnosis complete", "time": "11:45"},
+        ],
+        "requires_media": False,
+        "parts_used": [
+            {"name": "Brake shoe", "qty": 2},
+        ],
+    },
+]
+
+
+SERVICE_CUSTOMERS = [
+    {
+        "name": "Vision Buildcon",
+        "site": "Metro Heights",
+        "contacts": ["Anita Rao", "Satish Kulkarni"],
+        "geo": "15.4909, 73.8278",
+        "linked_lifts": 6,
+        "active_amc": 1,
+        "expired_amc": 0,
+        "open_tasks": 3,
+        "feedback": 4.5,
+    },
+    {
+        "name": "Blue Horizon LLP",
+        "site": "Oceanic Towers",
+        "contacts": ["Farhan Mistry"],
+        "geo": "18.5204, 73.8567",
+        "linked_lifts": 4,
+        "active_amc": 1,
+        "expired_amc": 1,
+        "open_tasks": 2,
+        "feedback": 4.2,
+    },
+]
+
+
+SERVICE_LIFTS = [
+    {
+        "code": "LFT-MH-09",
+        "type": "MRL",
+        "capacity": "13 passengers",
+        "speed": "1.5 m/s",
+        "stops": 18,
+        "controller": "SigmaLogic X",
+        "commissioned": datetime.date(2020, 5, 22),
+        "last_service": datetime.date(2024, 6, 18),
+        "next_due": datetime.date(2024, 7, 18),
+        "safety_devices": ["Governor", "A3 monitoring", "Overload sensor"],
+        "sla": "Gold AMC",
+        "contract": "AMC-2024-198",
+        "history": [
+            {"date": datetime.date(2024, 6, 18), "event": "Preventive service", "parts": ["Lubricant kit"]},
+            {"date": datetime.date(2024, 5, 4), "event": "Door sensor replace", "parts": ["Door sensor"]},
+        ],
+    },
+    {
+        "code": "LFT-OC-02",
+        "type": "Hydraulic",
+        "capacity": "10 passengers",
+        "speed": "1.0 m/s",
+        "stops": 12,
+        "controller": "Elevate Prime",
+        "commissioned": datetime.date(2018, 9, 12),
+        "last_service": datetime.date(2024, 6, 25),
+        "next_due": datetime.date(2024, 7, 25),
+        "safety_devices": ["Emergency lowering", "Buffer switch"],
+        "sla": "Comprehensive AMC",
+        "contract": "AMC-2024-112",
+        "history": [
+            {"date": datetime.date(2024, 6, 25), "event": "Breakdown resolved", "parts": ["Hydraulic fluid"]},
+        ],
+    },
+]
+
+
+SERVICE_COMPLAINTS = [
+    {
+        "id": "CPL-5012",
+        "source": "Customer Support",
+        "category": "Door",
+        "priority": "High",
+        "location": "Metro Heights",
+        "lift": "LFT-MH-09",
+        "status": "Converted to Service Task",
+        "linked_task": "SV-1042",
+    },
+    {
+        "id": "CPL-5015",
+        "source": "Technician",
+        "category": "Breakdown",
+        "priority": "Critical",
+        "location": "Oceanic Towers",
+        "lift": "LFT-OC-02",
+        "status": "Awaiting classification",
+        "linked_task": None,
+    },
+]
+
+
+SERVICE_CONTRACTS = [
+    {
+        "id": "AMC-2024-198",
+        "type": "Comprehensive",
+        "coverage": "All mechanical + electronics",
+        "start": datetime.date(2024, 1, 1),
+        "end": datetime.date(2024, 12, 31),
+        "visits": "Monthly",
+        "sla": "4h response / 48h closure",
+        "renewal": datetime.date(2024, 12, 1),
+        "pending_invoices": 0,
+    },
+    {
+        "id": "AMC-2024-112",
+        "type": "Semi",
+        "coverage": "Mechanical only",
+        "start": datetime.date(2023, 10, 1),
+        "end": datetime.date(2024, 9, 30),
+        "visits": "Quarterly",
+        "sla": "6h response / 72h closure",
+        "renewal": datetime.date(2024, 8, 30),
+        "pending_invoices": 2,
+    },
+]
+
+
+SERVICE_PARTS_LEDGER = {
+    "stock_alerts": [
+        {"part": "Door sensor", "current": 3, "threshold": 5},
+        {"part": "Brake shoe", "current": 6, "threshold": 10},
+    ],
+    "consumption": [
+        {"lift": "LFT-MH-09", "part": "Door sensor", "qty": 1, "month": "Jul"},
+        {"lift": "LFT-OC-02", "part": "Hydraulic fluid", "qty": 2, "month": "Jun"},
+        {"lift": "LFT-HB-03", "part": "Brake shoe", "qty": 2, "month": "Jun"},
+    ],
+    "returns": [
+        {"technician": "Ravi Kumar", "part": "Relay board", "qty": 1, "date": datetime.date(2024, 7, 10)},
+    ],
+}
+
+
+SERVICE_PREVENTIVE_PLAN = {
+    "upcoming": [
+        {
+            "site": "Metro Heights",
+            "lift": "LFT-MH-09",
+            "visit": datetime.date(2024, 7, 18),
+            "technician": "Ravi Kumar",
+            "checklist": "MRL-Gold",
+        },
+        {
+            "site": "Oceanic Towers",
+            "lift": "LFT-OC-02",
+            "visit": datetime.date(2024, 7, 25),
+            "technician": "Sneha Kulkarni",
+            "checklist": "Hydraulic-Core",
+        },
+    ],
+    "overdue": [
+        {
+            "site": "Nova Residency",
+            "lift": "LFT-NR-01",
+            "due": datetime.date(2024, 7, 10),
+            "days_overdue": 8,
+        },
+    ],
+    "checklists": [
+        {
+            "name": "MRL-Gold",
+            "items": 24,
+            "photo_rules": "Cabin, machine room, shaft mandatory",
+        },
+        {
+            "name": "Hydraulic-Core",
+            "items": 18,
+            "photo_rules": "Cabin + controller",
+        },
+    ],
+}
+
+
+SERVICE_AUTOMATIONS = {
+    "flows": [
+        {
+            "from": "Sarv",
+            "to": "Customer Support",
+            "summary": "Incoming calls auto-create tickets with recording",
+        },
+        {
+            "from": "Customer Support",
+            "to": "Service (AMC)",
+            "summary": "Marking as AMC support converts to AMC service task",
+        },
+        {
+            "from": "Customer Support",
+            "to": "Service (Non-AMC)",
+            "summary": "Creates chargeable task + optional Sales alert",
+        },
+        {
+            "from": "Service Task",
+            "to": "Inventory",
+            "summary": "Parts usage deducts stock / raises PR",
+        },
+        {
+            "from": "Service Task",
+            "to": "Overview",
+            "summary": "Live metrics refresh once task updates",
+        },
+    ],
+    "roles": {
+        "Admin": ["Full access", "Configure automations"],
+        "Service Manager": ["Planner, contracts, reports", "Approve conversions"],
+        "Technician": ["My tasks", "Upload media", "View assigned lifts"],
+    },
+    "config": [
+        "Complaint categories & priorities",
+        "SLA presets and escalation timers",
+        "PM checklist templates per lift type",
+        "Task statuses and close codes",
+        "Dashboard widget toggles + alert thresholds",
     ],
 }
 
@@ -6656,6 +7063,206 @@ def customer_support_calls():
         search_term=search_term,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
         categories=CUSTOMER_SUPPORT_CATEGORIES,
+    )
+
+
+# ---------------------- SERVICE MODULE ----------------------
+@app.route("/service")
+@login_required
+def service_home():
+    _module_visibility_required("service")
+    return redirect(url_for("service_overview"))
+
+
+@app.route("/service/overview")
+@login_required
+def service_overview():
+    _module_visibility_required("service")
+    calendar_items = []
+    today = datetime.date.today()
+    for entry in SERVICE_OVERVIEW_DATA.get("calendar", []):
+        date_value = entry.get("date")
+        if isinstance(date_value, datetime.date):
+            delta_days = (date_value - today).days
+            if delta_days == 0:
+                delta_label = "Today"
+            elif delta_days == 1:
+                delta_label = "Tomorrow"
+            elif delta_days > 1:
+                delta_label = f"In {delta_days} days"
+            elif delta_days == -1:
+                delta_label = "Yesterday"
+            else:
+                delta_label = f"{abs(delta_days)} days ago"
+            date_display = date_value.strftime("%d %b %Y")
+        else:
+            date_display = "—"
+            delta_label = ""
+        calendar_items.append(
+            {
+                "label": entry.get("label"),
+                "type": entry.get("type"),
+                "date": date_display,
+                "delta": delta_label,
+            }
+        )
+
+    technicians = []
+    for item in SERVICE_OVERVIEW_DATA.get("technicians", []):
+        technicians.append(
+            {
+                **item,
+                "rating_stars": int(round(item.get("rating", 0))),
+            }
+        )
+
+    return render_template(
+        "service/overview.html",
+        kpis=SERVICE_OVERVIEW_DATA.get("kpis", []),
+        chart_sets=SERVICE_OVERVIEW_DATA.get("charts", {}),
+        calendar_items=calendar_items,
+        filters=SERVICE_OVERVIEW_DATA.get("filters", []),
+        technicians=technicians,
+    )
+
+
+@app.route("/service/tasks")
+@login_required
+def service_tasks():
+    _module_visibility_required("service")
+    tasks = []
+    for task in SERVICE_TASKS:
+        tasks.append(
+            {
+                **task,
+                "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
+                "technician_display": ", ".join(task.get("technicians") or []),
+            }
+        )
+    return render_template("service/tasks.html", tasks=tasks)
+
+
+@app.route("/service/customers")
+@login_required
+def service_customers():
+    _module_visibility_required("service")
+    customers = []
+    for customer in SERVICE_CUSTOMERS:
+        customers.append(
+            {
+                **customer,
+                "contacts_display": ", ".join(customer.get("contacts") or []),
+            }
+        )
+    return render_template("service/customers.html", customers=customers)
+
+
+@app.route("/service/lifts")
+@login_required
+def service_lifts():
+    _module_visibility_required("service")
+    lifts = []
+    for lift in SERVICE_LIFTS:
+        history = []
+        for entry in lift.get("history", []):
+            history.append(
+                {
+                    "date": entry.get("date").strftime("%d %b %Y") if isinstance(entry.get("date"), datetime.date) else "—",
+                    "event": entry.get("event"),
+                    "parts": ", ".join(entry.get("parts") or []),
+                }
+            )
+        lifts.append(
+            {
+                **lift,
+                "commissioned_display": lift.get("commissioned").strftime("%d %b %Y") if isinstance(lift.get("commissioned"), datetime.date) else "—",
+                "last_service_display": lift.get("last_service").strftime("%d %b %Y") if isinstance(lift.get("last_service"), datetime.date) else "—",
+                "next_due_display": lift.get("next_due").strftime("%d %b %Y") if isinstance(lift.get("next_due"), datetime.date) else "—",
+                "history": history,
+                "safety_display": ", ".join(lift.get("safety_devices") or []),
+            }
+        )
+    return render_template("service/lifts.html", lifts=lifts)
+
+
+@app.route("/service/complaints")
+@login_required
+def service_complaints():
+    _module_visibility_required("service")
+    return render_template("service/complaints.html", complaints=SERVICE_COMPLAINTS)
+
+
+@app.route("/service/contracts")
+@login_required
+def service_contracts():
+    _module_visibility_required("service")
+    contracts = []
+    for contract in SERVICE_CONTRACTS:
+        contracts.append(
+            {
+                **contract,
+                "start_display": contract.get("start").strftime("%d %b %Y") if isinstance(contract.get("start"), datetime.date) else "—",
+                "end_display": contract.get("end").strftime("%d %b %Y") if isinstance(contract.get("end"), datetime.date) else "—",
+                "renewal_display": contract.get("renewal").strftime("%d %b %Y") if isinstance(contract.get("renewal"), datetime.date) else "—",
+            }
+        )
+    return render_template("service/contracts.html", contracts=contracts)
+
+
+@app.route("/service/parts-materials")
+@login_required
+def service_parts_materials():
+    _module_visibility_required("service")
+    ledger = SERVICE_PARTS_LEDGER
+    return render_template(
+        "service/parts_materials.html",
+        stock_alerts=ledger.get("stock_alerts", []),
+        consumption=ledger.get("consumption", []),
+        returns=ledger.get("returns", []),
+    )
+
+
+@app.route("/service/preventive-maintenance")
+@login_required
+def service_preventive_maintenance():
+    _module_visibility_required("service")
+    plan = SERVICE_PREVENTIVE_PLAN
+    upcoming = []
+    for visit in plan.get("upcoming", []):
+        upcoming.append(
+            {
+                **visit,
+                "visit_display": visit.get("visit").strftime("%d %b %Y") if isinstance(visit.get("visit"), datetime.date) else "—",
+            }
+        )
+    overdue = []
+    for visit in plan.get("overdue", []):
+        overdue.append(
+            {
+                **visit,
+                "due_display": visit.get("due").strftime("%d %b %Y") if isinstance(visit.get("due"), datetime.date) else "—",
+            }
+        )
+    return render_template(
+        "service/preventive_maintenance.html",
+        upcoming=upcoming,
+        overdue=overdue,
+        checklists=plan.get("checklists", []),
+    )
+
+
+@app.route("/service/automations")
+@login_required
+def service_automations():
+    _module_visibility_required("service")
+    roles = []
+    for role, capabilities in SERVICE_AUTOMATIONS.get("roles", {}).items():
+        roles.append({"role": role, "capabilities": capabilities})
+    return render_template(
+        "service/automations.html",
+        flows=SERVICE_AUTOMATIONS.get("flows", []),
+        roles=roles,
+        config_options=SERVICE_AUTOMATIONS.get("config", []),
     )
 
 

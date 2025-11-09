@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Parts & Materials{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-theme-primary">Parts &amp; Materials</h1>
+      <p class="text-sm text-slate-400">Track consumption per task, technician issues/returns and live stock thresholds.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:text-white">Sync with inventory</button>
+      <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">Create backorder</button>
+    </div>
+  </header>
+
+  <section class="grid gap-6 lg:grid-cols-3">
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-base font-semibold text-slate-100">Low stock alerts</h2>
+      <ul class="mt-4 space-y-3 text-sm text-slate-300">
+        {% for alert in stock_alerts %}
+          <li class="flex items-center justify-between rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2">
+            <span>{{ alert.part }}</span>
+            <span class="text-xs text-rose-200">{{ alert.current }} in stock · Min {{ alert.threshold }}</span>
+          </li>
+        {% else %}
+          <li class="text-slate-500">No alerts triggered.</li>
+        {% endfor %}
+      </ul>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 lg:col-span-2">
+      <h2 class="text-base font-semibold text-slate-100">Consumption by lift / technician</h2>
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-800/70 text-sm">
+          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+            <tr class="text-left">
+              <th class="px-4 py-2">Lift</th>
+              <th class="px-4 py-2">Part</th>
+              <th class="px-4 py-2">Qty</th>
+              <th class="px-4 py-2">Month</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70 text-slate-200">
+            {% for row in consumption %}
+              <tr>
+                <td class="px-4 py-2">{{ row.lift }}</td>
+                <td class="px-4 py-2">{{ row.part }}</td>
+                <td class="px-4 py-2">{{ row.qty }}</td>
+                <td class="px-4 py-2">{{ row.month }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">No consumption logged.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
+    <div class="border-b border-slate-800/70 px-6 py-4">
+      <h2 class="text-base font-semibold text-slate-100">Technician issue / return log</h2>
+      <p class="text-xs text-slate-400">Ensures accountability when parts are issued for reactive or preventive jobs.</p>
+    </div>
+    <div class="divide-y divide-slate-800/70">
+      {% for entry in returns %}
+        <article class="px-6 py-4 text-sm text-slate-300">
+          <p><span class="font-semibold text-slate-100">{{ entry.technician }}</span> returned {{ entry.qty }} × {{ entry.part }}</p>
+          <p class="text-xs text-slate-400">{{ entry.date.strftime('%d %b %Y') if entry.date else '' }}</p>
+        </article>
+      {% else %}
+        <p class="px-6 py-6 text-center text-sm text-slate-400">No return records yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
