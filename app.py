@@ -19,7 +19,7 @@ from flask_login import (
     current_user,
 )
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar
 from collections import OrderedDict
 
 from sqlalchemy import case, inspect, func, or_, and_
@@ -148,13 +148,28 @@ def parse_preferred_service_date(value):
             ),
             None,
         )
-    parsed = parse_optional_date(value)
-    if not parsed:
-        return (
-            None,
-            "Preferred service date must be a day between 01 and 30 or a valid YYYY-MM-DD date.",
-        )
-    return parsed, None
+    return None, "Preferred service date must be a day between 01 and 30."
+
+
+def parse_preferred_service_days(values):
+    if not values:
+        return [], None
+    if isinstance(values, str):
+        values = [values]
+    selected = []
+    for value in values:
+        cleaned = clean_str(value)
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if lowered not in SERVICE_PREFERRED_DAY_LABELS:
+            return [], "Select valid preferred service days."
+        if lowered == "any":
+            selected = ["any"]
+            break
+        if lowered not in selected:
+            selected.append(lowered)
+    return selected, None
 
 
 def is_monthly_preference_date(value):
@@ -165,6 +180,31 @@ def is_monthly_preference_date(value):
         and value.year == PREFERRED_SERVICE_DATE_BASE_YEAR
         and value.month == PREFERRED_SERVICE_DATE_BASE_MONTH
     )
+
+
+def add_months(date_obj, months):
+    if not isinstance(date_obj, datetime.date):
+        return None
+    month = date_obj.month - 1 + int(months)
+    year = date_obj.year + month // 12
+    month = month % 12 + 1
+    day = min(date_obj.day, calendar.monthrange(year, month)[1])
+    return datetime.date(year, month, day)
+
+
+def calculate_amc_end_date(start_date, duration_key):
+    if not isinstance(start_date, datetime.date):
+        return None
+    if not duration_key:
+        return None
+    duration_key = duration_key.strip().lower()
+    months = AMC_DURATION_MONTHS.get(duration_key)
+    if not months:
+        return None
+    target = add_months(start_date, months)
+    if not target:
+        return None
+    return target - datetime.timedelta(days=1)
 
 
 def format_preferred_service_date(value):
@@ -284,6 +324,145 @@ SERVICE_PREFERRED_DAY_OPTIONS = [
 SERVICE_PREFERRED_DAY_LABELS = {
     key: label for key, label in SERVICE_PREFERRED_DAY_OPTIONS if key
 }
+
+AMC_DURATION_CHOICES = [
+    ("", "Select AMC duration"),
+    ("1_year", "1 year"),
+    ("2_years", "2 years"),
+    ("3_years", "3 years"),
+    ("4_years", "4 years"),
+    ("5_years", "5 years"),
+    ("1_year_bimonthly", "1 year bimonthly"),
+    ("1_year_quarterly", "1 year quarterly"),
+    ("6_months", "6 months"),
+]
+AMC_DURATION_LABELS = {key: label for key, label in AMC_DURATION_CHOICES if key}
+AMC_DURATION_MONTHS = {
+    "1_year": 12,
+    "2_years": 24,
+    "3_years": 36,
+    "4_years": 48,
+    "5_years": 60,
+    "1_year_bimonthly": 12,
+    "1_year_quarterly": 12,
+    "6_months": 6,
+}
+
+DROPDOWN_FIELD_DEFINITIONS = {
+    "lift_type": {
+        "label": "Lift Type",
+        "value_editable": False,
+        "default_options": [
+            {"value": option, "label": option}
+            for option in ["Hydraulic", "MR", "MRL", "Goods", "Dumbwaiter", "Passenger"]
+        ],
+    },
+    "door_type": {
+        "label": "Door Type",
+        "value_editable": False,
+        "default_options": [
+            {"value": option, "label": option}
+            for option in [
+                "ATO-LH",
+                "ATO-RH",
+                "ACO",
+                "Swing",
+                "Collapsible",
+                "Gate",
+                "IMP",
+                "Manual",
+            ]
+        ],
+    },
+    "door_finish": {
+        "label": "Door Finish",
+        "value_editable": False,
+        "default_options": [
+            {"value": option, "label": option}
+            for option in ["SS H/L", "SS Mirror", "MS", "Powder Coated"]
+        ],
+    },
+    "power_supply": {
+        "label": "Power Supply",
+        "value_editable": False,
+        "default_options": [
+            {"value": option, "label": option}
+            for option in ["1 Phase", "3 Phase"]
+        ],
+    },
+    "machine_type": {
+        "label": "Machine Type",
+        "value_editable": False,
+        "default_options": [
+            {"value": option, "label": option}
+            for option in ["Geared", "Gearless", "Hydraulic", "Drum", "Stiltz"]
+        ],
+    },
+    "passenger_capacity": {
+        "label": "Passenger Capacity",
+        "value_editable": True,
+        "default_options": [
+            {"value": value, "label": label}
+            for value, label in [
+                ("0", "0"),
+                ("4", "4 Pass"),
+                ("6", "6 Pass"),
+                ("8", "8 Pass"),
+                ("10", "10 Pass"),
+                ("13", "13 Pass"),
+                ("15", "15 Pass"),
+                ("20", "20 Pass"),
+                ("25", "25 Pass"),
+            ]
+        ],
+    },
+    "load_capacity": {
+        "label": "Load Capacity (Kg)",
+        "value_editable": True,
+        "default_options": [
+            {"value": value, "label": f"{value} Kg"}
+            for value in ["170", "272", "408", "544", "680", "800", "1000", "1500"]
+        ],
+    },
+}
+
+
+def ensure_dropdown_options_seed():
+    for field_key, definition in DROPDOWN_FIELD_DEFINITIONS.items():
+        if DropdownOption.query.filter_by(field_key=field_key).count() > 0:
+            continue
+        default_options = definition.get("default_options") or []
+        for index, option in enumerate(default_options):
+            db.session.add(
+                DropdownOption(
+                    field_key=field_key,
+                    value=option.get("value"),
+                    label=option.get("label"),
+                    order_index=index,
+                )
+            )
+    db.session.commit()
+
+
+def get_dropdown_choices(field_key):
+    definition = DROPDOWN_FIELD_DEFINITIONS.get(field_key)
+    if not definition:
+        return []
+    options = (
+        DropdownOption.query.filter_by(field_key=field_key)
+        .order_by(DropdownOption.order_index.asc(), DropdownOption.id.asc())
+        .all()
+    )
+    if not options:
+        return [option.copy() for option in definition.get("default_options", [])]
+    return [option.as_choice() for option in options]
+
+
+def get_dropdown_options_map():
+    return {
+        field_key: get_dropdown_choices(field_key)
+        for field_key in DROPDOWN_FIELD_DEFINITIONS.keys()
+    }
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
 TASK_MILESTONES = [
     "Order Milestone",
@@ -2618,6 +2797,9 @@ def build_lift_payload(lift):
     if lift.site_address_line2:
         site_lines.append(lift.site_address_line2)
 
+    if lift.building_villa_number:
+        site_lines.insert(0, lift.building_villa_number)
+
     location_parts = [part for part in [lift.city, lift.state, lift.pincode] if part]
     if location_parts:
         site_lines.append(", ".join(location_parts))
@@ -2682,8 +2864,14 @@ def build_lift_payload(lift):
     amc_end = amc_config.get("end") or lift.amc_end
     linked_contract = get_service_contract_by_id(lift.amc_contract_id)
 
-    preferred_day_key = (lift.preferred_service_day or "").strip().lower()
-    preferred_day_display = SERVICE_PREFERRED_DAY_LABELS.get(preferred_day_key)
+    preferred_day_keys = lift.preferred_service_days
+    preferred_day_labels = []
+    for day_key in preferred_day_keys:
+        label = SERVICE_PREFERRED_DAY_LABELS.get(day_key)
+        if not label:
+            label = day_key.title()
+        preferred_day_labels.append(label)
+    preferred_day_display = ", ".join(preferred_day_labels) if preferred_day_labels else None
     preferred_date_display = format_preferred_service_date(lift.preferred_service_date)
     preferred_time_display = (
         lift.preferred_service_time.strftime("%H:%M")
@@ -2870,7 +3058,7 @@ def build_lift_payload(lift):
         "timeline": timeline_entries,
         "lifetime_metrics": lifetime_metrics,
         "remarks": lift.remarks or "—",
-        "notes": lift.notes or "—",
+        "building_villa_number": lift.building_villa_number or "—",
         "preferred_service_day_display": preferred_day_display or "—",
         "preferred_service_date_display": preferred_date_display,
         "preferred_service_time_display": preferred_time_display,
@@ -4020,6 +4208,7 @@ class Lift(db.Model):
     state = db.Column(db.String(120), nullable=True)
     pincode = db.Column(db.String(20), nullable=True)
     country = db.Column(db.String(120), nullable=True)
+    building_villa_number = db.Column(db.String(120), nullable=True)
     route = db.Column(db.String(20), nullable=True)
     building_floors = db.Column(db.String(40), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
@@ -4038,6 +4227,7 @@ class Lift(db.Model):
     amc_status = db.Column(db.String(40), nullable=True)
     amc_start = db.Column(db.Date, nullable=True)
     amc_end = db.Column(db.Date, nullable=True)
+    amc_duration_key = db.Column(db.String(40), nullable=True)
     amc_contract_id = db.Column(db.String(60), nullable=True)
     qr_code_url = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(40), nullable=True)
@@ -4048,6 +4238,7 @@ class Lift(db.Model):
     preferred_service_day = db.Column(db.String(20), nullable=True)
     preferred_service_date = db.Column(db.Date, nullable=True)
     preferred_service_time = db.Column(db.Time, nullable=True)
+    preferred_service_days_json = db.Column(db.Text, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -4091,6 +4282,52 @@ class Lift(db.Model):
     @door_finish.setter
     def door_finish(self, value):
         self.door_brand = value
+
+    @property
+    def preferred_service_days(self):
+        if not self.preferred_service_days_json:
+            fallback = clean_str(self.preferred_service_day)
+            return [fallback.lower()] if fallback else []
+        try:
+            data = json.loads(self.preferred_service_days_json)
+        except (TypeError, ValueError):
+            fallback = clean_str(self.preferred_service_day)
+            return [fallback.lower()] if fallback else []
+        if not isinstance(data, list):
+            fallback = clean_str(self.preferred_service_day)
+            return [fallback.lower()] if fallback else []
+        cleaned = []
+        for item in data:
+            if not isinstance(item, str):
+                continue
+            cleaned_item = item.strip().lower()
+            if cleaned_item:
+                cleaned.append(cleaned_item)
+        if not cleaned:
+            fallback = clean_str(self.preferred_service_day)
+            if fallback:
+                return [fallback.lower()]
+        return cleaned
+
+    @preferred_service_days.setter
+    def preferred_service_days(self, values):
+        if not values:
+            self.preferred_service_days_json = None
+            self.preferred_service_day = None
+            return
+        unique_values = []
+        for value in values:
+            if not isinstance(value, str):
+                continue
+            cleaned = value.strip().lower()
+            if cleaned and cleaned not in unique_values:
+                unique_values.append(cleaned)
+        if unique_values:
+            self.preferred_service_day = unique_values[0]
+            self.preferred_service_days_json = json.dumps(unique_values)
+        else:
+            self.preferred_service_day = None
+            self.preferred_service_days_json = None
 
 
 class LiftFile(db.Model):
@@ -4150,6 +4387,24 @@ class LiftComment(db.Model):
             return "—"
         return self.created_at.strftime("%d %b %Y, %I:%M %p")
 
+
+class DropdownOption(db.Model):
+    __tablename__ = "dropdown_option"
+
+    id = db.Column(db.Integer, primary_key=True)
+    field_key = db.Column(db.String(50), nullable=False, index=True)
+    value = db.Column(db.String(120), nullable=True)
+    label = db.Column(db.String(150), nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("field_key", "label", name="uq_dropdown_option_field_label"),
+    )
+
+    def as_choice(self):
+        option_value = self.value if self.value is not None else self.label
+        return {"id": self.id, "value": option_value, "label": self.label}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -4491,6 +4746,18 @@ def ensure_lift_columns():
         cur.execute("ALTER TABLE lift ADD COLUMN amc_contract_id TEXT;")
         added_cols.append("amc_contract_id")
 
+    if "building_villa_number" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN building_villa_number TEXT;")
+        added_cols.append("building_villa_number")
+
+    if "amc_duration_key" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN amc_duration_key TEXT;")
+        added_cols.append("amc_duration_key")
+
+    if "preferred_service_days_json" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_days_json TEXT;")
+        added_cols.append("preferred_service_days_json")
+
     conn.commit()
     conn.close()
 
@@ -4607,6 +4874,7 @@ def ensure_tables():
         Lift.__table__,
         LiftFile.__table__,
         LiftComment.__table__,
+        DropdownOption.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -4628,6 +4896,7 @@ def bootstrap_db():
     ensure_lift_columns()
     ensure_service_route_columns()
     ensure_customer_columns()
+    ensure_dropdown_options_seed()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
     for u, p in default_users:
@@ -4961,7 +5230,7 @@ def bootstrap_db():
                 city=entry.get("city"),
                 state=entry.get("state"),
                 pincode=entry.get("pincode"),
-                country=entry.get("country"),
+                country=entry.get("country") or "India",
                 route=entry.get("route"),
                 sector=entry.get("sector"),
                 branch=entry.get("branch"),
@@ -4971,7 +5240,7 @@ def bootstrap_db():
                 office_city=entry.get("office_city"),
                 office_state=entry.get("office_state"),
                 office_pincode=entry.get("office_pincode"),
-                office_country=entry.get("office_country"),
+                office_country=entry.get("office_country") or "India",
             )
             db.session.add(customer)
 
@@ -4985,6 +5254,7 @@ def bootstrap_db():
                 "customer_code": "CUS0001",
                 "site_address_line1": "Convent Road",
                 "site_address_line2": "Near Church",
+                "building_villa_number": "Villa 12",
                 "city": "Mapusa",
                 "state": "Goa",
                 "pincode": "403507",
@@ -5007,11 +5277,13 @@ def bootstrap_db():
                 "amc_status": "Active",
                 "amc_start": "2024-06-01",
                 "amc_end": "2025-05-31",
+                "amc_duration_key": "1_year",
                 "qr_code_url": "https://example.com/q/G192",
                 "status": "Active",
                 "last_service_date": "2025-10-10",
                 "next_service_due": "2026-01-08",
                 "notes": "Sister Maria Snehala",
+                "preferred_service_days": ["tuesday", "friday"],
             },
             {
                 "lift_code": "G208",
@@ -5019,6 +5291,7 @@ def bootstrap_db():
                 "customer_code": "CUS0005",
                 "site_address_line1": "B-504 Seaside Residency",
                 "site_address_line2": "Juhu Tara Road",
+                "building_villa_number": "B-504",
                 "city": "Mumbai",
                 "state": "Maharashtra",
                 "pincode": "400049",
@@ -5046,6 +5319,7 @@ def bootstrap_db():
                 "last_service_date": "2025-09-25",
                 "next_service_due": "2026-01-19",
                 "notes": None,
+                "preferred_service_days": ["any"],
             },
             {
                 "lift_code": "G167",
@@ -5053,6 +5327,7 @@ def bootstrap_db():
                 "customer_code": "CUS0004",
                 "site_address_line1": "H.No 123",
                 "site_address_line2": "Near Garden",
+                "building_villa_number": "House 123",
                 "city": "Porvorim",
                 "state": "Goa",
                 "pincode": "403501",
@@ -5075,11 +5350,13 @@ def bootstrap_db():
                 "amc_status": "Expired",
                 "amc_start": "2022-11-05",
                 "amc_end": "2023-11-04",
+                "amc_duration_key": "1_year",
                 "qr_code_url": "https://example.com/q/G167",
                 "status": "Active",
                 "last_service_date": "2025-08-16",
                 "next_service_due": "2025-11-30",
                 "notes": None,
+                "preferred_service_days": ["monday", "thursday"],
             },
             {
                 "lift_code": "G084",
@@ -5087,6 +5364,7 @@ def bootstrap_db():
                 "customer_code": "CUS0002",
                 "site_address_line1": "702 Tech Park",
                 "site_address_line2": "Andheri East",
+                "building_villa_number": "702",
                 "city": "Mumbai",
                 "state": "Maharashtra",
                 "pincode": "400059",
@@ -5109,11 +5387,13 @@ def bootstrap_db():
                 "amc_status": "Active",
                 "amc_start": "2024-07-01",
                 "amc_end": "2025-06-30",
+                "amc_duration_key": "1_year",
                 "qr_code_url": "https://example.com/q/G084",
                 "status": "Active",
                 "last_service_date": "2025-10-30",
                 "next_service_due": "2026-01-28",
                 "notes": "Kilowott is separate customer",
+                "preferred_service_days": ["wednesday"],
             },
             {
                 "lift_code": "G044",
@@ -5121,6 +5401,7 @@ def bootstrap_db():
                 "customer_code": "CUS0003",
                 "site_address_line1": "Satguru Apts",
                 "site_address_line2": "Near Community Hall",
+                "building_villa_number": "Block A",
                 "city": "Panjim",
                 "state": "Goa",
                 "pincode": "403001",
@@ -5143,11 +5424,13 @@ def bootstrap_db():
                 "amc_status": "None",
                 "amc_start": None,
                 "amc_end": None,
+                "amc_duration_key": None,
                 "qr_code_url": "https://example.com/q/G044",
                 "status": "Inactive",
                 "last_service_date": None,
                 "next_service_due": None,
                 "notes": "Satguru separate from Guru Naik",
+                "preferred_service_days": [],
             },
         ]
 
@@ -5161,7 +5444,8 @@ def bootstrap_db():
                 city=entry.get("city"),
                 state=entry.get("state"),
                 pincode=entry.get("pincode"),
-                country=entry.get("country"),
+                country=entry.get("country") or "India",
+                building_villa_number=entry.get("building_villa_number"),
                 route=entry.get("route"),
                 building_floors=entry.get("building_floors"),
                 lift_type=entry.get("lift_type"),
@@ -5180,6 +5464,7 @@ def bootstrap_db():
                 amc_status=entry.get("amc_status"),
                 amc_start=parse_optional_date(entry.get("amc_start")),
                 amc_end=parse_optional_date(entry.get("amc_end")),
+                amc_duration_key=(entry.get("amc_duration_key") or None),
                 qr_code_url=entry.get("qr_code_url"),
                 status=entry.get("status"),
                 last_service_date=parse_optional_date(entry.get("last_service_date")),
@@ -5187,6 +5472,8 @@ def bootstrap_db():
                 notes=entry.get("notes"),
                 last_updated_by=admin_user.id if admin_user else None,
             )
+            if entry.get("preferred_service_days"):
+                lift.preferred_service_days = entry.get("preferred_service_days")
             lift.set_capacity_display()
             db.session.add(lift)
 
@@ -5280,6 +5567,7 @@ def settings():
     service_routes = ServiceRoute.query.order_by(
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
+    dropdown_options = get_dropdown_options_map()
 
     if current_user.is_admin:
         departments = sorted(
@@ -5308,6 +5596,8 @@ def settings():
         support_channels=CUSTOMER_SUPPORT_CHANNELS,
         support_sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
         service_routes=service_routes,
+        dropdown_options=dropdown_options,
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
     )
 
 
@@ -5390,6 +5680,132 @@ def settings_service_route_delete(route_id):
     db.session.commit()
     flash(f"Route '{route.display_name}' removed.", "success")
     return redirect(url_for("settings", tab="modules"))
+
+
+def _get_dropdown_definition_or_404(field_key):
+    definition = DROPDOWN_FIELD_DEFINITIONS.get(field_key)
+    if not definition:
+        abort(404)
+    return definition
+
+
+@app.route("/settings/dropdowns/<field_key>/options", methods=["POST"])
+@login_required
+def settings_dropdown_option_create(field_key):
+    if not current_user.is_admin:
+        abort(403)
+    definition = _get_dropdown_definition_or_404(field_key)
+    label = clean_str(request.form.get("label"))
+    value = clean_str(request.form.get("value")) if definition.get("value_editable") else None
+    if not label:
+        flash("Option label cannot be empty.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    if not definition.get("value_editable"):
+        value = label
+    elif not value:
+        value = label
+    existing = (
+        DropdownOption.query.filter(
+            DropdownOption.field_key == field_key,
+            func.lower(DropdownOption.label) == label.lower(),
+        )
+        .first()
+    )
+    if existing:
+        flash("An option with that label already exists.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    max_order = (
+        db.session.query(func.coalesce(func.max(DropdownOption.order_index), -1))
+        .filter(DropdownOption.field_key == field_key)
+        .scalar()
+    )
+    option = DropdownOption(
+        field_key=field_key,
+        label=label,
+        value=value,
+        order_index=max_order + 1,
+    )
+    db.session.add(option)
+    db.session.commit()
+    flash("Dropdown option added.", "success")
+    return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/settings/dropdowns/<field_key>/options/<int:option_id>", methods=["POST"])
+@login_required
+def settings_dropdown_option_update(field_key, option_id):
+    if not current_user.is_admin:
+        abort(403)
+    definition = _get_dropdown_definition_or_404(field_key)
+    option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
+    if not option:
+        flash("Option not found.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    label = clean_str(request.form.get("label"))
+    value = clean_str(request.form.get("value")) if definition.get("value_editable") else option.label
+    if not label:
+        flash("Option label cannot be empty.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    if not definition.get("value_editable") or not value:
+        value = label
+    duplicate = (
+        DropdownOption.query.filter(
+            DropdownOption.field_key == field_key,
+            func.lower(DropdownOption.label) == label.lower(),
+            DropdownOption.id != option.id,
+        )
+        .first()
+    )
+    if duplicate:
+        flash("Another option already uses that label.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    option.label = label
+    option.value = value
+    db.session.commit()
+    flash("Option updated.", "success")
+    return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/settings/dropdowns/<field_key>/options/<int:option_id>/delete", methods=["POST"])
+@login_required
+def settings_dropdown_option_delete(field_key, option_id):
+    if not current_user.is_admin:
+        abort(403)
+    _get_dropdown_definition_or_404(field_key)
+    option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
+    if not option:
+        flash("Option not found.", "error")
+        return redirect(url_for("settings", tab="modules"))
+    db.session.delete(option)
+    db.session.commit()
+    flash("Option removed.", "success")
+    return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/settings/dropdowns/<field_key>/reorder", methods=["POST"])
+@login_required
+def settings_dropdown_option_reorder(field_key):
+    if not current_user.is_admin:
+        abort(403)
+    _get_dropdown_definition_or_404(field_key)
+    payload = request.get_json(silent=True) or {}
+    order_ids = payload.get("order")
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "Invalid payload."}), 400
+    options = {
+        option.id: option
+        for option in DropdownOption.query.filter_by(field_key=field_key).all()
+    }
+    for index, option_id in enumerate(order_ids):
+        try:
+            option_id = int(option_id)
+        except (TypeError, ValueError):
+            continue
+        option = options.get(option_id)
+        if option:
+            option.order_index = index
+    db.session.commit()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/sales")
@@ -8897,7 +9313,7 @@ def service_customers_create():
         city=clean_str(request.form.get("city")),
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
-        country=clean_str(request.form.get("country")),
+        country="India",
         sector=category_value,
         branch=branch_value,
         notes=clean_str(request.form.get("notes")),
@@ -8906,7 +9322,7 @@ def service_customers_create():
         office_city=clean_str(request.form.get("office_city")),
         office_state=clean_str(request.form.get("office_state")),
         office_pincode=clean_str(request.form.get("office_pincode")),
-        office_country=clean_str(request.form.get("office_country")),
+        office_country="India",
     )
 
     db.session.add(customer)
@@ -8997,7 +9413,7 @@ def service_customer_update_address(customer_id):
         customer.city = clean_str(request.form.get("city"))
         customer.state = clean_str(request.form.get("state"))
         customer.pincode = clean_str(request.form.get("pincode"))
-        customer.country = clean_str(request.form.get("country"))
+        customer.country = "India"
         success_message = "Billing address updated."
     elif address_type == "office":
         customer.office_address_line1 = clean_str(request.form.get("office_address_line1"))
@@ -9005,7 +9421,7 @@ def service_customer_update_address(customer_id):
         customer.office_city = clean_str(request.form.get("office_city"))
         customer.office_state = clean_str(request.form.get("office_state"))
         customer.office_pincode = clean_str(request.form.get("office_pincode"))
-        customer.office_country = clean_str(request.form.get("office_country"))
+        customer.office_country = "India"
         success_message = "Office address updated."
     else:
         flash("Unknown address type.", "error")
@@ -9039,7 +9455,6 @@ def service_lifts():
                 func.lower(Lift.route).like(like),
                 func.lower(Lift.lift_type).like(like),
                 func.lower(Lift.status).like(like),
-                func.lower(Lift.notes).like(like),
             )
         )
 
@@ -9050,6 +9465,7 @@ def service_lifts():
     ).all()
     next_lift_code = generate_next_lift_code()
     next_customer_code = generate_next_customer_code()
+    dropdown_options = get_dropdown_options_map()
 
     return render_template(
         "service/lifts.html",
@@ -9061,6 +9477,10 @@ def service_lifts():
         next_customer_code=next_customer_code,
         service_contracts=SERVICE_CONTRACTS,
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
+        dropdown_options=dropdown_options,
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        amc_duration_choices=AMC_DURATION_CHOICES,
+        amc_duration_months=AMC_DURATION_MONTHS,
     )
 
 
@@ -9124,20 +9544,12 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
-    amc_end, error = parse_date_field(request.form.get("amc_end"), "AMC end")
-    if error:
-        flash(error, "error")
+    amc_duration_value = clean_str(request.form.get("amc_duration_key"))
+    amc_duration_key = amc_duration_value.lower() if amc_duration_value else None
+    if amc_duration_key and amc_duration_key not in AMC_DURATION_MONTHS:
+        flash("Select a valid AMC duration option.", "error")
         return redirect(redirect_url)
-
-    last_service_date, error = parse_date_field(request.form.get("last_service_date"), "Last service date")
-    if error:
-        flash(error, "error")
-        return redirect(redirect_url)
-
-    next_service_due, error = parse_date_field(request.form.get("next_service_due"), "Next service due date")
-    if error:
-        flash(error, "error")
-        return redirect(redirect_url)
+    computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
 
     preferred_date, error = parse_preferred_service_date(
         request.form.get("preferred_service_date")
@@ -9153,14 +9565,11 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
-    preferred_day = None
-    if preferred_day_raw:
-        day_key = preferred_day_raw.lower()
-        if day_key not in SERVICE_PREFERRED_DAY_LABELS:
-            flash("Select a valid preferred service day.", "error")
-            return redirect(redirect_url)
-        preferred_day = day_key
+    preferred_days_raw = request.form.getlist("preferred_service_days")
+    preferred_days, day_error = parse_preferred_service_days(preferred_days_raw)
+    if day_error:
+        flash(day_error, "error")
+        return redirect(redirect_url)
 
     contract_input = clean_str(request.form.get("amc_contract_id"))
     amc_contract_id = None
@@ -9181,6 +9590,7 @@ def service_lifts_create():
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
         country="India",
+        building_villa_number=clean_str(request.form.get("building_villa_number")),
         route=route_value,
         building_floors=clean_str(request.form.get("building_floors")),
         lift_type=clean_str(request.form.get("lift_type")),
@@ -9191,26 +9601,24 @@ def service_lifts_create():
         machine_brand=clean_str(request.form.get("machine_brand")),
         controller_brand=clean_str(request.form.get("controller_brand")),
         door_type=clean_str(request.form.get("door_type")),
-        door_brand=clean_str(request.form.get("door_brand")),
+        door_finish=clean_str(request.form.get("door_finish")),
         cabin_finish=clean_str(request.form.get("cabin_finish")),
         power_supply=clean_str(request.form.get("power_supply")),
         install_date=install_date,
         warranty_expiry=warranty_expiry,
         amc_status=clean_str(request.form.get("amc_status")),
         amc_start=amc_start,
-        amc_end=amc_end,
+        amc_end=computed_amc_end,
+        amc_duration_key=amc_duration_key,
         amc_contract_id=amc_contract_id,
         qr_code_url=clean_str(request.form.get("qr_code_url")),
         status=clean_str(request.form.get("status")),
-        last_service_date=last_service_date,
-        next_service_due=next_service_due,
-        notes=clean_str(request.form.get("notes")),
         remarks=clean_str(request.form.get("remarks")),
-        preferred_service_day=preferred_day,
         preferred_service_date=preferred_date,
         preferred_service_time=preferred_time,
         last_updated_by=current_user.id if current_user.is_authenticated else None,
     )
+    lift.preferred_service_days = preferred_days
     lift.set_capacity_display()
 
     db.session.add(lift)
@@ -9276,6 +9684,7 @@ def service_lift_edit(lift_id):
         .order_by(LiftComment.created_at.desc())
         .all()
     )
+    dropdown_options = get_dropdown_options_map()
     return render_template(
         "service/lift_edit.html",
         lift=lift,
@@ -9285,6 +9694,10 @@ def service_lift_edit(lift_id):
         comments=comments,
         service_contracts=SERVICE_CONTRACTS,
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
+        dropdown_options=dropdown_options,
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        amc_duration_choices=AMC_DURATION_CHOICES,
+        amc_duration_months=AMC_DURATION_MONTHS,
     )
 
 
@@ -9349,20 +9762,12 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
-    amc_end, error = parse_date_field(request.form.get("amc_end"), "AMC end")
-    if error:
-        flash(error, "error")
+    amc_duration_value = clean_str(request.form.get("amc_duration_key"))
+    amc_duration_key = amc_duration_value.lower() if amc_duration_value else None
+    if amc_duration_key and amc_duration_key not in AMC_DURATION_MONTHS:
+        flash("Select a valid AMC duration option.", "error")
         return redirect(redirect_url)
-
-    last_service_date, error = parse_date_field(request.form.get("last_service_date"), "Last service date")
-    if error:
-        flash(error, "error")
-        return redirect(redirect_url)
-
-    next_service_due, error = parse_date_field(request.form.get("next_service_due"), "Next service due date")
-    if error:
-        flash(error, "error")
-        return redirect(redirect_url)
+    computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
 
     preferred_date, error = parse_preferred_service_date(
         request.form.get("preferred_service_date")
@@ -9378,14 +9783,11 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
-    preferred_day = None
-    if preferred_day_raw:
-        day_key = preferred_day_raw.lower()
-        if day_key not in SERVICE_PREFERRED_DAY_LABELS:
-            flash("Select a valid preferred service day.", "error")
-            return redirect(redirect_url)
-        preferred_day = day_key
+    preferred_days_raw = request.form.getlist("preferred_service_days")
+    preferred_days, day_error = parse_preferred_service_days(preferred_days_raw)
+    if day_error:
+        flash(day_error, "error")
+        return redirect(redirect_url)
 
     contract_input = clean_str(request.form.get("amc_contract_id"))
     amc_contract_id = None
@@ -9402,7 +9804,8 @@ def service_lift_update(lift_id):
     lift.city = clean_str(request.form.get("city"))
     lift.state = clean_str(request.form.get("state"))
     lift.pincode = clean_str(request.form.get("pincode"))
-    lift.country = clean_str(request.form.get("country"))
+    lift.country = "India"
+    lift.building_villa_number = clean_str(request.form.get("building_villa_number"))
     lift.route = route_value
     lift.building_floors = clean_str(request.form.get("building_floors"))
     lift.lift_type = clean_str(request.form.get("lift_type"))
@@ -9413,24 +9816,22 @@ def service_lift_update(lift_id):
     lift.machine_brand = clean_str(request.form.get("machine_brand"))
     lift.controller_brand = clean_str(request.form.get("controller_brand"))
     lift.door_type = clean_str(request.form.get("door_type"))
-    lift.door_brand = clean_str(request.form.get("door_brand"))
+    lift.door_finish = clean_str(request.form.get("door_finish"))
     lift.cabin_finish = clean_str(request.form.get("cabin_finish"))
     lift.power_supply = clean_str(request.form.get("power_supply"))
     lift.install_date = install_date
     lift.warranty_expiry = warranty_expiry
     lift.amc_status = clean_str(request.form.get("amc_status"))
     lift.amc_start = amc_start
-    lift.amc_end = amc_end
+    lift.amc_end = computed_amc_end
+    lift.amc_duration_key = amc_duration_key
     lift.amc_contract_id = amc_contract_id
     lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
     lift.status = clean_str(request.form.get("status"))
-    lift.last_service_date = last_service_date
-    lift.next_service_due = next_service_due
-    lift.notes = clean_str(request.form.get("notes"))
     lift.remarks = clean_str(request.form.get("remarks"))
-    lift.preferred_service_day = preferred_day
     lift.preferred_service_date = preferred_date
     lift.preferred_service_time = preferred_time
+    lift.preferred_service_days = preferred_days
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
     lift.set_capacity_display()
 
@@ -9452,8 +9853,8 @@ def service_lift_update_notes(lift_id):
 
     redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
 
-    lift.notes = clean_str(request.form.get("notes"))
     lift.remarks = clean_str(request.form.get("remarks"))
+
     preferred_date, error = parse_preferred_service_date(
         request.form.get("preferred_service_date")
     )
@@ -9467,16 +9868,13 @@ def service_lift_update_notes(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
-    if "preferred_service_day" in request.form:
-        preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
-        if preferred_day_raw:
-            day_key = preferred_day_raw.lower()
-            if day_key not in SERVICE_PREFERRED_DAY_LABELS:
-                flash("Select a valid preferred service day.", "error")
-                return redirect(redirect_url)
-            lift.preferred_service_day = day_key
-        else:
-            lift.preferred_service_day = None
+    if "preferred_service_days" in request.form:
+        preferred_days_raw = request.form.getlist("preferred_service_days")
+        preferred_days, day_error = parse_preferred_service_days(preferred_days_raw)
+        if day_error:
+            flash(day_error, "error")
+            return redirect(redirect_url)
+        lift.preferred_service_days = preferred_days
 
     lift.preferred_service_date = preferred_date
     lift.preferred_service_time = preferred_time

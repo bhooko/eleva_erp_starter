@@ -316,10 +316,10 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
         <input name="pincode" value="{{ customer.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
-      <label class="space-y-1">
+      <div class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
-        <input name="country" value="{{ customer.country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
+        <p class="w-full rounded-xl border border-dashed border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-400">India (default)</p>
+      </div>
     </div>
     <div class="flex items-center justify-end gap-2">
       <button type="button" data-modal-close class="rounded-xl border border-slate-700/70 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Cancel</button>
@@ -359,10 +359,10 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
         <input name="office_pincode" value="{{ customer.office_pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
-      <label class="space-y-1">
+      <div class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
-        <input name="office_country" value="{{ customer.office_country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
+        <p class="w-full rounded-xl border border-dashed border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-400">India (default)</p>
+      </div>
     </div>
     <div class="flex items-center justify-end gap-2">
       <button type="button" data-modal-close class="rounded-xl border border-slate-700/70 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Cancel</button>

@@ -74,6 +74,10 @@
           <dt class="text-xs uppercase tracking-wide text-slate-400">Site summary</dt>
           <dd class="text-sm text-slate-100">{{ payload.site_summary }}</dd>
         </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa No</dt>
+          <dd class="text-sm text-slate-100">{{ payload.building_villa_number }}</dd>
+        </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">Customer &amp; contact</dt>
           <dd class="text-sm text-slate-100">{{ payload.customer_summary }}</dd>
@@ -119,7 +123,7 @@
           <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service day</dt>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service days</dt>
           <dd class="text-sm text-slate-100">{{ payload.preferred_service_day_display }}</dd>
         </div>
         <div>
@@ -134,16 +138,9 @@
     </section>
 
     <section class="space-y-4">
-      <h3 class="text-lg font-semibold text-theme-primary">Remarks &amp; notes</h3>
-      <div class="grid gap-4 lg:grid-cols-2">
-        <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <h4 class="text-sm font-semibold text-slate-100">Service remarks</h4>
-          <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</p>
-        </div>
-        <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <h4 class="text-sm font-semibold text-slate-100">General notes</h4>
-          <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.notes or 'No notes captured.' }}</p>
-        </div>
+      <h3 class="text-lg font-semibold text-theme-primary">Service remarks</h3>
+      <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</p>
       </div>
     </section>
 
