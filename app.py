@@ -2786,6 +2786,18 @@ def build_lift_payload(lift):
     merge_nested_dict(insight_config, LIFT_INSIGHT_LIBRARY.get(lift.lift_code, {}))
 
     customer = lift.customer
+    route_display = "—"
+    if lift.route:
+        route_value = lift.route.strip()
+        route_record = None
+        if route_value:
+            route_record = ServiceRoute.query.filter(
+                func.lower(ServiceRoute.state) == route_value.lower()
+            ).first()
+        if route_record:
+            route_display = route_record.display_name
+        elif route_value:
+            route_display = route_value
     site_lines = []
     if insight_config.get("site_name"):
         site_lines.append(insight_config["site_name"])
@@ -3028,6 +3040,38 @@ def build_lift_payload(lift):
         reverse=True,
     )
 
+    machine_type_display = (
+        lift.machine_type or insight_config.get("drive_type") or "—"
+    )
+    door_finish_display = (
+        lift.door_finish or insight_config.get("door_finish") or "—"
+    )
+    cabin_finish_display = (
+        lift.cabin_finish or insight_config.get("cabin_finish") or "—"
+    )
+    power_supply_display = (
+        lift.power_supply or insight_config.get("power_supply") or "—"
+    )
+    machine_make_value = machine_make if machine_make != "—" else None
+    machine_model_value = machine_model if machine_model != "—" else None
+    machine_serial_value = machine_serial if machine_serial != "—" else None
+    machine_details_parts = []
+    if machine_make_value:
+        machine_details_parts.append(machine_make_value)
+    if machine_model_value:
+        machine_details_parts.append(machine_model_value)
+    if machine_serial_value:
+        machine_details_parts.append(f"Serial {machine_serial_value}")
+    machine_details_display = " · ".join(machine_details_parts) if machine_details_parts else "—"
+    controller_type_value = insight_config.get("controller_type")
+    controller_brand_value = lift.controller_brand
+    controller_parts = []
+    if controller_type_value:
+        controller_parts.append(controller_type_value)
+    if controller_brand_value:
+        controller_parts.append(controller_brand_value)
+    controller_display = " · ".join(controller_parts) if controller_parts else "—"
+
     payload = {
         "id": lift.id,
         "lift_code": lift.lift_code,
@@ -3038,14 +3082,21 @@ def build_lift_payload(lift):
         "site_summary": " · ".join(site_lines) if site_lines else "—",
         "customer_summary": " · ".join(customer_lines) if customer_lines else "—",
         "lift_type": lift.lift_type or "—",
-        "drive_type": insight_config.get("drive_type") or "—",
-        "controller_type": insight_config.get("controller_type") or "—",
-        "controller_brand": lift.controller_brand or "—",
+        "drive_type": machine_type_display,
+        "machine_type": machine_type_display,
+        "controller_type": controller_type_value or "—",
+        "controller_brand": controller_brand_value or "—",
+        "controller_display": controller_display,
         "door_type": lift.door_type or "—",
         "door_configuration": insight_config.get("door_configuration") or (lift.door_type or "—"),
         "floors_served": insight_config.get("floors_served") or (lift.building_floors or "—"),
+        "route_display": route_display,
+        "door_finish": door_finish_display,
+        "cabin_finish": cabin_finish_display,
+        "power_supply": power_supply_display,
         "capacity_display": lift.capacity_display or (f"{lift.capacity_persons} persons / {lift.capacity_kg} kg" if lift.capacity_persons and lift.capacity_kg else "—"),
         "speed_display": f"{lift.speed_mps:.2f} m/s" if lift.speed_mps is not None else "—",
+        "machine_details_display": machine_details_display,
         "machine_make": machine_make,
         "machine_model": machine_model,
         "machine_serial": machine_serial,
