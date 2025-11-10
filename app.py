@@ -10,7 +10,14 @@ from flask import (
     session,
 )
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, login_user, login_required, logout_user, UserMixin, current_user
+from flask_login import (
+    LoginManager,
+    login_user,
+    login_required,
+    logout_user,
+    UserMixin,
+    current_user,
+)
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy
 from collections import OrderedDict
@@ -112,6 +119,17 @@ def parse_date_field(value, label):
     return parsed, None
 
 
+def parse_time_field(value, label):
+    value = clean_str(value)
+    if not value:
+        return None, None
+    try:
+        parsed = datetime.datetime.strptime(value, "%H:%M").time()
+    except (TypeError, ValueError):
+        return None, f"{label} must be in 24-hour HH:MM format."
+    return parsed, None
+
+
 def validate_branch(value, *, label="Branch", required=False):
     branch_value = clean_str(value)
     if not branch_value:
@@ -129,6 +147,26 @@ def validate_branch(value, *, label="Branch", required=False):
             return option, None
 
     return branch_value, None
+
+
+def _next_sequential_code(model, column_attr, *, prefix, width):
+    column = getattr(model, column_attr)
+    max_value = 0
+    for (code,) in db.session.query(column).filter(column.isnot(None)).all():
+        match = re.search(r"(\d+)$", code or "")
+        if not match:
+            continue
+        max_value = max(max_value, int(match.group(1)))
+    next_value = max_value + 1
+    return f"{prefix}{next_value:0{width}d}"
+
+
+def generate_next_customer_code():
+    return _next_sequential_code(Customer, "customer_code", prefix="CUS", width=4)
+
+
+def generate_next_lift_code():
+    return _next_sequential_code(Lift, "lift_code", prefix="LFT", width=4)
 
 
 # ---------------------- QC Profile choices (visible in UI) ----------------------
@@ -3883,6 +3921,8 @@ class Lift(db.Model):
     next_service_due = db.Column(db.Date, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
+    preferred_service_date = db.Column(db.Date, nullable=True)
+    preferred_service_time = db.Column(db.Time, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -4309,6 +4349,14 @@ def ensure_lift_columns():
     if "remarks" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN remarks TEXT;")
         added_cols.append("remarks")
+
+    if "preferred_service_date" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_date DATE;")
+        added_cols.append("preferred_service_date")
+
+    if "preferred_service_time" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_time TEXT;")
+        added_cols.append("preferred_service_time")
 
     conn.commit()
     conn.close()
@@ -5154,6 +5202,43 @@ def settings_service_route_create():
     db.session.add(ServiceRoute(state=route_name, branch=branch_value))
     db.session.commit()
     flash(f"Route '{route_name}' for branch {branch_value} added.", "success")
+    return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/settings/service/routes/<int:route_id>/update", methods=["POST"])
+@login_required
+def settings_service_route_update(route_id):
+    if not current_user.is_admin:
+        abort(403)
+
+    route = db.session.get(ServiceRoute, route_id)
+    if not route:
+        flash("Route not found.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
+    if not route_name:
+        flash("Route name cannot be empty.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    branch_value, error = validate_branch(request.form.get("branch"), required=True)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    duplicate = (
+        ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower(), ServiceRoute.id != route.id)
+        .first()
+    )
+    if duplicate:
+        flash("Another route already uses that name.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    route.state = route_name
+    route.branch = branch_value
+    db.session.commit()
+
+    flash("Route updated.", "success")
     return redirect(url_for("settings", tab="modules"))
 
 
@@ -8630,17 +8715,15 @@ def service_customers():
         )
 
     customers = query.order_by(func.lower(Customer.company_name)).all()
-    lift_payload_map = {}
     for customer in customers:
         open_lifts = [lift for lift in customer.lifts if is_lift_open(lift)]
         customer.open_lifts = open_lifts
-        for lift in open_lifts:
-            lift_payload_map[str(lift.id)] = build_lift_payload(lift)
+    next_customer_code = generate_next_customer_code()
     return render_template(
         "service/customers.html",
         customers=customers,
         search_query=search_query,
-        lift_payload_map=lift_payload_map,
+        next_customer_code=next_customer_code,
     )
 
 
@@ -8651,7 +8734,7 @@ def service_customers_create():
 
     redirect_url = request.form.get("next") or url_for("service_customers")
 
-    customer_code = clean_str(request.form.get("customer_code"))
+    customer_code = generate_next_customer_code()
     company_name = clean_str(request.form.get("company_name"))
     category_value = clean_str(request.form.get("category"))
     branch_value, branch_error = validate_branch(request.form.get("branch"))
@@ -8659,15 +8742,13 @@ def service_customers_create():
         flash(branch_error, "error")
         return redirect(redirect_url)
 
-    if not customer_code or not company_name:
-        flash("Customer code and company name are required.", "error")
+    if not company_name:
+        flash("Company name is required.", "error")
         return redirect(redirect_url)
-
-    customer_code = customer_code.upper()
 
     existing = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
     if existing:
-        flash("Another customer already uses that customer code.", "error")
+        flash("Another customer already uses that customer code. Please try again.", "error")
         return redirect(redirect_url)
 
     customer = Customer(
@@ -8720,13 +8801,10 @@ def service_customer_detail(customer_id):
     )
 
     customer.open_lifts = [lift for lift in lifts if is_lift_open(lift)]
-    lift_payload_map = {str(lift.id): build_lift_payload(lift) for lift in lifts}
-
     return render_template(
         "service/customer_detail.html",
         customer=customer,
         lifts=lifts,
-        lift_payload_map=lift_payload_map,
     )
 
 
@@ -8740,7 +8818,6 @@ def service_customer_update(customer_id):
         flash("Customer not found.", "error")
         return redirect(url_for("service_customers"))
 
-    customer_code_raw = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
     category_value = clean_str(request.form.get("category"))
     branch_value, branch_error = validate_branch(request.form.get("branch"))
@@ -8748,25 +8825,9 @@ def service_customer_update(customer_id):
         flash(branch_error, "error")
         return redirect(url_for("service_customer_detail", customer_id=customer.id))
 
-    if not customer_code_raw or not company_name:
-        flash("Customer code and company name are required.", "error")
+    if not company_name:
+        flash("Company name is required.", "error")
         return redirect(url_for("service_customer_detail", customer_id=customer.id))
-
-    new_code = customer_code_raw.upper()
-    if new_code != customer.customer_code:
-        duplicate = Customer.query.filter(
-            func.lower(Customer.customer_code) == new_code.lower(),
-            Customer.id != customer.id,
-        ).first()
-        if duplicate:
-            flash("Another customer already uses that customer code.", "error")
-            return redirect(url_for("service_customer_detail", customer_id=customer.id))
-
-        old_code = customer.customer_code
-        for lift in Lift.query.filter_by(customer_code=old_code).all():
-            lift.customer_code = new_code
-
-        customer.customer_code = new_code
 
     customer.company_name = company_name
     customer.contact_person = clean_str(request.form.get("contact_person"))
@@ -8854,7 +8915,8 @@ def service_lifts():
     service_routes = ServiceRoute.query.order_by(
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
-    lift_payloads = [build_lift_payload(lift) for lift in lifts]
+    next_lift_code = generate_next_lift_code()
+    next_customer_code = generate_next_customer_code()
 
     return render_template(
         "service/lifts.html",
@@ -8862,7 +8924,8 @@ def service_lifts():
         customers=customers,
         service_routes=service_routes,
         search_query=search_query,
-        lift_payloads=lift_payloads,
+        next_lift_code=next_lift_code,
+        next_customer_code=next_customer_code,
     )
 
 
@@ -8873,16 +8936,7 @@ def service_lifts_create():
 
     redirect_url = request.form.get("next") or url_for("service_lifts")
 
-    lift_code = clean_str(request.form.get("lift_code"))
-    if not lift_code:
-        flash("Lift code is required.", "error")
-        return redirect(redirect_url)
-    lift_code = lift_code.upper()
-
-    existing = Lift.query.filter(func.lower(Lift.lift_code) == lift_code.lower()).first()
-    if existing:
-        flash("Another lift already uses that lift code.", "error")
-        return redirect(redirect_url)
+    lift_code = generate_next_lift_code()
 
     customer_code_input = clean_str(request.form.get("customer_code"))
     customer_code = None
@@ -8948,6 +9002,20 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
+    preferred_date, error = parse_date_field(
+        request.form.get("preferred_service_date"), "Preferred service date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    preferred_time, error = parse_time_field(
+        request.form.get("preferred_service_time"), "Preferred service time"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
     lift = Lift(
         lift_code=lift_code,
         external_lift_id=clean_str(request.form.get("external_lift_id")),
@@ -8982,6 +9050,8 @@ def service_lifts_create():
         next_service_due=next_service_due,
         notes=clean_str(request.form.get("notes")),
         remarks=clean_str(request.form.get("remarks")),
+        preferred_service_date=preferred_date,
+        preferred_service_time=preferred_time,
         last_updated_by=current_user.id if current_user.is_authenticated else None,
     )
     lift.set_capacity_display()
@@ -8991,6 +9061,38 @@ def service_lifts_create():
 
     flash(f"Lift {lift.lift_code} created.", "success")
     return redirect(redirect_url)
+
+
+@app.route("/service/lifts/<int:lift_id>")
+@login_required
+def service_lift_detail(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    payload = build_lift_payload(lift)
+    attachments = (
+        LiftFile.query.filter_by(lift_id=lift.id)
+        .order_by(LiftFile.created_at.desc())
+        .all()
+    )
+    comments = (
+        LiftComment.query.filter_by(lift_id=lift.id)
+        .order_by(LiftComment.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "service/lift_detail.html",
+        lift=lift,
+        payload=payload,
+        attachments=attachments,
+        comments=comments,
+        next_customer_code=generate_next_customer_code(),
+    )
 
 
 @app.route("/service/lifts/<int:lift_id>/edit")
@@ -9037,23 +9139,7 @@ def service_lift_update(lift_id):
         flash("Lift not found.", "error")
         return redirect(url_for("service_lifts"))
 
-    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
-
-    lift_code = clean_str(request.form.get("lift_code"))
-    if not lift_code:
-        flash("Lift code is required.", "error")
-        return redirect(redirect_url)
-    new_code = lift_code.upper()
-
-    if new_code != lift.lift_code:
-        duplicate = Lift.query.filter(
-            func.lower(Lift.lift_code) == new_code.lower(),
-            Lift.id != lift.id,
-        ).first()
-        if duplicate:
-            flash("Another lift already uses that lift code.", "error")
-            return redirect(redirect_url)
-        lift.lift_code = new_code
+    redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
 
     customer_code_input = clean_str(request.form.get("customer_code"))
     if customer_code_input:
@@ -9119,6 +9205,20 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
+    preferred_date, error = parse_date_field(
+        request.form.get("preferred_service_date"), "Preferred service date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    preferred_time, error = parse_time_field(
+        request.form.get("preferred_service_time"), "Preferred service time"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
     lift.external_lift_id = clean_str(request.form.get("external_lift_id"))
     lift.site_address_line1 = clean_str(request.form.get("site_address_line1"))
     lift.site_address_line2 = clean_str(request.form.get("site_address_line2"))
@@ -9150,6 +9250,8 @@ def service_lift_update(lift_id):
     lift.next_service_due = next_service_due
     lift.notes = clean_str(request.form.get("notes"))
     lift.remarks = clean_str(request.form.get("remarks"))
+    lift.preferred_service_date = preferred_date
+    lift.preferred_service_time = preferred_time
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
     lift.set_capacity_display()
 
@@ -9157,6 +9259,41 @@ def service_lift_update(lift_id):
 
     flash("Lift details updated.", "success")
     return redirect(url_for("service_lift_edit", lift_id=lift.id))
+
+
+@app.route("/service/lifts/<int:lift_id>/notes", methods=["POST"])
+@login_required
+def service_lift_update_notes(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
+
+    lift.notes = clean_str(request.form.get("notes"))
+    lift.remarks = clean_str(request.form.get("remarks"))
+    preferred_date, error = parse_date_field(
+        request.form.get("preferred_service_date"), "Preferred service date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    preferred_time_raw = request.form.get("preferred_service_time")
+    preferred_time, error = parse_time_field(preferred_time_raw, "Preferred service time")
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    lift.preferred_service_date = preferred_date
+    lift.preferred_service_time = preferred_time
+    db.session.commit()
+
+    flash("Preferences updated.", "success")
+    return redirect(redirect_url)
 
 
 @app.route("/service/lifts/<int:lift_id>/comments", methods=["POST"])
@@ -9169,7 +9306,7 @@ def service_lift_add_comment(lift_id):
         flash("Lift not found.", "error")
         return redirect(url_for("service_lifts"))
 
-    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
+    redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
     body = (request.form.get("body") or "").strip()
     if not body:
         flash("Comment cannot be empty.", "error")
@@ -9197,7 +9334,7 @@ def service_lift_upload_file(lift_id):
         flash("Lift not found.", "error")
         return redirect(url_for("service_lifts"))
 
-    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
+    redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
 
     uploaded_file = request.files.get("attachment")
     if not uploaded_file or not uploaded_file.filename:
@@ -9287,20 +9424,62 @@ def service_parts_materials():
 def service_preventive_maintenance():
     _module_visibility_required("service")
     plan = SERVICE_PREVENTIVE_PLAN
+    preference_lifts = {
+        lift.lift_code: lift
+        for lift in Lift.query.filter(
+            or_(Lift.preferred_service_date.isnot(None), Lift.preferred_service_time.isnot(None))
+        ).all()
+    }
+
+    def preference_warning(lift_code, visit_date=None, visit_time=None):
+        lift_pref = preference_lifts.get(lift_code)
+        if not lift_pref:
+            return None
+
+        messages = []
+        if lift_pref.preferred_service_date:
+            if isinstance(visit_date, datetime.date):
+                if lift_pref.preferred_service_date != visit_date:
+                    messages.append(
+                        f"Prefers {lift_pref.preferred_service_date.strftime('%d %b %Y')}"
+                    )
+            else:
+                messages.append(
+                    f"Prefers {lift_pref.preferred_service_date.strftime('%d %b %Y')}"
+                )
+        if lift_pref.preferred_service_time:
+            if isinstance(visit_time, datetime.time):
+                if lift_pref.preferred_service_time != visit_time:
+                    messages.append(
+                        f"Prefers {lift_pref.preferred_service_time.strftime('%H:%M')}"
+                    )
+            else:
+                messages.append(
+                    f"Prefers {lift_pref.preferred_service_time.strftime('%H:%M')}"
+                )
+        if messages:
+            return " · ".join(messages)
+        return None
+
     upcoming = []
     for visit in plan.get("upcoming", []):
+        visit_date = visit.get("visit") if isinstance(visit.get("visit"), datetime.date) else None
+        visit_time = visit.get("time") if isinstance(visit.get("time"), datetime.time) else None
         upcoming.append(
             {
                 **visit,
-                "visit_display": visit.get("visit").strftime("%d %b %Y") if isinstance(visit.get("visit"), datetime.date) else "—",
+                "visit_display": visit_date.strftime("%d %b %Y") if visit_date else "—",
+                "preference_warning": preference_warning(visit.get("lift"), visit_date, visit_time),
             }
         )
     overdue = []
     for visit in plan.get("overdue", []):
+        due_date = visit.get("due") if isinstance(visit.get("due"), datetime.date) else None
         overdue.append(
             {
                 **visit,
-                "due_display": visit.get("due").strftime("%d %b %Y") if isinstance(visit.get("due"), datetime.date) else "—",
+                "due_display": due_date.strftime("%d %b %Y") if due_date else "—",
+                "preference_warning": preference_warning(visit.get("lift"), due_date, None),
             }
         )
     return render_template(
