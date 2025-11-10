@@ -36,8 +36,7 @@
             <th class="px-4 py-3 text-left">Route</th>
             <th class="px-4 py-3 text-left">City</th>
             <th class="px-4 py-3 text-left">Status</th>
-            <th class="px-4 py-3 text-left">Install date</th>
-            <th class="px-4 py-3 text-left">Last service</th>
+            <th class="px-4 py-3 text-left">AMC status</th>
             <th class="px-4 py-3 text-left">Next due</th>
             <th class="px-4 py-3 text-left">Actions</th>
           </tr>
@@ -60,8 +59,19 @@
               <td class="px-4 py-3">{{ lift.route or '—' }}</td>
               <td class="px-4 py-3">{{ lift.city or '—' }}</td>
               <td class="px-4 py-3">{{ lift.status or '—' }}</td>
-              <td class="px-4 py-3">{{ lift.install_date.strftime('%d %b %Y') if lift.install_date else '—' }}</td>
-              <td class="px-4 py-3">{{ lift.last_service_date.strftime('%d %b %Y') if lift.last_service_date else '—' }}</td>
+              <td class="px-4 py-3">
+                {% set amc_status = lift.amc_status or 'Not set' %}
+                {% set amc_status_lower = amc_status|lower %}
+                {% set amc_badge_classes = {
+                  'active': 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+                  'expired': 'border border-rose-500/40 bg-rose-500/10 text-rose-200',
+                  'inactive': 'border border-rose-500/40 bg-rose-500/10 text-rose-200',
+                  'none': 'border border-slate-700/70 bg-slate-800/70 text-slate-300',
+                  'not set': 'border border-slate-700/70 bg-slate-800/70 text-slate-300'
+                } %}
+                {% set badge_class = amc_badge_classes.get(amc_status_lower, 'border border-slate-700/70 bg-slate-800/70 text-slate-300') %}
+                <span class="inline-flex min-w-[6rem] justify-center rounded-lg px-2.5 py-1 text-xs font-semibold {{ badge_class }}">{{ amc_status }}</span>
+              </td>
               <td class="px-4 py-3">{{ lift.next_service_due.strftime('%d %b %Y') if lift.next_service_due else '—' }}</td>
               <td class="px-4 py-3">
                 <div class="flex flex-wrap gap-2">
@@ -72,7 +82,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="10" class="px-4 py-6 text-center text-sm text-slate-400">No lifts available yet. Use the <strong class="text-slate-200">Add lift</strong> button to register a lift.</td>
+              <td colspan="9" class="px-4 py-6 text-center text-sm text-slate-400">No lifts available yet. Use the <strong class="text-slate-200">Add lift</strong> button to register a lift.</td>
             </tr>
           {% endfor %}
         </tbody>
