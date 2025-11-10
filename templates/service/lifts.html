@@ -260,6 +260,16 @@
         <input type="date" name="amc_end" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC contract</span>
+        {% set selected_contract = request.form.get('amc_contract_id') or '' %}
+        <select name="amc_contract_id" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">No contract linked</option>
+          {% for contract in service_contracts %}
+            <option value="{{ contract.id }}" {% if selected_contract and selected_contract.lower() == contract.id.lower() %}selected{% endif %}>{{ contract.id }} · {{ contract.type }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">QR code URL</span>
         <input type="url" name="qr_code_url" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
@@ -284,6 +294,18 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
         <input type="date" name="preferred_service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service day</span>
+        {% set selected_day = request.form.get('preferred_service_day') or '' %}
+        <select name="preferred_service_day" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">No preference</option>
+          {% for value, label in service_day_options %}
+            {% if value %}
+              <option value="{{ value }}" {% if selected_day and selected_day.lower() == value %}selected{% endif %}>{{ label }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>

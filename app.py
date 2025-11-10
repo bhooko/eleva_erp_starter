@@ -169,6 +169,16 @@ def generate_next_lift_code():
     return _next_sequential_code(Lift, "lift_code", prefix="LFT", width=4)
 
 
+def get_service_contract_by_id(contract_id):
+    if not contract_id:
+        return None
+    for contract in SERVICE_CONTRACTS:
+        contract_code = str(contract.get("id") or "").strip()
+        if contract_code and contract_code.lower() == str(contract_id).strip().lower():
+            return contract
+    return None
+
+
 # ---------------------- QC Profile choices (visible in UI) ----------------------
 STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
@@ -198,6 +208,21 @@ AMC_STATUS_OPTIONS = ["Active", "Expired", "Renewal Pending", "Call Basis"]
 LIFT_STATUS_OPTIONS = ["On", "Off", "Protected", "Decommissioned"]
 SERVICE_BRANCH_OPTIONS = ["Goa", "Mumbai"]
 SERVICE_BRANCH_OPTION_SET = {option.lower() for option in SERVICE_BRANCH_OPTIONS}
+
+SERVICE_PREFERRED_DAY_OPTIONS = [
+    ("", "No preference"),
+    ("any", "Any day"),
+    ("monday", "Monday"),
+    ("tuesday", "Tuesday"),
+    ("wednesday", "Wednesday"),
+    ("thursday", "Thursday"),
+    ("friday", "Friday"),
+    ("saturday", "Saturday"),
+    ("sunday", "Sunday"),
+]
+SERVICE_PREFERRED_DAY_LABELS = {
+    key: label for key, label in SERVICE_PREFERRED_DAY_OPTIONS if key
+}
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
 TASK_MILESTONES = [
     "Order Milestone",
@@ -2594,6 +2619,26 @@ def build_lift_payload(lift):
     amc_config = insight_config.get("amc", {}) or {}
     amc_start = amc_config.get("start") or lift.amc_start
     amc_end = amc_config.get("end") or lift.amc_end
+    linked_contract = get_service_contract_by_id(lift.amc_contract_id)
+
+    preferred_day_key = (lift.preferred_service_day or "").strip().lower()
+    preferred_day_display = SERVICE_PREFERRED_DAY_LABELS.get(preferred_day_key)
+    preferred_date_display = format_service_date(lift.preferred_service_date)
+    preferred_time_display = (
+        lift.preferred_service_time.strftime("%H:%M")
+        if isinstance(lift.preferred_service_time, datetime.time)
+        else "—"
+    )
+    preference_bits = []
+    if preferred_day_display:
+        preference_bits.append(preferred_day_display)
+    if lift.preferred_service_date:
+        preference_bits.append(lift.preferred_service_date.strftime("%d %b %Y"))
+    elif lift.preferred_service_time and not preferred_day_display:
+        preference_bits.append("Any date")
+    if lift.preferred_service_time:
+        preference_bits.append(lift.preferred_service_time.strftime("%H:%M"))
+    preferred_summary = " · ".join(preference_bits)
 
     amc_payload = {
         "status": (lift.amc_status or amc_config.get("status") or "—"),
@@ -2623,6 +2668,19 @@ def build_lift_payload(lift):
             for item in amc_config.get("attachments", [])
         ],
     }
+
+    if linked_contract and linked_contract.get("id"):
+        amc_payload["contract"] = {
+            "id": linked_contract.get("id"),
+            "type": linked_contract.get("type"),
+            "coverage": linked_contract.get("coverage"),
+            "url": url_for(
+                "service_contracts",
+                _anchor=f"contract-{linked_contract.get('id')}"
+            ),
+        }
+    else:
+        amc_payload["contract"] = None
 
     uploads_config = insight_config.get("uploads", {}) or {}
     documents = [
@@ -2752,6 +2810,10 @@ def build_lift_payload(lift):
         "lifetime_metrics": lifetime_metrics,
         "remarks": lift.remarks or "—",
         "notes": lift.notes or "—",
+        "preferred_service_day_display": preferred_day_display or "—",
+        "preferred_service_date_display": preferred_date_display,
+        "preferred_service_time_display": preferred_time_display,
+        "preferred_service_summary": preferred_summary,
         "location_display": ", ".join(
             [part for part in [lift.city, lift.state, lift.pincode, lift.country] if part]
         )
@@ -3915,12 +3977,14 @@ class Lift(db.Model):
     amc_status = db.Column(db.String(40), nullable=True)
     amc_start = db.Column(db.Date, nullable=True)
     amc_end = db.Column(db.Date, nullable=True)
+    amc_contract_id = db.Column(db.String(60), nullable=True)
     qr_code_url = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(40), nullable=True)
     last_service_date = db.Column(db.Date, nullable=True)
     next_service_due = db.Column(db.Date, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
+    preferred_service_day = db.Column(db.String(20), nullable=True)
     preferred_service_date = db.Column(db.Date, nullable=True)
     preferred_service_time = db.Column(db.Time, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -4357,6 +4421,14 @@ def ensure_lift_columns():
     if "preferred_service_time" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_time TEXT;")
         added_cols.append("preferred_service_time")
+
+    if "preferred_service_day" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_day TEXT;")
+        added_cols.append("preferred_service_day")
+
+    if "amc_contract_id" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN amc_contract_id TEXT;")
+        added_cols.append("amc_contract_id")
 
     conn.commit()
     conn.close()
@@ -8926,6 +8998,8 @@ def service_lifts():
         search_query=search_query,
         next_lift_code=next_lift_code,
         next_customer_code=next_customer_code,
+        service_contracts=SERVICE_CONTRACTS,
+        service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
     )
 
 
@@ -9016,6 +9090,24 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
+    preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
+    preferred_day = None
+    if preferred_day_raw:
+        day_key = preferred_day_raw.lower()
+        if day_key not in SERVICE_PREFERRED_DAY_LABELS:
+            flash("Select a valid preferred service day.", "error")
+            return redirect(redirect_url)
+        preferred_day = day_key
+
+    contract_input = clean_str(request.form.get("amc_contract_id"))
+    amc_contract_id = None
+    if contract_input:
+        contract_record = get_service_contract_by_id(contract_input)
+        if not contract_record:
+            flash("Select a valid AMC contract.", "error")
+            return redirect(redirect_url)
+        amc_contract_id = contract_record.get("id")
+
     lift = Lift(
         lift_code=lift_code,
         external_lift_id=clean_str(request.form.get("external_lift_id")),
@@ -9044,12 +9136,14 @@ def service_lifts_create():
         amc_status=clean_str(request.form.get("amc_status")),
         amc_start=amc_start,
         amc_end=amc_end,
+        amc_contract_id=amc_contract_id,
         qr_code_url=clean_str(request.form.get("qr_code_url")),
         status=clean_str(request.form.get("status")),
         last_service_date=last_service_date,
         next_service_due=next_service_due,
         notes=clean_str(request.form.get("notes")),
         remarks=clean_str(request.form.get("remarks")),
+        preferred_service_day=preferred_day,
         preferred_service_date=preferred_date,
         preferred_service_time=preferred_time,
         last_updated_by=current_user.id if current_user.is_authenticated else None,
@@ -9126,6 +9220,8 @@ def service_lift_edit(lift_id):
         service_routes=service_routes,
         attachments=attachments,
         comments=comments,
+        service_contracts=SERVICE_CONTRACTS,
+        service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
     )
 
 
@@ -9219,6 +9315,24 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
+    preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
+    preferred_day = None
+    if preferred_day_raw:
+        day_key = preferred_day_raw.lower()
+        if day_key not in SERVICE_PREFERRED_DAY_LABELS:
+            flash("Select a valid preferred service day.", "error")
+            return redirect(redirect_url)
+        preferred_day = day_key
+
+    contract_input = clean_str(request.form.get("amc_contract_id"))
+    amc_contract_id = None
+    if contract_input:
+        contract_record = get_service_contract_by_id(contract_input)
+        if not contract_record:
+            flash("Select a valid AMC contract.", "error")
+            return redirect(redirect_url)
+        amc_contract_id = contract_record.get("id")
+
     lift.external_lift_id = clean_str(request.form.get("external_lift_id"))
     lift.site_address_line1 = clean_str(request.form.get("site_address_line1"))
     lift.site_address_line2 = clean_str(request.form.get("site_address_line2"))
@@ -9244,12 +9358,14 @@ def service_lift_update(lift_id):
     lift.amc_status = clean_str(request.form.get("amc_status"))
     lift.amc_start = amc_start
     lift.amc_end = amc_end
+    lift.amc_contract_id = amc_contract_id
     lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
     lift.status = clean_str(request.form.get("status"))
     lift.last_service_date = last_service_date
     lift.next_service_due = next_service_due
     lift.notes = clean_str(request.form.get("notes"))
     lift.remarks = clean_str(request.form.get("remarks"))
+    lift.preferred_service_day = preferred_day
     lift.preferred_service_date = preferred_date
     lift.preferred_service_time = preferred_time
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
@@ -9287,6 +9403,17 @@ def service_lift_update_notes(lift_id):
     if error:
         flash(error, "error")
         return redirect(redirect_url)
+
+    if "preferred_service_day" in request.form:
+        preferred_day_raw = clean_str(request.form.get("preferred_service_day"))
+        if preferred_day_raw:
+            day_key = preferred_day_raw.lower()
+            if day_key not in SERVICE_PREFERRED_DAY_LABELS:
+                flash("Select a valid preferred service day.", "error")
+                return redirect(redirect_url)
+            lift.preferred_service_day = day_key
+        else:
+            lift.preferred_service_day = None
 
     lift.preferred_service_date = preferred_date
     lift.preferred_service_time = preferred_time
@@ -9427,7 +9554,11 @@ def service_preventive_maintenance():
     preference_lifts = {
         lift.lift_code: lift
         for lift in Lift.query.filter(
-            or_(Lift.preferred_service_date.isnot(None), Lift.preferred_service_time.isnot(None))
+            or_(
+                Lift.preferred_service_date.isnot(None),
+                Lift.preferred_service_time.isnot(None),
+                Lift.preferred_service_day.isnot(None),
+            )
         ).all()
     }
 
@@ -9457,6 +9588,15 @@ def service_preventive_maintenance():
                 messages.append(
                     f"Prefers {lift_pref.preferred_service_time.strftime('%H:%M')}"
                 )
+        day_key = (lift_pref.preferred_service_day or "").strip().lower()
+        if day_key and day_key in SERVICE_PREFERRED_DAY_LABELS:
+            if day_key != "any":
+                day_label = SERVICE_PREFERRED_DAY_LABELS.get(day_key)
+                if isinstance(visit_date, datetime.date):
+                    if visit_date.strftime("%A").lower() != day_key:
+                        messages.append(f"Prefers {day_label}")
+                else:
+                    messages.append(f"Prefers {day_label}")
         if messages:
             return " · ".join(messages)
         return None
