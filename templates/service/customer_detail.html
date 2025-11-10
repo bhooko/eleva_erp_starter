@@ -19,7 +19,7 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold text-theme-primary">Customer details</h2>
-          <p class="text-xs text-slate-400">Update routing, billing and contact information.</p>
+          <p class="text-xs text-slate-400">Update routing, category and contact information.</p>
         </div>
         <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save changes</button>
       </div>
@@ -29,7 +29,7 @@
           <input name="customer_code" value="{{ customer.customer_code }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
         </label>
         <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer name</span>
           <input name="company_name" value="{{ customer.company_name }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
         </label>
         <label class="space-y-1">
@@ -50,11 +50,25 @@
         </label>
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
-          <input name="route" value="{{ customer.route or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+          <select name="route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+            <option value="">Select route</option>
+            {% for route in service_routes %}
+              {% set option_value = route.state %}
+              <option value="{{ option_value }}" {% if customer.route and customer.route|lower == option_value|lower %}selected{% endif %}>{{ route.display_name }}</option>
+            {% endfor %}
+          </select>
+          {% if not service_routes %}
+            <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+          {% endif %}
         </label>
         <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Sector</span>
-          <input name="sector" value="{{ customer.sector or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Category</span>
+          <select name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+            <option value="">Select category</option>
+            {% for option in ["Individual", "Company", "Proprietorship"] %}
+              <option value="{{ option }}" {% if customer.sector and customer.sector|lower == option|lower %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
         </label>
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
@@ -63,32 +77,6 @@
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">GST number</span>
           <input name="gst_no" value="{{ customer.gst_no or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-      </div>
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="space-y-1 md:col-span-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Billing address line 1</span>
-          <input name="billing_address_line1" value="{{ customer.billing_address_line1 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-        <label class="space-y-1 md:col-span-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Billing address line 2</span>
-          <input name="billing_address_line2" value="{{ customer.billing_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
-          <input name="city" value="{{ customer.city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
-          <input name="state" value="{{ customer.state or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
-          <input name="pincode" value="{{ customer.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
-          <input name="country" value="{{ customer.country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
         </label>
       </div>
       <label class="space-y-1">
@@ -126,6 +114,10 @@
           <dd class="font-semibold text-slate-200">{{ customer.route or '—' }}</dd>
         </div>
         <div class="flex justify-between">
+          <dt class="text-slate-400">Category</dt>
+          <dd class="font-semibold text-slate-200">{{ customer.sector or '—' }}</dd>
+        </div>
+        <div class="flex justify-between">
           <dt class="text-slate-400">Branch</dt>
           <dd class="font-semibold text-slate-200">{{ customer.branch or '—' }}</dd>
         </div>
@@ -144,11 +136,61 @@
           </dd>
         </div>
       </dl>
-      <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 p-4 text-xs text-slate-300">
-        <h3 class="text-sm font-semibold text-slate-100">Billing address</h3>
-        <p class="mt-1 whitespace-pre-line">{{ (customer.billing_address_line1 or '') ~ '\n' ~ (customer.billing_address_line2 or '') }}</p>
-        <p>{{ customer.city or '' }}{{ ', ' if customer.city and customer.state }}{{ customer.state or '' }} {{ customer.pincode or '' }}</p>
-        <p>{{ customer.country or '' }}</p>
+      {% set billing_has_address = customer.billing_address_line1 or customer.billing_address_line2 or customer.city or customer.state or customer.pincode or customer.country %}
+      <div class="relative rounded-xl border border-slate-800/80 bg-slate-900/80 p-4 text-xs text-slate-300">
+        <div class="flex items-start justify-between gap-2">
+          <h3 class="text-sm font-semibold text-slate-100">Billing address</h3>
+          <button type="button" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400/50 hover:text-emerald-200" data-address-edit="billing" aria-label="Edit billing address">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487a2.25 2.25 0 113.182 3.182L7.125 20.588a4.5 4.5 0 01-1.897 1.13l-2.005.572a.75.75 0 01-.927-.928l.572-2.004a4.5 4.5 0 011.13-1.898L16.862 4.487z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 7.125L16.875 4.5" />
+            </svg>
+          </button>
+        </div>
+        {% if billing_has_address %}
+          {% if customer.billing_address_line1 %}
+            <p class="mt-2 text-slate-200">{{ customer.billing_address_line1 }}</p>
+          {% endif %}
+          {% if customer.billing_address_line2 %}
+            <p class="text-slate-200">{{ customer.billing_address_line2 }}</p>
+          {% endif %}
+          {% if customer.city or customer.state or customer.pincode %}
+            <p class="text-slate-200">{{ customer.city or '' }}{% if customer.city and customer.state %}, {% endif %}{{ customer.state or '' }}{% if customer.pincode %} {{ customer.pincode }}{% endif %}</p>
+          {% endif %}
+          {% if customer.country %}
+            <p class="text-slate-200">{{ customer.country }}</p>
+          {% endif %}
+        {% else %}
+          <p class="mt-2 text-slate-500">No billing address added yet.</p>
+        {% endif %}
+      </div>
+      {% set office_has_address = customer.office_address_line1 or customer.office_address_line2 or customer.office_city or customer.office_state or customer.office_pincode or customer.office_country %}
+      <div class="relative rounded-xl border border-slate-800/80 bg-slate-900/80 p-4 text-xs text-slate-300">
+        <div class="flex items-start justify-between gap-2">
+          <h3 class="text-sm font-semibold text-slate-100">Office address</h3>
+          <button type="button" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400/50 hover:text-emerald-200" data-address-edit="office" aria-label="Edit office address">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487a2.25 2.25 0 113.182 3.182L7.125 20.588a4.5 4.5 0 01-1.897 1.13l-2.005.572a.75.75 0 01-.927-.928l.572-2.004a4.5 4.5 0 011.13-1.898L16.862 4.487z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 7.125L16.875 4.5" />
+            </svg>
+          </button>
+        </div>
+        {% if office_has_address %}
+          {% if customer.office_address_line1 %}
+            <p class="mt-2 text-slate-200">{{ customer.office_address_line1 }}</p>
+          {% endif %}
+          {% if customer.office_address_line2 %}
+            <p class="text-slate-200">{{ customer.office_address_line2 }}</p>
+          {% endif %}
+          {% if customer.office_city or customer.office_state or customer.office_pincode %}
+            <p class="text-slate-200">{{ customer.office_city or '' }}{% if customer.office_city and customer.office_state %}, {% endif %}{{ customer.office_state or '' }}{% if customer.office_pincode %} {{ customer.office_pincode }}{% endif %}</p>
+          {% endif %}
+          {% if customer.office_country %}
+            <p class="text-slate-200">{{ customer.office_country }}</p>
+          {% endif %}
+        {% else %}
+          <p class="mt-2 text-slate-500">No office address added yet.</p>
+        {% endif %}
       </div>
       <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 p-4 text-xs text-slate-300">
         <h3 class="text-sm font-semibold text-slate-100">Notes</h3>
@@ -263,6 +305,147 @@
     <div data-lift-modal-body class="space-y-6"></div>
   </div>
 </dialog>
+
+<dialog id="billingAddressModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_customer_update_address', customer_id=customer.id) }}" class="w-full max-w-xl space-y-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit billing address</h2>
+        <p class="text-xs text-slate-400">Update the billing location used for invoices and statements.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="address_type" value="billing" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Address line 1</span>
+        <input name="billing_address_line1" value="{{ customer.billing_address_line1 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Address line 2</span>
+        <input name="billing_address_line2" value="{{ customer.billing_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
+        <input name="city" value="{{ customer.city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
+        <input name="state" value="{{ customer.state or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
+        <input name="pincode" value="{{ customer.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
+        <input name="country" value="{{ customer.country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-2">
+      <button type="button" data-modal-close class="rounded-xl border border-slate-700/70 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Cancel</button>
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save billing address</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="officeAddressModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_customer_update_address', customer_id=customer.id) }}" class="w-full max-w-xl space-y-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit office address</h2>
+        <p class="text-xs text-slate-400">Capture the customer's registered or head office details.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="address_type" value="office" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Address line 1</span>
+        <input name="office_address_line1" value="{{ customer.office_address_line1 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Address line 2</span>
+        <input name="office_address_line2" value="{{ customer.office_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
+        <input name="office_city" value="{{ customer.office_city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
+        <input name="office_state" value="{{ customer.office_state or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
+        <input name="office_pincode" value="{{ customer.office_pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
+        <input name="office_country" value="{{ customer.office_country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-2">
+      <button type="button" data-modal-close class="rounded-xl border border-slate-700/70 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Cancel</button>
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save office address</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  (function() {
+    function setupDialog(triggerSelector, modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal) {
+        return;
+      }
+
+      function openModal() {
+        if (typeof modal.showModal === 'function') {
+          modal.showModal();
+        } else {
+          modal.classList.add('open');
+        }
+      }
+
+      function closeModal() {
+        if (typeof modal.close === 'function') {
+          modal.close();
+        } else {
+          modal.classList.remove('open');
+        }
+      }
+
+      document.querySelectorAll(triggerSelector).forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          openModal();
+        });
+      });
+
+      modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeModal();
+        });
+      });
+
+      modal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeModal();
+      });
+
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+          closeModal();
+        }
+      });
+    }
+
+    setupDialog('[data-address-edit="billing"]', 'billingAddressModal');
+    setupDialog('[data-address-edit="office"]', 'officeAddressModal');
+  })();
+</script>
 
 <script>
   (function() {
