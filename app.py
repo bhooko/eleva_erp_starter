@@ -8505,7 +8505,6 @@ def service_customers():
         )
 
     customers = query.order_by(func.lower(Customer.company_name)).all()
-    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
     lift_payload_map = {}
     for customer in customers:
         open_lifts = [lift for lift in customer.lifts if is_lift_open(lift)]
@@ -8517,7 +8516,6 @@ def service_customers():
         customers=customers,
         search_query=search_query,
         lift_payload_map=lift_payload_map,
-        service_routes=service_routes,
     )
 
 
@@ -8530,7 +8528,6 @@ def service_customers_create():
 
     customer_code = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
-    route_value = clean_str(request.form.get("route"))
     category_value = clean_str(request.form.get("category"))
 
     if not customer_code or not company_name:
@@ -8538,12 +8535,6 @@ def service_customers_create():
         return redirect(redirect_url)
 
     customer_code = customer_code.upper()
-
-    if route_value:
-        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
-        if not valid_route:
-            flash("Select a valid service route from the dropdown.", "error")
-            return redirect(redirect_url)
 
     existing = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
     if existing:
@@ -8564,7 +8555,6 @@ def service_customers_create():
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
         country=clean_str(request.form.get("country")),
-        route=route_value,
         sector=category_value,
         branch=clean_str(request.form.get("branch")),
         notes=clean_str(request.form.get("notes")),
@@ -8603,14 +8593,11 @@ def service_customer_detail(customer_id):
     customer.open_lifts = [lift for lift in lifts if is_lift_open(lift)]
     lift_payload_map = {str(lift.id): build_lift_payload(lift) for lift in lifts}
 
-    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
-
     return render_template(
         "service/customer_detail.html",
         customer=customer,
         lifts=lifts,
         lift_payload_map=lift_payload_map,
-        service_routes=service_routes,
     )
 
 
@@ -8626,7 +8613,6 @@ def service_customer_update(customer_id):
 
     customer_code_raw = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
-    route_value = clean_str(request.form.get("route"))
     category_value = clean_str(request.form.get("category"))
 
     if not customer_code_raw or not company_name:
@@ -8649,19 +8635,12 @@ def service_customer_update(customer_id):
 
         customer.customer_code = new_code
 
-    if route_value:
-        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
-        if not valid_route:
-            flash("Select a valid service route from the dropdown.", "error")
-            return redirect(url_for("service_customer_detail", customer_id=customer.id))
-
     customer.company_name = company_name
     customer.contact_person = clean_str(request.form.get("contact_person"))
     customer.phone = clean_str(request.form.get("phone"))
     customer.mobile = clean_str(request.form.get("mobile"))
     customer.email = clean_str(request.form.get("email"))
     customer.gst_no = clean_str(request.form.get("gst_no"))
-    customer.route = route_value
     customer.sector = category_value
     customer.branch = clean_str(request.form.get("branch"))
     customer.notes = clean_str(request.form.get("notes"))
@@ -8739,12 +8718,14 @@ def service_lifts():
 
     lifts = query.order_by(func.lower(Lift.lift_code)).all()
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
     lift_payloads = [build_lift_payload(lift) for lift in lifts]
 
     return render_template(
         "service/lifts.html",
         lifts=lifts,
         customers=customers,
+        service_routes=service_routes,
         search_query=search_query,
         lift_payloads=lift_payloads,
     )
@@ -8778,6 +8759,13 @@ def service_lifts_create():
             return redirect(redirect_url)
     else:
         customer = None
+
+    route_value = clean_str(request.form.get("route"))
+    if route_value:
+        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
+        if not valid_route:
+            flash("Select a valid service route from the dropdown.", "error")
+            return redirect(redirect_url)
 
     capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
     if error:
@@ -8834,7 +8822,7 @@ def service_lifts_create():
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
         country=clean_str(request.form.get("country")),
-        route=clean_str(request.form.get("route")),
+        route=route_value,
         building_floors=clean_str(request.form.get("building_floors")),
         lift_type=clean_str(request.form.get("lift_type")),
         capacity_persons=capacity_persons,
@@ -8880,6 +8868,7 @@ def service_lift_edit(lift_id):
         return redirect(url_for("service_lifts"))
 
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
     attachments = (
         LiftFile.query.filter_by(lift_id=lift.id)
         .order_by(LiftFile.created_at.desc())
@@ -8894,6 +8883,7 @@ def service_lift_edit(lift_id):
         "service/lift_edit.html",
         lift=lift,
         customers=customers,
+        service_routes=service_routes,
         attachments=attachments,
         comments=comments,
     )
@@ -8937,6 +8927,13 @@ def service_lift_update(lift_id):
         lift.customer_code = new_customer_code
     else:
         lift.customer_code = None
+
+    route_value = clean_str(request.form.get("route"))
+    if route_value:
+        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
+        if not valid_route:
+            flash("Select a valid service route from the dropdown.", "error")
+            return redirect(redirect_url)
 
     capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
     if error:
@@ -8990,7 +8987,7 @@ def service_lift_update(lift_id):
     lift.state = clean_str(request.form.get("state"))
     lift.pincode = clean_str(request.form.get("pincode"))
     lift.country = clean_str(request.form.get("country"))
-    lift.route = clean_str(request.form.get("route"))
+    lift.route = route_value
     lift.building_floors = clean_str(request.form.get("building_floors"))
     lift.lift_type = clean_str(request.form.get("lift_type"))
     lift.capacity_persons = capacity_persons
