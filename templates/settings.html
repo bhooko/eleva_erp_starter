@@ -420,11 +420,9 @@
           <div class="space-y-6">
             {% for field_key in managed_dropdown_fields %}
               {% set definition = dropdown_meta.get(field_key) %}
-              {% if not definition %}
-                {% continue %}
-              {% endif %}
-              {% set options = dropdown_options.get(field_key, []) %}
-              <section class="space-y-4 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5">
+              {% if definition %}
+                {% set options = dropdown_options.get(field_key, []) %}
+                <section class="space-y-4 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5">
                 <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h5 class="text-sm font-semibold text-slate-100">{{ definition.label }}</h5>
@@ -498,7 +496,8 @@
                     {% endfor %}
                   </ul>
                 {% endif %}
-              </section>
+                </section>
+              {% endif %}
             {% endfor %}
           </div>
         </section>

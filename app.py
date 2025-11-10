@@ -3067,6 +3067,7 @@ def build_lift_payload(lift):
             [part for part in [lift.city, lift.state, lift.pincode, lift.country] if part]
         )
         or "—",
+        "geo_location": lift.geo_location or "—",
         "comments": [
             {
                 "body": comment.body,
@@ -4207,6 +4208,7 @@ class Lift(db.Model):
     city = db.Column(db.String(120), nullable=True)
     state = db.Column(db.String(120), nullable=True)
     pincode = db.Column(db.String(20), nullable=True)
+    geo_location = db.Column(db.String(255), nullable=True)
     country = db.Column(db.String(120), nullable=True)
     building_villa_number = db.Column(db.String(120), nullable=True)
     route = db.Column(db.String(20), nullable=True)
@@ -4749,6 +4751,10 @@ def ensure_lift_columns():
     if "building_villa_number" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN building_villa_number TEXT;")
         added_cols.append("building_villa_number")
+
+    if "geo_location" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN geo_location TEXT;")
+        added_cols.append("geo_location")
 
     if "amc_duration_key" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN amc_duration_key TEXT;")
@@ -9589,6 +9595,7 @@ def service_lifts_create():
         city=clean_str(request.form.get("city")),
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
+        geo_location=clean_str(request.form.get("geo_location")),
         country="India",
         building_villa_number=clean_str(request.form.get("building_villa_number")),
         route=route_value,
@@ -9804,6 +9811,7 @@ def service_lift_update(lift_id):
     lift.city = clean_str(request.form.get("city"))
     lift.state = clean_str(request.form.get("state"))
     lift.pincode = clean_str(request.form.get("pincode"))
+    lift.geo_location = clean_str(request.form.get("geo_location"))
     lift.country = "India"
     lift.building_villa_number = clean_str(request.form.get("building_villa_number"))
     lift.route = route_value
