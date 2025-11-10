@@ -58,24 +58,12 @@
         <dd class="text-sm text-slate-100">{{ payload.lift_type }}</dd>
       </div>
       <div class="sm:col-span-2">
-        <dt class="text-xs uppercase tracking-wide text-slate-400">Site Name &amp; Address</dt>
-        <dd class="space-y-1 text-sm text-slate-100">
-          {% for line in payload.site_lines %}
-            <div>{{ line }}</div>
-          {% else %}
-            <div>—</div>
-          {% endfor %}
-        </dd>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Site summary</dt>
+        <dd class="text-sm text-slate-100">{{ payload.site_summary }}</dd>
       </div>
       <div class="sm:col-span-2">
-        <dt class="text-xs uppercase tracking-wide text-slate-400">Customer / Builder Name &amp; Contact</dt>
-        <dd class="space-y-1 text-sm text-slate-100">
-          {% for line in payload.customer_lines %}
-            <div>{{ line }}</div>
-          {% else %}
-            <div>—</div>
-          {% endfor %}
-        </dd>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Customer &amp; contact</dt>
+        <dd class="text-sm text-slate-100">{{ payload.customer_summary }}</dd>
       </div>
       <div>
         <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (Persons / Kg)</dt>
@@ -105,6 +93,10 @@
         <dt class="text-xs uppercase tracking-wide text-slate-400">Drive Type</dt>
         <dd class="text-sm text-slate-100">{{ payload.drive_type }}</dd>
       </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Location</dt>
+        <dd class="text-sm text-slate-100">{{ payload.location_display }}</dd>
+      </div>
       <div class="sm:col-span-2">
         <dt class="text-xs uppercase tracking-wide text-slate-400">Machine Details</dt>
         <dd class="text-sm text-slate-100">{{ payload.machine_make }} · {{ payload.machine_model }} · Serial {{ payload.machine_serial }}</dd>
@@ -118,6 +110,22 @@
         <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
       </div>
     </dl>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Remarks &amp; Notes</h3>
+    </div>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">Service remarks</h4>
+        <p class="text-sm text-slate-300 whitespace-pre-line">{{ payload.remarks if payload.remarks != '—' else 'No remarks added yet.' }}</p>
+      </div>
+      <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <h4 class="text-sm font-semibold text-slate-100">General notes</h4>
+        <p class="text-sm text-slate-300 whitespace-pre-line">{{ payload.notes if payload.notes != '—' else 'No notes captured.' }}</p>
+      </div>
+    </div>
   </section>
 
   <section class="space-y-4">
@@ -256,6 +264,14 @@
                 <div class="text-slate-400">{{ document.description }}</div>
               {% endif %}
               <div class="text-slate-500">Updated {{ document.updated_display }}</div>
+              {% if document.size_display or document.uploaded_by %}
+                <div class="text-slate-500">
+                  {% if document.size_display %}{{ document.size_display }}{% endif %}
+                  {% if document.uploaded_by %}
+                    {% if document.size_display %} · {% endif %}Uploaded by {{ document.uploaded_by }}
+                  {% endif %}
+                </div>
+              {% endif %}
             </li>
           {% else %}
             <li>No documents uploaded yet.</li>
@@ -275,6 +291,14 @@
                 <div class="text-slate-400">{{ attachment.description }}</div>
               {% endif %}
               <div class="text-slate-500">Updated {{ attachment.updated_display }}</div>
+              {% if attachment.size_display or attachment.uploaded_by %}
+                <div class="text-slate-500">
+                  {% if attachment.size_display %}{{ attachment.size_display }}{% endif %}
+                  {% if attachment.uploaded_by %}
+                    {% if attachment.size_display %} · {% endif %}Uploaded by {{ attachment.uploaded_by }}
+                  {% endif %}
+                </div>
+              {% endif %}
             </li>
           {% else %}
             <li>No additional uploads available.</li>
@@ -303,6 +327,25 @@
         </li>
       {% else %}
         <li class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">No activity has been recorded for this lift yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-theme-primary">Comments</h3>
+    </div>
+    <ul class="space-y-3">
+      {% for comment in payload.comments %}
+        <li class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span class="text-sm font-semibold text-slate-100">{{ comment.author }}</span>
+            <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
+          </div>
+          <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ comment.body }}</p>
+        </li>
+      {% else %}
+        <li class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">No comments recorded yet.</li>
       {% endfor %}
     </ul>
   </section>

@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, subqueryload
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -2569,6 +2569,47 @@ def build_lift_payload(lift):
                 }
             )
 
+    stored_documents = []
+    stored_other_uploads = []
+    sorted_attachments = sorted(
+        lift.attachments,
+        key=lambda record: record.created_at or datetime.datetime.min,
+        reverse=True,
+    )
+    for record in sorted_attachments:
+        entry = {
+            "label": record.display_label,
+            "filename": record.original_filename,
+            "description": record.description,
+            "updated_display": record.uploaded_display,
+            "url": url_for("static", filename=record.stored_path) if record.stored_path else "#",
+            "uploaded_by": record.uploaded_by.display_name if record.uploaded_by else None,
+            "size_display": record.display_size,
+        }
+        category = (record.category or "other").strip().lower()
+        if category == "document":
+            stored_documents.append(entry)
+        else:
+            stored_other_uploads.append(entry)
+
+    def dedupe_uploads(items):
+        seen = set()
+        unique = []
+        for item in items:
+            key = (
+                (item.get("label") or "").strip().lower(),
+                (item.get("filename") or "").strip().lower(),
+                item.get("url") or "",
+            )
+            if key in seen:
+                continue
+            unique.append(item)
+            seen.add(key)
+        return unique
+
+    documents = dedupe_uploads(stored_documents + documents)
+    additional_uploads = dedupe_uploads(stored_other_uploads + additional_uploads)
+
     breakdowns = [
         {
             "issue": item.get("issue", "—"),
@@ -2594,6 +2635,12 @@ def build_lift_payload(lift):
         for item in insight_config.get("timeline", [])
     ]
 
+    sorted_comments = sorted(
+        lift.comments,
+        key=lambda record: record.created_at or datetime.datetime.min,
+        reverse=True,
+    )
+
     payload = {
         "id": lift.id,
         "lift_code": lift.lift_code,
@@ -2601,6 +2648,8 @@ def build_lift_payload(lift):
         "status": lift.status or "—",
         "site_lines": site_lines or ["—"],
         "customer_lines": customer_lines or ["—"],
+        "site_summary": " · ".join(site_lines) if site_lines else "—",
+        "customer_summary": " · ".join(customer_lines) if customer_lines else "—",
         "lift_type": lift.lift_type or "—",
         "drive_type": insight_config.get("drive_type") or "—",
         "controller_type": insight_config.get("controller_type") or "—",
@@ -2621,6 +2670,20 @@ def build_lift_payload(lift):
         "breakdowns": breakdowns,
         "timeline": timeline_entries,
         "lifetime_metrics": lifetime_metrics,
+        "remarks": lift.remarks or "—",
+        "notes": lift.notes or "—",
+        "location_display": ", ".join(
+            [part for part in [lift.city, lift.state, lift.pincode, lift.country] if part]
+        )
+        or "—",
+        "comments": [
+            {
+                "body": comment.body,
+                "author": comment.author_name,
+                "created_display": comment.created_display,
+            }
+            for comment in sorted_comments
+        ],
     }
 
     return payload
@@ -3736,6 +3799,7 @@ class Lift(db.Model):
     last_service_date = db.Column(db.Date, nullable=True)
     next_service_due = db.Column(db.Date, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -3751,6 +3815,16 @@ class Lift(db.Model):
         back_populates="lifts",
         foreign_keys=[customer_code],
     )
+    attachments = db.relationship(
+        "LiftFile",
+        back_populates="lift",
+        cascade="all, delete-orphan",
+    )
+    comments = db.relationship(
+        "LiftComment",
+        back_populates="lift",
+        cascade="all, delete-orphan",
+    )
 
     def set_capacity_display(self):
         if self.capacity_persons and self.capacity_kg:
@@ -3761,6 +3835,65 @@ class Lift(db.Model):
             self.capacity_display = f"{self.capacity_kg} kg"
         else:
             self.capacity_display = None
+
+
+class LiftFile(db.Model):
+    __tablename__ = "lift_file"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=False, index=True)
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    label = db.Column(db.String(150), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    category = db.Column(db.String(20), nullable=True, default="other")
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_path = db.Column(db.String(400), nullable=False)
+    content_type = db.Column(db.String(120), nullable=True)
+    file_size = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    lift = db.relationship("Lift", back_populates="attachments")
+    uploaded_by = db.relationship("User")
+
+    @property
+    def display_label(self):
+        return self.label or self.original_filename
+
+    @property
+    def display_size(self):
+        return format_file_size(self.file_size or 0)
+
+    @property
+    def uploaded_display(self):
+        if not self.created_at:
+            return "—"
+        return self.created_at.strftime("%d %b %Y, %I:%M %p")
+
+
+class LiftComment(db.Model):
+    __tablename__ = "lift_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=False, index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    lift = db.relationship("Lift", back_populates="comments")
+    author = db.relationship("User")
+
+    @property
+    def author_name(self):
+        if self.author:
+            return self.author.display_name
+        return "System"
+
+    @property
+    def created_display(self):
+        if not self.created_at:
+            return "—"
+        return self.created_at.strftime("%d %b %Y, %I:%M %p")
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -4072,6 +4205,29 @@ def ensure_qc_columns():
         print("✔️ project OK")
 
 
+def ensure_lift_columns():
+    db_path = os.path.join("instance", "eleva.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(lift)")
+    lift_cols = [row[1] for row in cur.fetchall()]
+    added_cols = []
+
+    if "remarks" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN remarks TEXT;")
+        added_cols.append("remarks")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in lift: {', '.join(added_cols)}")
+    else:
+        print("✔️ lift OK")
+
+
 def ensure_tables():
     """Ensure all known tables exist. Creates them if missing."""
     created_tables = []
@@ -4103,6 +4259,8 @@ def ensure_tables():
         SalesOpportunityItem.__table__,
         Customer.__table__,
         Lift.__table__,
+        LiftFile.__table__,
+        LiftComment.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -4121,6 +4279,7 @@ def ensure_tables():
 def bootstrap_db():
     ensure_tables()
     ensure_qc_columns()    # adds missing columns safely
+    ensure_lift_columns()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
     for u, p in default_users:
@@ -8361,7 +8520,11 @@ def service_lifts():
     _module_visibility_required("service")
 
     search_query = (request.args.get("q") or "").strip()
-    query = Lift.query.options(joinedload(Lift.customer))
+    query = Lift.query.options(
+        joinedload(Lift.customer),
+        subqueryload(Lift.attachments),
+        subqueryload(Lift.comments),
+    )
 
     if search_query:
         like = f"%{search_query.lower()}%"
@@ -8498,6 +8661,7 @@ def service_lifts_create():
         last_service_date=last_service_date,
         next_service_due=next_service_due,
         notes=clean_str(request.form.get("notes")),
+        remarks=clean_str(request.form.get("remarks")),
         last_updated_by=current_user.id if current_user.is_authenticated else None,
     )
     lift.set_capacity_display()
@@ -8520,7 +8684,23 @@ def service_lift_edit(lift_id):
         return redirect(url_for("service_lifts"))
 
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
-    return render_template("service/lift_edit.html", lift=lift, customers=customers)
+    attachments = (
+        LiftFile.query.filter_by(lift_id=lift.id)
+        .order_by(LiftFile.created_at.desc())
+        .all()
+    )
+    comments = (
+        LiftComment.query.filter_by(lift_id=lift.id)
+        .order_by(LiftComment.created_at.desc())
+        .all()
+    )
+    return render_template(
+        "service/lift_edit.html",
+        lift=lift,
+        customers=customers,
+        attachments=attachments,
+        comments=comments,
+    )
 
 
 @app.route("/service/lifts/<int:lift_id>/update", methods=["POST"])
@@ -8637,6 +8817,7 @@ def service_lift_update(lift_id):
     lift.last_service_date = last_service_date
     lift.next_service_due = next_service_due
     lift.notes = clean_str(request.form.get("notes"))
+    lift.remarks = clean_str(request.form.get("remarks"))
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
     lift.set_capacity_display()
 
@@ -8644,6 +8825,92 @@ def service_lift_update(lift_id):
 
     flash("Lift details updated.", "success")
     return redirect(url_for("service_lift_edit", lift_id=lift.id))
+
+
+@app.route("/service/lifts/<int:lift_id>/comments", methods=["POST"])
+@login_required
+def service_lift_add_comment(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty.", "error")
+        return redirect(redirect_url)
+
+    comment = LiftComment(
+        lift=lift,
+        body=body,
+        author=current_user if current_user.is_authenticated else None,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    flash("Comment added.", "success")
+    return redirect(redirect_url)
+
+
+@app.route("/service/lifts/<int:lift_id>/files", methods=["POST"])
+@login_required
+def service_lift_upload_file(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lift_edit", lift_id=lift.id)
+
+    uploaded_file = request.files.get("attachment")
+    if not uploaded_file or not uploaded_file.filename:
+        flash("Select a file to upload.", "error")
+        return redirect(redirect_url)
+
+    safe_name = secure_filename(uploaded_file.filename)
+    if not safe_name:
+        flash("The selected file name is not valid.", "error")
+        return redirect(redirect_url)
+
+    if not allowed_file(safe_name, kind="attachment"):
+        flash("Unsupported file type. Upload images, videos or documents only.", "error")
+        return redirect(redirect_url)
+
+    upload_root = os.path.join(app.config["UPLOAD_FOLDER"], "lifts", str(lift.id))
+    os.makedirs(upload_root, exist_ok=True)
+
+    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+    destination_path = os.path.join(upload_root, unique_name)
+    uploaded_file.save(destination_path)
+
+    static_root = os.path.join(BASE_DIR, "static")
+    stored_relative = os.path.relpath(destination_path, static_root).replace(os.sep, "/")
+
+    category = (request.form.get("category") or "other").strip().lower()
+    if category not in {"document", "media", "other"}:
+        category = "other"
+
+    record = LiftFile(
+        lift=lift,
+        original_filename=uploaded_file.filename,
+        stored_path=stored_relative,
+        content_type=uploaded_file.mimetype,
+        file_size=os.path.getsize(destination_path),
+        label=clean_str(request.form.get("label")),
+        description=clean_str(request.form.get("description")),
+        category=category,
+        uploaded_by=current_user if current_user.is_authenticated else None,
+    )
+    db.session.add(record)
+    db.session.commit()
+
+    flash("File uploaded.", "success")
+    return redirect(redirect_url)
 
 
 @app.route("/service/complaints")
