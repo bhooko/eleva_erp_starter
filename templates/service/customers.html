@@ -191,7 +191,18 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
-        <input name="branch" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Goa / Mumbai" />
+        {% set selected_branch = request.form.get('branch') %}
+        {% set selected_branch_lower = selected_branch.lower() if selected_branch else '' %}
+        <select name="branch" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select branch</option>
+          {% for branch in SERVICE_BRANCH_OPTIONS %}
+            {% set branch_lower = branch.lower() %}
+            <option value="{{ branch }}" {% if selected_branch and selected_branch_lower == branch_lower %}selected{% endif %}>{{ branch }}</option>
+          {% endfor %}
+          {% if selected_branch and selected_branch_lower not in SERVICE_BRANCH_OPTION_SET %}
+            <option value="{{ selected_branch }}" selected>{{ selected_branch }}</option>
+          {% endif %}
+        </select>
       </label>
     </div>
     <div class="grid gap-4 md:grid-cols-2">

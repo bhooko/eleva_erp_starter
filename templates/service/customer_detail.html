@@ -59,7 +59,18 @@
         </label>
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
-          <input name="branch" value="{{ customer.branch or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+          {% set branch_value = customer.branch or '' %}
+          {% set branch_value_lower = branch_value.lower() if branch_value else '' %}
+          <select name="branch" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+            <option value="">Select branch</option>
+            {% for branch in SERVICE_BRANCH_OPTIONS %}
+              {% set branch_lower = branch.lower() %}
+              <option value="{{ branch }}" {% if branch_value and branch_value_lower == branch_lower %}selected{% endif %}>{{ branch }}</option>
+            {% endfor %}
+            {% if branch_value and branch_value_lower not in SERVICE_BRANCH_OPTION_SET %}
+              <option value="{{ branch_value }}" selected>{{ branch_value }}</option>
+            {% endif %}
+          </select>
         </label>
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">GST number</span>
