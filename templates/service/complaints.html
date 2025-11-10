@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Eleva ERP – Complaints Intake{% endblock %}
+{% block title %}Eleva ERP – All Complaints{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <h1 class="text-2xl font-semibold text-theme-primary">Complaints Inbox</h1>
-      <p class="text-sm text-slate-400">View-only feed of complaints originating from Customer Support or field escalation.</p>
+      <h1 class="text-2xl font-semibold text-theme-primary">All complaints</h1>
+      <p class="text-sm text-slate-400">Centralized listing of every complaint escalated to Service, ready for triage or follow-up.</p>
     </div>
     <div class="flex gap-2">
       <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:text-white">Filter categories</button>
@@ -16,44 +16,65 @@
 
   <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
     <div class="border-b border-slate-800/70 px-6 py-4">
-      <h2 class="text-base font-semibold text-slate-100">Complaint feed</h2>
-      <p class="text-xs text-slate-400">Classification happens upstream in Customer Support; Service consumes the converted tasks.</p>
+      <h2 class="text-base font-semibold text-slate-100">Complaints register</h2>
+      <p class="text-xs text-slate-400">Monitor intake status, location context and conversion progress for every complaint handed to Service.</p>
     </div>
-    <div class="divide-y divide-slate-800/70">
-      {% for complaint in complaints %}
-        <article class="px-6 py-5">
-          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p class="text-xs uppercase tracking-wide text-slate-500">{{ complaint.source }}</p>
-              <h3 class="text-lg font-semibold text-slate-200">{{ complaint.id }}</h3>
-              <p class="text-sm text-slate-400">Category: {{ complaint.category }} · Priority: {{ complaint.priority }}</p>
-              <p class="text-xs text-slate-400">Location: {{ complaint.location }} · Lift: {{ complaint.lift }}</p>
-            </div>
-            <div class="text-xs text-slate-300">
-              <p>Status: <span class="font-semibold text-theme-primary">{{ complaint.status }}</span></p>
-              {% if complaint.linked_task %}
-                <p>Linked service task <span class="font-semibold text-emerald-300">{{ complaint.linked_task }}</span></p>
-              {% else %}
-                <p class="text-amber-300">Awaiting conversion</p>
-              {% endif %}
-            </div>
-          </div>
-          <div class="mt-4 grid gap-3 text-xs text-slate-300 lg:grid-cols-2">
-            <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
-              <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversion flow</h4>
-              <p class="mt-2 text-slate-300">AMC support tickets convert automatically with SLA + audio preserved.</p>
-              <p class="mt-1 text-slate-300">Non-AMC complaints trigger chargeable task, ping Sales for estimate if needed.</p>
-            </div>
-            <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
-              <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ownership</h4>
-              <p class="mt-2 text-slate-300">Technicians only interact post-conversion; classification stays within Customer Support.</p>
-              <p class="mt-1 text-slate-300">Service retains visibility for routing and to audit repeated incidents by category.</p>
-            </div>
-          </div>
-        </article>
-      {% else %}
-        <p class="px-6 py-8 text-center text-sm text-slate-400">No complaints visible to Service right now.</p>
-      {% endfor %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800 text-sm">
+        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th scope="col" class="px-6 py-3 text-left">Complaint ID</th>
+            <th scope="col" class="px-4 py-3 text-left">Source</th>
+            <th scope="col" class="px-4 py-3 text-left">Category</th>
+            <th scope="col" class="px-4 py-3 text-left">Priority</th>
+            <th scope="col" class="px-4 py-3 text-left">Location</th>
+            <th scope="col" class="px-4 py-3 text-left">Lift</th>
+            <th scope="col" class="px-4 py-3 text-left">Status</th>
+            <th scope="col" class="px-4 py-3 text-left">Linked task</th>
+            <th scope="col" class="px-4 py-3 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/70 text-slate-200">
+          {% for complaint in complaints %}
+            <tr class="hover:bg-slate-800/40">
+              <td class="px-6 py-4 font-semibold text-theme-primary">{{ complaint.id }}</td>
+              <td class="px-4 py-4">
+                <span class="text-xs uppercase tracking-wide text-slate-500">{{ complaint.source }}</span>
+              </td>
+              <td class="px-4 py-4">{{ complaint.category }}</td>
+              <td class="px-4 py-4">
+                <span class="inline-flex items-center rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs text-slate-200">{{ complaint.priority }}</span>
+              </td>
+              <td class="px-4 py-4">{{ complaint.location }}</td>
+              <td class="px-4 py-4">{{ complaint.lift }}</td>
+              <td class="px-4 py-4">
+                <span class="font-semibold text-theme-primary">{{ complaint.status }}</span>
+              </td>
+              <td class="px-4 py-4">
+                {% if complaint.linked_task %}
+                  <span class="font-semibold text-emerald-300">{{ complaint.linked_task }}</span>
+                {% else %}
+                  <span class="text-xs text-amber-300">Awaiting conversion</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-4">
+                <div class="flex items-center gap-2">
+                  <a href="#" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition hover:bg-emerald-500/20" title="View complaint {{ complaint.id }}">
+                    <span class="sr-only">View complaint {{ complaint.id }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                      <path d="M10 3c-3.978 0-7.36 2.69-8.5 6.45a1.22 1.22 0 000 .9C2.64 14.11 6.022 16.8 10 16.8s7.36-2.69 8.5-6.45a1.22 1.22 0 000-.9C17.36 5.69 13.978 3 10 3zm0 11.3c-2.48 0-4.5-1.95-4.5-4.35S7.52 5.6 10 5.6s4.5 1.95 4.5 4.35-2.02 4.35-4.5 4.35zm0-7a2.65 2.65 0 100 5.3 2.65 2.65 0 000-5.3z" />
+                    </svg>
+                  </a>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9" class="px-6 py-8 text-center text-sm text-slate-400">No complaints visible to Service right now.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 </div>
