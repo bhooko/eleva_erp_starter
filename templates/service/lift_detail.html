@@ -96,19 +96,35 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Controller</dt>
-          <dd class="text-sm text-slate-100">{{ payload.controller_type }} · {{ payload.controller_brand }}</dd>
+          <dd class="text-sm text-slate-100">{{ payload.controller_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
           <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Drive type</dt>
-          <dd class="text-sm text-slate-100">{{ payload.drive_type }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Door finish</dt>
+          <dd class="text-sm text-slate-100">{{ payload.door_finish }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Cabin finish</dt>
+          <dd class="text-sm text-slate-100">{{ payload.cabin_finish }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine type</dt>
+          <dd class="text-sm text-slate-100">{{ payload.machine_type }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Power supply</dt>
+          <dd class="text-sm text-slate-100">{{ payload.power_supply }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Location</dt>
           <dd class="text-sm text-slate-100">{{ payload.location_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Service route</dt>
+          <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
@@ -116,7 +132,7 @@
         </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
-          <dd class="text-sm text-slate-100">{{ payload.machine_make }} · {{ payload.machine_model }} · Serial {{ payload.machine_serial }}</dd>
+          <dd class="text-sm text-slate-100">{{ payload.machine_details_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Installed</dt>
