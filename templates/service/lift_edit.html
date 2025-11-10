@@ -51,6 +51,10 @@
         <input name="site_address_line2" value="{{ lift.site_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building / Villa No</span>
+        <input name="building_villa_number" value="{{ lift.building_villa_number or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
         <input name="city" value="{{ lift.city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
@@ -61,10 +65,6 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
         <input name="pincode" value="{{ lift.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
-        <input name="country" value="{{ lift.country or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
@@ -86,29 +86,38 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
         {% set lift_type_value = lift.lift_type or '' %}
+        {% set lift_type_options = dropdown_options.get('lift_type', []) %}
         <select name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select lift type</option>
-          {% for option in LIFT_TYPE_OPTIONS %}
-            <option value="{{ option }}" {% if lift_type_value and lift_type_value.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% for option in lift_type_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if lift_type_value and lift_type_value.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>
-        {% if lift.capacity_persons is not none %}
-          {% set capacity_persons_value = '' ~ lift.capacity_persons %}
-        {% else %}
-          {% set capacity_persons_value = '' %}
-        {% endif %}
+        {% set capacity_persons_value = lift.capacity_persons|string if lift.capacity_persons is not none else '' %}
+        {% set passenger_capacity_options = dropdown_options.get('passenger_capacity', []) %}
         <select name="capacity_persons" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
-          {% for value, label in LIFT_CAPACITY_PERSON_OPTIONS %}
-            <option value="{{ value }}" {% if capacity_persons_value == value %}selected{% endif %}>{{ label }}</option>
+          <option value="">Select capacity</option>
+          {% for option in passenger_capacity_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if capacity_persons_value and capacity_persons_value == option_value %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (kg)</span>
-        <input name="capacity_kg" type="number" min="0" value="{{ lift.capacity_kg if lift.capacity_kg is not none else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        {% set capacity_kg_value = lift.capacity_kg|string if lift.capacity_kg is not none else '' %}
+        {% set load_capacity_options = dropdown_options.get('load_capacity', []) %}
+        <select name="capacity_kg" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select load</option>
+          {% for option in load_capacity_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if capacity_kg_value and capacity_kg_value == option_value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Speed (m/s)</span>
@@ -117,10 +126,12 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine type</span>
         {% set machine_type_value = lift.machine_type or '' %}
+        {% set machine_type_options = dropdown_options.get('machine_type', []) %}
         <select name="machine_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select machine type</option>
-          {% for option in MACHINE_TYPE_OPTIONS %}
-            <option value="{{ option }}" {% if machine_type_value and machine_type_value.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% for option in machine_type_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if machine_type_value and machine_type_value.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
@@ -135,20 +146,24 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door type</span>
         {% set door_type_value = lift.door_type or '' %}
+        {% set door_type_options = dropdown_options.get('door_type', []) %}
         <select name="door_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select door type</option>
-          {% for option in DOOR_TYPE_OPTIONS %}
-            <option value="{{ option }}" {% if door_type_value and door_type_value.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% for option in door_type_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if door_type_value and door_type_value.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door finish</span>
         {% set door_finish_value = lift.door_finish or '' %}
-        <select name="door_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+        {% set door_finish_options = dropdown_options.get('door_finish', []) %}
+        <select name="door_finish" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select door finish</option>
-          {% for option in DOOR_FINISH_OPTIONS %}
-            <option value="{{ option }}" {% if door_finish_value and door_finish_value.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% for option in door_finish_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if door_finish_value and door_finish_value.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
@@ -159,10 +174,12 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Power supply</span>
         {% set power_supply_value = lift.power_supply or '' %}
+        {% set power_supply_options = dropdown_options.get('power_supply', []) %}
         <select name="power_supply" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select power supply</option>
-          {% for option in POWER_SUPPLY_OPTIONS %}
-            <option value="{{ option }}" {% if power_supply_value and power_supply_value.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% for option in power_supply_options %}
+            {% set option_value = option.value %}
+            <option value="{{ option_value }}" {% if power_supply_value and power_supply_value.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
       </label>
@@ -186,11 +203,23 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC start</span>
-        <input type="date" name="amc_start" value="{{ lift.amc_start.isoformat() if lift.amc_start else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="date" name="amc_start" id="liftAmcStartEdit" value="{{ lift.amc_start.isoformat() if lift.amc_start else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC duration</span>
+        {% set amc_duration_value = lift.amc_duration_key or '' %}
+        <select name="amc_duration_key" id="liftAmcDurationEdit" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select duration</option>
+          {% for value, label in amc_duration_choices %}
+            {% if value %}
+              <option value="{{ value }}" {% if amc_duration_value and amc_duration_value.lower() == value %}selected{% endif %}>{{ label }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC end</span>
-        <input type="date" name="amc_end" value="{{ lift.amc_end.isoformat() if lift.amc_end else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="date" name="amc_end" id="liftAmcEndEdit" value="{{ lift.amc_end.isoformat() if lift.amc_end else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC contract</span>
@@ -218,27 +247,35 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Last service date</span>
-        <input type="date" name="last_service_date" value="{{ lift.last_service_date.isoformat() if lift.last_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="date" name="last_service_date" value="{{ lift.last_service_date.isoformat() if lift.last_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
+        <p class="text-[11px] text-slate-500">Auto-updated from completed service visits.</p>
       </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next service due</span>
-        <input type="date" name="next_service_due" value="{{ lift.next_service_due.isoformat() if lift.next_service_due else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
+      {% if lift.preferred_service_date and lift.preferred_service_date.year == 2000 and lift.preferred_service_date.month == 1 %}
+        {% set preferred_service_date_day = "%02d" % lift.preferred_service_date.day %}
+      {% else %}
+        {% set preferred_service_date_day = '' %}
+      {% endif %}
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
-        <input type="date" name="preferred_service_date" value="{{ lift.preferred_service_date.isoformat() if lift.preferred_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <select name="preferred_service_date" id="liftPreferredServiceDateEdit" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">No preference</option>
+          {% for day in range(1, 31) %}
+            {% set day_value = "%02d" % day %}
+            <option value="{{ day_value }}" {% if preferred_service_date_day == day_value %}selected{% endif %}>{{ day_value }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service day</span>
-        {% set selected_day = lift.preferred_service_day or '' %}
-        <select name="preferred_service_day" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
-          <option value="">No preference</option>
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service days</span>
+        {% set selected_days = lift.preferred_service_days %}
+        <select name="preferred_service_days" id="liftPreferredServiceDaysEdit" multiple size="5" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           {% for value, label in service_day_options %}
             {% if value %}
-              <option value="{{ value }}" {% if selected_day and selected_day.lower() == value %}selected{% endif %}>{{ label }}</option>
+              <option value="{{ value }}" {% if value in selected_days %}selected{% endif %}>{{ label }}</option>
             {% endif %}
           {% endfor %}
         </select>
+        <p class="text-[11px] text-slate-500">Hold Ctrl (Windows) or Command (Mac) to select multiple days. "Any day" clears other selections.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
@@ -246,12 +283,8 @@
       </label>
     </div>
     <label class="space-y-1">
-      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Remarks</span>
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service remarks</span>
       <textarea name="remarks" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Add service reminders or highlights">{{ lift.remarks or '' }}</textarea>
-    </label>
-    <label class="space-y-1">
-      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</span>
-      <textarea name="notes" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">{{ lift.notes or '' }}</textarea>
     </label>
     <div class="flex items-center justify-end gap-2">
       <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save lift</button>
@@ -427,6 +460,80 @@
       });
     }
     setupModal('[data-modal-open="customer-create-from-lift"]', 'customerFromLiftModal');
+
+    const amcDurationMonths = {{ amc_duration_months | tojson }};
+    const amcStartInput = document.getElementById('liftAmcStartEdit');
+    const amcDurationInput = document.getElementById('liftAmcDurationEdit');
+    const amcEndInput = document.getElementById('liftAmcEndEdit');
+
+    function addMonths(date, months) {
+      const result = new Date(date.getTime());
+      const desiredMonth = result.getMonth() + months;
+      const year = result.getFullYear();
+      result.setMonth(desiredMonth);
+      if (result.getMonth() !== ((desiredMonth % 12) + 12) % 12) {
+        result.setDate(0);
+      }
+      return result;
+    }
+
+    function formatDateInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function updateAmcEnd() {
+      if (!amcStartInput || !amcDurationInput || !amcEndInput) {
+        return;
+      }
+      const startValue = amcStartInput.value;
+      const durationKey = amcDurationInput.value;
+      if (!startValue || !durationKey || !amcDurationMonths[durationKey]) {
+        amcEndInput.value = '';
+        return;
+      }
+      const startDate = new Date(startValue + 'T00:00:00');
+      if (Number.isNaN(startDate.getTime())) {
+        amcEndInput.value = '';
+        return;
+      }
+      const months = parseInt(amcDurationMonths[durationKey], 10) || 0;
+      if (!months) {
+        amcEndInput.value = '';
+        return;
+      }
+      const computed = addMonths(startDate, months);
+      computed.setDate(computed.getDate() - 1);
+      amcEndInput.value = formatDateInput(computed);
+    }
+
+    if (amcStartInput && amcDurationInput) {
+      amcStartInput.addEventListener('change', updateAmcEnd);
+      amcDurationInput.addEventListener('change', updateAmcEnd);
+      updateAmcEnd();
+    }
+
+    function enforcePreferredDays(select) {
+      if (!select) {
+        return;
+      }
+      const selectedValues = Array.from(select.selectedOptions).map((option) => option.value);
+      if (selectedValues.includes('any') && selectedValues.length > 1) {
+        Array.from(select.options).forEach((option) => {
+          if (option.value !== 'any') {
+            option.selected = false;
+          }
+        });
+      }
+    }
+
+    const preferredDaysSelect = document.getElementById('liftPreferredServiceDaysEdit');
+    if (preferredDaysSelect) {
+      preferredDaysSelect.addEventListener('change', () => enforcePreferredDays(preferredDaysSelect));
+      enforcePreferredDays(preferredDaysSelect);
+    }
   })();
 </script>
 {% endblock %}
