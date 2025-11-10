@@ -67,6 +67,14 @@
           <dd class="text-sm text-slate-100">{{ lift.lift_code }}</dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">External lift ID</dt>
+          <dd class="text-sm text-slate-100">{{ payload.external_lift_id }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer code</dt>
+          <dd class="text-sm text-slate-100">{{ payload.customer_code }}</dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
           <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
         </div>
@@ -76,7 +84,11 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa No.</dt>
-          <dd class="text-sm text-slate-100">{{ payload.building_villa_number }}</dd>
+          <dd class="text-sm text-slate-100">{{ payload.site_address_line1 }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Building name / road</dt>
+          <dd class="text-sm text-slate-100">{{ payload.site_address_line2 }}</dd>
         </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">Customer &amp; contact</dt>
@@ -85,6 +97,18 @@
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
           <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">City</dt>
+          <dd class="text-sm text-slate-100">{{ payload.city }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">State</dt>
+          <dd class="text-sm text-slate-100">{{ payload.state }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Pincode</dt>
+          <dd class="text-sm text-slate-100">{{ payload.pincode }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Speed (m/s)</dt>
@@ -99,6 +123,10 @@
           <dd class="text-sm text-slate-100">{{ payload.controller_display }}</dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Controller brand</dt>
+          <dd class="text-sm text-slate-100">{{ payload.controller_brand }}</dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
           <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
         </div>
@@ -109,6 +137,10 @@
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Cabin finish</dt>
           <dd class="text-sm text-slate-100">{{ payload.cabin_finish }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine brand</dt>
+          <dd class="text-sm text-slate-100">{{ payload.machine_brand }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Machine type</dt>
@@ -123,12 +155,26 @@
           <dd class="text-sm text-slate-100">{{ payload.location_display }}</dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Country</dt>
+          <dd class="text-sm text-slate-100">{{ payload.country }}</dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Service route</dt>
           <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
           <dd class="text-sm text-slate-100">{{ payload.geo_location }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">QR code</dt>
+          <dd class="text-sm text-slate-100">
+            {% if payload.qr_code_url %}
+              <a href="{{ payload.qr_code_url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">Open QR code</a>
+            {% else %}
+              —
+            {% endif %}
+          </dd>
         </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
@@ -141,6 +187,14 @@
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Commissioned</dt>
           <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Warranty expiry</dt>
+          <dd class="text-sm text-slate-100">{{ payload.warranty_expiry_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Last service date</dt>
+          <dd class="text-sm text-slate-100">{{ payload.last_service_date_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service days</dt>
@@ -174,6 +228,10 @@
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">AMC type</dt>
           <dd class="text-sm text-slate-100">{{ payload.amc.type }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC duration</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.duration_display }}</dd>
         </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">AMC contract</dt>
