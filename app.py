@@ -3724,6 +3724,18 @@ class QCWorkLog(db.Model):
     actor = db.relationship("User")
 
 
+class ServiceRoute(db.Model):
+    __tablename__ = "service_route"
+
+    id = db.Column(db.Integer, primary_key=True)
+    state = db.Column(db.String(120), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    @property
+    def display_name(self):
+        return self.state
+
+
 class Customer(db.Model):
     __tablename__ = "customer"
 
@@ -3741,10 +3753,16 @@ class Customer(db.Model):
     state = db.Column(db.String(120), nullable=True)
     pincode = db.Column(db.String(20), nullable=True)
     country = db.Column(db.String(120), nullable=True)
-    route = db.Column(db.String(20), nullable=True)
+    route = db.Column(db.String(120), nullable=True)
     sector = db.Column(db.String(60), nullable=True)
     branch = db.Column(db.String(120), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    office_address_line1 = db.Column(db.String(255), nullable=True)
+    office_address_line2 = db.Column(db.String(255), nullable=True)
+    office_city = db.Column(db.String(120), nullable=True)
+    office_state = db.Column(db.String(120), nullable=True)
+    office_pincode = db.Column(db.String(20), nullable=True)
+    office_country = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime,
@@ -4228,6 +4246,39 @@ def ensure_lift_columns():
         print("✔️ lift OK")
 
 
+def ensure_customer_columns():
+    db_path = os.path.join("instance", "eleva.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(customer)")
+    customer_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    column_defs = [
+        ("office_address_line1", "TEXT"),
+        ("office_address_line2", "TEXT"),
+        ("office_city", "TEXT"),
+        ("office_state", "TEXT"),
+        ("office_pincode", "TEXT"),
+        ("office_country", "TEXT"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in customer_cols:
+            cur.execute(f"ALTER TABLE customer ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in customer: {', '.join(added_cols)}")
+    else:
+        print("✔️ customer OK")
+
+
 def ensure_tables():
     """Ensure all known tables exist. Creates them if missing."""
     created_tables = []
@@ -4257,6 +4308,7 @@ def ensure_tables():
         SalesOpportunityFile.__table__,
         SalesOpportunityEngagement.__table__,
         SalesOpportunityItem.__table__,
+        ServiceRoute.__table__,
         Customer.__table__,
         Lift.__table__,
         LiftFile.__table__,
@@ -4280,6 +4332,7 @@ def bootstrap_db():
     ensure_tables()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
+    ensure_customer_columns()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
     for u, p in default_users:
@@ -4460,6 +4513,12 @@ def bootstrap_db():
                 notes="Add your updates here to keep the timeline current.",
             ))
 
+    if ServiceRoute.query.count() == 0:
+        default_routes = ["Goa", "Maharashtra", "Karnataka"]
+        for state_name in default_routes:
+            db.session.add(ServiceRoute(state=state_name))
+        db.session.flush()
+
     if Customer.query.count() == 0:
         seed_customers = [
             {
@@ -4476,10 +4535,16 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403507",
                 "country": "India",
-                "route": "R1",
-                "sector": "Private",
+                "route": "Goa",
+                "sector": "Company",
                 "branch": "Goa",
                 "notes": "Preferred morning visits",
+                "office_address_line1": "Administration Block",
+                "office_address_line2": "Convent Road",
+                "office_city": "Mapusa",
+                "office_state": "Goa",
+                "office_pincode": "403507",
+                "office_country": "India",
             },
             {
                 "customer_code": "CUS0002",
@@ -4495,10 +4560,16 @@ def bootstrap_db():
                 "state": "Maharashtra",
                 "pincode": "400059",
                 "country": "India",
-                "route": "M1",
-                "sector": "Commercial",
+                "route": "Maharashtra",
+                "sector": "Company",
                 "branch": "Mumbai",
                 "notes": "Key account",
+                "office_address_line1": "702 Tech Park",
+                "office_address_line2": "Corporate Wing",
+                "office_city": "Mumbai",
+                "office_state": "Maharashtra",
+                "office_pincode": "400059",
+                "office_country": "India",
             },
             {
                 "customer_code": "CUS0003",
@@ -4514,10 +4585,16 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403001",
                 "country": "India",
-                "route": "R2",
-                "sector": "Residential",
+                "route": "Goa",
+                "sector": "Proprietorship",
                 "branch": "Goa",
                 "notes": "Call watchman before visit",
+                "office_address_line1": "Community Office",
+                "office_address_line2": "Satguru Apts",
+                "office_city": "Panjim",
+                "office_state": "Goa",
+                "office_pincode": "403001",
+                "office_country": "India",
             },
             {
                 "customer_code": "CUS0004",
@@ -4533,10 +4610,16 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403501",
                 "country": "India",
-                "route": "R1",
-                "sector": "Residential",
+                "route": "Goa",
+                "sector": "Individual",
                 "branch": "Goa",
                 "notes": None,
+                "office_address_line1": None,
+                "office_address_line2": None,
+                "office_city": None,
+                "office_state": None,
+                "office_pincode": None,
+                "office_country": None,
             },
             {
                 "customer_code": "CUS0005",
@@ -4552,10 +4635,16 @@ def bootstrap_db():
                 "state": "Maharashtra",
                 "pincode": "400049",
                 "country": "India",
-                "route": "M1",
-                "sector": "Residential",
+                "route": "Maharashtra",
+                "sector": "Individual",
                 "branch": "Mumbai",
                 "notes": None,
+                "office_address_line1": "702 Tech Park",
+                "office_address_line2": "Client Relations Desk",
+                "office_city": "Mumbai",
+                "office_state": "Maharashtra",
+                "office_pincode": "400059",
+                "office_country": "India",
             },
         ]
 
@@ -4578,6 +4667,12 @@ def bootstrap_db():
                 sector=entry.get("sector"),
                 branch=entry.get("branch"),
                 notes=entry.get("notes"),
+                office_address_line1=entry.get("office_address_line1"),
+                office_address_line2=entry.get("office_address_line2"),
+                office_city=entry.get("office_city"),
+                office_state=entry.get("office_state"),
+                office_pincode=entry.get("office_pincode"),
+                office_country=entry.get("office_country"),
             )
             db.session.add(customer)
 
@@ -4595,7 +4690,7 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403507",
                 "country": "India",
-                "route": "R1",
+                "route": "Goa",
                 "building_floors": "G+4",
                 "lift_type": "Hydraulic",
                 "capacity_persons": 10,
@@ -4629,7 +4724,7 @@ def bootstrap_db():
                 "state": "Maharashtra",
                 "pincode": "400049",
                 "country": "India",
-                "route": "M1",
+                "route": "Maharashtra",
                 "building_floors": "G+1",
                 "lift_type": "MRL",
                 "capacity_persons": 2,
@@ -4663,7 +4758,7 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403501",
                 "country": "India",
-                "route": "R1",
+                "route": "Goa",
                 "building_floors": "G+3",
                 "lift_type": "MR",
                 "capacity_persons": 6,
@@ -4697,7 +4792,7 @@ def bootstrap_db():
                 "state": "Maharashtra",
                 "pincode": "400059",
                 "country": "India",
-                "route": "M1",
+                "route": "Maharashtra",
                 "building_floors": "G+2",
                 "lift_type": "Goods",
                 "capacity_persons": 0,
@@ -4731,7 +4826,7 @@ def bootstrap_db():
                 "state": "Goa",
                 "pincode": "403001",
                 "country": "India",
-                "route": "R2",
+                "route": "Goa",
                 "building_floors": "G+2",
                 "lift_type": "Passenger",
                 "capacity_persons": 6,
@@ -4883,6 +4978,8 @@ def settings():
     department_options = []
     position_options = []
 
+    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
+
     if current_user.is_admin:
         departments = sorted(
             Department.query.order_by(Department.name.asc()).all(),
@@ -4909,7 +5006,47 @@ def settings():
         support_categories=CUSTOMER_SUPPORT_CATEGORIES,
         support_channels=CUSTOMER_SUPPORT_CHANNELS,
         support_sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
+        service_routes=service_routes,
     )
+
+
+@app.route("/settings/service/routes/create", methods=["POST"])
+@login_required
+def settings_service_route_create():
+    if not current_user.is_admin:
+        abort(403)
+
+    state_name = clean_str(request.form.get("state"))
+    if not state_name:
+        flash("State name is required to add a route.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == state_name.lower()).first()
+    if existing:
+        flash("A route for that state already exists.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    db.session.add(ServiceRoute(state=state_name))
+    db.session.commit()
+    flash(f"Route '{state_name}' added.", "success")
+    return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/settings/service/routes/<int:route_id>/delete", methods=["POST"])
+@login_required
+def settings_service_route_delete(route_id):
+    if not current_user.is_admin:
+        abort(403)
+
+    route = db.session.get(ServiceRoute, route_id)
+    if not route:
+        flash("Route not found.", "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    db.session.delete(route)
+    db.session.commit()
+    flash(f"Route '{route.state}' removed.", "success")
+    return redirect(url_for("settings", tab="modules"))
 
 
 @app.route("/sales")
@@ -8368,6 +8505,7 @@ def service_customers():
         )
 
     customers = query.order_by(func.lower(Customer.company_name)).all()
+    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
     lift_payload_map = {}
     for customer in customers:
         open_lifts = [lift for lift in customer.lifts if is_lift_open(lift)]
@@ -8379,6 +8517,7 @@ def service_customers():
         customers=customers,
         search_query=search_query,
         lift_payload_map=lift_payload_map,
+        service_routes=service_routes,
     )
 
 
@@ -8391,12 +8530,20 @@ def service_customers_create():
 
     customer_code = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
+    route_value = clean_str(request.form.get("route"))
+    category_value = clean_str(request.form.get("category"))
 
     if not customer_code or not company_name:
         flash("Customer code and company name are required.", "error")
         return redirect(redirect_url)
 
     customer_code = customer_code.upper()
+
+    if route_value:
+        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
+        if not valid_route:
+            flash("Select a valid service route from the dropdown.", "error")
+            return redirect(redirect_url)
 
     existing = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
     if existing:
@@ -8417,10 +8564,16 @@ def service_customers_create():
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
         country=clean_str(request.form.get("country")),
-        route=clean_str(request.form.get("route")),
-        sector=clean_str(request.form.get("sector")),
+        route=route_value,
+        sector=category_value,
         branch=clean_str(request.form.get("branch")),
         notes=clean_str(request.form.get("notes")),
+        office_address_line1=clean_str(request.form.get("office_address_line1")),
+        office_address_line2=clean_str(request.form.get("office_address_line2")),
+        office_city=clean_str(request.form.get("office_city")),
+        office_state=clean_str(request.form.get("office_state")),
+        office_pincode=clean_str(request.form.get("office_pincode")),
+        office_country=clean_str(request.form.get("office_country")),
     )
 
     db.session.add(customer)
@@ -8450,11 +8603,14 @@ def service_customer_detail(customer_id):
     customer.open_lifts = [lift for lift in lifts if is_lift_open(lift)]
     lift_payload_map = {str(lift.id): build_lift_payload(lift) for lift in lifts}
 
+    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
+
     return render_template(
         "service/customer_detail.html",
         customer=customer,
         lifts=lifts,
         lift_payload_map=lift_payload_map,
+        service_routes=service_routes,
     )
 
 
@@ -8470,6 +8626,8 @@ def service_customer_update(customer_id):
 
     customer_code_raw = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
+    route_value = clean_str(request.form.get("route"))
+    category_value = clean_str(request.form.get("category"))
 
     if not customer_code_raw or not company_name:
         flash("Customer code and company name are required.", "error")
@@ -8491,20 +8649,20 @@ def service_customer_update(customer_id):
 
         customer.customer_code = new_code
 
+    if route_value:
+        valid_route = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_value.lower()).first()
+        if not valid_route:
+            flash("Select a valid service route from the dropdown.", "error")
+            return redirect(url_for("service_customer_detail", customer_id=customer.id))
+
     customer.company_name = company_name
     customer.contact_person = clean_str(request.form.get("contact_person"))
     customer.phone = clean_str(request.form.get("phone"))
     customer.mobile = clean_str(request.form.get("mobile"))
     customer.email = clean_str(request.form.get("email"))
     customer.gst_no = clean_str(request.form.get("gst_no"))
-    customer.billing_address_line1 = clean_str(request.form.get("billing_address_line1"))
-    customer.billing_address_line2 = clean_str(request.form.get("billing_address_line2"))
-    customer.city = clean_str(request.form.get("city"))
-    customer.state = clean_str(request.form.get("state"))
-    customer.pincode = clean_str(request.form.get("pincode"))
-    customer.country = clean_str(request.form.get("country"))
-    customer.route = clean_str(request.form.get("route"))
-    customer.sector = clean_str(request.form.get("sector"))
+    customer.route = route_value
+    customer.sector = category_value
     customer.branch = clean_str(request.form.get("branch"))
     customer.notes = clean_str(request.form.get("notes"))
 
@@ -8512,6 +8670,44 @@ def service_customer_update(customer_id):
 
     flash("Customer updated.", "success")
     return redirect(url_for("service_customer_detail", customer_id=customer.id))
+
+
+@app.route("/service/customers/<int:customer_id>/address", methods=["POST"])
+@login_required
+def service_customer_update_address(customer_id):
+    _module_visibility_required("service")
+
+    customer = db.session.get(Customer, customer_id)
+    if not customer:
+        flash("Customer not found.", "error")
+        return redirect(url_for("service_customers"))
+
+    address_type = (request.form.get("address_type") or "").strip().lower()
+    redirect_url = url_for("service_customer_detail", customer_id=customer.id)
+
+    if address_type == "billing":
+        customer.billing_address_line1 = clean_str(request.form.get("billing_address_line1"))
+        customer.billing_address_line2 = clean_str(request.form.get("billing_address_line2"))
+        customer.city = clean_str(request.form.get("city"))
+        customer.state = clean_str(request.form.get("state"))
+        customer.pincode = clean_str(request.form.get("pincode"))
+        customer.country = clean_str(request.form.get("country"))
+        success_message = "Billing address updated."
+    elif address_type == "office":
+        customer.office_address_line1 = clean_str(request.form.get("office_address_line1"))
+        customer.office_address_line2 = clean_str(request.form.get("office_address_line2"))
+        customer.office_city = clean_str(request.form.get("office_city"))
+        customer.office_state = clean_str(request.form.get("office_state"))
+        customer.office_pincode = clean_str(request.form.get("office_pincode"))
+        customer.office_country = clean_str(request.form.get("office_country"))
+        success_message = "Office address updated."
+    else:
+        flash("Unknown address type.", "error")
+        return redirect(redirect_url)
+
+    db.session.commit()
+    flash(success_message, "success")
+    return redirect(redirect_url)
 
 
 @app.route("/service/lifts")
