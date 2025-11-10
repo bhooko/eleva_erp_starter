@@ -171,11 +171,22 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
-        <input name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Passenger / Goods / Hydraulic" />
+        {% set selected_lift_type = request.form.get('lift_type') or '' %}
+        <select name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift type</option>
+          {% for option in LIFT_TYPE_OPTIONS %}
+            <option value="{{ option }}" {% if selected_lift_type and selected_lift_type.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>
-        <input name="capacity_persons" type="number" min="0" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        {% set selected_capacity = request.form.get('capacity_persons') or '' %}
+        <select name="capacity_persons" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          {% for value, label in LIFT_CAPACITY_PERSON_OPTIONS %}
+            <option value="{{ value }}" {% if selected_capacity == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (kg)</span>
@@ -187,7 +198,13 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine type</span>
-        <input name="machine_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="GEARED / GEARLESS / Hydraulic" />
+        {% set selected_machine_type = request.form.get('machine_type') or '' %}
+        <select name="machine_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select machine type</option>
+          {% for option in MACHINE_TYPE_OPTIONS %}
+            <option value="{{ option }}" {% if selected_machine_type and selected_machine_type.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine brand</span>
@@ -199,11 +216,23 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door type</span>
-        <input name="door_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Automatic Telescopic Opening" />
+        {% set selected_door_type = request.form.get('door_type') or '' %}
+        <select name="door_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select door type</option>
+          {% for option in DOOR_TYPE_OPTIONS %}
+            <option value="{{ option }}" {% if selected_door_type and selected_door_type.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door brand</span>
-        <input name="door_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door finish</span>
+        {% set selected_door_finish = request.form.get('door_brand') or '' %}
+        <select name="door_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select door finish</option>
+          {% for option in DOOR_FINISH_OPTIONS %}
+            <option value="{{ option }}" {% if selected_door_finish and selected_door_finish.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Cabin finish</span>
@@ -211,7 +240,13 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Power supply</span>
-        <input name="power_supply" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="1-phase / 3-phase" />
+        {% set selected_power_supply = request.form.get('power_supply') or '' %}
+        <select name="power_supply" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select power supply</option>
+          {% for option in POWER_SUPPLY_OPTIONS %}
+            <option value="{{ option }}" {% if selected_power_supply and selected_power_supply.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Install date</span>
@@ -223,7 +258,13 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC status</span>
-        <input name="amc_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Active / Expired / None" />
+        {% set selected_amc_status = request.form.get('amc_status') or '' %}
+        <select name="amc_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select AMC status</option>
+          {% for option in AMC_STATUS_OPTIONS %}
+            <option value="{{ option }}" {% if selected_amc_status and selected_amc_status.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC start</span>
@@ -238,8 +279,14 @@
         <input type="url" name="qr_code_url" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</span>
-        <input name="status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Active / Inactive / Decommissioned" />
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift status</span>
+        {% set selected_lift_status = request.form.get('status') or '' %}
+        <select name="status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift status</option>
+          {% for option in LIFT_STATUS_OPTIONS %}
+            <option value="{{ option }}" {% if selected_lift_status and selected_lift_status.lower() == option.lower() %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Last service date</span>

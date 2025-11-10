@@ -405,16 +405,26 @@
           </div>
 
           {% if current_user.is_admin %}
-            <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[2fr,auto] md:items-end">
+            <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[2fr,1fr,auto] md:items-end">
               <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
-                <input name="state" required placeholder="e.g. Goa" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
+                <input name="route_name" required placeholder="e.g. Panaji Urban" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                <p class="text-[11px] text-slate-500">Type a new service route name to map it to a branch.</p>
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
+                <select name="branch" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+                  <option value="">Select branch</option>
+                  {% for branch in SERVICE_BRANCH_OPTIONS %}
+                    <option value="{{ branch }}">{{ branch }}</option>
+                  {% endfor %}
+                </select>
               </label>
               <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Add route</button>
             </form>
           {% else %}
             <div class="rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-400">
-              Only administrators can add or remove routes. Ask an admin if you need a new state added.
+              Only administrators can add or remove routes. Ask an admin if you need a new route added.
             </div>
           {% endif %}
 
@@ -423,8 +433,13 @@
               {% for route in service_routes %}
                 <div class="flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p class="text-base font-semibold text-slate-100">{{ route.display_name }}</p>
-                    <p class="text-xs text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</p>
+                    <p class="text-base font-semibold text-slate-100">{{ route.route_name }}</p>
+                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      {% if route.branch %}
+                        <span class="inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 font-semibold text-emerald-100">{{ route.branch }}</span>
+                      {% endif %}
+                      <span class="text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</span>
+                    </div>
                   </div>
                   {% if current_user.is_admin %}
                     <form method="post" action="{{ url_for('settings_service_route_delete', route_id=route.id) }}" class="flex items-center justify-end">
@@ -435,7 +450,7 @@
               {% endfor %}
             {% else %}
               <div class="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/40 p-5 text-sm text-slate-400">
-                No service routes defined yet. Add a state above to populate the dropdowns in Service → Customers.
+                No service routes defined yet. Add a route above to populate the dropdowns in Service → Customers and Lifts.
               </div>
             {% endif %}
           </div>

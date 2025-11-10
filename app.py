@@ -112,12 +112,54 @@ def parse_date_field(value, label):
     return parsed, None
 
 
+def validate_branch(value, *, label="Branch", required=False):
+    branch_value = clean_str(value)
+    if not branch_value:
+        if required:
+            return None, f"{label} is required."
+        return None, None
+
+    lowered = branch_value.lower()
+    if lowered not in SERVICE_BRANCH_OPTION_SET:
+        allowed = ", ".join(SERVICE_BRANCH_OPTIONS)
+        return None, f"{label} must be one of {allowed}."
+
+    for option in SERVICE_BRANCH_OPTIONS:
+        if option.lower() == lowered:
+            return option, None
+
+    return branch_value, None
+
+
 # ---------------------- QC Profile choices (visible in UI) ----------------------
 STAGES = [
     "Template QC", "Stage 1", "Stage 2", "Stage 3",
     "Completion", "Completion QC", "Structure", "Cladding", "Service", "Repair", "Material"
 ]
-LIFT_TYPES = ["Hydraulic", "MRL", "MR", "Dumbwaiter", "Goods"]
+LIFT_TYPE_OPTIONS = ["Hydraulic", "MR", "MRL", "Goods", "Dumbwaiter"]
+LIFT_TYPES = list(LIFT_TYPE_OPTIONS)
+
+LIFT_CAPACITY_PERSON_OPTIONS = [
+    ("", "Select capacity"),
+    ("0", "0"),
+    ("4", "4 Pass"),
+    ("6", "6 Pass"),
+    ("8", "8 Pass"),
+    ("10", "10 Pass"),
+    ("13", "13 Pass"),
+    ("15", "15 Pass"),
+    ("20", "20 Pass"),
+    ("25", "25 Pass"),
+]
+
+MACHINE_TYPE_OPTIONS = ["Geared", "Gearless", "Hydraulic", "Drum", "Stiltz"]
+DOOR_TYPE_OPTIONS = ["ATO-LH", "ATO-RH", "ACO", "Swing", "Collapsible", "Gate", "IMP"]
+DOOR_FINISH_OPTIONS = ["SS H/L", "SS Mirror", "MS"]
+POWER_SUPPLY_OPTIONS = ["1 Phase", "3 Phase"]
+AMC_STATUS_OPTIONS = ["Active", "Expired", "Renewal Pending", "Call Basis"]
+LIFT_STATUS_OPTIONS = ["On", "Off", "Protected", "Decommissioned"]
+SERVICE_BRANCH_OPTIONS = ["Goa", "Mumbai"]
+SERVICE_BRANCH_OPTION_SET = {option.lower() for option in SERVICE_BRANCH_OPTIONS}
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
 TASK_MILESTONES = [
     "Order Milestone",
@@ -3195,6 +3237,22 @@ def inject_workspace_modules():
     }
 
 
+@app.context_processor
+def inject_service_form_options():
+    return {
+        "SERVICE_BRANCH_OPTIONS": SERVICE_BRANCH_OPTIONS,
+        "SERVICE_BRANCH_OPTION_SET": SERVICE_BRANCH_OPTION_SET,
+        "LIFT_TYPE_OPTIONS": LIFT_TYPE_OPTIONS,
+        "LIFT_CAPACITY_PERSON_OPTIONS": LIFT_CAPACITY_PERSON_OPTIONS,
+        "MACHINE_TYPE_OPTIONS": MACHINE_TYPE_OPTIONS,
+        "DOOR_TYPE_OPTIONS": DOOR_TYPE_OPTIONS,
+        "DOOR_FINISH_OPTIONS": DOOR_FINISH_OPTIONS,
+        "POWER_SUPPLY_OPTIONS": POWER_SUPPLY_OPTIONS,
+        "AMC_STATUS_OPTIONS": AMC_STATUS_OPTIONS,
+        "LIFT_STATUS_OPTIONS": LIFT_STATUS_OPTIONS,
+    }
+
+
 class Project(db.Model):
     __tablename__ = "project"
     id = db.Column(db.Integer, primary_key=True)
@@ -3729,10 +3787,17 @@ class ServiceRoute(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     state = db.Column(db.String(120), unique=True, nullable=False)
+    branch = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     @property
     def display_name(self):
+        if self.branch:
+            return f"{self.state} · {self.branch}"
+        return self.state
+
+    @property
+    def route_name(self):
         return self.state
 
 
@@ -3853,6 +3918,14 @@ class Lift(db.Model):
             self.capacity_display = f"{self.capacity_kg} kg"
         else:
             self.capacity_display = None
+
+    @property
+    def door_finish(self):
+        return self.door_brand
+
+    @door_finish.setter
+    def door_finish(self, value):
+        self.door_brand = value
 
 
 class LiftFile(db.Model):
@@ -4246,6 +4319,46 @@ def ensure_lift_columns():
         print("✔️ lift OK")
 
 
+def ensure_service_route_columns():
+    db_path = os.path.join("instance", "eleva.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(service_route)")
+    route_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "branch" not in route_cols:
+        cur.execute("ALTER TABLE service_route ADD COLUMN branch TEXT;")
+        added_cols.append("branch")
+
+    before_update = conn.total_changes
+    cur.execute(
+        """
+        UPDATE service_route
+        SET branch = CASE
+            WHEN lower(state) = 'goa' THEN 'Goa'
+            WHEN lower(state) = 'maharashtra' THEN 'Mumbai'
+            WHEN lower(state) = 'karnataka' THEN 'Mumbai'
+            ELSE branch
+        END
+        WHERE branch IS NULL
+        """
+    )
+    branch_backfill_changes = conn.total_changes - before_update
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in service_route: {', '.join(added_cols)}")
+    elif branch_backfill_changes:
+        print("♻️ service_route branches backfilled")
+    else:
+        print("✔️ service_route OK")
+
+
 def ensure_customer_columns():
     db_path = os.path.join("instance", "eleva.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -4332,6 +4445,7 @@ def bootstrap_db():
     ensure_tables()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
+    ensure_service_route_columns()
     ensure_customer_columns()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
@@ -4514,9 +4628,13 @@ def bootstrap_db():
             ))
 
     if ServiceRoute.query.count() == 0:
-        default_routes = ["Goa", "Maharashtra", "Karnataka"]
-        for state_name in default_routes:
-            db.session.add(ServiceRoute(state=state_name))
+        default_routes = [
+            ("Goa", "Goa"),
+            ("Maharashtra", "Mumbai"),
+            ("Karnataka", "Mumbai"),
+        ]
+        for state_name, branch_name in default_routes:
+            db.session.add(ServiceRoute(state=state_name, branch=branch_name))
         db.session.flush()
 
     if Customer.query.count() == 0:
@@ -4978,7 +5096,9 @@ def settings():
     department_options = []
     position_options = []
 
-    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
+    service_routes = ServiceRoute.query.order_by(
+        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
+    ).all()
 
     if current_user.is_admin:
         departments = sorted(
@@ -5016,19 +5136,24 @@ def settings_service_route_create():
     if not current_user.is_admin:
         abort(403)
 
-    state_name = clean_str(request.form.get("state"))
-    if not state_name:
-        flash("State name is required to add a route.", "error")
+    route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
+    if not route_name:
+        flash("Route name is required to add a route.", "error")
         return redirect(url_for("settings", tab="modules"))
 
-    existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == state_name.lower()).first()
+    branch_value, error = validate_branch(request.form.get("branch"), required=True)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("settings", tab="modules"))
+
+    existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower()).first()
     if existing:
-        flash("A route for that state already exists.", "error")
+        flash("A route with that name already exists.", "error")
         return redirect(url_for("settings", tab="modules"))
 
-    db.session.add(ServiceRoute(state=state_name))
+    db.session.add(ServiceRoute(state=route_name, branch=branch_value))
     db.session.commit()
-    flash(f"Route '{state_name}' added.", "success")
+    flash(f"Route '{route_name}' for branch {branch_value} added.", "success")
     return redirect(url_for("settings", tab="modules"))
 
 
@@ -5045,7 +5170,7 @@ def settings_service_route_delete(route_id):
 
     db.session.delete(route)
     db.session.commit()
-    flash(f"Route '{route.state}' removed.", "success")
+    flash(f"Route '{route.display_name}' removed.", "success")
     return redirect(url_for("settings", tab="modules"))
 
 
@@ -8529,6 +8654,10 @@ def service_customers_create():
     customer_code = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
     category_value = clean_str(request.form.get("category"))
+    branch_value, branch_error = validate_branch(request.form.get("branch"))
+    if branch_error:
+        flash(branch_error, "error")
+        return redirect(redirect_url)
 
     if not customer_code or not company_name:
         flash("Customer code and company name are required.", "error")
@@ -8556,7 +8685,7 @@ def service_customers_create():
         pincode=clean_str(request.form.get("pincode")),
         country=clean_str(request.form.get("country")),
         sector=category_value,
-        branch=clean_str(request.form.get("branch")),
+        branch=branch_value,
         notes=clean_str(request.form.get("notes")),
         office_address_line1=clean_str(request.form.get("office_address_line1")),
         office_address_line2=clean_str(request.form.get("office_address_line2")),
@@ -8614,6 +8743,10 @@ def service_customer_update(customer_id):
     customer_code_raw = clean_str(request.form.get("customer_code"))
     company_name = clean_str(request.form.get("company_name"))
     category_value = clean_str(request.form.get("category"))
+    branch_value, branch_error = validate_branch(request.form.get("branch"))
+    if branch_error:
+        flash(branch_error, "error")
+        return redirect(url_for("service_customer_detail", customer_id=customer.id))
 
     if not customer_code_raw or not company_name:
         flash("Customer code and company name are required.", "error")
@@ -8642,7 +8775,7 @@ def service_customer_update(customer_id):
     customer.email = clean_str(request.form.get("email"))
     customer.gst_no = clean_str(request.form.get("gst_no"))
     customer.sector = category_value
-    customer.branch = clean_str(request.form.get("branch"))
+    customer.branch = branch_value
     customer.notes = clean_str(request.form.get("notes"))
 
     db.session.commit()
@@ -8718,7 +8851,9 @@ def service_lifts():
 
     lifts = query.order_by(func.lower(Lift.lift_code)).all()
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
-    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
+    service_routes = ServiceRoute.query.order_by(
+        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
+    ).all()
     lift_payloads = [build_lift_payload(lift) for lift in lifts]
 
     return render_template(
@@ -8766,6 +8901,7 @@ def service_lifts_create():
         if not valid_route:
             flash("Select a valid service route from the dropdown.", "error")
             return redirect(redirect_url)
+        route_value = valid_route.state
 
     capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
     if error:
@@ -8868,7 +9004,9 @@ def service_lift_edit(lift_id):
         return redirect(url_for("service_lifts"))
 
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
-    service_routes = ServiceRoute.query.order_by(func.lower(ServiceRoute.state)).all()
+    service_routes = ServiceRoute.query.order_by(
+        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
+    ).all()
     attachments = (
         LiftFile.query.filter_by(lift_id=lift.id)
         .order_by(LiftFile.created_at.desc())
@@ -8934,6 +9072,7 @@ def service_lift_update(lift_id):
         if not valid_route:
             flash("Select a valid service route from the dropdown.", "error")
             return redirect(redirect_url)
+        route_value = valid_route.state
 
     capacity_persons, error = parse_int_field(request.form.get("capacity_persons"), "Capacity (persons)")
     if error:
