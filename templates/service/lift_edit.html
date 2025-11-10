@@ -20,7 +20,8 @@
     <div class="grid gap-4 md:grid-cols-2">
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
-        <input name="lift_code" value="{{ lift.lift_code }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input value="{{ lift.lift_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
+        <p class="text-[11px] text-slate-500">Lift codes are auto-generated and cannot be edited.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
@@ -213,6 +214,14 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next service due</span>
         <input type="date" name="next_service_due" value="{{ lift.next_service_due.isoformat() if lift.next_service_due else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
+        <input type="date" name="preferred_service_date" value="{{ lift.preferred_service_date.isoformat() if lift.preferred_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
+        <input type="time" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
     </div>
     <label class="space-y-1">
       <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Remarks</span>
@@ -331,7 +340,8 @@
     <div class="grid gap-4 md:grid-cols-2">
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
-        <input name="customer_code" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="CUS0006" />
+        <input value="{{ next_customer_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
+        <p class="text-[11px] text-slate-500">Automatically generated on save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>

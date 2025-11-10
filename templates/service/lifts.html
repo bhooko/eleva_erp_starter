@@ -46,7 +46,7 @@
           {% for lift in lifts %}
             <tr class="hover:bg-slate-800/40">
               <td class="px-4 py-3 font-semibold text-theme-primary">
-                <button type="button" data-lift-open="{{ lift.id }}" class="text-left font-semibold text-theme-primary transition hover:text-emerald-200">{{ lift.lift_code }}</button>
+                <a href="{{ url_for('service_lift_detail', lift_id=lift.id) }}" class="text-left font-semibold text-theme-primary transition hover:text-emerald-200">{{ lift.lift_code }}</a>
               </td>
               <td class="px-4 py-3">
                 {% if lift.customer %}
@@ -65,7 +65,7 @@
               <td class="px-4 py-3">{{ lift.next_service_due.strftime('%d %b %Y') if lift.next_service_due else '—' }}</td>
               <td class="px-4 py-3">
                 <div class="flex flex-wrap gap-2">
-                  <button type="button" data-lift-open="{{ lift.id }}" class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20">View</button>
+                  <a href="{{ url_for('service_lift_detail', lift_id=lift.id) }}" class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20">View</a>
                   <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-200 transition hover:bg-slate-800/70">Edit</a>
                 </div>
               </td>
@@ -80,22 +80,6 @@
     </div>
   </div>
 </div>
-
-{% if lift_payloads %}
-  {% for lift_payload in lift_payloads %}
-    <template id="liftDetailTemplate-{{ lift_payload.id }}">
-      {% with payload=lift_payload %}
-        {% include "partials/lift_modal_content.html" %}
-      {% endwith %}
-    </template>
-  {% endfor %}
-{% endif %}
-
-<dialog id="liftDetailModal" class="modal-dialog">
-  <div class="w-full max-w-5xl rounded-2xl border border-slate-800 bg-slate-950/95 p-6 text-sm text-slate-100">
-    <div data-lift-modal-body class="space-y-6"></div>
-  </div>
-</dialog>
 
 <dialog id="liftCreateModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lifts_create') }}" class="w-full max-w-4xl space-y-6 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
@@ -113,7 +97,8 @@
     <div class="grid gap-4 md:grid-cols-2">
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
-        <input name="lift_code" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="G300" />
+        <input value="{{ next_lift_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
+        <p class="text-[11px] text-slate-500">Automatically generated when you save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
@@ -296,6 +281,14 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next service due</span>
         <input type="date" name="next_service_due" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
+        <input type="date" name="preferred_service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
+        <input type="time" name="preferred_service_time" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
     </div>
     <label class="space-y-1">
       <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Remarks</span>
@@ -324,7 +317,8 @@
     <div class="grid gap-4 md:grid-cols-2">
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
-        <input name="customer_code" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="CUS0006" />
+        <input value="{{ next_customer_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
+        <p class="text-[11px] text-slate-500">Automatically generated on save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>
@@ -360,67 +354,6 @@
     </div>
   </form>
 </dialog>
-
-<script>
-  (function() {
-    const modal = document.getElementById('liftDetailModal');
-    if (!modal) {
-      return;
-    }
-    const body = modal.querySelector('[data-lift-modal-body]');
-
-    function closeModal() {
-      if (typeof modal.close === 'function') {
-        modal.close();
-      } else {
-        modal.classList.remove('open');
-      }
-    }
-
-    function openModal(liftId) {
-      if (!body) {
-        return;
-      }
-      const template = document.getElementById(`liftDetailTemplate-${liftId}`);
-      if (!template) {
-        return;
-      }
-      body.innerHTML = '';
-      body.appendChild(template.content.cloneNode(true));
-      if (typeof modal.showModal === 'function') {
-        modal.showModal();
-      } else {
-        modal.classList.add('open');
-      }
-    }
-
-    document.addEventListener('click', (event) => {
-      const openTrigger = event.target.closest('[data-lift-open]');
-      if (openTrigger) {
-        event.preventDefault();
-        openModal(openTrigger.getAttribute('data-lift-open'));
-        return;
-      }
-
-      const closeTrigger = event.target.closest('#liftDetailModal [data-modal-close]');
-      if (closeTrigger) {
-        event.preventDefault();
-        closeModal();
-      }
-    });
-
-    modal.addEventListener('cancel', (event) => {
-      event.preventDefault();
-      closeModal();
-    });
-
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        closeModal();
-      }
-    });
-  })();
-</script>
 
 <script>
   (function() {

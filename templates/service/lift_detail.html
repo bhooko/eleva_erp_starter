@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Lift {{ lift.lift_code }}{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-400"><a href="{{ url_for('service_lifts') }}" class="text-emerald-200 hover:text-emerald-100">Lifts</a> · Overview</p>
+      <h1 class="text-2xl font-semibold text-theme-primary">Lift {{ lift.lift_code }}</h1>
+      <p class="text-sm text-slate-400">{{ lift.lift_type or 'Type not set' }} · {{ lift.capacity_display or 'Capacity not set' }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('service_lifts') }}" class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Back to lifts</a>
+      <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">Edit details</a>
+    </div>
+  </header>
+
+  <section class="space-y-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Lift · {{ lift.lift_code }}</p>
+        <h2 class="text-xl font-semibold text-theme-primary">
+          {% if payload.site_lines %}
+            {{ payload.site_lines[0] }}
+          {% else %}
+            {{ lift.site_address_line1 or 'Site details unavailable' }}
+          {% endif %}
+        </h2>
+        <div class="mt-2 space-y-1 text-xs text-slate-400">
+          {% for line in payload.site_lines[1:] %}
+            <div>{{ line }}</div>
+          {% endfor %}
+          {% for line in payload.customer_lines %}
+            <div>{{ line }}</div>
+          {% endfor %}
+          {% if lift.external_lift_id %}
+            <div>External ID: {{ lift.external_lift_id }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex flex-col items-end gap-2 text-right text-xs text-slate-400">
+        <div><span class="font-semibold text-slate-100">Status:</span> <span class="text-emerald-200">{{ lift.status or 'Not captured' }}</span></div>
+        <div><span class="font-semibold text-slate-100">AMC status:</span> <span class="text-emerald-200">{{ payload.amc.status }}</span></div>
+        {% if lift.preferred_service_date or lift.preferred_service_time %}
+          <div class="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Preferred PM: {{ lift.preferred_service_date.strftime('%d %b %Y') if lift.preferred_service_date else 'Any date' }}{% if lift.preferred_service_time %} · {{ lift.preferred_service_time.strftime('%H:%M') }}{% endif %}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <section class="space-y-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Lifetime value</h3>
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {% for metric in payload.lifetime_metrics %}
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-400">{{ metric.label }}</p>
+            <p class="mt-2 text-lg font-semibold text-emerald-200">{{ metric.display }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="space-y-4">
+      <h3 class="text-lg font-semibold text-theme-primary">Lift details</h3>
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Lift code / ID</dt>
+          <dd class="text-sm text-slate-100">{{ lift.lift_code }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
+          <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Site summary</dt>
+          <dd class="text-sm text-slate-100">{{ payload.site_summary }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer &amp; contact</dt>
+          <dd class="text-sm text-slate-100">{{ payload.customer_summary }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
+          <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Speed (m/s)</dt>
+          <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Floors served</dt>
+          <dd class="text-sm text-slate-100">{{ payload.floors_served }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Controller</dt>
+          <dd class="text-sm text-slate-100">{{ payload.controller_type }} · {{ payload.controller_brand }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
+          <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Drive type</dt>
+          <dd class="text-sm text-slate-100">{{ payload.drive_type }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Location</dt>
+          <dd class="text-sm text-slate-100">{{ payload.location_display }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
+          <dd class="text-sm text-slate-100">{{ payload.machine_make }} · {{ payload.machine_model }} · Serial {{ payload.machine_serial }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Installed</dt>
+          <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Commissioned</dt>
+          <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="space-y-4">
+      <h3 class="text-lg font-semibold text-theme-primary">Remarks &amp; notes</h3>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <h4 class="text-sm font-semibold text-slate-100">Service remarks</h4>
+          <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</p>
+        </div>
+        <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <h4 class="text-sm font-semibold text-slate-100">General notes</h4>
+          <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.notes or 'No notes captured.' }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-4">
+      <h3 class="text-lg font-semibold text-theme-primary">AMC details</h3>
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.status }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC type</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.type }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC start</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.start_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC end</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.end_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Contract value</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.contract_value_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Payment terms</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.payment_terms }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Services per year</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.services_per_year }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Pending services</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.pending_services_count }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Service owner</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.service_owner }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Service contact</dt>
+          <dd class="text-sm text-slate-100">{{ payload.amc.service_contact }}</dd>
+        </div>
+      </dl>
+    </section>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-2">
+    <form method="post" action="{{ url_for('service_lift_update_notes', lift_id=lift.id) }}" class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-sm text-slate-100">
+      <input type="hidden" name="next" value="{{ request.full_path }}" />
+      <h2 class="text-lg font-semibold text-theme-primary">Notes &amp; preferences</h2>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service remarks</span>
+        <textarea name="remarks" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Add service reminders or highlights">{{ lift.remarks or '' }}</textarea>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">General notes</span>
+        <textarea name="notes" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">{{ lift.notes or '' }}</textarea>
+      </label>
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
+          <input type="date" name="preferred_service_date" value="{{ lift.preferred_service_date.isoformat() if lift.preferred_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
+          <input type="time" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        </label>
+      </div>
+      <p class="text-xs text-amber-200/90">Set a preferred window to surface a warning when preventive maintenance is planned.</p>
+      <div class="flex items-center justify-end">
+        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save preferences</button>
+      </div>
+    </form>
+
+    <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+      <h2 class="text-lg font-semibold text-theme-primary">Attachments</h2>
+      {% if attachments %}
+        <ul class="space-y-3 text-sm text-slate-200">
+          {% for attachment in attachments %}
+            <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <a href="{{ url_for('static', filename=attachment.stored_path) }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ attachment.display_label }}</a>
+                <span class="text-xs text-slate-400">{{ attachment.uploaded_display }}</span>
+              </div>
+              <div class="text-xs text-slate-400">
+                {{ attachment.display_size }}
+                {% if attachment.uploaded_by %}
+                  · Uploaded by {{ attachment.uploaded_by.display_name }}
+                {% endif %}
+              </div>
+              {% if attachment.description %}
+                <p class="text-sm text-slate-300">{{ attachment.description }}</p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No attachments uploaded yet.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('service_lift_upload_file', lift_id=lift.id) }}" enctype="multipart/form-data" class="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+        <input type="hidden" name="next" value="{{ request.full_path }}" />
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Display name</span>
+            <input name="label" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Document title" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Category</span>
+            <select name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+              <option value="document">Document</option>
+              <option value="media">Media</option>
+              <option value="other" selected>Other</option>
+            </select>
+          </label>
+        </div>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</span>
+          <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Notes about this attachment (optional)"></textarea>
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Select file</span>
+          <input type="file" name="attachment" class="w-full text-sm text-slate-300" />
+        </label>
+        <div class="flex items-center justify-end">
+          <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Upload file</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-theme-primary">Comments</h2>
+    </div>
+    <div class="mt-4 space-y-3">
+      {% if comments %}
+        <ul class="space-y-3">
+          {% for comment in comments %}
+            <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span class="text-sm font-semibold text-slate-100">{{ comment.author_name }}</span>
+                <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
+              </div>
+              <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No comments recorded yet.</p>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('service_lift_add_comment', lift_id=lift.id) }}" class="mt-4 space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+      <input type="hidden" name="next" value="{{ request.full_path }}" />
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Add a comment</span>
+        <textarea name="body" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Share a status update or observation"></textarea>
+      </label>
+      <div class="flex items-center justify-end">
+        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Post comment</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
