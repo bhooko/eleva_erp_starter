@@ -130,6 +130,67 @@ def parse_time_field(value, label):
     return parsed, None
 
 
+PREFERRED_SERVICE_DATE_BASE_YEAR = 2000
+PREFERRED_SERVICE_DATE_BASE_MONTH = 1
+
+
+def parse_preferred_service_date(value):
+    value = clean_str(value)
+    if not value:
+        return None, None
+    if re.fullmatch(r"0?[1-9]|[12][0-9]|30", value):
+        day = int(value)
+        return (
+            datetime.date(
+                PREFERRED_SERVICE_DATE_BASE_YEAR,
+                PREFERRED_SERVICE_DATE_BASE_MONTH,
+                day,
+            ),
+            None,
+        )
+    parsed = parse_optional_date(value)
+    if not parsed:
+        return (
+            None,
+            "Preferred service date must be a day between 01 and 30 or a valid YYYY-MM-DD date.",
+        )
+    return parsed, None
+
+
+def is_monthly_preference_date(value):
+    if isinstance(value, datetime.datetime):
+        value = value.date()
+    return (
+        isinstance(value, datetime.date)
+        and value.year == PREFERRED_SERVICE_DATE_BASE_YEAR
+        and value.month == PREFERRED_SERVICE_DATE_BASE_MONTH
+    )
+
+
+def format_preferred_service_date(value):
+    if not value:
+        return "—"
+    if isinstance(value, datetime.datetime):
+        value = value.date()
+    if is_monthly_preference_date(value):
+        return f"Day {value.day:02d}"
+    return value.strftime("%d %b %Y")
+
+
+def preferred_service_date_matches(preferred_value, visit_date):
+    if not preferred_value or not visit_date:
+        return False
+    if isinstance(preferred_value, datetime.datetime):
+        preferred_value = preferred_value.date()
+    if isinstance(visit_date, datetime.datetime):
+        visit_date = visit_date.date()
+    if not isinstance(preferred_value, datetime.date) or not isinstance(visit_date, datetime.date):
+        return False
+    if is_monthly_preference_date(preferred_value):
+        return preferred_value.day == visit_date.day
+    return preferred_value == visit_date
+
+
 def validate_branch(value, *, label="Branch", required=False):
     branch_value = clean_str(value)
     if not branch_value:
@@ -2623,7 +2684,7 @@ def build_lift_payload(lift):
 
     preferred_day_key = (lift.preferred_service_day or "").strip().lower()
     preferred_day_display = SERVICE_PREFERRED_DAY_LABELS.get(preferred_day_key)
-    preferred_date_display = format_service_date(lift.preferred_service_date)
+    preferred_date_display = format_preferred_service_date(lift.preferred_service_date)
     preferred_time_display = (
         lift.preferred_service_time.strftime("%H:%M")
         if isinstance(lift.preferred_service_time, datetime.time)
@@ -2633,7 +2694,7 @@ def build_lift_payload(lift):
     if preferred_day_display:
         preference_bits.append(preferred_day_display)
     if lift.preferred_service_date:
-        preference_bits.append(lift.preferred_service_date.strftime("%d %b %Y"))
+        preference_bits.append(format_preferred_service_date(lift.preferred_service_date))
     elif lift.preferred_service_time and not preferred_day_display:
         preference_bits.append("Any date")
     if lift.preferred_service_time:
@@ -9012,16 +9073,18 @@ def service_lifts_create():
 
     lift_code = generate_next_lift_code()
 
-    customer_code_input = clean_str(request.form.get("customer_code"))
+    customer_name_input = clean_str(request.form.get("customer_name"))
     customer_code = None
-    if customer_code_input:
-        customer_code = customer_code_input.upper()
-        customer = Customer.query.filter(func.lower(Customer.customer_code) == customer_code.lower()).first()
+    customer = None
+    if customer_name_input:
+        lowered = customer_name_input.lower()
+        customer = Customer.query.filter(func.lower(Customer.company_name) == lowered).first()
+        if not customer:
+            customer = Customer.query.filter(func.lower(Customer.customer_code) == lowered).first()
         if not customer:
             flash("Select a valid customer from the list or create a new customer.", "error")
             return redirect(redirect_url)
-    else:
-        customer = None
+        customer_code = customer.customer_code
 
     route_value = clean_str(request.form.get("route"))
     if route_value:
@@ -9076,8 +9139,8 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_date, error = parse_date_field(
-        request.form.get("preferred_service_date"), "Preferred service date"
+    preferred_date, error = parse_preferred_service_date(
+        request.form.get("preferred_service_date")
     )
     if error:
         flash(error, "error")
@@ -9117,7 +9180,7 @@ def service_lifts_create():
         city=clean_str(request.form.get("city")),
         state=clean_str(request.form.get("state")),
         pincode=clean_str(request.form.get("pincode")),
-        country=clean_str(request.form.get("country")),
+        country="India",
         route=route_value,
         building_floors=clean_str(request.form.get("building_floors")),
         lift_type=clean_str(request.form.get("lift_type")),
@@ -9301,8 +9364,8 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_date, error = parse_date_field(
-        request.form.get("preferred_service_date"), "Preferred service date"
+    preferred_date, error = parse_preferred_service_date(
+        request.form.get("preferred_service_date")
     )
     if error:
         flash(error, "error")
@@ -9391,8 +9454,8 @@ def service_lift_update_notes(lift_id):
 
     lift.notes = clean_str(request.form.get("notes"))
     lift.remarks = clean_str(request.form.get("remarks"))
-    preferred_date, error = parse_date_field(
-        request.form.get("preferred_service_date"), "Preferred service date"
+    preferred_date, error = parse_preferred_service_date(
+        request.form.get("preferred_service_date")
     )
     if error:
         flash(error, "error")
@@ -9569,15 +9632,16 @@ def service_preventive_maintenance():
 
         messages = []
         if lift_pref.preferred_service_date:
+            preferred_display = format_preferred_service_date(
+                lift_pref.preferred_service_date
+            )
             if isinstance(visit_date, datetime.date):
-                if lift_pref.preferred_service_date != visit_date:
-                    messages.append(
-                        f"Prefers {lift_pref.preferred_service_date.strftime('%d %b %Y')}"
-                    )
+                if not preferred_service_date_matches(
+                    lift_pref.preferred_service_date, visit_date
+                ):
+                    messages.append(f"Prefers {preferred_display}")
             else:
-                messages.append(
-                    f"Prefers {lift_pref.preferred_service_date.strftime('%d %b %Y')}"
-                )
+                messages.append(f"Prefers {preferred_display}")
         if lift_pref.preferred_service_time:
             if isinstance(visit_time, datetime.time):
                 if lift_pref.preferred_service_time != visit_time:

@@ -105,14 +105,14 @@
         <input name="external_lift_id" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1 md:col-span-2">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
-        <input name="customer_code" list="customerOptions" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Select customer" />
-        <datalist id="customerOptions">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer name</span>
+        <input name="customer_name" list="customerNameOptions" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Select customer" />
+        <datalist id="customerNameOptions">
           {% for customer in customers %}
-            <option value="{{ customer.customer_code }}" label="{{ customer.company_name }}"></option>
+            <option value="{{ customer.company_name }}" label="{{ customer.customer_code }}"></option>
           {% endfor %}
         </datalist>
-        <p class="text-xs text-slate-500">Search for an existing customer or use the "New customer" button to create one.</p>
+        <p class="text-xs text-slate-500">Start typing a customer name to filter the list or use the "New customer" button to create one.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Site address line 1</span>
@@ -133,10 +133,6 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
         <input name="pincode" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Country</span>
-        <input name="country" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" value="India" />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
@@ -256,8 +252,17 @@
         <input type="date" name="amc_start" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC duration</span>
+        <select name="amc_duration_years" id="liftAmcDuration" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select duration</option>
+          {% for years in range(1, 6) %}
+            <option value="{{ years }}">{{ years }} year{% if years > 1 %}s{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC end</span>
-        <input type="date" name="amc_end" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="date" name="amc_end" id="liftAmcEnd" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC contract</span>
@@ -293,7 +298,14 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service date</span>
-        <input type="date" name="preferred_service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <select name="preferred_service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">No preference</option>
+          {% for day in range(1, 31) %}
+            {% set day_value = "%02d" % day %}
+            <option value="{{ day_value }}">{{ day_value }}</option>
+          {% endfor %}
+        </select>
+        <p class="text-[11px] text-slate-500">Pick a day of the month (01-30).</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service day</span>
@@ -403,6 +415,36 @@
     }
     setupModal('[data-modal-open="lift-create"]', 'liftCreateModal');
     setupModal('[data-modal-open="customer-create-from-lift"]', 'customerFromLiftModal');
+
+    const amcStartInput = document.querySelector('input[name="amc_start"]');
+    const amcDurationSelect = document.getElementById('liftAmcDuration');
+    const amcEndInput = document.getElementById('liftAmcEnd');
+
+    function updateAmcEndDate() {
+      if (!amcStartInput || !amcDurationSelect || !amcEndInput) return;
+      const startValue = amcStartInput.value;
+      const years = parseInt(amcDurationSelect.value, 10);
+      if (!startValue || Number.isNaN(years)) {
+        amcEndInput.value = '';
+        return;
+      }
+      const parts = startValue.split('-').map((part) => parseInt(part, 10));
+      if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        amcEndInput.value = '';
+        return;
+      }
+      const [year, month, day] = parts;
+      const endDate = new Date(Date.UTC(year, month - 1, day));
+      endDate.setUTCFullYear(endDate.getUTCFullYear() + years);
+      endDate.setUTCDate(endDate.getUTCDate() - 1);
+      const isoValue = endDate.toISOString().slice(0, 10);
+      amcEndInput.value = isoValue;
+    }
+
+    if (amcStartInput && amcDurationSelect) {
+      amcStartInput.addEventListener('change', updateAmcEndDate);
+      amcDurationSelect.addEventListener('change', updateAmcEndDate);
+    }
   })();
 </script>
 {% endblock %}
