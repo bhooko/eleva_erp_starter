@@ -67,7 +67,16 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
-        <input name="route" value="{{ lift.route or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <select name="route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select route</option>
+          {% for route in service_routes %}
+            {% set option_value = route.state %}
+            <option value="{{ option_value }}" {% if lift.route and lift.route|lower == option_value|lower %}selected{% endif %}>{{ route.display_name }}</option>
+          {% endfor %}
+        </select>
+        {% if not service_routes %}
+          <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+        {% endif %}
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building floors</span>
@@ -292,10 +301,6 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mobile</span>
         <input name="mobile" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
-      </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
-        <input name="route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="R1 / R2 / M1" />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Sector</span>
