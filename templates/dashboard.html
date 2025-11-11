@@ -1,47 +1,23 @@
 {% extends "base.html" %}
 {% set view_mode = page_mode or 'dashboard' %}
-{% block title %}Eleva ERP – {{ 'Project Tasks' if view_mode == 'projects' else 'Dashboard' }}{% endblock %}
 
-{% block content %}
-<div class="space-y-6">
-  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-start gap-6 card-hover-lift fade-in-up">
-    <div>
-      <h2 class="text-lg font-semibold text-slate-100">
-        {% if view_mode == 'projects' %}
-          Pending Project Tasks for {{ viewing_user.display_name }}
-        {% else %}
-          Pending Work for {{ viewing_user.display_name }}
-        {% endif %}
-      </h2>
-      <p class="text-sm text-slate-400 mt-1">
-        {% if view_mode == 'projects' %}
-          Focus on the project execution items that still need your attention.
-        {% else %}
-          Only tasks and activities that are still pending across Sales, Projects, and QC modules.
-        {% endif %}
-      </p>
-      {% if current_user.is_admin and viewing_user.id != current_user.id %}
-        <p class="text-xs text-emerald-300/80 mt-2">Administrator view – showing {{ viewing_user.username }}'s workload.</p>
-      {% endif %}
-    </div>
-    <div class="ml-auto text-right">
-      <div class="text-4xl font-bold text-emerald-400">{{ pending_total }}</div>
-      <div class="text-xs uppercase tracking-wide text-slate-400">Pending Items</div>
-    </div>
-  </div>
-
-  {% set cards = namespace(count=0, empty=[]) %}
+{% macro render_dashboard_cards(modules, empty_text) %}
+  {% set cards = namespace(count=0) %}
   <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    {% for module in pending_modules %}
-      {% if module['items'] %}
-        {% for item in module['items'] %}
+    {% for module in modules %}
+      {% set items = module['items'] or [] %}
+      {% if items %}
+        {% for item in items %}
           {% set cards.count = cards.count + 1 %}
           {% set card_index = cards.count - 1 %}
-          <article class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 flex flex-col gap-3 card-hover-lift fade-in-up" style="--fade-delay: {{ card_index * 60 }}ms;">
+          <article
+            class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 flex flex-col gap-3 card-hover-lift fade-in-up"
+            style="--fade-delay: {{ card_index * 60 }}ms;"
+          >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 space-y-1">
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 text-[11px] uppercase tracking-wide text-slate-300">{{ module.module }}</span>
+                  <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 text-[11px] uppercase tracking-wide text-slate-300">{{ module['module'] }}</span>
                   {% if item.identifier %}
                     <span class="text-[11px] text-slate-500 font-mono shrink-0">{{ item.identifier }}</span>
                   {% endif %}
@@ -58,7 +34,11 @@
                 {% if item.due_description or item.due_display %}
                   <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ item.due_class }}">
                     {% if item.due_description %}{{ item.due_description }}{% endif %}
-                    {% if item.due_description and item.due_display %}<span class="text-slate-400 normal-case ml-1">({{ item.due_display }})</span>{% elif item.due_display %}Due {{ item.due_display }}{% endif %}
+                    {% if item.due_description and item.due_display %}
+                      <span class="text-slate-400 normal-case ml-1">({{ item.due_display }})</span>
+                    {% elif item.due_display %}
+                      Due {{ item.due_display }}
+                    {% endif %}
                   </span>
                 {% endif %}
               </div>
@@ -78,24 +58,189 @@
 
             <div class="mt-auto flex flex-wrap gap-2">
               {% if item.url %}
-                <a href="{{ item.url }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 transition btn-shimmer">View Details</a>
+                <a
+                  href="{{ item.url }}"
+                  class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 transition btn-shimmer"
+                >View Details</a>
               {% endif %}
               {% if item.secondary_url %}
-                <a href="{{ item.secondary_url }}" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition btn-shimmer">{{ item.secondary_label }}</a>
+                <a
+                  href="{{ item.secondary_url }}"
+                  class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition btn-shimmer"
+                >{{ item.secondary_label }}</a>
               {% endif %}
             </div>
           </article>
         {% endfor %}
-      {% else %}
-        {% set _ = cards.empty.append(module) %}
       {% endif %}
     {% endfor %}
   </div>
 
   {% if cards.count == 0 %}
     <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
-      Nothing pending — time for a coffee? ☕
+      {{ empty_text }}
     </div>
   {% endif %}
+{% endmacro %}
+
+{% block title %}Eleva ERP – {{ 'Project Tasks' if view_mode == 'projects' else 'Dashboard' }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6" data-dashboard-tabs data-default-tab="my">
+  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-start gap-6 card-hover-lift fade-in-up">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100">
+        {% if view_mode == 'projects' %}
+          <span data-tab-label="my">Pending Project Tasks for {{ viewing_user.display_name }}</span>
+          <span data-tab-label="team" class="hidden">Team Project Tasks for {{ viewing_user.display_name }}</span>
+        {% else %}
+          <span data-tab-label="my">Pending Work for {{ viewing_user.display_name }}</span>
+          <span data-tab-label="team" class="hidden">Team Workload for {{ viewing_user.display_name }}</span>
+        {% endif %}
+      </h2>
+      <p class="text-sm text-slate-400 mt-1">
+        {% if view_mode == 'projects' %}
+          <span data-tab-description="my">Focus on the project execution items that still need your attention.</span>
+          <span data-tab-description="team" class="hidden">See open project and QC work owned by your direct and indirect reports.</span>
+        {% else %}
+          <span data-tab-description="my">Only tasks and activities that are still pending across Sales, Projects, and QC modules.</span>
+          <span data-tab-description="team" class="hidden">Everything pending across your team's assignments in Sales, Projects, and QC.</span>
+        {% endif %}
+      </p>
+      {% if current_user.is_admin and viewing_user.id != current_user.id %}
+        <p class="text-xs text-emerald-300/80 mt-2">Administrator view – showing {{ viewing_user.username }}'s workload.</p>
+      {% endif %}
+    </div>
+    <div class="ml-auto text-right">
+      <div
+        class="text-4xl font-bold text-emerald-400"
+        data-tab-count-display
+        data-my-count="{{ pending_total|default(0) }}"
+        data-team-count="{{ team_pending_total|default(0) }}"
+      >
+        {{ pending_total|default(0) }}
+      </div>
+      <div class="text-xs uppercase tracking-wide text-slate-400">Pending Items</div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3 border-b border-slate-800/80 pb-2" role="tablist" aria-label="Dashboard scope selector">
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+      data-tab-target="my"
+      role="tab"
+      aria-selected="false"
+      aria-controls="dashboard-panel-my"
+      id="dashboard-tab-my"
+    >
+      <span>My Dash</span>
+      <span
+        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+        data-tab-count="my"
+      >{{ pending_total|default(0) }}</span>
+    </button>
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+      data-tab-target="team"
+      role="tab"
+      aria-selected="false"
+      aria-controls="dashboard-panel-team"
+      id="dashboard-tab-team"
+    >
+      <span>Team Dash</span>
+      <span
+        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+        data-tab-count="team"
+      >{{ team_pending_total|default(0) }}</span>
+    </button>
+  </div>
+
+  <div id="dashboard-panel-my" data-tab-panel="my" role="tabpanel" aria-labelledby="dashboard-tab-my">
+    {{ render_dashboard_cards(pending_modules or [], "Nothing pending — time for a coffee? ☕") }}
+  </div>
+
+  <div id="dashboard-panel-team" data-tab-panel="team" role="tabpanel" aria-labelledby="dashboard-tab-team" class="hidden">
+    {% if team_members %}
+      {{ render_dashboard_cards(team_pending_modules or [], "Your team has no pending work right now. 🎉") }}
+    {% else %}
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
+        No team members are currently reporting to you.
+      </div>
+    {% endif %}
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('[data-dashboard-tabs]').forEach(function (root) {
+        const buttons = root.querySelectorAll('[data-tab-target]');
+        const panels = root.querySelectorAll('[data-tab-panel]');
+        if (!buttons.length || !panels.length) {
+          return;
+        }
+
+        const countDisplay = root.querySelector('[data-tab-count-display]');
+        const labelTargets = root.querySelectorAll('[data-tab-label]');
+        const descriptionTargets = root.querySelectorAll('[data-tab-description]');
+        const badgeTargets = root.querySelectorAll('[data-tab-count]');
+
+        function activate(target) {
+          const normalized = target === 'team' ? 'team' : 'my';
+
+          buttons.forEach(function (button) {
+            const isActive = button.dataset.tabTarget === normalized;
+            button.classList.toggle('bg-slate-800/80', isActive);
+            button.classList.toggle('text-slate-100', isActive);
+            button.classList.toggle('border-slate-700', isActive);
+            button.classList.toggle('text-slate-400', !isActive);
+            button.classList.toggle('border-transparent', !isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          });
+
+          panels.forEach(function (panel) {
+            const isActive = panel.dataset.tabPanel === normalized;
+            panel.classList.toggle('hidden', !isActive);
+          });
+
+          labelTargets.forEach(function (label) {
+            const isActive = label.dataset.tabLabel === normalized;
+            label.classList.toggle('hidden', !isActive);
+          });
+
+          descriptionTargets.forEach(function (description) {
+            const isActive = description.dataset.tabDescription === normalized;
+            description.classList.toggle('hidden', !isActive);
+          });
+
+          badgeTargets.forEach(function (badge) {
+            const isActive = badge.dataset.tabCount === normalized;
+            badge.classList.toggle('bg-emerald-500/80', isActive);
+            badge.classList.toggle('text-slate-900', isActive);
+            badge.classList.toggle('bg-slate-800/70', !isActive);
+            badge.classList.toggle('text-slate-200', !isActive);
+          });
+
+          if (countDisplay) {
+            const datasetKey = normalized === 'team' ? 'teamCount' : 'myCount';
+            const value = countDisplay.dataset[datasetKey] || '0';
+            countDisplay.textContent = value;
+          }
+        }
+
+        const initial = root.dataset.defaultTab || (buttons[0] && buttons[0].dataset.tabTarget) || 'my';
+        activate(initial);
+
+        buttons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            activate(button.dataset.tabTarget || 'my');
+          });
+        });
+      });
+    });
+  </script>
 {% endblock %}

@@ -8159,7 +8159,13 @@ def _build_task_overview(viewing_user: "User"):
             return "scheduled"
         return "open"
 
-    def _build_pending_modules(viewing_user, open_tasks, now):
+    def _build_pending_modules(
+        viewing_user,
+        open_tasks,
+        now,
+        assignee_lookup=None,
+        sales_user_ids=None,
+    ):
         modules_map = OrderedDict()
         module_order = []
 
@@ -8214,6 +8220,10 @@ def _build_task_overview(viewing_user: "User"):
             if task.project and task.project.name:
                 metadata.append(f"Project: {task.project.name}")
 
+            assignee_user = None
+            if assignee_lookup:
+                assignee_user = assignee_lookup.get(getattr(task, "assigned_to", None))
+
             module["items"].append(
                 {
                     "title": task.display_title,
@@ -8230,7 +8240,17 @@ def _build_task_overview(viewing_user: "User"):
                     if task.template_id
                     else None,
                     "secondary_label": "New Submission" if task.template_id else None,
-                    "metadata": metadata,
+                    "metadata": metadata
+                    + (
+                        []
+                        if not assignee_user
+                        or (viewing_user and assignee_user.id == viewing_user.id)
+                        else [
+                            f"Owner: {assignee_user.display_name}"
+                            if assignee_user.display_name
+                            else f"Owner: {assignee_user.username}"
+                        ]
+                    ),
                 }
             )
 
@@ -8244,21 +8264,35 @@ def _build_task_overview(viewing_user: "User"):
                     "No pending sales activities.",
                     "Upcoming and overdue sales engagements on your opportunities.",
                 )
-            sales_items = (
-                SalesOpportunityEngagement.query
-                .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
-                .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
-                .filter(
-                    or_(
+            sales_filters = []
+            if sales_user_ids is None:
+                if viewing_user:
+                    sales_filters = [
                         SalesOpportunity.owner_id == viewing_user.id,
                         SalesOpportunityEngagement.created_by_id == viewing_user.id,
+                    ]
+            else:
+                allowed_ids = [uid for uid in set(sales_user_ids) if uid]
+                if allowed_ids:
+                    sales_filters = [
+                        SalesOpportunity.owner_id.in_(allowed_ids),
+                        SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
+                    ]
+            sales_items = []
+            if sales_filters:
+                sales_items = (
+                    SalesOpportunityEngagement.query
+                    .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
+                    .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
+                    .filter(or_(*sales_filters))
+                    .filter(func.lower(SalesOpportunity.status) != "closed")
+                    .order_by(
+                        SalesOpportunityEngagement.scheduled_for.asc(),
+                        SalesOpportunityEngagement.id.asc(),
                     )
+                    .limit(50)
+                    .all()
                 )
-                .filter(func.lower(SalesOpportunity.status) != "closed")
-                .order_by(SalesOpportunityEngagement.scheduled_for.asc(), SalesOpportunityEngagement.id.asc())
-                .limit(50)
-                .all()
-            )
 
             for activity in sales_items:
                 opportunity = activity.opportunity
@@ -8272,6 +8306,22 @@ def _build_task_overview(viewing_user: "User"):
                         metadata.append(opportunity.stage)
                     if opportunity.client and opportunity.client.display_name:
                         metadata.append(f"Client: {opportunity.client.display_name}")
+
+                if assignee_lookup:
+                    owner_user = None
+                    if opportunity and opportunity.owner_id:
+                        owner_user = assignee_lookup.get(opportunity.owner_id)
+                    if owner_user and owner_user.display_name:
+                        owner_label = f"Owner: {owner_user.display_name}"
+                        if owner_label not in metadata:
+                            metadata.append(owner_label)
+                    planner_user = None
+                    if activity.created_by_id:
+                        planner_user = assignee_lookup.get(activity.created_by_id)
+                    if planner_user and planner_user.display_name:
+                        planner_label = f"Planner: {planner_user.display_name}"
+                        if planner_label not in metadata:
+                            metadata.append(planner_label)
 
                 sales_module["items"].append(
                     {
@@ -8296,6 +8346,59 @@ def _build_task_overview(viewing_user: "User"):
         pending_modules = [modules_map[label] for label in module_order]
         pending_total = sum(len(module["items"]) for module in pending_modules)
         return pending_modules, pending_total
+
+    def _team_members_for(user):
+        if not user:
+            return []
+
+        members = []
+        seen_positions = set()
+        stack = []
+
+        position = getattr(user, "position", None)
+        if position and getattr(position, "direct_reports", None):
+            stack.extend(list(position.direct_reports))
+
+        if not stack and user.is_admin:
+            query = User.query.filter(User.id != user.id)
+            query = query.filter(User.active.is_(True))
+            ordered = query.order_by(
+                User.first_name.asc(),
+                User.last_name.asc(),
+                User.username.asc(),
+            ).all()
+            return ordered
+
+        while stack:
+            pos = stack.pop()
+            if not pos:
+                continue
+            pos_id = getattr(pos, "id", None)
+            if pos_id in seen_positions:
+                continue
+            seen_positions.add(pos_id)
+            direct_reports = list(getattr(pos, "direct_reports", []) or [])
+            if direct_reports:
+                stack.extend(direct_reports)
+            if not getattr(pos, "active", True):
+                continue
+            for member in list(getattr(pos, "users", []) or []):
+                if not member or getattr(member, "id", None) is None:
+                    continue
+                if member.id == user.id:
+                    continue
+                if not member.is_active:
+                    continue
+                members.append(member)
+
+        unique_members = []
+        seen_member_ids = set()
+        for member in members:
+            if member.id in seen_member_ids:
+                continue
+            seen_member_ids.add(member.id)
+            unique_members.append(member)
+        return unique_members
 
     status_order = case(
         (QCWork.status == "In Progress", 0),
@@ -8347,6 +8450,30 @@ def _build_task_overview(viewing_user: "User"):
 
     pending_modules, pending_total = _build_pending_modules(viewing_user, open_tasks, now)
 
+    team_members = _team_members_for(viewing_user)
+    team_user_ids = sorted(
+        {member.id for member in team_members if getattr(member, "id", None)}
+    )
+    team_pending_modules = []
+    team_pending_total = 0
+    if team_user_ids:
+        team_tasks = (
+            QCWork.query
+            .filter(QCWork.assigned_to.in_(team_user_ids))
+            .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
+            .all()
+        )
+        team_actionable_tasks = [task for task in team_tasks if task.dependency_satisfied]
+        team_open_tasks = [task for task in team_actionable_tasks if task.status != "Closed"]
+        assignment_lookup = {member.id: member for member in team_members}
+        team_pending_modules, team_pending_total = _build_pending_modules(
+            viewing_user,
+            team_open_tasks,
+            now,
+            assignee_lookup=assignment_lookup,
+            sales_user_ids=team_user_ids,
+        )
+
     return {
         "open_tasks": open_tasks,
         "closed_tasks": closed_tasks,
@@ -8357,6 +8484,9 @@ def _build_task_overview(viewing_user: "User"):
         "team_load": team_load,
         "pending_modules": pending_modules,
         "pending_total": pending_total,
+        "team_pending_modules": team_pending_modules,
+        "team_pending_total": team_pending_total,
+        "team_members": team_members,
     }
 
 
@@ -8408,6 +8538,16 @@ def projects_pending():
     ]
     context["pending_modules"] = project_modules
     context["pending_total"] = sum(len(module.get("items", [])) for module in project_modules)
+
+    team_project_modules = [
+        module
+        for module in context.get("team_pending_modules", [])
+        if module.get("module") in {"Projects", "Quality Control"}
+    ]
+    context["team_pending_modules"] = team_project_modules
+    context["team_pending_total"] = sum(
+        len(module.get("items", [])) for module in team_project_modules
+    )
 
     return render_template("dashboard.html", **context)
 
