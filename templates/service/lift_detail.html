@@ -26,17 +26,11 @@
               {{ lift.site_address_line1 or 'Site details unavailable' }}
             {% endif %}
           </h2>
-          <div class="mt-2 space-y-1 text-xs text-slate-400">
-            {% for line in payload.site_lines[1:] %}
-              <div>{{ line }}</div>
-            {% endfor %}
-            {% for line in payload.customer_lines %}
-              <div>{{ line }}</div>
-            {% endfor %}
-            {% if lift.external_lift_id %}
+          {% if lift.external_lift_id %}
+            <div class="mt-2 text-xs text-slate-400">
               <div>External ID: {{ lift.external_lift_id }}</div>
-            {% endif %}
-          </div>
+            </div>
+          {% endif %}
         </div>
         <div class="flex flex-col items-end gap-2 text-right text-xs text-slate-400">
           <div><span class="font-semibold text-slate-100">Status:</span> <span class="text-emerald-200">{{ lift.status or 'Not captured' }}</span></div>
@@ -485,18 +479,16 @@
       <ul class="space-y-3">
         {% for entry in payload.timeline %}
           <li class="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div class="flex items-center gap-2">
+            <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <div class="flex flex-wrap items-center gap-2">
                 <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-400">{{ entry.category }}</span>
                 <span class="text-sm font-semibold text-slate-100">{{ entry.title }}</span>
+                {% if entry.actor_label or entry.actor_name %}
+                  <span class="rounded-full bg-slate-800/70 px-2 py-1 text-xs text-slate-300">{{ entry.actor_label or entry.actor_name }}</span>
+                {% endif %}
               </div>
-              <span class="text-xs text-slate-400">{{ entry.date_display }}</span>
+              <span class="text-xs text-slate-400 sm:pt-1">{{ entry.date_display }}</span>
             </div>
-            {% if entry.actor_label or entry.actor_name %}
-              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span class="rounded-full bg-slate-800/70 px-2 py-1">{{ entry.actor_label or entry.actor_name }}</span>
-              </div>
-            {% endif %}
             {% if entry.detail %}
               <p class="mt-2 text-sm text-slate-300">{{ entry.detail }}</p>
             {% endif %}
@@ -832,7 +824,7 @@
   </form>
 </dialog>
 <dialog id="liftServiceScheduleModal" class="modal-dialog">
-  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" enctype="multipart/form-data" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" enctype="multipart/form-data" class="w-full max-w-5xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
     <div class="flex items-start justify-between gap-4">
       <div>
         <h2 class="text-lg font-semibold text-theme-primary">Edit service schedule</h2>
@@ -850,26 +842,24 @@
               <p class="text-sm font-semibold text-slate-100">Bulk create schedule</p>
               <p>Set the first visit date to auto-generate {{ payload.amc.services_per_year }} services this year.</p>
             </div>
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <label class="flex flex-col gap-1 text-xs uppercase tracking-wide text-slate-400">
-                <span>First service date</span>
-                <input type="date" id="bulkServiceStartDate" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-100" />
-              </label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <label for="bulkServiceStartDate" class="text-xs uppercase tracking-wide text-slate-400">First service date</label>
+              <input type="date" id="bulkServiceStartDate" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-100 sm:w-auto" />
               <button type="button" data-bulk-generate class="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20">Generate</button>
             </div>
           </div>
         </div>
       {% endif %}
-      <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-5">
         <div>Service date</div>
         <div>Technician</div>
         <div>Status</div>
-        <div>Service slip</div>
+        <div class="xl:col-span-2">Service slip</div>
       </div>
       <div id="serviceScheduleList" class="space-y-3">
         {% set schedule_entries = payload.service_schedule if payload.service_schedule else [{'date_iso': '', 'technician_value': '', 'status_key': 'scheduled', 'slip_url': '', 'slip_label': '', 'slip_display_label': '', 'slip_stored': '', 'has_slip': False, 'allow_overdue': False}] %}
         {% for visit in schedule_entries %}
-          <div class="grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-4" data-service-row data-allow-overdue="{{ 'true' if visit.allow_overdue else 'false' }}" data-status="{{ visit.status_key }}">
+          <div class="grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-5" data-service-row data-allow-overdue="{{ 'true' if visit.allow_overdue else 'false' }}" data-status="{{ visit.status_key }}">
             <label class="space-y-1">
               <span class="sr-only">Service date</span>
               <input type="date" name="service_date" value="{{ visit.date_iso }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
@@ -882,34 +872,28 @@
               <span class="sr-only">Status</span>
               <select name="service_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
                 {% for value, label in service_visit_status_options %}
-                  {% if value != 'overdue' or visit.allow_overdue or visit.status_key == 'overdue' %}
-                    <option value="{{ value }}" {% if visit.status_key == value %}selected{% endif %}>{{ label }}</option>
-                  {% endif %}
+                  <option value="{{ value }}" {% if value == 'overdue' %}data-overdue-option="true" {% if not visit.allow_overdue and visit.status_key != 'overdue' %}disabled hidden{% endif %}{% endif %} {% if visit.status_key == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
             </label>
-            <div class="space-y-2">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 xl:col-span-2">
               <input type="hidden" name="service_slip_existing" value="{{ visit.slip_stored or '' }}">
               <input type="hidden" name="service_slip_label" value="{{ visit.slip_label or '' }}">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div class="flex-1 space-y-2">
-                  {% if visit.has_slip and visit.slip_url %}
-                    <a href="{{ visit.slip_url }}" target="_blank" rel="noopener" data-existing-slip class="inline-flex items-center gap-2 text-xs font-semibold text-emerald-200 hover:text-emerald-100">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13.5A2.25 2.25 0 0 1 3 15.75v-9A2.25 2.25 0 0 1 5.25 4.5h9l6.75 6.75" />
-                      </svg>
-                      <span>Current slip{% if visit.slip_display_label %}: {{ visit.slip_display_label }}{% endif %}</span>
-                    </a>
-                  {% else %}
-                    <p class="text-xs text-slate-500" data-no-slip>No file attached.</p>
-                  {% endif %}
-                  <label class="block">
-                    <span class="sr-only">Upload service slip</span>
-                    <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
-                  </label>
-                </div>
-                <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+              <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                {% if visit.has_slip and visit.slip_url %}
+                  <a href="{{ visit.slip_url }}" target="_blank" rel="noopener" data-existing-slip class="inline-flex items-center gap-2 text-xs font-semibold text-emerald-200 hover:text-emerald-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13.5A2.25 2.25 0 0 1 3 15.75v-9A2.25 2.25 0 0 1 5.25 4.5h9l6.75 6.75" />
+                    </svg>
+                    <span>Current slip{% if visit.slip_display_label %}: {{ visit.slip_display_label }}{% endif %}</span>
+                  </a>
+                {% endif %}
+                <label class="block">
+                  <span class="sr-only">Upload service slip</span>
+                  <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
+                </label>
               </div>
+              <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70 sm:self-start">Remove</button>
             </div>
           </div>
         {% endfor %}
@@ -1179,30 +1163,16 @@
     const routeTechnicianPlaceholder = {{ (payload.route_display if payload.route_display != '—' else 'Route technician') | tojson }};
 
     const addableStatusOptions = (scheduleStatusOptions || []).filter(([value]) => value !== 'overdue');
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-    function ensureNoSlipNotice(row) {
-      const container = row.querySelector('.flex-1.space-y-2');
-      if (!container) return;
-      const existingLink = container.querySelector('[data-existing-slip]');
-      const currentNotice = container.querySelector('[data-no-slip]');
-      if (existingLink) {
-        if (currentNotice) {
-          currentNotice.remove();
-        }
-        return;
+    function getDefaultStatusValue(select) {
+      if (!select) return '';
+      const preferredOption = Array.from(select.options).find((option) => option.value && option.value !== 'overdue');
+      if (preferredOption) {
+        return preferredOption.value;
       }
-      if (!currentNotice) {
-        const notice = document.createElement('p');
-        notice.className = 'text-xs text-slate-500';
-        notice.dataset.noSlip = 'true';
-        notice.textContent = 'No file attached.';
-        const firstLabel = container.querySelector('label');
-        if (firstLabel) {
-          container.insertBefore(notice, firstLabel);
-        } else {
-          container.appendChild(notice);
-        }
-      }
+      return select.options.length ? select.options[0].value : '';
     }
 
     function enforceOverdueAvailability(row, select) {
@@ -1222,6 +1192,37 @@
           row.setAttribute('data-status', fallback);
         }
       }
+    }
+
+    function updateRowStatusBasedOnDate(row) {
+      if (!row) return;
+      const select = row.querySelector('select[name="service_status"]');
+      if (!select) return;
+      const dateInput = row.querySelector('input[name="service_date"]');
+      const isCompleted = select.value === 'completed';
+      let allowOverdue = false;
+      if (dateInput && dateInput.value) {
+        const visitDate = new Date(`${dateInput.value}T00:00:00`);
+        if (!Number.isNaN(visitDate.getTime()) && visitDate < todayStart && !isCompleted) {
+          allowOverdue = true;
+        }
+      }
+      row.setAttribute('data-allow-overdue', allowOverdue ? 'true' : 'false');
+      enforceOverdueAvailability(row, select);
+      if (allowOverdue && !isCompleted) {
+        if (select.value !== 'overdue') {
+          select.value = 'overdue';
+        }
+      } else if (select.value === 'overdue') {
+        const fallback = getDefaultStatusValue(select);
+        if (fallback) {
+          select.value = fallback;
+        } else {
+          select.value = '';
+        }
+      }
+      row.setAttribute('data-status', select.value);
+      updateServiceRemoveButtons();
     }
 
     function updateServiceRemoveButtons() {
@@ -1248,12 +1249,19 @@
 
     function createServiceRow() {
       const wrapper = document.createElement('div');
-      wrapper.className = 'grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-4';
+      wrapper.className = 'grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-5';
       wrapper.setAttribute('data-service-row', 'true');
       wrapper.setAttribute('data-allow-overdue', 'false');
-      const optionSource = addableStatusOptions.length ? addableStatusOptions : (scheduleStatusOptions || []);
-      const optionsHtml = optionSource
-        .map(([value, label]) => `<option value="${value}">${label}</option>`)
+      const optionSource = (scheduleStatusOptions && scheduleStatusOptions.length)
+        ? scheduleStatusOptions
+        : addableStatusOptions;
+      const optionsHtml = (optionSource || [])
+        .map(([value, label]) => {
+          if (value === 'overdue') {
+            return `<option value="${value}" data-overdue-option="true" disabled hidden>${label}</option>`;
+          }
+          return `<option value="${value}">${label}</option>`;
+        })
         .join('');
       wrapper.innerHTML = `
         <label class="space-y-1">
@@ -1270,25 +1278,20 @@
             ${optionsHtml}
           </select>
         </label>
-        <div class="space-y-2">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 xl:col-span-2">
           <input type="hidden" name="service_slip_existing" value="">
           <input type="hidden" name="service_slip_label" value="">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div class="flex-1 space-y-2">
-              <p class="text-xs text-slate-500" data-no-slip>No file attached.</p>
-              <label class="block">
-                <span class="sr-only">Upload service slip</span>
-                <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
-              </label>
-            </div>
-            <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            <label class="block">
+              <span class="sr-only">Upload service slip</span>
+              <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
+            </label>
           </div>
+          <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70 sm:self-start">Remove</button>
         </div>
       `;
       const select = wrapper.querySelector('select[name="service_status"]');
-      const defaultValue = (addableStatusOptions[0] && addableStatusOptions[0][0])
-        || (scheduleStatusOptions && scheduleStatusOptions[0] && scheduleStatusOptions[0][0])
-        || '';
+      const defaultValue = getDefaultStatusValue(select);
       if (select && defaultValue) {
         select.value = defaultValue;
       }
@@ -1316,8 +1319,14 @@
         statusSelect.onchange = () => {
           enforceOverdueAvailability(row, statusSelect);
           row.setAttribute('data-status', statusSelect.value);
-          updateServiceRemoveButtons();
+          updateRowStatusBasedOnDate(row);
         };
+      }
+      const dateInput = row.querySelector('input[name="service_date"]');
+      if (dateInput) {
+        dateInput.addEventListener('change', () => {
+          updateRowStatusBasedOnDate(row);
+        });
       }
       const removeButton = row.querySelector('.remove-service');
       if (removeButton) {
@@ -1350,12 +1359,11 @@
             if (existingLink) {
               existingLink.remove();
             }
-            ensureNoSlipNotice(row);
             updateServiceRemoveButtons();
           }
         };
       }
-      ensureNoSlipNotice(row);
+      updateRowStatusBasedOnDate(row);
     }
 
     function refreshServiceRows() {
