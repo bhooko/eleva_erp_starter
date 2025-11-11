@@ -323,6 +323,11 @@
             <div class="text-xs text-slate-400">{{ entry.date_display }}</div>
           </div>
           <div class="mt-2 text-sm font-semibold text-slate-100">{{ entry.title }}</div>
+          {% if entry.actor_label or entry.actor_name %}
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span class="rounded-full bg-slate-800/70 px-2 py-1">{{ entry.actor_label or entry.actor_name }}</span>
+            </div>
+          {% endif %}
           <p class="mt-1 text-sm text-slate-300">{{ entry.detail }}</p>
         </li>
       {% else %}

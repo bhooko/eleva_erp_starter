@@ -307,7 +307,11 @@ DOOR_FINISH_OPTIONS = ["SS H/L", "SS Mirror", "MS"]
 POWER_SUPPLY_OPTIONS = ["1 Phase", "3 Phase"]
 AMC_STATUS_OPTIONS = ["Active", "Expired", "Renewal Pending", "Call Basis"]
 
-SERVICE_VISIT_STATUS_OPTIONS = [("scheduled", "Scheduled"), ("due", "Due")]
+SERVICE_VISIT_STATUS_OPTIONS = [
+    ("scheduled", "Scheduled"),
+    ("completed", "Completed"),
+    ("overdue", "Overdue"),
+]
 SERVICE_VISIT_STATUS_LABELS = {
     value: label for value, label in SERVICE_VISIT_STATUS_OPTIONS
 }
@@ -1774,7 +1778,7 @@ def _log_srt_activity(task_id, **payload):
     if not task_id:
         return
 
-    event = dict(payload)
+    event = apply_actor_context(payload)
     event.setdefault("timestamp", datetime.datetime.utcnow())
     SRT_TASK_ACTIVITY.setdefault(task_id, []).append(event)
 
@@ -2082,7 +2086,7 @@ def _handle_customer_support_ticket_creation():
 
     ticket_id = _generate_customer_support_ticket_id()
     created_at = datetime.datetime.utcnow()
-    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    actor_info = timeline_actor_context()
 
     timeline_detail_parts = []
     if channel_label:
@@ -2124,8 +2128,8 @@ def _handle_customer_support_ticket_creation():
                 "type": "status",
                 "label": "Ticket logged",
                 "visibility": "external",
-                "actor": actor_name,
                 "detail": timeline_detail or "Ticket created manually.",
+                **actor_info,
             }
         ],
         "linked_tasks": [],
@@ -2804,6 +2808,53 @@ def format_duration_hours(value):
     return f"{hours:.1f} hrs"
 
 
+def timeline_actor_context(actor_name=None, actor_role=None):
+    name = (actor_name or "").strip()
+    role = (actor_role or "").strip().lower()
+
+    if not name:
+        if current_user.is_authenticated:
+            name = (
+                current_user.display_name
+                or current_user.email
+                or current_user.username
+                or "User"
+            )
+            role = role or ("admin" if current_user.is_admin else "user")
+        else:
+            name = "System"
+
+    if not role:
+        role = "system" if name.strip().lower() == "system" else "user"
+
+    if role not in {"system", "admin", "user"}:
+        role = "user"
+
+    if role == "system":
+        label = "System"
+        normalized_name = "System"
+    else:
+        normalized_name = name or ("Admin" if role == "admin" else "User")
+        role_label = "Admin" if role == "admin" else "User"
+        label = f"{role_label} · {normalized_name}" if normalized_name else role_label
+
+    return {
+        "actor": normalized_name,
+        "actor_role": role,
+        "actor_label": label,
+    }
+
+
+def apply_actor_context(entry, actor_name=None, actor_role=None):
+    payload = dict(entry or {})
+    actor_fields = timeline_actor_context(
+        actor_name or payload.get("actor"),
+        actor_role or payload.get("actor_role"),
+    )
+    payload.update(actor_fields)
+    return payload
+
+
 def is_lift_open(lift):
     status = (lift.status or "").strip().lower()
     return not status or status not in {"inactive", "scrapped", "decommissioned"}
@@ -3035,6 +3086,7 @@ def build_lift_payload(lift):
                 "slip_display_label": slip_display_label,
                 "slip_stored": slip_raw,
                 "has_slip": bool(slip_href),
+                "allow_overdue": True,
             }
         )
 
@@ -3164,21 +3216,29 @@ def build_lift_payload(lift):
     stored_timeline = lift.timeline_entries
     if stored_timeline:
         for item in stored_timeline:
+            actor_info = apply_actor_context(item)
             timeline_entries.append(
                 {
                     "date_display": format_service_date(item.get("date")),
                     "title": item.get("title", "—"),
                     "detail": item.get("detail", ""),
                     "category": item.get("category", "Update"),
+                    "actor_label": actor_info.get("actor_label"),
+                    "actor_role": actor_info.get("actor_role"),
+                    "actor_name": actor_info.get("actor"),
                 }
             )
     for item in insight_config.get("timeline", []) or []:
+        actor_info = apply_actor_context(item)
         timeline_entries.append(
             {
                 "date_display": format_service_date(item.get("date")),
                 "title": item.get("title", "—"),
                 "detail": item.get("detail", ""),
                 "category": item.get("category", "Update"),
+                "actor_label": actor_info.get("actor_label"),
+                "actor_role": actor_info.get("actor_role"),
+                "actor_name": actor_info.get("actor"),
             }
         )
 
@@ -4755,12 +4815,16 @@ class Lift(db.Model):
                     parsed_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
                 except ValueError:
                     parsed_date = None
+            actor_info = apply_actor_context(item)
             entries.append(
                 {
                     "date": parsed_date,
                     "title": item.get("title") or "—",
                     "detail": item.get("detail") or "",
                     "category": item.get("category") or "Update",
+                    "actor": actor_info.get("actor"),
+                    "actor_role": actor_info.get("actor_role"),
+                    "actor_label": actor_info.get("actor_label"),
                 }
             )
         return entries
@@ -4790,12 +4854,16 @@ class Lift(db.Model):
                         iso_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date().isoformat()
                     except ValueError:
                         iso_date = None
+            actor_info = apply_actor_context(item)
             cleaned.append(
                 {
                     "date": iso_date,
                     "title": title,
                     "detail": detail or "",
                     "category": category,
+                    "actor": actor_info.get("actor"),
+                    "actor_role": actor_info.get("actor_role"),
+                    "actor_label": actor_info.get("actor_label"),
                 }
             )
         self.timeline_entries_json = json.dumps(cleaned, ensure_ascii=False)
@@ -9295,7 +9363,10 @@ def customer_support_tasks():
     has_open_linked_tasks = False
     if selected_ticket:
         timeline = sorted(
-            selected_ticket.get("timeline", []),
+            (
+                apply_actor_context(event)
+                for event in selected_ticket.get("timeline", [])
+            ),
             key=lambda event: event.get("timestamp"),
             reverse=True,
         )
@@ -9305,7 +9376,10 @@ def customer_support_tasks():
             has_open_linked_tasks = _ticket_has_open_linked_tasks(selected_ticket)
 
         timeline_chronological = sorted(
-            selected_ticket.get("timeline", []),
+            (
+                apply_actor_context(event)
+                for event in selected_ticket.get("timeline", [])
+            ),
             key=lambda event: event.get("timestamp"),
         )
         for entry in timeline_chronological:
@@ -9479,15 +9553,15 @@ def customer_support_update_ticket(ticket_id):
         return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
     ticket["updated_at"] = datetime.datetime.utcnow()
-    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    actor_info = timeline_actor_context()
     ticket.setdefault("timeline", []).append(
         {
             "timestamp": datetime.datetime.utcnow(),
             "type": "status",
             "label": "Ticket details updated",
             "visibility": "internal",
-            "actor": actor_name,
             "detail": "; ".join(changes),
+            **actor_info,
         }
     )
 
@@ -9498,8 +9572,8 @@ def customer_support_update_ticket(ticket_id):
                 "type": "comment",
                 "label": "Closing remarks",
                 "visibility": "internal",
-                "actor": actor_name,
                 "comment": closing_comment,
+                **actor_info,
             }
         )
 
@@ -9527,7 +9601,7 @@ def customer_support_mark_ticket_resolved(ticket_id):
 
     current_status = (ticket.get("status") or "").strip()
     now = datetime.datetime.utcnow()
-    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    actor_info = timeline_actor_context()
 
     if current_status.lower() not in {"resolved", "closed"}:
         ticket["status"] = "Resolved"
@@ -9539,8 +9613,8 @@ def customer_support_mark_ticket_resolved(ticket_id):
                 "type": "status",
                 "label": "Ticket marked resolved",
                 "visibility": "internal",
-                "actor": actor_name,
                 "detail": f"Status changed from {previous_label} to Resolved.",
+                **actor_info,
             }
         )
     else:
@@ -9552,8 +9626,8 @@ def customer_support_mark_ticket_resolved(ticket_id):
             "type": "comment",
             "label": "Closing remarks",
             "visibility": "internal",
-            "actor": actor_name,
             "comment": closing_comment,
+            **actor_info,
         }
     )
 
@@ -9606,15 +9680,15 @@ def customer_support_post_update(ticket_id):
     if attachments_added:
         ticket.setdefault("attachments", []).extend(attachments_added)
 
-    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    actor_info = timeline_actor_context()
     visibility_label = "External update" if is_external else "Internal note"
     timeline_entry = {
         "timestamp": datetime.datetime.utcnow(),
         "type": "comment" if comment else "attachment",
         "label": visibility_label,
         "visibility": "external" if is_external else "internal",
-        "actor": actor_name,
     }
+    timeline_entry.update(actor_info)
 
     if comment:
         timeline_entry["comment"] = comment
@@ -10533,6 +10607,7 @@ def service_lift_update(lift_id):
         detail = clean_str(request.form.get("timeline_detail"))
         category = clean_str(request.form.get("timeline_category")) or "Update"
         entries = list(lift.timeline_entries)
+        actor_info = timeline_actor_context()
         entries.insert(
             0,
             {
@@ -10540,6 +10615,7 @@ def service_lift_update(lift_id):
                 "title": title,
                 "detail": detail,
                 "category": category,
+                **actor_info,
             },
         )
         lift.timeline_entries = entries
@@ -11208,10 +11284,13 @@ def srt_task_create():
     )
 
     actor_name = None
+    actor_role = None
     if current_user.is_authenticated:
         actor_name = current_user.display_name
+        actor_role = "admin" if current_user.is_admin else "user"
     elif owner and owner != "Unassigned":
         actor_name = owner
+        actor_role = "user"
 
     _log_srt_activity(
         task_id,
@@ -11219,6 +11298,7 @@ def srt_task_create():
         label="Task created",
         detail=f"{task_name} — {summary}" if summary else task_name,
         actor=actor_name or "System",
+        actor_role=actor_role,
     )
 
     flash("SRT task added to the board.", "success")
@@ -11242,26 +11322,41 @@ def srt_task_data(task_id):
     due_date = task.get("due_date")
     due_in = (due_date - today).days if due_date else None
 
-    timeline = sorted(
-        [
+    timeline_entries = []
+    for event in SRT_TASK_ACTIVITY.get(task_id, []):
+        enriched = apply_actor_context(event)
+        raw_timestamp = event.get("timestamp") or datetime.datetime.utcnow()
+        if isinstance(raw_timestamp, str):
+            try:
+                timestamp_value = datetime.datetime.fromisoformat(raw_timestamp)
+            except ValueError:
+                timestamp_value = datetime.datetime.utcnow()
+        else:
+            timestamp_value = raw_timestamp
+        timeline_entries.append(
             {
-                "type": event.get("type", "update"),
-                "label": event.get("label") or "Update",
-                "detail": event.get("detail"),
-                "actor": event.get("actor"),
+                "type": enriched.get("type", event.get("type", "update")),
+                "label": enriched.get("label") or event.get("label") or "Update",
+                "detail": enriched.get("detail") or event.get("detail"),
+                "actor": enriched.get("actor"),
+                "actor_role": enriched.get("actor_role"),
+                "actor_label": enriched.get("actor_label"),
                 "comment": event.get("comment"),
                 "attachment_label": event.get("attachment_label"),
                 "attachment_url": event.get("attachment_url"),
-                "timestamp": (event.get("timestamp") or datetime.datetime.utcnow()).isoformat(),
-                "timestamp_display": (event.get("timestamp") or datetime.datetime.utcnow()).strftime(
-                    "%d %b %Y • %H:%M"
-                ),
+                "timestamp": timestamp_value.isoformat(),
+                "timestamp_display": timestamp_value.strftime("%d %b %Y • %H:%M"),
+                "_sort_timestamp": timestamp_value,
             }
-            for event in SRT_TASK_ACTIVITY.get(task_id, [])
-        ],
-        key=lambda item: item["timestamp"],
+        )
+
+    timeline = sorted(
+        timeline_entries,
+        key=lambda item: item.get("_sort_timestamp") or datetime.datetime.utcnow(),
         reverse=True,
     )
+    for entry in timeline:
+        entry.pop("_sort_timestamp", None)
 
     task_payload = {
         "id": task["id"],
@@ -11323,7 +11418,7 @@ def srt_task_update(task_id):
     original_due = task.get("due_date")
 
     events = []
-    actor_name = current_user.display_name if current_user.is_authenticated else "System"
+    actor_info = timeline_actor_context()
 
     if status != original_status:
         events.append(
@@ -11331,7 +11426,8 @@ def srt_task_update(task_id):
                 "type": "status",
                 "label": f"Status updated to {status}",
                 "detail": f"{original_status or '—'} → {status}",
-                "actor": actor_name,
+                "actor": actor_info.get("actor"),
+                "actor_role": actor_info.get("actor_role"),
             }
         )
         task["status"] = status
@@ -11342,7 +11438,8 @@ def srt_task_update(task_id):
                 "type": "assignment",
                 "label": "Owner reassigned",
                 "detail": f"{original_owner or 'Unassigned'} → {owner or 'Unassigned'}",
-                "actor": actor_name,
+                "actor": actor_info.get("actor"),
+                "actor_role": actor_info.get("actor_role"),
             }
         )
         task["owner"] = owner or "Unassigned"
@@ -11355,7 +11452,8 @@ def srt_task_update(task_id):
                 "type": "due_date",
                 "label": "Due date updated",
                 "detail": f"{old_due_display} → {new_due_display}",
-                "actor": actor_name,
+                "actor": actor_info.get("actor"),
+                "actor_role": actor_info.get("actor_role"),
             }
         )
         task["due_date"] = due_date
@@ -11366,7 +11464,8 @@ def srt_task_update(task_id):
                 "type": "comment",
                 "label": "Comment added",
                 "comment": comment,
-                "actor": actor_name,
+                "actor": actor_info.get("actor"),
+                "actor_role": actor_info.get("actor_role"),
             }
         )
 
@@ -11377,7 +11476,8 @@ def srt_task_update(task_id):
                 "label": attachment_label or "Attachment uploaded",
                 "attachment_label": attachment_label or attachment_url,
                 "attachment_url": attachment_url,
-                "actor": actor_name,
+                "actor": actor_info.get("actor"),
+                "actor_role": actor_info.get("actor_role"),
             }
         )
 
