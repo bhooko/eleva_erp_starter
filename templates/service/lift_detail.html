@@ -11,56 +11,78 @@
     </div>
     <div class="flex gap-2">
       <a href="{{ url_for('service_lifts') }}" class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Back to lifts</a>
-      <a href="{{ url_for('service_lift_edit', lift_id=lift.id) }}" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">Edit details</a>
     </div>
   </header>
 
-  <section class="space-y-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <p class="text-xs uppercase tracking-wide text-slate-400">Lift · {{ lift.lift_code }}</p>
-        <h2 class="text-xl font-semibold text-theme-primary">
-          {% if payload.site_lines %}
-            {{ payload.site_lines[0] }}
-          {% else %}
-            {{ lift.site_address_line1 or 'Site details unavailable' }}
-          {% endif %}
-        </h2>
-        <div class="mt-2 space-y-1 text-xs text-slate-400">
-          {% for line in payload.site_lines[1:] %}
-            <div>{{ line }}</div>
-          {% endfor %}
-          {% for line in payload.customer_lines %}
-            <div>{{ line }}</div>
-          {% endfor %}
-          {% if lift.external_lift_id %}
-            <div>External ID: {{ lift.external_lift_id }}</div>
+  <div class="space-y-6">
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-400">Lift · {{ lift.lift_code }}</p>
+          <h2 class="text-xl font-semibold text-theme-primary">
+            {% if payload.site_lines %}
+              {{ payload.site_lines[0] }}
+            {% else %}
+              {{ lift.site_address_line1 or 'Site details unavailable' }}
+            {% endif %}
+          </h2>
+          <div class="mt-2 space-y-1 text-xs text-slate-400">
+            {% for line in payload.site_lines[1:] %}
+              <div>{{ line }}</div>
+            {% endfor %}
+            {% for line in payload.customer_lines %}
+              <div>{{ line }}</div>
+            {% endfor %}
+            {% if lift.external_lift_id %}
+              <div>External ID: {{ lift.external_lift_id }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-2 text-right text-xs text-slate-400">
+          <div><span class="font-semibold text-slate-100">Status:</span> <span class="text-emerald-200">{{ lift.status or 'Not captured' }}</span></div>
+          <div><span class="font-semibold text-slate-100">AMC status:</span> <span class="text-emerald-200">{{ payload.amc.status }}</span></div>
+          {% if payload.preferred_service_summary %}
+            <div class="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Preferred PM: {{ payload.preferred_service_summary }}</div>
           {% endif %}
         </div>
       </div>
-      <div class="flex flex-col items-end gap-2 text-right text-xs text-slate-400">
-        <div><span class="font-semibold text-slate-100">Status:</span> <span class="text-emerald-200">{{ lift.status or 'Not captured' }}</span></div>
-        <div><span class="font-semibold text-slate-100">AMC status:</span> <span class="text-emerald-200">{{ payload.amc.status }}</span></div>
-        {% if payload.preferred_service_summary %}
-          <div class="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Preferred PM: {{ payload.preferred_service_summary }}</div>
-        {% endif %}
-      </div>
-    </div>
+    </section>
 
-    <section class="space-y-4">
-      <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Lifetime value</h3>
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-theme-primary">Lift lifetime value</h2>
+          <p class="text-xs text-slate-400">Revenue, cost and breakdown highlights.</p>
+        </div>
+        <button type="button" data-modal-open="lift-lifetime" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Edit lifetime value</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {% for metric in payload.lifetime_metrics %}
           <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
             <p class="text-xs uppercase tracking-wide text-slate-400">{{ metric.label }}</p>
             <p class="mt-2 text-lg font-semibold text-emerald-200">{{ metric.display }}</p>
           </div>
+        {% else %}
+          <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No lifetime metrics captured yet.</p>
         {% endfor %}
       </div>
     </section>
 
-    <section class="space-y-4">
-      <h3 class="text-lg font-semibold text-theme-primary">Lift details</h3>
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">Lift summary details</h2>
+        <button type="button" data-modal-open="lift-summary" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Edit lift summary</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
+      </div>
       <dl class="grid gap-4 sm:grid-cols-2">
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Lift code / ID</dt>
@@ -71,32 +93,24 @@
           <dd class="text-sm text-slate-100">{{ payload.external_lift_id }}</dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer name</dt>
+          <dd class="text-sm text-slate-100">{{ lift.customer.company_name if lift.customer else '—' }}</dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Customer code</dt>
           <dd class="text-sm text-slate-100">{{ payload.customer_code }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
-          <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Site summary</dt>
-          <dd class="text-sm text-slate-100">{{ payload.site_summary }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Site name</dt>
+          <dd class="text-sm text-slate-100">{{ payload.site_lines[0] if payload.site_lines else '—' }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa No.</dt>
-          <dd class="text-sm text-slate-100">{{ payload.site_address_line1 }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa no.</dt>
+          <dd class="text-sm text-slate-100">{{ payload.building_villa_number }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Building name / road</dt>
           <dd class="text-sm text-slate-100">{{ payload.site_address_line2 }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer &amp; contact</dt>
-          <dd class="text-sm text-slate-100">{{ payload.customer_summary }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
-          <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">City</dt>
@@ -111,20 +125,60 @@
           <dd class="text-sm text-slate-100">{{ payload.pincode }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Speed (m/s)</dt>
-          <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
+          <dd class="text-sm text-slate-100">{{ payload.geo_location }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Completion date</dt>
+          <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Handover date</dt>
+          <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Warranty expiry</dt>
+          <dd class="text-sm text-slate-100">{{ payload.warranty_expiry_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">QR code</dt>
+          <dd class="text-sm text-slate-100">
+            {% if payload.qr_code_url %}
+              <a href="{{ payload.qr_code_url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">Open QR code</a>
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">Lift specifications</h2>
+        <button type="button" data-modal-open="lift-specs" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Edit lift specifications</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
+      </div>
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
+          <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Floors served</dt>
           <dd class="text-sm text-slate-100">{{ payload.floors_served }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Controller</dt>
-          <dd class="text-sm text-slate-100">{{ payload.controller_display }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
+          <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Controller brand</dt>
-          <dd class="text-sm text-slate-100">{{ payload.controller_brand }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Speed</dt>
+          <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
@@ -139,87 +193,37 @@
           <dd class="text-sm text-slate-100">{{ payload.cabin_finish }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine brand</dt>
-          <dd class="text-sm text-slate-100">{{ payload.machine_brand }}</dd>
-        </div>
-        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Machine type</dt>
           <dd class="text-sm text-slate-100">{{ payload.machine_type }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Power supply</dt>
-          <dd class="text-sm text-slate-100">{{ payload.power_supply }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Location</dt>
-          <dd class="text-sm text-slate-100">{{ payload.location_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Country</dt>
-          <dd class="text-sm text-slate-100">{{ payload.country }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Service route</dt>
-          <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
-          <dd class="text-sm text-slate-100">{{ payload.geo_location }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">QR code</dt>
-          <dd class="text-sm text-slate-100">
-            {% if payload.qr_code_url %}
-              <a href="{{ payload.qr_code_url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">Open QR code</a>
-            {% else %}
-              —
-            {% endif %}
-          </dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine brand</dt>
+          <dd class="text-sm text-slate-100">{{ payload.machine_brand }}</dd>
         </div>
         <div class="sm:col-span-2">
           <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
           <dd class="text-sm text-slate-100">{{ payload.machine_details_display }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Installed</dt>
-          <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Power supply</dt>
+          <dd class="text-sm text-slate-100">{{ payload.power_supply }}</dd>
         </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Commissioned</dt>
-          <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Warranty expiry</dt>
-          <dd class="text-sm text-slate-100">{{ payload.warranty_expiry_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Last service date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.last_service_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service days</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_day_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred service time</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_time_display }}</dd>
+        <div class="sm:col-span-2">
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Lift remarks</dt>
+          <dd class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</dd>
         </div>
       </dl>
     </section>
-
-    <section class="space-y-4">
-      <h3 class="text-lg font-semibold text-theme-primary">Service remarks</h3>
-      <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <p class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</p>
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">AMC details</h2>
+        <button type="button" data-modal-open="lift-amc" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Edit AMC details</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
       </div>
-    </section>
-
-    <section class="space-y-4">
-      <h3 class="text-lg font-semibold text-theme-primary">AMC details</h3>
       <dl class="grid gap-4 sm:grid-cols-2">
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
@@ -233,14 +237,12 @@
           <dt class="text-xs uppercase tracking-wide text-slate-400">AMC duration</dt>
           <dd class="text-sm text-slate-100">{{ payload.amc.duration_display }}</dd>
         </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC contract</dt>
-          <dd class="space-y-1 text-sm text-slate-100">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Contract</dt>
+          <dd class="text-sm text-slate-100">
             {% if payload.amc.contract %}
               <a href="{{ payload.amc.contract.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ payload.amc.contract.id }}</a>
-              <div class="text-xs text-slate-400">
-                {{ payload.amc.contract.type or '—' }}{% if payload.amc.contract.coverage %} · {{ payload.amc.contract.coverage }}{% endif %}
-              </div>
+              <div class="text-xs text-slate-400">{{ payload.amc.contract.type or '—' }}{% if payload.amc.contract.coverage %} · {{ payload.amc.contract.coverage }}{% endif %}</div>
             {% else %}
               —
             {% endif %}
@@ -263,6 +265,10 @@
           <dd class="text-sm text-slate-100">{{ payload.amc.payment_terms }}</dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Route</dt>
+          <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-400">Services per year</dt>
           <dd class="text-sm text-slate-100">{{ payload.amc.services_per_year }}</dd>
         </div>
@@ -271,97 +277,829 @@
           <dd class="text-sm text-slate-100">{{ payload.amc.pending_services_count }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Service owner</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.service_owner }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM date</dt>
+          <dd class="text-sm text-slate-100">{{ payload.preferred_service_date_display }}</dd>
         </div>
         <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Service contact</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.service_contact }}</dd>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM day</dt>
+          <dd class="text-sm text-slate-100">{{ payload.preferred_service_day_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM time</dt>
+          <dd class="text-sm text-slate-100">{{ payload.preferred_service_time_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Last service date</dt>
+          <dd class="text-sm text-slate-100">{{ payload.last_service_date_display }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Service remarks</dt>
+          <dd class="text-sm text-slate-300 whitespace-pre-line">{{ payload.service_notes or 'No service remarks added yet.' }}</dd>
         </div>
       </dl>
     </section>
-  </section>
 
-  <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-    <h2 class="text-lg font-semibold text-theme-primary">Attachments</h2>
-    {% if attachments %}
-      <ul class="space-y-3 text-sm text-slate-200">
-        {% for attachment in attachments %}
-          <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <a href="{{ url_for('static', filename=attachment.stored_path) }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ attachment.display_label }}</a>
-              <span class="text-xs text-slate-400">{{ attachment.uploaded_display }}</span>
-            </div>
-            <div class="text-xs text-slate-400">
-              {{ attachment.display_size }}
-              {% if attachment.uploaded_by %}
-                · Uploaded by {{ attachment.uploaded_by.display_name }}
-              {% endif %}
-            </div>
-            {% if attachment.description %}
-              <p class="text-sm text-slate-300">{{ attachment.description }}</p>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No attachments uploaded yet.</p>
-    {% endif %}
-    <form method="post" action="{{ url_for('service_lift_upload_file', lift_id=lift.id) }}" enctype="multipart/form-data" class="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-      <input type="hidden" name="next" value="{{ request.full_path }}" />
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Category</span>
-        <select name="category" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
-          <option value="document">Document</option>
-          <option value="media">Media</option>
-          <option value="other" selected>Other</option>
-        </select>
-      </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</span>
-        <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Notes about this attachment (optional)"></textarea>
-      </label>
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Select file</span>
-        <input type="file" name="attachment" class="w-full text-sm text-slate-300" />
-      </label>
-      <div class="flex items-center justify-end">
-        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Upload file</button>
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">AMC contact details</h2>
+        <button type="button" data-modal-open="lift-contacts" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Edit AMC contacts</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
       </div>
-    </form>
-  </section>
-
-  <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-theme-primary">Comments</h2>
-    </div>
-    <div class="mt-4 space-y-3">
-      {% if comments %}
-        <ul class="space-y-3">
-          {% for comment in comments %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-800 text-sm">
+          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="px-4 py-2 text-left">Name</th>
+              <th class="px-4 py-2 text-left">Designation</th>
+              <th class="px-4 py-2 text-left">Contact no.</th>
+              <th class="px-4 py-2 text-left">Email</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80 text-slate-200">
+            {% for contact in payload.amc.contacts %}
+              <tr>
+                <td class="px-4 py-2">{{ contact.name }}</td>
+                <td class="px-4 py-2">{{ contact.designation }}</td>
+                <td class="px-4 py-2">{{ contact.phone }}</td>
+                <td class="px-4 py-2">{{ contact.email }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4" class="px-4 py-4 text-center text-sm text-slate-400">No AMC contacts captured yet.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">Attachments</h2>
+        <button type="button" data-modal-open="lift-attachments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Upload attachment</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
+      </div>
+      {% if attachments %}
+        <ul class="space-y-3 text-sm text-slate-200">
+          {% for attachment in attachments %}
             <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <span class="text-sm font-semibold text-slate-100">{{ comment.author_name }}</span>
-                <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
+                <a href="{{ url_for('static', filename=attachment.stored_path) }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ attachment.display_label }}</a>
+                <span class="text-xs text-slate-400">{{ attachment.uploaded_display }}</span>
               </div>
-              <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
+              <div class="text-xs text-slate-400">
+                {{ attachment.display_size }}
+                {% if attachment.uploaded_by %}
+                  · Uploaded by {{ attachment.uploaded_by.display_name }}
+                {% endif %}
+              </div>
+              {% if attachment.description %}
+                <p class="text-sm text-slate-300">{{ attachment.description }}</p>
+              {% endif %}
             </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No comments recorded yet.</p>
+        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No attachments uploaded yet.</p>
       {% endif %}
-    </div>
-    <form method="post" action="{{ url_for('service_lift_add_comment', lift_id=lift.id) }}" class="mt-4 space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-      <input type="hidden" name="next" value="{{ request.full_path }}" />
-      <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Add a comment</span>
-        <textarea name="body" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Share a status update or observation"></textarea>
-      </label>
-      <div class="flex items-center justify-end">
-        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Post comment</button>
+    </section>
+
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">Comments</h2>
+        <button type="button" data-modal-open="lift-comments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Add comment</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
       </div>
-    </form>
-  </section>
+      <div class="space-y-3">
+        {% if comments %}
+          <ul class="space-y-3">
+            {% for comment in comments %}
+              <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span class="text-sm font-semibold text-slate-100">{{ comment.author_name }}</span>
+                  <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
+                </div>
+                <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No comments recorded yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-theme-primary">Timeline</h2>
+        <button type="button" data-modal-open="lift-timeline" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+          <span class="sr-only">Add timeline entry</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+          </svg>
+        </button>
+      </div>
+      <ul class="space-y-3">
+        {% for entry in payload.timeline %}
+          <li class="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2">
+                <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-400">{{ entry.category }}</span>
+                <span class="text-sm font-semibold text-slate-100">{{ entry.title }}</span>
+              </div>
+              <span class="text-xs text-slate-400">{{ entry.date_display }}</span>
+            </div>
+            {% if entry.detail %}
+              <p class="mt-2 text-sm text-slate-300">{{ entry.detail }}</p>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No activity has been recorded for this lift yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
 </div>
+<dialog id="liftSummaryModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit lift summary</h2>
+        <p class="text-xs text-slate-400">Update customer linkage, site information and warranty milestones.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="summary" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
+        <input value="{{ lift.lift_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
+        <input name="external_lift_id" value="{{ lift.external_lift_id or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
+        <input name="customer_code" value="{{ lift.customer_code or '' }}" list="customerCodeOptions" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Search customer code" />
+        <datalist id="customerCodeOptions">
+          {% for customer in customers %}
+            <option value="{{ customer.customer_code }}" label="{{ customer.company_name }}"></option>
+          {% endfor %}
+        </datalist>
+        <p class="text-[11px] text-slate-500">Type to select a linked customer by code.</p>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building / Villa no.</span>
+        <input name="building_villa_number" value="{{ lift.building_villa_number or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building name, road, area</span>
+        <input name="site_address_line2" value="{{ lift.site_address_line2 or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">City</span>
+        <input name="city" value="{{ lift.city or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">State</span>
+        <input name="state" value="{{ lift.state or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pincode</span>
+        <input name="pincode" value="{{ lift.pincode or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Geo location</span>
+        <input name="geo_location" value="{{ lift.geo_location or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. 15.4969, 73.8278" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Completion date</span>
+        <input type="date" name="install_date" value="{{ lift.install_date.isoformat() if lift.install_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty expiry</span>
+        <input type="date" name="warranty_expiry" value="{{ lift.warranty_expiry.isoformat() if lift.warranty_expiry else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">QR code URL</span>
+        <input type="url" name="qr_code_url" value="{{ lift.qr_code_url or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save summary</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftLifetimeModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-3xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit lifetime value metrics</h2>
+        <p class="text-xs text-slate-400">Capture financial and service KPIs specific to this lift.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="lifetime_metrics" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div id="lifetimeMetricsList" class="space-y-4">
+      {% set lifetime_metrics = payload.lifetime_metrics if payload.lifetime_metrics else [{'label':'','display':''}] %}
+      {% for metric in lifetime_metrics %}
+        <div class="grid gap-3 md:grid-cols-[1fr,1fr,auto] items-end metric-row">
+          <label class="space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Metric label</span>
+            <input name="metric_label" value="{{ metric.label }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Total AMC value" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Display value</span>
+            <input name="metric_display" value="{{ metric.display }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. ₹4,20,000" />
+          </label>
+          <button type="button" class="remove-metric hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="flex items-center justify-between">
+      <button type="button" data-add-metric class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Add metric</button>
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save metrics</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftSpecsModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit lift specifications</h2>
+        <p class="text-xs text-slate-400">Maintain technical specifications that service teams depend on.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="specifications" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
+        <select name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift type</option>
+          {% for option in dropdown_options.get('lift_type', LIFT_TYPE_OPTIONS) %}
+            {% set option_value = option.value if option.value is defined else option %}
+            <option value="{{ option_value }}" {% if lift.lift_type and lift.lift_type|lower == option_value|lower %}selected{% endif %}>{{ option.label if option.label is defined else option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Floors served</span>
+        <input name="building_floors" value="{{ lift.building_floors or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>
+        <input name="capacity_persons" value="{{ lift.capacity_persons or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (kg)</span>
+        <input name="capacity_kg" value="{{ lift.capacity_kg or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Speed (m/s)</span>
+        <input name="speed_mps" value="{{ '%.2f'|format(lift.speed_mps) if lift.speed_mps is not none else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. 1.0" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door type</span>
+        <select name="door_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select door type</option>
+          {% for option in dropdown_options.get('door_type', DOOR_TYPE_OPTIONS) %}
+            {% set option_value = option.value if option.value is defined else option %}
+            <option value="{{ option_value }}" {% if lift.door_type and lift.door_type|lower == option_value|lower %}selected{% endif %}>{{ option.label if option.label is defined else option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Door finish</span>
+        <select name="door_finish" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select door finish</option>
+          {% for option in dropdown_options.get('door_finish', DOOR_FINISH_OPTIONS) %}
+            {% set option_value = option.value if option.value is defined else option %}
+            <option value="{{ option_value }}" {% if lift.door_finish and lift.door_finish|lower == option_value|lower %}selected{% endif %}>{{ option.label if option.label is defined else option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Cabin finish</span>
+        <input name="cabin_finish" value="{{ lift.cabin_finish or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine type</span>
+        <select name="machine_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select machine type</option>
+          {% for option in dropdown_options.get('machine_type', MACHINE_TYPE_OPTIONS) %}
+            {% set option_value = option.value if option.value is defined else option %}
+            <option value="{{ option_value }}" {% if lift.machine_type and lift.machine_type|lower == option_value|lower %}selected{% endif %}>{{ option.label if option.label is defined else option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Machine brand</span>
+        <input name="machine_brand" value="{{ lift.machine_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Controller brand</span>
+        <input name="controller_brand" value="{{ lift.controller_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Power supply</span>
+        <select name="power_supply" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select power supply</option>
+          {% for option in dropdown_options.get('power_supply', POWER_SUPPLY_OPTIONS) %}
+            {% set option_value = option.value if option.value is defined else option %}
+            <option value="{{ option_value }}" {% if lift.power_supply and lift.power_supply|lower == option_value|lower %}selected{% endif %}>{{ option.label if option.label is defined else option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift remarks</span>
+        <textarea name="remarks" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Add installation notes or reminders">{{ lift.remarks or '' }}</textarea>
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save specifications</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftAmcModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit AMC details</h2>
+        <p class="text-xs text-slate-400">Control maintenance cadence, routing and key service preferences.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="amc_details" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC status</span>
+        {% set amc_status_value = lift.amc_status or '' %}
+        <select name="amc_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select AMC status</option>
+          {% for option in AMC_STATUS_OPTIONS %}
+            <option value="{{ option }}" {% if amc_status_value and amc_status_value|lower == option|lower %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
+        <select name="route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select route</option>
+          {% for route in service_routes %}
+            {% set option_value = route.state %}
+            <option value="{{ option_value }}" {% if lift.route and lift.route|lower == option_value|lower %}selected{% endif %}>{{ route.display_name }}</option>
+          {% endfor %}
+        </select>
+        {% if not service_routes %}
+          <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+        {% endif %}
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC start date</span>
+        <input type="date" name="amc_start" id="liftAmcStartDetail" value="{{ lift.amc_start.isoformat() if lift.amc_start else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC duration</span>
+        {% set amc_duration_value = lift.amc_duration_key or '' %}
+        <select name="amc_duration_key" id="liftAmcDurationDetail" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select duration</option>
+          {% for value, label in amc_duration_choices %}
+            {% if value %}
+              <option value="{{ value }}" {% if amc_duration_value and amc_duration_value == value %}selected{% endif %}>{{ label }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC end date</span>
+        <input type="date" name="amc_end" id="liftAmcEndDetail" value="{{ lift.amc_end.isoformat() if lift.amc_end else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
+        <p class="text-[11px] text-slate-500">Auto-calculated using start date and duration.</p>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC contract</span>
+        {% set selected_contract = lift.amc_contract_id or '' %}
+        <select name="amc_contract_id" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">No contract linked</option>
+          {% for contract in service_contracts %}
+            <option value="{{ contract.id }}" {% if selected_contract and selected_contract|lower == contract.id|lower %}selected{% endif %}>{{ contract.id }} · {{ contract.type }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift status</span>
+        {% set lift_status_value = lift.status or '' %}
+        <select name="status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift status</option>
+          {% for option in LIFT_STATUS_OPTIONS %}
+            <option value="{{ option }}" {% if lift_status_value and lift_status_value|lower == option|lower %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Last service date</span>
+        <input type="date" name="last_service_date" value="{{ lift.last_service_date.isoformat() if lift.last_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred PM date</span>
+        {% if lift.preferred_service_date and lift.preferred_service_date.year == 2000 and lift.preferred_service_date.month == 1 %}
+          {% set preferred_service_date_day = "%02d" % lift.preferred_service_date.day %}
+        {% else %}
+          {% set preferred_service_date_day = '' %}
+        {% endif %}
+        <select name="preferred_service_date" id="liftPreferredServiceDateDetail" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Any date</option>
+          <option value="monthly" {% if preferred_service_date_day %}selected{% endif %}>Specific day each month</option>
+        </select>
+        <div id="preferredServiceDateSpecificDetail" class="{% if not preferred_service_date_day %}hidden{% endif %}">
+          <input type="number" min="1" max="28" name="preferred_service_date_day" value="{{ preferred_service_date_day }}" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Day of month (1-28)" />
+        </div>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred PM days</span>
+        {% set selected_days = lift.preferred_service_days %}
+        <select name="preferred_service_days" id="liftPreferredServiceDaysDetail" multiple size="5" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          {% for key, label in service_day_options %}
+            <option value="{{ key }}" {% if key in selected_days %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred PM time</span>
+        <input type="time" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service remarks</span>
+        <textarea name="service_notes" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Capture AMC scope notes, escalations or commitments">{{ lift.notes or '' }}</textarea>
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save AMC details</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftContactsModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit AMC contacts</h2>
+        <p class="text-xs text-slate-400">List the stakeholders responsible for AMC coordination.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="amc_contacts" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="space-y-3">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-4 font-semibold text-xs uppercase tracking-wide text-slate-400">
+        <div>Name</div>
+        <div>Designation</div>
+        <div>Contact no.</div>
+        <div>Email</div>
+      </div>
+      <div id="amcContactsList" class="space-y-3">
+        {% set contacts = payload.amc.contacts if payload.amc.contacts else [{'name':'','designation':'','phone':'','email':''}] %}
+        {% for contact in contacts %}
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-4 contact-row">
+            <input name="contact_name" value="{{ contact.name if contact.name != '—' else '' }}" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Full name" />
+            <input name="contact_designation" value="{{ contact.designation if contact.designation != '—' else '' }}" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Designation" />
+            <input name="contact_phone" value="{{ contact.phone if contact.phone != '—' else '' }}" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Phone" />
+            <div class="flex gap-3">
+              <input name="contact_email" value="{{ contact.email if contact.email != '—' else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Email" />
+              <button type="button" class="remove-contact hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" data-add-contact class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Add contact</button>
+    </div>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save contacts</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftAttachmentsModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_upload_file', lift_id=lift.id) }}" enctype="multipart/form-data" class="w-full max-w-xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Upload attachment</h2>
+        <p class="text-xs text-slate-400">Share site photos, contracts or machine documentation.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Description</span>
+      <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Notes about this attachment (optional)"></textarea>
+    </label>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Select file</span>
+      <input type="file" name="attachment" class="w-full text-sm text-slate-300" />
+    </label>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Upload file</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftCommentsModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_add_comment', lift_id=lift.id) }}" class="w-full max-w-xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Add comment</h2>
+        <p class="text-xs text-slate-400">Share a status update or observation for teammates.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Comment</span>
+      <textarea name="body" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Share a status update or observation"></textarea>
+    </label>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Post comment</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="liftTimelineModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Add timeline entry</h2>
+        <p class="text-xs text-slate-400">Log significant service events or customer communications.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="timeline" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Event date</span>
+      <input type="date" name="timeline_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+    </label>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Title</span>
+      <input name="timeline_title" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Preventive service completed" />
+    </label>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Category</span>
+      <select name="timeline_category" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+        <option value="Service">Service</option>
+        <option value="Breakdown">Breakdown</option>
+        <option value="AMC">AMC</option>
+        <option value="Inspection">Inspection</option>
+        <option value="Update" selected>Update</option>
+      </select>
+    </label>
+    <label class="space-y-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Detail</span>
+      <textarea name="timeline_detail" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Add context or next steps"></textarea>
+    </label>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Add entry</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    function setupModal(openSelector, modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      document.querySelectorAll(openSelector).forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+          if (typeof modal.showModal === 'function') {
+            modal.showModal();
+          } else {
+            modal.classList.add('open');
+          }
+        });
+      });
+      modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (typeof modal.close === 'function') {
+            modal.close();
+          } else {
+            modal.classList.remove('open');
+          }
+        });
+      });
+    }
+
+    setupModal('[data-modal-open="lift-summary"]', 'liftSummaryModal');
+    setupModal('[data-modal-open="lift-lifetime"]', 'liftLifetimeModal');
+    setupModal('[data-modal-open="lift-specs"]', 'liftSpecsModal');
+    setupModal('[data-modal-open="lift-amc"]', 'liftAmcModal');
+    setupModal('[data-modal-open="lift-contacts"]', 'liftContactsModal');
+    setupModal('[data-modal-open="lift-attachments"]', 'liftAttachmentsModal');
+    setupModal('[data-modal-open="lift-comments"]', 'liftCommentsModal');
+    setupModal('[data-modal-open="lift-timeline"]', 'liftTimelineModal');
+
+    const amcDurationMonths = {{ amc_duration_months | tojson }};
+    const amcStartInput = document.getElementById('liftAmcStartDetail');
+    const amcDurationInput = document.getElementById('liftAmcDurationDetail');
+    const amcEndInput = document.getElementById('liftAmcEndDetail');
+
+    function addMonths(date, months) {
+      const result = new Date(date.getTime());
+      const desiredMonth = result.getMonth() + months;
+      result.setMonth(desiredMonth);
+      if (result.getMonth() !== ((desiredMonth % 12) + 12) % 12) {
+        result.setDate(0);
+      }
+      return result;
+    }
+
+    function formatDateInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function updateAmcEnd() {
+      if (!amcStartInput || !amcDurationInput || !amcEndInput) {
+        return;
+      }
+      const startValue = amcStartInput.value;
+      const durationKey = amcDurationInput.value;
+      if (!startValue || !durationKey || !amcDurationMonths[durationKey]) {
+        amcEndInput.value = '';
+        return;
+      }
+      const startDate = new Date(`${startValue}T00:00:00`);
+      if (Number.isNaN(startDate.getTime())) {
+        amcEndInput.value = '';
+        return;
+      }
+      const months = parseInt(amcDurationMonths[durationKey], 10) || 0;
+      if (!months) {
+        amcEndInput.value = '';
+        return;
+      }
+      const computed = addMonths(startDate, months);
+      computed.setDate(computed.getDate() - 1);
+      amcEndInput.value = formatDateInput(computed);
+    }
+
+    if (amcStartInput && amcDurationInput) {
+      amcStartInput.addEventListener('change', updateAmcEnd);
+      amcDurationInput.addEventListener('change', updateAmcEnd);
+      updateAmcEnd();
+    }
+
+    const preferredDateSelect = document.getElementById('liftPreferredServiceDateDetail');
+    const preferredDateWrapper = document.getElementById('preferredServiceDateSpecificDetail');
+    const preferredDateInput = preferredDateWrapper ? preferredDateWrapper.querySelector('input[name="preferred_service_date_day"]') : null;
+
+    function togglePreferredDate() {
+      if (!preferredDateSelect || !preferredDateWrapper) return;
+      if (preferredDateSelect.value === 'monthly') {
+        preferredDateWrapper.classList.remove('hidden');
+      } else {
+        preferredDateWrapper.classList.add('hidden');
+        if (preferredDateInput) {
+          preferredDateInput.value = '';
+        }
+      }
+    }
+
+    if (preferredDateSelect) {
+      preferredDateSelect.addEventListener('change', togglePreferredDate);
+      togglePreferredDate();
+    }
+
+    function enforcePreferredDays(select) {
+      if (!select) return;
+      const selectedValues = Array.from(select.selectedOptions).map((option) => option.value);
+      if (selectedValues.includes('any') && selectedValues.length > 1) {
+        Array.from(select.options).forEach((option) => {
+          if (option.value !== 'any') {
+            option.selected = false;
+          }
+        });
+      }
+    }
+
+    const preferredDaysSelect = document.getElementById('liftPreferredServiceDaysDetail');
+    if (preferredDaysSelect) {
+      preferredDaysSelect.addEventListener('change', () => enforcePreferredDays(preferredDaysSelect));
+      enforcePreferredDays(preferredDaysSelect);
+    }
+
+    const lifetimeList = document.getElementById('lifetimeMetricsList');
+    const addMetricButton = document.querySelector('[data-add-metric]');
+
+    function createMetricRow() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'grid gap-3 md:grid-cols-[1fr,1fr,auto] items-end metric-row';
+      wrapper.innerHTML = `
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Metric label</span>
+          <input name="metric_label" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Net profitability" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Display value</span>
+          <input name="metric_display" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. ₹0" />
+        </label>
+        <button type="button" class="remove-metric hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+      `;
+      return wrapper;
+    }
+
+    function refreshMetricRemoveButtons() {
+      if (!lifetimeList) return;
+      const rows = lifetimeList.querySelectorAll('.metric-row');
+      rows.forEach((row) => {
+        const removeButton = row.querySelector('.remove-metric');
+        if (!removeButton) return;
+        if (rows.length > 1) {
+          removeButton.classList.remove('hidden');
+        } else {
+          removeButton.classList.add('hidden');
+        }
+        removeButton.onclick = () => {
+          if (lifetimeList.querySelectorAll('.metric-row').length > 1) {
+            row.remove();
+            refreshMetricRemoveButtons();
+          } else {
+            row.querySelectorAll('input').forEach((input) => {
+              input.value = '';
+            });
+          }
+        };
+      });
+    }
+
+    if (addMetricButton && lifetimeList) {
+      addMetricButton.addEventListener('click', () => {
+        lifetimeList.appendChild(createMetricRow());
+        refreshMetricRemoveButtons();
+      });
+      refreshMetricRemoveButtons();
+    }
+
+    const contactsList = document.getElementById('amcContactsList');
+    const addContactButton = document.querySelector('[data-add-contact]');
+
+    function createContactRow() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'grid grid-cols-1 gap-3 md:grid-cols-4 contact-row';
+      wrapper.innerHTML = `
+        <input name="contact_name" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Full name" />
+        <input name="contact_designation" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Designation" />
+        <input name="contact_phone" class="rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Phone" />
+        <div class="flex gap-3">
+          <input name="contact_email" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Email" />
+          <button type="button" class="remove-contact hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+        </div>
+      `;
+      return wrapper;
+    }
+
+    function refreshContactRemoveButtons() {
+      if (!contactsList) return;
+      const rows = contactsList.querySelectorAll('.contact-row');
+      rows.forEach((row) => {
+        const removeButton = row.querySelector('.remove-contact');
+        if (!removeButton) return;
+        if (rows.length > 1) {
+          removeButton.classList.remove('hidden');
+        } else {
+          removeButton.classList.add('hidden');
+        }
+        removeButton.onclick = () => {
+          if (contactsList.querySelectorAll('.contact-row').length > 1) {
+            row.remove();
+            refreshContactRemoveButtons();
+          } else {
+            row.querySelectorAll('input').forEach((input) => {
+              input.value = '';
+            });
+          }
+        };
+      });
+    }
+
+    if (addContactButton && contactsList) {
+      addContactButton.addEventListener('click', () => {
+        contactsList.appendChild(createContactRow());
+        refreshContactRemoveButtons();
+      });
+      refreshContactRemoveButtons();
+    }
+  });
+</script>
 {% endblock %}
