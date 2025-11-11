@@ -144,11 +144,19 @@
           </div>
         </div>
         <div class="hidden rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200" data-amc-site-field>
-          <label class="text-xs uppercase tracking-wide text-slate-500">AMC site</label>
+          <label class="text-xs uppercase tracking-wide text-slate-500">AMC lift</label>
           <select name="amc_site" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-amc-site-select>
-            <option value="" selected disabled>Select AMC site</option>
-            {% for site in amc_sites %}
-              <option value="{{ site.id }}">{{ site.label }}{% if site.client %} · {{ site.client }}{% endif %}</option>
+            <option value="" selected disabled>Select lift</option>
+            {% for lift in amc_lifts %}
+              <option
+                value="{{ lift.id }}"
+                data-customer-name="{{ lift.customer_name|default('', true) }}"
+                data-customer-code="{{ lift.customer_code|default('', true) }}"
+                data-client="{{ lift.client|default('', true) }}"
+                data-amc-status="{{ lift.amc_status|default('', true) }}"
+              >
+                {{ lift.label }}{% if lift.customer_name %} · {{ lift.customer_name }}{% elif lift.customer_code %} · {{ lift.customer_code }}{% endif %}{% if lift.amc_status %} · AMC {{ lift.amc_status }}{% endif %}
+              </option>
             {% endfor %}
           </select>
           <p class="mt-2 text-[11px] text-slate-500">Only required for Support – AMC tickets.</p>
@@ -920,6 +928,27 @@
       const categorySelect = document.querySelector('[data-ticket-category]');
       const amcSiteField = document.querySelector('[data-amc-site-field]');
       const amcSiteSelect = amcSiteField ? amcSiteField.querySelector('[data-amc-site-select]') : null;
+      const customerNameInput = addTicketForm ? addTicketForm.querySelector('input[name="customer"]') : null;
+
+      const syncCustomerNameForAmcSelection = () => {
+        if (!amcSiteSelect || !customerNameInput) {
+          return;
+        }
+        if (!amcSiteSelect.value) {
+          return;
+        }
+        const selectedOption = amcSiteSelect.options[amcSiteSelect.selectedIndex];
+        if (!selectedOption) {
+          return;
+        }
+        const linkedCustomer =
+          selectedOption.getAttribute('data-customer-name') ||
+          selectedOption.getAttribute('data-client') ||
+          selectedOption.getAttribute('data-customer-code');
+        if (linkedCustomer) {
+          customerNameInput.value = linkedCustomer;
+        }
+      };
 
       const refreshAmcSiteVisibility = () => {
         if (!amcSiteField) {
@@ -944,6 +973,11 @@
         categorySelect.addEventListener('change', refreshAmcSiteVisibility);
       }
       refreshAmcSiteVisibility();
+      syncCustomerNameForAmcSelection();
+
+      if (amcSiteSelect) {
+        amcSiteSelect.addEventListener('change', syncCustomerNameForAmcSelection);
+      }
 
       if (addTicketForm) {
         addTicketForm.addEventListener('reset', () => {

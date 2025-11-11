@@ -1913,9 +1913,69 @@ def _resolve_customer_support_channel_label(channel_value):
     return None
 
 
+def _format_customer_support_amc_site_from_lift(lift):
+    if not lift:
+        return None
+
+    location_parts = [
+        lift.site_address_line1,
+        lift.site_address_line2,
+        lift.city,
+        lift.state,
+    ]
+    location = ", ".join(part for part in location_parts if part)
+
+    base_label = lift.lift_code or f"Lift {lift.id}"
+    label = f"{base_label} · {location}" if location else base_label
+
+    customer_name = None
+    customer_code = None
+    if lift.customer:
+        customer_name = lift.customer.company_name or None
+        customer_code = lift.customer.customer_code or None
+    else:
+        customer_code = lift.customer_code or None
+
+    return {
+        "id": str(lift.id),
+        "label": label,
+        "client": customer_name or customer_code,
+        "customer_name": customer_name,
+        "customer_code": customer_code,
+        "amc_status": lift.amc_status or None,
+    }
+
+
+def _customer_support_amc_site_options():
+    lifts = (
+        Lift.query.options(joinedload(Lift.customer))
+        .order_by(func.lower(Lift.lift_code))
+        .all()
+    )
+
+    options = []
+    for lift in lifts:
+        formatted = _format_customer_support_amc_site_from_lift(lift)
+        if formatted:
+            options.append(formatted)
+
+    return sorted(options, key=lambda item: (item.get("label") or "").lower())
+
+
 def _resolve_customer_support_amc_site(site_id):
     if not site_id:
         return None
+
+    try:
+        lift_id = int(site_id)
+    except (TypeError, ValueError):
+        lift_id = None
+
+    if lift_id is not None:
+        lift = db.session.get(Lift, lift_id)
+        formatted = _format_customer_support_amc_site_from_lift(lift)
+        if formatted:
+            return formatted
 
     lowered = site_id.lower()
     for site in CUSTOMER_SUPPORT_AMC_SITES:
@@ -2103,8 +2163,6 @@ def _handle_customer_support_ticket_creation():
     uploaded_files = request.files.getlist("attachments") or []
 
     errors = []
-    if not customer:
-        errors.append("Enter the customer name for the ticket.")
     if not subject:
         errors.append("Provide a summary of the customer issue.")
     if not category_id:
@@ -2129,6 +2187,18 @@ def _handle_customer_support_ticket_creation():
             amc_site_record = _resolve_customer_support_amc_site(amc_site_id)
             if not amc_site_record:
                 errors.append("Choose a valid AMC site from the list.")
+
+    if amc_site_record:
+        linked_customer_name = (
+            amc_site_record.get("customer_name")
+            or amc_site_record.get("client")
+            or amc_site_record.get("customer")
+        )
+        if linked_customer_name and not customer:
+            customer = linked_customer_name
+
+    if not customer:
+        errors.append("Enter the customer name for the ticket.")
 
     channel_label = _resolve_customer_support_channel_label(channel_value)
     if channel_value and not channel_label:
@@ -2218,6 +2288,12 @@ def _handle_customer_support_ticket_creation():
             "label": amc_site_record.get("label"),
             "client": amc_site_record.get("client"),
         }
+        if amc_site_record.get("customer_name"):
+            ticket_record["amc_site"]["customer_name"] = amc_site_record.get("customer_name")
+        if amc_site_record.get("customer_code"):
+            ticket_record["amc_site"]["customer_code"] = amc_site_record.get("customer_code")
+        if amc_site_record.get("amc_status"):
+            ticket_record["amc_site"]["amc_status"] = amc_site_record.get("amc_status")
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
     flash(f"Ticket {ticket_id} created successfully.", "success")
@@ -9614,10 +9690,7 @@ def customer_support_tasks():
         has_open_linked_tasks=has_open_linked_tasks,
         ticket_open_task_map=ticket_open_task_map,
         active_support_users=active_support_users,
-        amc_sites=sorted(
-            CUSTOMER_SUPPORT_AMC_SITES,
-            key=lambda item: (item.get("label") or "").lower(),
-        ),
+        amc_lifts=_customer_support_amc_site_options(),
     )
 
 
