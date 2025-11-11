@@ -3000,10 +3000,27 @@ def build_lift_payload(lift):
             else "scheduled"
         )
         status_display = SERVICE_VISIT_STATUS_LABELS.get(status_key, "Scheduled")
-        slip_url = clean_str(
+        slip_raw = clean_str(
             item.get("slip_url") or item.get("slip") or item.get("url") or item.get("href")
         )
-        slip_label = clean_str(item.get("slip_label") or item.get("label")) or "Service slip"
+        slip_label = clean_str(item.get("slip_label") or item.get("label"))
+        slip_href = None
+        if slip_raw:
+            if slip_raw.lower().startswith(("http://", "https://")):
+                slip_href = slip_raw
+            elif slip_raw.startswith("/"):
+                slip_href = slip_raw
+            else:
+                normalized = slip_raw.lstrip("/")
+                if normalized.startswith("static/"):
+                    normalized = normalized.split("static/", 1)[1]
+                if normalized:
+                    slip_href = url_for("static", filename=normalized)
+        slip_display_label = (
+            slip_label
+            or (os.path.basename(slip_raw) if slip_raw else None)
+            or "Service slip"
+        )
         service_schedule.append(
             {
                 "date": visit_date,
@@ -3013,9 +3030,11 @@ def build_lift_payload(lift):
                 "technician_value": technician_raw or "",
                 "status_key": status_key,
                 "status_display": status_display,
-                "slip_url": slip_url,
+                "slip_url": slip_href,
                 "slip_label": slip_label,
-                "has_slip": bool(slip_url),
+                "slip_display_label": slip_display_label,
+                "slip_stored": slip_raw,
+                "has_slip": bool(slip_href),
             }
         )
 
@@ -10364,17 +10383,68 @@ def service_lift_update(lift_id):
         dates = request.form.getlist("service_date")
         technicians = request.form.getlist("service_technician")
         statuses = request.form.getlist("service_status")
-        slip_urls = request.form.getlist("service_slip_url")
+        slip_existing_values = request.form.getlist("service_slip_existing")
         slip_labels = request.form.getlist("service_slip_label")
-        max_len = max(len(dates), len(technicians), len(statuses), len(slip_urls), len(slip_labels))
+        slip_files = request.files.getlist("service_slip_file")
+        max_len = max(
+            len(dates),
+            len(technicians),
+            len(statuses),
+            len(slip_existing_values),
+            len(slip_labels),
+            len(slip_files),
+        )
         schedule_entries = []
+        static_root = os.path.join(BASE_DIR, "static")
         for idx in range(max_len):
             date_value = dates[idx] if idx < len(dates) else ""
             technician = clean_str(technicians[idx]) if idx < len(technicians) else None
             status_value = clean_str(statuses[idx]) if idx < len(statuses) else None
-            slip_url = clean_str(slip_urls[idx]) if idx < len(slip_urls) else None
-            slip_label = clean_str(slip_labels[idx]) if idx < len(slip_labels) else None
-            if not any([date_value, technician, status_value, slip_url, slip_label]):
+            slip_value = (
+                clean_str(slip_existing_values[idx])
+                if idx < len(slip_existing_values)
+                else None
+            )
+            slip_label = (
+                clean_str(slip_labels[idx]) if idx < len(slip_labels) else None
+            )
+            uploaded_file = slip_files[idx] if idx < len(slip_files) else None
+            if uploaded_file and getattr(uploaded_file, "filename", None):
+                if not uploaded_file.filename:
+                    uploaded_file = None
+            if uploaded_file and uploaded_file.filename:
+                safe_name = secure_filename(uploaded_file.filename)
+                if not safe_name:
+                    flash(
+                        "The uploaded service slip file name is not valid.",
+                        "error",
+                    )
+                    return redirect(redirect_url)
+                if not allowed_file(safe_name, kind="attachment"):
+                    flash(
+                        "Unsupported file type for service slip. Upload images, videos or documents only.",
+                        "error",
+                    )
+                    return redirect(redirect_url)
+                upload_root = os.path.join(
+                    app.config["UPLOAD_FOLDER"], "service_slips", str(lift.id)
+                )
+                os.makedirs(upload_root, exist_ok=True)
+                unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+                destination_path = os.path.join(upload_root, unique_name)
+                uploaded_file.save(destination_path)
+                slip_value = (
+                    os.path.relpath(destination_path, static_root)
+                    .replace(os.sep, "/")
+                    .lstrip("/")
+                )
+                slip_label = uploaded_file.filename
+            if slip_value and isinstance(slip_value, str) and not slip_value.lower().startswith(("http://", "https://")):
+                normalized_value = slip_value.lstrip("/")
+                if normalized_value.startswith("static/"):
+                    normalized_value = normalized_value.split("static/", 1)[1]
+                slip_value = normalized_value or None
+            if not any([date_value, technician, status_value, slip_value, slip_label]):
                 continue
             if not date_value:
                 flash(
@@ -10398,7 +10468,7 @@ def service_lift_update(lift_id):
                     "date": visit_date.isoformat() if visit_date else None,
                     "technician": technician,
                     "status": status_key,
-                    "slip_url": slip_url,
+                    "slip_url": slip_value,
                     "slip_label": slip_label,
                 }
             )
