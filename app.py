@@ -306,6 +306,11 @@ DOOR_TYPE_OPTIONS = ["ATO-LH", "ATO-RH", "ACO", "Swing", "Collapsible", "Gate", 
 DOOR_FINISH_OPTIONS = ["SS H/L", "SS Mirror", "MS"]
 POWER_SUPPLY_OPTIONS = ["1 Phase", "3 Phase"]
 AMC_STATUS_OPTIONS = ["Active", "Expired", "Renewal Pending", "Call Basis"]
+
+SERVICE_VISIT_STATUS_OPTIONS = [("scheduled", "Scheduled"), ("due", "Due")]
+SERVICE_VISIT_STATUS_LABELS = {
+    value: label for value, label in SERVICE_VISIT_STATUS_OPTIONS
+}
 LIFT_STATUS_OPTIONS = ["On", "Off", "Protected", "Decommissioned"]
 SERVICE_BRANCH_OPTIONS = ["Goa", "Mumbai"]
 SERVICE_BRANCH_OPTION_SET = {option.lower() for option in SERVICE_BRANCH_OPTIONS}
@@ -1006,6 +1011,7 @@ DEFAULT_LIFT_INSIGHT = {
         "service_contact": "—",
         "renewal_history": [],
         "attachments": [],
+        "service_schedule": [],
     },
     "machine": {
         "make": "—",
@@ -1082,6 +1088,28 @@ LIFT_INSIGHT_LIBRARY = {
                     "label": "Service schedule FY25",
                     "filename": "ServiceScheduleFY25.xlsx",
                     "url": "#",
+                },
+            ],
+            "service_schedule": [
+                {
+                    "date": datetime.date(2024, 4, 15),
+                    "status": "scheduled",
+                    "slip_url": "#",
+                    "slip_label": "April service slip",
+                },
+                {
+                    "date": datetime.date(2024, 6, 15),
+                    "technician": "Ramesh Pawar",
+                    "status": "scheduled",
+                    "slip_url": "#",
+                    "slip_label": "June service slip",
+                },
+                {
+                    "date": datetime.date(2024, 8, 14),
+                    "technician": "Sneha Kulkarni",
+                    "status": "due",
+                    "slip_url": "#",
+                    "slip_label": "August service slip",
                 },
             ],
         },
@@ -2941,6 +2969,60 @@ def build_lift_payload(lift):
         ],
     }
 
+    route_technician_label = (
+        route_display if route_display and route_display != "—" else "Route technician"
+    )
+
+    schedule_source = lift.service_schedule or amc_config.get("service_schedule") or []
+    service_schedule = []
+    for item in schedule_source:
+        if not isinstance(item, dict):
+            continue
+        raw_date = item.get("date")
+        visit_date = None
+        if isinstance(raw_date, datetime.datetime):
+            visit_date = raw_date.date()
+        elif isinstance(raw_date, datetime.date):
+            visit_date = raw_date
+        elif isinstance(raw_date, str):
+            try:
+                visit_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+            except ValueError:
+                visit_date = None
+        date_display = format_service_date(visit_date)
+        date_iso = visit_date.isoformat() if isinstance(visit_date, datetime.date) else ""
+        technician_raw = clean_str(item.get("technician"))
+        technician_display = technician_raw or route_technician_label
+        status_raw = clean_str(item.get("status"))
+        status_key = (
+            status_raw.lower()
+            if status_raw and status_raw.lower() in SERVICE_VISIT_STATUS_LABELS
+            else "scheduled"
+        )
+        status_display = SERVICE_VISIT_STATUS_LABELS.get(status_key, "Scheduled")
+        slip_url = clean_str(
+            item.get("slip_url") or item.get("slip") or item.get("url") or item.get("href")
+        )
+        slip_label = clean_str(item.get("slip_label") or item.get("label")) or "Service slip"
+        service_schedule.append(
+            {
+                "date": visit_date,
+                "date_display": date_display,
+                "date_iso": date_iso,
+                "technician_display": technician_display,
+                "technician_value": technician_raw or "",
+                "status_key": status_key,
+                "status_display": status_display,
+                "slip_url": slip_url,
+                "slip_label": slip_label,
+                "has_slip": bool(slip_url),
+            }
+        )
+
+    service_schedule.sort(
+        key=lambda entry: entry["date"] or datetime.date.max
+    )
+
     contacts_source = lift.amc_contacts or amc_config.get("contacts", []) or []
     amc_contacts = []
     for contact in contacts_source:
@@ -3166,6 +3248,7 @@ def build_lift_payload(lift):
         "breakdowns": breakdowns,
         "timeline": timeline_entries,
         "lifetime_metrics": lifetime_metrics,
+        "service_schedule": service_schedule,
         "remarks": lift.remarks or "—",
         "building_villa_number": lift.building_villa_number or "—",
         "preferred_service_day_display": preferred_day_display or "—",
@@ -4355,6 +4438,7 @@ class Lift(db.Model):
     lifetime_metrics_json = db.Column(db.Text, nullable=True)
     amc_contacts_json = db.Column(db.Text, nullable=True)
     timeline_entries_json = db.Column(db.Text, nullable=True)
+    service_schedule_json = db.Column(db.Text, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -4537,6 +4621,97 @@ class Lift(db.Model):
                 }
             )
         self.amc_contacts_json = json.dumps(cleaned, ensure_ascii=False)
+
+    @property
+    def service_schedule(self):
+        if not self.service_schedule_json:
+            return []
+        try:
+            data = json.loads(self.service_schedule_json)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        schedule = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            raw_date = item.get("date")
+            visit_date = None
+            if isinstance(raw_date, datetime.datetime):
+                visit_date = raw_date.date()
+            elif isinstance(raw_date, datetime.date):
+                visit_date = raw_date
+            elif isinstance(raw_date, str):
+                try:
+                    visit_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+                except ValueError:
+                    visit_date = None
+            technician = clean_str(item.get("technician"))
+            status_value = clean_str(item.get("status"))
+            status_key = (
+                status_value.lower()
+                if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
+                else None
+            )
+            slip_url = clean_str(item.get("slip_url") or item.get("slip"))
+            slip_label = clean_str(item.get("slip_label") or item.get("label"))
+            schedule.append(
+                {
+                    "date": visit_date,
+                    "technician": technician,
+                    "status": status_key,
+                    "slip_url": slip_url,
+                    "slip_label": slip_label,
+                }
+            )
+        return schedule
+
+    @service_schedule.setter
+    def service_schedule(self, values):
+        if not values:
+            self.service_schedule_json = None
+            return
+        cleaned = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            raw_date = item.get("date")
+            iso_date = None
+            if isinstance(raw_date, datetime.datetime):
+                iso_date = raw_date.date().isoformat()
+            elif isinstance(raw_date, datetime.date):
+                iso_date = raw_date.isoformat()
+            else:
+                date_str = clean_str(raw_date)
+                if date_str:
+                    try:
+                        iso_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date().isoformat()
+                    except ValueError:
+                        continue
+            if not iso_date:
+                continue
+            status_value = clean_str(item.get("status"))
+            status_key = (
+                status_value.lower()
+                if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
+                else "scheduled"
+            )
+            technician = clean_str(item.get("technician"))
+            slip_url = clean_str(item.get("slip_url"))
+            slip_label = clean_str(item.get("slip_label"))
+            cleaned.append(
+                {
+                    "date": iso_date,
+                    "technician": technician,
+                    "status": status_key,
+                    "slip_url": slip_url,
+                    "slip_label": slip_label,
+                }
+            )
+        self.service_schedule_json = (
+            json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+        )
 
     @property
     def timeline_entries(self):
@@ -5050,6 +5225,10 @@ def ensure_lift_columns():
     if "timeline_entries_json" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN timeline_entries_json TEXT;")
         added_cols.append("timeline_entries_json")
+
+    if "service_schedule_json" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN service_schedule_json TEXT;")
+        added_cols.append("service_schedule_json")
 
     conn.commit()
     conn.close()
@@ -9960,6 +10139,7 @@ def service_lift_detail(lift_id):
         service_routes=service_routes,
         service_contracts=SERVICE_CONTRACTS,
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
+        service_visit_status_options=SERVICE_VISIT_STATUS_OPTIONS,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         amc_duration_choices=AMC_DURATION_CHOICES,
@@ -10178,6 +10358,54 @@ def service_lift_update(lift_id):
 
         db.session.commit()
         flash("AMC details updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "service_schedule":
+        dates = request.form.getlist("service_date")
+        technicians = request.form.getlist("service_technician")
+        statuses = request.form.getlist("service_status")
+        slip_urls = request.form.getlist("service_slip_url")
+        slip_labels = request.form.getlist("service_slip_label")
+        max_len = max(len(dates), len(technicians), len(statuses), len(slip_urls), len(slip_labels))
+        schedule_entries = []
+        for idx in range(max_len):
+            date_value = dates[idx] if idx < len(dates) else ""
+            technician = clean_str(technicians[idx]) if idx < len(technicians) else None
+            status_value = clean_str(statuses[idx]) if idx < len(statuses) else None
+            slip_url = clean_str(slip_urls[idx]) if idx < len(slip_urls) else None
+            slip_label = clean_str(slip_labels[idx]) if idx < len(slip_labels) else None
+            if not any([date_value, technician, status_value, slip_url, slip_label]):
+                continue
+            if not date_value:
+                flash(
+                    f"Service date is required for each scheduled visit (row {idx + 1}).",
+                    "error",
+                )
+                return redirect(redirect_url)
+            visit_date, error = parse_date_field(
+                date_value, f"Service date (row {idx + 1})"
+            )
+            if error:
+                flash(error, "error")
+                return redirect(redirect_url)
+            status_key = (
+                status_value.lower()
+                if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
+                else "scheduled"
+            )
+            schedule_entries.append(
+                {
+                    "date": visit_date.isoformat() if visit_date else None,
+                    "technician": technician,
+                    "status": status_key,
+                    "slip_url": slip_url,
+                    "slip_label": slip_label,
+                }
+            )
+        lift.service_schedule = schedule_entries
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+        db.session.commit()
+        flash("Service schedule updated.", "success")
         return redirect(redirect_url)
 
     if form_section == "amc_contacts":
