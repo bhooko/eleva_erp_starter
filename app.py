@@ -2045,6 +2045,9 @@ def _calculate_ticket_sla_due(ticket):
 
 def _customer_support_team_members():
     members = set(CUSTOMER_SUPPORT_DEFAULT_TEAM)
+    for user in get_assignable_users_for_module("customer_support"):
+        if user.is_active:
+            members.add(user.display_name)
     for ticket in CUSTOMER_SUPPORT_TICKETS:
         assignee = ticket.get("assignee")
         if assignee:
@@ -2057,6 +2060,130 @@ def _customer_support_team_members():
         members.add(current_user.display_name)
     members.add("Unassigned")
     return sorted(member for member in members if member)
+
+
+def _resolve_ticket_assignee_user(ticket, module_key="customer_support"):
+    if not isinstance(ticket, dict):
+        return None
+
+    assignee_user_id = ticket.get("assignee_user_id")
+    if assignee_user_id:
+        try:
+            user_id = int(assignee_user_id)
+        except (TypeError, ValueError):
+            user_id = None
+        if user_id is not None:
+            user = User.query.get(user_id)
+            if user and user.is_active:
+                if not module_key or user.can_be_assigned_module(module_key):
+                    return user
+
+    assignee_name = (ticket.get("assignee") or "").strip()
+    if not assignee_name or assignee_name.lower() == "unassigned":
+        return None
+
+    lowered_name = assignee_name.lower()
+    potential_users = get_assignable_users_for_module(module_key) if module_key else User.query.all()
+    for user in potential_users:
+        if not user.is_active:
+            continue
+        if user.display_name.strip().lower() == lowered_name or user.username.strip().lower() == lowered_name:
+            ticket["assignee_user_id"] = user.id
+            ticket["assignee"] = user.display_name
+            return user
+
+    user = User.query.filter(func.lower(User.username) == lowered_name).first()
+    if user and user.is_active:
+        if not module_key or user.can_be_assigned_module(module_key):
+            ticket["assignee_user_id"] = user.id
+            ticket["assignee"] = user.display_name
+            return user
+
+    return None
+
+
+def _user_is_service_team_member(user, service_user_ids):
+    if not user or not user.is_active:
+        return False
+    if user.id in service_user_ids:
+        return True
+    department = (getattr(user, "department", "") or "").strip().lower()
+    return department == "service"
+
+
+def _service_complaint_tasks_from_support():
+    service_users = get_assignable_users_for_module("service")
+    service_user_ids = {user.id for user in service_users if user.is_active}
+
+    complaint_tasks = []
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        status_value = (ticket.get("status") or "").strip().lower()
+        if status_value in {"resolved", "closed"}:
+            continue
+
+        assigned_user = _resolve_ticket_assignee_user(ticket)
+        if not _user_is_service_team_member(assigned_user, service_user_ids):
+            continue
+
+        site_label = ticket.get("location") or ticket.get("customer") or "Site not specified"
+        client_label = ticket.get("customer") or ticket.get("contact_name") or "Customer pending"
+        lift_label = (ticket.get("amc_site") or {}).get("label") or "—"
+
+        due_at = ticket.get("due_at") or _calculate_ticket_sla_due(ticket)
+        if isinstance(due_at, datetime.datetime):
+            schedule_window = due_at.strftime("%d %b · %H:%M")
+        else:
+            schedule_window = "Awaiting scheduling"
+
+        sla_info = ticket.get("sla") or {}
+        resolution_hours = sla_info.get("resolution_hours")
+        if resolution_hours:
+            sla_label = f"Resolve within {resolution_hours}h"
+        else:
+            sla_label = "No SLA defined"
+
+        worklog_entries = []
+        created_at = ticket.get("created_at")
+        if isinstance(created_at, datetime.datetime):
+            worklog_entries.append(
+                {
+                    "label": ticket.get("subject") or "Ticket logged",
+                    "time": created_at.strftime("%d %b %H:%M"),
+                }
+            )
+        updated_at = ticket.get("updated_at")
+        if (
+            isinstance(updated_at, datetime.datetime)
+            and updated_at != created_at
+            and ticket.get("status")
+        ):
+            worklog_entries.append(
+                {
+                    "label": f"Status: {ticket.get('status')}",
+                    "time": updated_at.strftime("%d %b %H:%M"),
+                }
+            )
+
+        complaint_tasks.append(
+            {
+                "id": ticket.get("id"),
+                "site": site_label,
+                "client": client_label,
+                "lift_id": lift_label,
+                "call_type": f"Complaint · {ticket.get('category')}" if ticket.get("category") else "Complaint",
+                "priority": ticket.get("priority") or "Medium",
+                "technicians": [assigned_user.display_name] if assigned_user else [],
+                "schedule_window": schedule_window,
+                "sla": sla_label,
+                "status": ticket.get("status") or "Open",
+                "worklog": worklog_entries,
+                "requires_media": False,
+                "parts_used": [],
+                "origin_ticket_id": ticket.get("id"),
+            }
+        )
+
+    return complaint_tasks
 
 
 def _infer_attachment_type(filename, mimetype=None):
@@ -2157,12 +2284,14 @@ def _handle_customer_support_ticket_creation():
     amc_site_id = (request.form.get("amc_site") or "").strip()
     channel_value = (request.form.get("channel") or "").strip()
     sla_priority_id = (request.form.get("sla_priority") or "").strip()
-    assignee = (request.form.get("assignee") or "").strip()
+    assignee_value = (request.form.get("assignee") or "").strip()
     due_raw = (request.form.get("due_datetime") or "").strip()
     remarks = (request.form.get("remarks") or "").strip()
     uploaded_files = request.files.getlist("attachments") or []
 
     errors = []
+    assignee_user = None
+    assignee_user_id = None
     if not subject:
         errors.append("Provide a summary of the customer issue.")
     if not category_id:
@@ -2220,6 +2349,22 @@ def _handle_customer_support_ticket_creation():
         except ValueError:
             errors.append("Enter the due date in YYYY-MM-DD HH:MM format.")
 
+    if assignee_value:
+        try:
+            assignee_user_id = int(assignee_value)
+        except (TypeError, ValueError):
+            assignee_user_id = None
+        if assignee_user_id is None:
+            errors.append("Select a valid assignee from the ERP user list.")
+        else:
+            assignee_user = User.query.get(assignee_user_id)
+            if (
+                not assignee_user
+                or not assignee_user.is_active
+                or not assignee_user.can_be_assigned_module("customer_support")
+            ):
+                errors.append("Select a valid assignee from the ERP user list.")
+
     if errors:
         for message in errors:
             flash(message, "error")
@@ -2255,7 +2400,8 @@ def _handle_customer_support_ticket_creation():
         "channel": channel_label or channel_value,
         "priority": "Medium",
         "status": "Open",
-        "assignee": assignee or "Unassigned",
+        "assignee": assignee_user.display_name if assignee_user else "Unassigned",
+        "assignee_user_id": assignee_user.id if assignee_user else None,
         "created_at": created_at,
         "updated_at": created_at,
         "sla": {
@@ -9619,6 +9765,7 @@ def customer_support_tasks():
     now = datetime.datetime.utcnow()
     tickets = []
     for ticket in CUSTOMER_SUPPORT_TICKETS:
+        _resolve_ticket_assignee_user(ticket)
         sla_due_at = _calculate_ticket_sla_due(ticket)
         ticket["_sla_due_at"] = sla_due_at
         ticket["_sla_due_iso"] = sla_due_at.isoformat() if sla_due_at else ""
@@ -9684,7 +9831,6 @@ def customer_support_tasks():
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
         priority_options=["Low", "Medium", "High", "Critical"],
-        team_members=_customer_support_team_members(),
         open_ticket_modal=bool(selected_ticket),
         open_linked_task_modal=open_linked_task_modal,
         has_open_linked_tasks=has_open_linked_tasks,
@@ -9780,20 +9926,48 @@ def customer_support_update_ticket(ticket_id):
 
     status = (request.form.get("status") or ticket.get("status") or "Open").strip()
     priority = (request.form.get("priority") or ticket.get("priority") or "Medium").strip()
-    assignee = (request.form.get("assignee") or ticket.get("assignee") or "Unassigned").strip()
+    assignee_value = (request.form.get("assignee") or "").strip()
     closing_comment = (request.form.get("closing_comment") or "").strip()
 
     allowed_status = {"Open", "In Progress", "Resolved", "Closed"}
     allowed_priority = {"Low", "Medium", "High", "Critical"}
-    team_members = set(_customer_support_team_members())
-
     errors = []
     if status not in allowed_status:
         errors.append("Choose a valid status for the ticket.")
     if priority not in allowed_priority:
         errors.append("Choose a valid priority for the ticket.")
-    if assignee and assignee not in team_members:
-        errors.append("Select an assignee from the available team members.")
+
+    assignee_user = None
+    new_assignee_label = "Unassigned"
+    new_assignee_id = None
+    current_assignee_label = ticket.get("assignee") or "Unassigned"
+    current_assignee_id = ticket.get("assignee_user_id")
+
+    if assignee_value:
+        try:
+            assignee_user_id = int(assignee_value)
+        except (TypeError, ValueError):
+            assignee_user_id = None
+        if assignee_user_id is None:
+            if assignee_value == current_assignee_label:
+                new_assignee_label = current_assignee_label
+                new_assignee_id = current_assignee_id
+            else:
+                errors.append("Select an assignee from the available team members.")
+        else:
+            assignee_user = User.query.get(assignee_user_id)
+            if (
+                not assignee_user
+                or not assignee_user.is_active
+                or not assignee_user.can_be_assigned_module("customer_support")
+            ):
+                errors.append("Select an assignee from the available team members.")
+            else:
+                new_assignee_label = assignee_user.display_name
+                new_assignee_id = assignee_user.id
+    else:
+        new_assignee_label = "Unassigned"
+        new_assignee_id = None
 
     if errors:
         for message in errors:
@@ -9819,9 +9993,13 @@ def customer_support_update_ticket(ticket_id):
     if priority != ticket.get("priority"):
         changes.append(f"Priority updated to {priority}")
         ticket["priority"] = priority
-    if assignee != (ticket.get("assignee") or "Unassigned"):
-        changes.append(f"Assigned to {assignee}")
-        ticket["assignee"] = assignee
+    if (
+        new_assignee_label != current_assignee_label
+        or (new_assignee_id or None) != (current_assignee_id or None)
+    ):
+        changes.append(f"Assigned to {new_assignee_label}")
+        ticket["assignee"] = new_assignee_label
+        ticket["assignee_user_id"] = new_assignee_id
 
     if not changes:
         flash("No changes detected to update.", "info")
@@ -10070,6 +10248,14 @@ def service_tasks():
     _module_visibility_required("service")
     tasks = []
     for task in SERVICE_TASKS:
+        tasks.append(
+            {
+                **task,
+                "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
+                "technician_display": ", ".join(task.get("technicians") or []),
+            }
+        )
+    for task in _service_complaint_tasks_from_support():
         tasks.append(
             {
                 **task,

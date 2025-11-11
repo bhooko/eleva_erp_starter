@@ -186,10 +186,14 @@
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
             <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
-              <option value="" selected disabled>Select team member</option>
-              {% for member in team_members %}
-                <option value="{{ member }}">{{ member }}</option>
-              {% endfor %}
+              <option value="">Unassigned</option>
+              {% if active_support_users %}
+                {% for user in active_support_users %}
+                  <option value="{{ user.id }}">{{ user.display_name }}</option>
+                {% endfor %}
+              {% else %}
+                <option value="" disabled>No ERP users available</option>
+              {% endif %}
             </select>
           </div>
         </div>
@@ -361,9 +365,13 @@
               <div class="flex items-center justify-between gap-3">
                 <span>Assignee</span>
                 <select name="assignee" class="w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 text-xs">
-                  {% for member in team_members %}
-                    <option value="{{ member }}" {{ 'selected' if member == selected_ticket.assignee else '' }}>{{ member }}</option>
+                  <option value="" {{ 'selected' if (selected_ticket.get('assignee_user_id') is none and (selected_ticket.assignee or 'Unassigned') == 'Unassigned') else '' }}>Unassigned</option>
+                  {% for user in active_support_users %}
+                    <option value="{{ user.id }}" {{ 'selected' if user.id == selected_ticket.get('assignee_user_id') else '' }}>{{ user.display_name }}</option>
                   {% endfor %}
+                  {% if selected_ticket.assignee and selected_ticket.assignee not in ['Unassigned', ''] and selected_ticket.get('assignee_user_id') is none %}
+                    <option value="{{ selected_ticket.assignee }}" selected>{{ selected_ticket.assignee }} (not in ERP)</option>
+                  {% endif %}
                 </select>
               </div>
               <div class="flex items-center justify-between gap-3">
