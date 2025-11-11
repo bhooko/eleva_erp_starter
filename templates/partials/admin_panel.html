@@ -6,12 +6,12 @@
             data-label-open="Close"
             data-label-closed="+ Add user"
             aria-controls="create-user-section"
-            aria-expanded="false">
+            aria-expanded="{{ 'true' if show_create_user_form else 'false' }}">
       + Add user
     </button>
   </div>
   <section id="create-user-section"
-           class="hidden rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6">
+           class="{{ '' if show_create_user_form else 'hidden ' }}rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 space-y-6">
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="text-xl font-semibold text-slate-100">Create User</h2>
@@ -23,45 +23,49 @@
               data-label-open="Close"
               data-label-closed="Close"
               aria-controls="create-user-section"
-              aria-expanded="false">
+              aria-expanded="{{ 'true' if show_create_user_form else 'false' }}">
         Close
       </button>
     </header>
+    {% set create_defaults = create_user_defaults or {} %}
+    {% set selected_department = create_defaults.get('department_id') %}
+    {% set selected_position = create_defaults.get('position_id') %}
+    {% set active_choice = create_defaults.get('active', '1') %}
     <form method="post" action="{{ url_for('admin_users_create') }}" class="grid gap-4 md:grid-cols-2">
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-username">Username</label>
-        <input id="create-username" name="username" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="jane.doe" />
+        <input id="create-username" name="username" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="jane.doe" value="{{ create_defaults.get('username', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-password">Password</label>
-        <input id="create-password" name="password" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Temporary password" />
+        <input id="create-password" name="password" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Temporary password" value="{{ create_defaults.get('password', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-first-name">First name</label>
-        <input id="create-first-name" name="first_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+        <input id="create-first-name" name="first_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" value="{{ create_defaults.get('first_name', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-last-name">Last name</label>
-        <input id="create-last-name" name="last_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+        <input id="create-last-name" name="last_name" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" value="{{ create_defaults.get('last_name', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-email">Email</label>
-        <input id="create-email" name="email" type="email" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+        <input id="create-email" name="email" type="email" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" value="{{ create_defaults.get('email', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-mobile">Mobile number</label>
-        <input id="create-mobile" name="mobile_number" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+        <input id="create-mobile" name="mobile_number" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" value="{{ create_defaults.get('mobile_number', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-role">Role</label>
-        <input id="create-role" name="role" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Admin / Supervisor / ..." />
+        <input id="create-role" name="role" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" placeholder="Admin / Supervisor / ..." value="{{ create_defaults.get('role', '') }}" />
       </div>
       <div class="space-y-1">
         <label class="text-sm text-slate-300" for="create-department">Department</label>
         <select id="create-department" name="department_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
           <option value="">No department</option>
           {% for dept in department_options %}
-            <option value="{{ dept.id }}">{{ dept.full_name }}</option>
+            <option value="{{ dept.id }}" {% if selected_department and selected_department|int == dept.id %}selected{% endif %}>{{ dept.full_name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -70,13 +74,13 @@
         <select id="create-position" name="position_id" class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
           <option value="">No position</option>
           {% for pos in position_options %}
-            <option value="{{ pos.id }}">{{ pos.display_label }}</option>
+            <option value="{{ pos.id }}" {% if selected_position and selected_position|int == pos.id %}selected{% endif %}>{{ pos.display_label }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="md:col-span-2 flex items-center justify-between">
         <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" checked />
+          <input type="checkbox" name="active" value="1" class="rounded border-slate-700 bg-slate-900" {% if active_choice not in ('', '0', 0, None, False) %}checked{% endif %} />
           Active immediately
         </label>
         <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Create user</button>
