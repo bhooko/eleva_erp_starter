@@ -4300,6 +4300,23 @@ def inject_service_form_options():
     }
 
 
+@app.context_processor
+def inject_switchable_users():
+    users = []
+    if current_user.is_authenticated:
+        try:
+            users = (
+                User.query.order_by(
+                    User.first_name.asc(),
+                    User.last_name.asc(),
+                    User.username.asc(),
+                ).all()
+            )
+        except Exception:
+            users = []
+    return {"switchable_users": users}
+
+
 class Project(db.Model):
     __tablename__ = "project"
     id = db.Column(db.Integer, primary_key=True)
@@ -6500,6 +6517,34 @@ def logout():
     session.pop("session_token", None)
     flash("Logged out", "info")
     return redirect(url_for("index"))
+
+
+@app.route("/switch-user", methods=["POST"])
+@login_required
+def switch_user():
+    target_id = request.form.get("user_id")
+    redirect_to = request.form.get("next") or request.referrer or url_for("dashboard")
+
+    if not target_id:
+        flash("Select a user to switch.", "error")
+        return redirect(redirect_to)
+
+    user = User.query.filter_by(id=target_id).first()
+    if not user:
+        flash("Unable to find the selected user.", "error")
+        return redirect(redirect_to)
+
+    if not user.is_active:
+        flash("The selected user is deactivated.", "error")
+        return redirect(redirect_to)
+
+    user.issue_session_token()
+    db.session.commit()
+
+    login_user(user)
+    session["session_token"] = user.session_token
+    flash(f"Switched to {user.display_name}", "info")
+    return redirect(redirect_to)
 
 
 @app.route("/profile", methods=["GET", "POST"])

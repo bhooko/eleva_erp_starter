@@ -688,6 +688,23 @@
             <div class="text-sm font-semibold text-slate-100">{{ current_user.display_name }}</div>
             <div class="text-xs text-slate-400">{{ current_user.role or 'Member' }}</div>
           </div>
+          <form method="post"
+                action="{{ url_for('switch_user') }}"
+                class="relative">
+            <label for="user-switcher" class="sr-only">Switch user</label>
+            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+            <select id="user-switcher"
+                    name="user_id"
+                    class="block min-w-[160px] appearance-none rounded-xl border border-slate-700/70 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-200 shadow-inner focus:border-emerald-400/70 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 sm:text-sm"
+                    onchange="this.form.submit()"
+                    title="Switch to another user">
+              {% for user in switchable_users %}
+                <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>
+                  {{ user.display_name }}{% if user.role %} · {{ user.role }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </form>
           <a href="{{ url_for('profile') }}"
              class="group relative block w-10 h-10 rounded-full border border-slate-700/70 bg-slate-800/60 overflow-hidden focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
              title="Open profile">
