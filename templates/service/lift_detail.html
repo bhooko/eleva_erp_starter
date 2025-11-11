@@ -67,404 +67,487 @@
       </div>
     </section>
 
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">Lift summary details</h2>
-        <button type="button" data-modal-open="lift-summary" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Edit lift summary</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      <dl class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Lift code / ID</dt>
-          <dd class="text-sm text-slate-100">{{ lift.lift_code }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">External lift ID</dt>
-          <dd class="text-sm text-slate-100">{{ payload.external_lift_id }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer name</dt>
-          <dd class="text-sm text-slate-100">{{ lift.customer.company_name if lift.customer else '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Customer code</dt>
-          <dd class="text-sm text-slate-100">{{ payload.customer_code }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Site name</dt>
-          <dd class="text-sm text-slate-100">{{ payload.site_lines[0] if payload.site_lines else '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa no.</dt>
-          <dd class="text-sm text-slate-100">{{ payload.building_villa_number }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Building name / road</dt>
-          <dd class="text-sm text-slate-100">{{ payload.site_address_line2 }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">City</dt>
-          <dd class="text-sm text-slate-100">{{ payload.city }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">State</dt>
-          <dd class="text-sm text-slate-100">{{ payload.state }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Pincode</dt>
-          <dd class="text-sm text-slate-100">{{ payload.pincode }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
-          <dd class="text-sm text-slate-100">{{ payload.geo_location }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Completion date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Handover date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Warranty expiry</dt>
-          <dd class="text-sm text-slate-100">{{ payload.warranty_expiry_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">QR code</dt>
-          <dd class="text-sm text-slate-100">
-            {% if payload.qr_code_url %}
-              <a href="{{ payload.qr_code_url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">Open QR code</a>
-            {% else %}
-              —
-            {% endif %}
-          </dd>
-        </div>
-      </dl>
-    </section>
+    
 
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">Lift specifications</h2>
-        <button type="button" data-modal-open="lift-specs" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Edit lift specifications</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      <dl class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
-          <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Floors served</dt>
-          <dd class="text-sm text-slate-100">{{ payload.floors_served }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
-          <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Speed</dt>
-          <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
-          <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Door finish</dt>
-          <dd class="text-sm text-slate-100">{{ payload.door_finish }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Cabin finish</dt>
-          <dd class="text-sm text-slate-100">{{ payload.cabin_finish }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine type</dt>
-          <dd class="text-sm text-slate-100">{{ payload.machine_type }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine brand</dt>
-          <dd class="text-sm text-slate-100">{{ payload.machine_brand }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
-          <dd class="text-sm text-slate-100">{{ payload.machine_details_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Power supply</dt>
-          <dd class="text-sm text-slate-100">{{ payload.power_supply }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Lift remarks</dt>
-          <dd class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</dd>
-        </div>
-      </dl>
-    </section>
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">AMC details</h2>
-        <button type="button" data-modal-open="lift-amc" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Edit AMC details</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      <dl class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.status }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC type</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.type }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC duration</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.duration_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Contract</dt>
-          <dd class="text-sm text-slate-100">
-            {% if payload.amc.contract %}
-              <a href="{{ payload.amc.contract.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ payload.amc.contract.id }}</a>
-              <div class="text-xs text-slate-400">{{ payload.amc.contract.type or '—' }}{% if payload.amc.contract.coverage %} · {{ payload.amc.contract.coverage }}{% endif %}</div>
-            {% else %}
-              —
-            {% endif %}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC start</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.start_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">AMC end</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.end_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Contract value</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.contract_value_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Payment terms</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.payment_terms }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Route</dt>
-          <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Services per year</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.services_per_year }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Pending services</dt>
-          <dd class="text-sm text-slate-100">{{ payload.amc.pending_services_count }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_date_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM day</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_day_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM time</dt>
-          <dd class="text-sm text-slate-100">{{ payload.preferred_service_time_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Last service date</dt>
-          <dd class="text-sm text-slate-100">{{ payload.last_service_date_display }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">Service remarks</dt>
-          <dd class="text-sm text-slate-300 whitespace-pre-line">{{ payload.service_notes or 'No service remarks added yet.' }}</dd>
-        </div>
-      </dl>
-    </section>
-
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 class="text-lg font-semibold text-theme-primary">Service schedule</h2>
-          <p class="text-xs text-slate-400">Planned preventive visits for the current AMC period.</p>
-        </div>
-        <button
-          type="button"
-          data-modal-open="lift-service-schedule"
-          class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800/70"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-            <path d="M10.75 3.5a.75.75 0 0 0-1.5 0V9.25H3.5a.75.75 0 0 0 0 1.5H9.25V16.5a.75.75 0 0 0 1.5 0V10.75H16.5a.75.75 0 0 0 0-1.5H10.75V3.5Z" />
-          </svg>
-          Edit schedule
-        </button>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-800 text-sm">
-          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th class="px-4 py-2 text-left">Service date</th>
-              <th class="px-4 py-2 text-left">Service slip</th>
-              <th class="px-4 py-2 text-left">Technician</th>
-              <th class="px-4 py-2 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800/80 text-slate-200">
-            {% if payload.service_schedule %}
-              {% for visit in payload.service_schedule %}
-                <tr>
-                  <td class="px-4 py-2 font-semibold text-slate-100">{{ visit.date_display }}</td>
-                  <td class="px-4 py-2">
-                    {% if visit.has_slip %}
-                      <a
-                        href="{{ visit.slip_url }}"
-                        target="_blank"
-                        rel="noopener"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-400/10 text-emerald-200 transition hover:bg-emerald-400/20"
-                        title="{{ visit.slip_display_label }}"
-                      >
-                        <span class="sr-only">{{ visit.slip_display_label }}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13.5A2.25 2.25 0 0 1 3 15.75v-9A2.25 2.25 0 0 1 5.25 4.5h9l6.75 6.75" />
-                        </svg>
-                      </a>
-                    {% else %}
-                      <span class="text-slate-500">—</span>
-                    {% endif %}
-                  </td>
-                  <td class="px-4 py-2">{{ visit.technician_display }}</td>
-                  <td class="px-4 py-2">
-                    {% set badge_class = 'border border-slate-700/70 bg-slate-800/60 text-slate-200' %}
-                    {% if visit.status_key == 'completed' %}
-                      {% set badge_class = 'border border-emerald-400/40 bg-emerald-400/10 text-emerald-200' %}
-                    {% elif visit.status_key == 'overdue' %}
-                      {% set badge_class = 'border border-rose-400/40 bg-rose-400/10 text-rose-200' %}
-                    {% endif %}
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ badge_class }}">{{ visit.status_display }}</span>
-                  </td>
-                </tr>
-              {% endfor %}
-            {% else %}
-              <tr>
-                <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">No service visits planned for this AMC period yet.</td>
-              </tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">AMC contact details</h2>
-        <button type="button" data-modal-open="lift-contacts" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Edit AMC contacts</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-800 text-sm">
-          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th class="px-4 py-2 text-left">Name</th>
-              <th class="px-4 py-2 text-left">Designation</th>
-              <th class="px-4 py-2 text-left">Contact no.</th>
-              <th class="px-4 py-2 text-left">Email</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800/80 text-slate-200">
-            {% for contact in payload.amc.contacts %}
-              <tr>
-                <td class="px-4 py-2">{{ contact.name }}</td>
-                <td class="px-4 py-2">{{ contact.designation }}</td>
-                <td class="px-4 py-2">{{ contact.phone }}</td>
-                <td class="px-4 py-2">{{ contact.email }}</td>
-              </tr>
-            {% else %}
-              <tr>
-                <td colspan="4" class="px-4 py-4 text-center text-sm text-slate-400">No AMC contacts captured yet.</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">Attachments</h2>
-        <button type="button" data-modal-open="lift-attachments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Upload attachment</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      {% if attachments %}
-        <ul class="space-y-3 text-sm text-slate-200">
-          {% for attachment in attachments %}
-            <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <a href="{{ url_for('static', filename=attachment.stored_path) }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ attachment.display_label }}</a>
-                <span class="text-xs text-slate-400">{{ attachment.uploaded_display }}</span>
-              </div>
-              <div class="text-xs text-slate-400">
-                {{ attachment.display_size }}
-                {% if attachment.uploaded_by %}
-                  · Uploaded by {{ attachment.uploaded_by.display_name }}
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">Lift summary details</h2>
+            <button type="button" data-modal-open="lift-summary" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Edit lift summary</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <dl class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Lift code / ID</dt>
+              <dd class="text-sm text-slate-100">{{ lift.lift_code }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">External lift ID</dt>
+              <dd class="text-sm text-slate-100">{{ payload.external_lift_id }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Customer name</dt>
+              <dd class="text-sm text-slate-100">{{ lift.customer.company_name if lift.customer else '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Customer code</dt>
+              <dd class="text-sm text-slate-100">{{ payload.customer_code }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Site name</dt>
+              <dd class="text-sm text-slate-100">{{ payload.site_lines[0] if payload.site_lines else '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Building / Villa no.</dt>
+              <dd class="text-sm text-slate-100">{{ payload.building_villa_number }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Building name / road</dt>
+              <dd class="text-sm text-slate-100">{{ payload.site_address_line2 }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">City</dt>
+              <dd class="text-sm text-slate-100">{{ payload.city }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">State</dt>
+              <dd class="text-sm text-slate-100">{{ payload.state }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Pincode</dt>
+              <dd class="text-sm text-slate-100">{{ payload.pincode }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Geo location</dt>
+              <dd class="text-sm text-slate-100">{{ payload.geo_location }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Completion date</dt>
+              <dd class="text-sm text-slate-100">{{ payload.install_date_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Handover date</dt>
+              <dd class="text-sm text-slate-100">{{ payload.commissioned_date_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Warranty expiry</dt>
+              <dd class="text-sm text-slate-100">{{ payload.warranty_expiry_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">QR code</dt>
+              <dd class="text-sm text-slate-100">
+                {% if payload.qr_code_url %}
+                  <a href="{{ payload.qr_code_url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">Open QR code</a>
+                {% else %}
+                  —
                 {% endif %}
-              </div>
-              {% if attachment.description %}
-                <p class="text-sm text-slate-300">{{ attachment.description }}</p>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No attachments uploaded yet.</p>
-      {% endif %}
-    </section>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">Lift specifications</h2>
+            <button type="button" data-modal-open="lift-specs" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Edit lift specifications</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <dl class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt>
+              <dd class="text-sm text-slate-100">{{ lift.lift_type or '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Floors served</dt>
+              <dd class="text-sm text-slate-100">{{ payload.floors_served }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Capacity (persons / kg)</dt>
+              <dd class="text-sm text-slate-100">{{ payload.capacity_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Speed</dt>
+              <dd class="text-sm text-slate-100">{{ payload.speed_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Door type</dt>
+              <dd class="text-sm text-slate-100">{{ payload.door_type }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Door finish</dt>
+              <dd class="text-sm text-slate-100">{{ payload.door_finish }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Cabin finish</dt>
+              <dd class="text-sm text-slate-100">{{ payload.cabin_finish }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Machine type</dt>
+              <dd class="text-sm text-slate-100">{{ payload.machine_type }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Machine brand</dt>
+              <dd class="text-sm text-slate-100">{{ payload.machine_brand }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Machine details</dt>
+              <dd class="text-sm text-slate-100">{{ payload.machine_details_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Power supply</dt>
+              <dd class="text-sm text-slate-100">{{ payload.power_supply }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Lift remarks</dt>
+              <dd class="text-sm text-slate-300 whitespace-pre-line">{{ lift.remarks or 'No remarks added yet.' }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </div>
 
-    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-theme-primary">Comments</h2>
-        <button type="button" data-modal-open="lift-comments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Add comment</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
-      </div>
-      <div class="space-y-3">
-        {% if comments %}
-          <ul class="space-y-3">
-            {% for comment in comments %}
-              <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <span class="text-sm font-semibold text-slate-100">{{ comment.author_name }}</span>
-                  <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
-                </div>
-                <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No comments recorded yet.</p>
-        {% endif %}
-      </div>
-    </section>
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">AMC details</h2>
+            <button type="button" data-modal-open="lift-amc" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Edit AMC details</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <dl class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.status }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">AMC type</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.type }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">AMC duration</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.duration_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Contract</dt>
+              <dd class="text-sm text-slate-100">
+                {% if payload.amc.contract %}
+                  <a href="{{ payload.amc.contract.url }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ payload.amc.contract.id }}</a>
+                  <div class="text-xs text-slate-400">{{ payload.amc.contract.type or '—' }}{% if payload.amc.contract.coverage %} · {{ payload.amc.contract.coverage }}{% endif %}</div>
+                {% else %}
+                  —
+                {% endif %}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">AMC start</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.start_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">AMC end</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.end_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Contract value</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.contract_value_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Payment terms</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.payment_terms }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Route</dt>
+              <dd class="text-sm text-slate-100">{{ payload.route_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Services per year</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.services_per_year }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Pending services</dt>
+              <dd class="text-sm text-slate-100">{{ payload.amc.pending_services_count }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM date</dt>
+              <dd class="text-sm text-slate-100">{{ payload.preferred_service_date_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM day</dt>
+              <dd class="text-sm text-slate-100">{{ payload.preferred_service_day_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Preferred PM time</dt>
+              <dd class="text-sm text-slate-100">{{ payload.preferred_service_time_display }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Last service date</dt>
+              <dd class="text-sm text-slate-100">{{ payload.last_service_date_display }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Service remarks</dt>
+              <dd class="text-sm text-slate-300 whitespace-pre-line">{{ payload.service_notes or 'No service remarks added yet.' }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">AMC contact details</h2>
+            <button type="button" data-modal-open="lift-contacts" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Edit AMC contacts</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-800 text-sm">
+              <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th class="px-4 py-2 text-left">Name</th>
+                  <th class="px-4 py-2 text-left">Designation</th>
+                  <th class="px-4 py-2 text-left">Contact no.</th>
+                  <th class="px-4 py-2 text-left">Email</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 text-slate-200">
+                {% for contact in payload.amc.contacts %}
+                  <tr>
+                    <td class="px-4 py-2">{{ contact.name }}</td>
+                    <td class="px-4 py-2">{{ contact.designation }}</td>
+                    <td class="px-4 py-2">{{ contact.phone }}</td>
+                    <td class="px-4 py-2">{{ contact.email }}</td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="px-4 py-4 text-center text-sm text-slate-400">No AMC contacts captured yet.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-theme-primary">Service schedule</h2>
+              <p class="text-xs text-slate-400">Planned preventive visits for the current AMC period.</p>
+            </div>
+            <button
+              type="button"
+              data-modal-open="lift-service-schedule"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800/70"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                <path d="M10.75 3.5a.75.75 0 0 0-1.5 0V9.25H3.5a.75.75 0 0 0 0 1.5H9.25V16.5a.75.75 0 0 0 1.5 0V10.75H16.5a.75.75 0 0 0 0-1.5H10.75V3.5Z" />
+              </svg>
+              Edit schedule
+            </button>
+          </div>
+          <div class="flex-1 overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-800 text-sm">
+              <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th class="px-4 py-2 text-left">Service date</th>
+                  <th class="px-4 py-2 text-left">Service slip</th>
+                  <th class="px-4 py-2 text-left">Technician</th>
+                  <th class="px-4 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 text-slate-200">
+                {% if payload.service_schedule %}
+                  {% for visit in payload.service_schedule %}
+                    <tr>
+                      <td class="px-4 py-2 font-semibold text-slate-100">{{ visit.date_display }}</td>
+                      <td class="px-4 py-2">
+                        {% if visit.has_slip %}
+                          <a
+                            href="{{ visit.slip_url }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-400/10 text-emerald-200 transition hover:bg-emerald-400/20"
+                            title="{{ visit.slip_display_label }}"
+                          >
+                            <span class="sr-only">{{ visit.slip_display_label }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13.5A2.25 2.25 0 0 1 3 15.75v-9A2.25 2.25 0 0 1 5.25 4.5h9l6.75 6.75" />
+                            </svg>
+                          </a>
+                        {% else %}
+                          <span class="text-slate-500">—</span>
+                        {% endif %}
+                      </td>
+                      <td class="px-4 py-2">{{ visit.technician_display }}</td>
+                      <td class="px-4 py-2">
+                        {% set badge_class = 'border border-slate-700/70 bg-slate-800/60 text-slate-200' %}
+                        {% if visit.status_key == 'completed' %}
+                          {% set badge_class = 'border border-emerald-400/40 bg-emerald-400/10 text-emerald-200' %}
+                        {% elif visit.status_key == 'overdue' %}
+                          {% set badge_class = 'border border-rose-400/40 bg-rose-400/10 text-rose-200' %}
+                        {% endif %}
+                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ badge_class }}">{{ visit.status_display }}</span>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">No service visits planned for this AMC period yet.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">Breakdown Summary</h2>
+          </div>
+          <div class="flex-1 overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-800 text-sm">
+              <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th class="px-4 py-2 text-left">Date</th>
+                  <th class="px-4 py-2 text-left">Breakdown type</th>
+                  <th class="px-4 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80 text-slate-200">
+                {% if payload.breakdown_summary %}
+                  {% for summary in payload.breakdown_summary %}
+                    {% set status_key = summary.status_key or summary.status|lower|replace(' ', '_') %}
+                    {% set badge_class = 'border border-slate-700/70 bg-slate-800/60 text-slate-200' %}
+                    {% if status_key == 'fixed' %}
+                      {% set badge_class = 'border border-emerald-400/40 bg-emerald-400/10 text-emerald-200' %}
+                    {% elif status_key in ['in_progress', 'in-progress'] %}
+                      {% set badge_class = 'border border-amber-400/40 bg-amber-400/10 text-amber-200' %}
+                    {% elif status_key == 'open' %}
+                      {% set badge_class = 'border border-rose-400/40 bg-rose-400/10 text-rose-200' %}
+                    {% elif status_key == 'accounts_clearance' %}
+                      {% set badge_class = 'border border-sky-400/40 bg-sky-400/10 text-sky-200' %}
+                    {% endif %}
+                    <tr
+                      data-breakdown-entry
+                      data-breakdown-date="{{ summary.date_display }}"
+                      data-breakdown-date-iso="{{ summary.date_iso }}"
+                      data-breakdown-type="{{ summary.type|e }}"
+                      data-breakdown-status="{{ summary.status|e }}"
+                      data-breakdown-status-key="{{ status_key }}"
+                      data-breakdown-description="{{ summary.description|e }}"
+                      data-breakdown-reference="{{ summary.call_reference|e }}"
+                      data-breakdown-reported-by="{{ (summary.reported_by or '')|e }}"
+                      tabindex="0"
+                      class="cursor-pointer transition hover:bg-slate-800/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-0"
+                    >
+                      <td class="px-4 py-2 font-semibold text-slate-100">{{ summary.date_display }}</td>
+                      <td class="px-4 py-2">{{ summary.type }}</td>
+                      <td class="px-4 py-2">
+                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ badge_class }}">{{ summary.status or '—' }}</span>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="3" class="px-4 py-6 text-center text-sm text-slate-400">No breakdown updates recorded yet.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">Comments</h2>
+            <button type="button" data-modal-open="lift-comments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Add comment</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 space-y-3 overflow-y-auto pr-1">
+            {% if comments %}
+              <ul class="space-y-3">
+                {% for comment in comments %}
+                  <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span class="text-sm font-semibold text-slate-100">{{ comment.author_name }}</span>
+                      <span class="text-xs text-slate-400">{{ comment.created_display }}</span>
+                    </div>
+                    <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No comments recorded yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div class="flex h-full flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-theme-primary">Attachments</h2>
+            <button type="button" data-modal-open="lift-attachments" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+              <span class="sr-only">Upload attachment</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 space-y-3 overflow-y-auto pr-1">
+            {% if attachments %}
+              <ul class="space-y-3 text-sm text-slate-200">
+                {% for attachment in attachments %}
+                  <li class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <a href="{{ url_for('static', filename=attachment.stored_path) }}" class="font-semibold text-emerald-200 hover:text-emerald-100" target="_blank" rel="noopener">{{ attachment.display_label }}</a>
+                      <span class="text-xs text-slate-400">{{ attachment.uploaded_display }}</span>
+                    </div>
+                    <div class="text-xs text-slate-400">
+                      {{ attachment.display_size }}
+                      {% if attachment.uploaded_by %}
+                        · Uploaded by {{ attachment.uploaded_by.display_name }}
+                      {% endif %}
+                    </div>
+                    {% if attachment.description %}
+                      <p class="text-sm text-slate-300">{{ attachment.description }}</p>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No attachments uploaded yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    </div>
 
     <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
       <div class="flex items-center justify-between">
@@ -905,6 +988,45 @@
     </div>
   </form>
 </dialog>
+<dialog id="breakdownSummaryModal" class="modal-dialog">
+  <div class="w-full max-w-lg space-y-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Breakdown details</h2>
+        <p class="text-xs text-slate-400">Status, notes and references for the selected breakdown.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <dl class="grid gap-4 sm:grid-cols-2">
+      <div class="sm:col-span-2">
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Breakdown type</dt>
+        <dd class="text-sm font-semibold text-slate-100" data-breakdown-type>—</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Date</dt>
+        <dd class="text-sm text-slate-100" data-breakdown-date>—</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt>
+        <dd>
+          <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border border-slate-700/70 bg-slate-800/60 text-slate-200" data-breakdown-status-badge>—</span>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Reference</dt>
+        <dd class="text-sm text-slate-100" data-breakdown-reference>—</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Reported by</dt>
+        <dd class="text-sm text-slate-100" data-breakdown-reported-by>—</dd>
+      </div>
+      <div class="sm:col-span-2">
+        <dt class="text-xs uppercase tracking-wide text-slate-400">Notes</dt>
+        <dd class="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300" data-breakdown-description>No additional details provided.</dd>
+      </div>
+    </dl>
+  </div>
+</dialog>
 <dialog id="liftContactsModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
     <div class="flex items-start justify-between gap-4">
@@ -1026,27 +1148,42 @@
 </dialog>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    function openModal(modal) {
+      if (!modal) return;
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        modal.classList.add('open');
+      }
+    }
+
+    function closeModal(modal) {
+      if (!modal) return;
+      if (typeof modal.close === 'function') {
+        modal.close();
+      } else {
+        modal.classList.remove('open');
+      }
+    }
+
+    function attachModalClosers(modal) {
+      if (!modal) return;
+      modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', () => closeModal(modal));
+      });
+      modal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeModal(modal);
+      });
+    }
+
     function setupModal(openSelector, modalId) {
       const modal = document.getElementById(modalId);
       if (!modal) return;
       document.querySelectorAll(openSelector).forEach((trigger) => {
-        trigger.addEventListener('click', () => {
-          if (typeof modal.showModal === 'function') {
-            modal.showModal();
-          } else {
-            modal.classList.add('open');
-          }
-        });
+        trigger.addEventListener('click', () => openModal(modal));
       });
-      modal.querySelectorAll('[data-modal-close]').forEach((button) => {
-        button.addEventListener('click', () => {
-          if (typeof modal.close === 'function') {
-            modal.close();
-          } else {
-            modal.classList.remove('open');
-          }
-        });
-      });
+      attachModalClosers(modal);
     }
 
     setupModal('[data-modal-open="lift-summary"]', 'liftSummaryModal');
@@ -1058,6 +1195,72 @@
     setupModal('[data-modal-open="lift-attachments"]', 'liftAttachmentsModal');
     setupModal('[data-modal-open="lift-comments"]', 'liftCommentsModal');
     setupModal('[data-modal-open="lift-timeline"]', 'liftTimelineModal');
+
+    const breakdownModal = document.getElementById('breakdownSummaryModal');
+    if (breakdownModal) {
+      attachModalClosers(breakdownModal);
+      const breakdownFields = {
+        type: breakdownModal.querySelector('[data-breakdown-type]'),
+        date: breakdownModal.querySelector('[data-breakdown-date]'),
+        reference: breakdownModal.querySelector('[data-breakdown-reference]'),
+        reportedBy: breakdownModal.querySelector('[data-breakdown-reported-by]'),
+        description: breakdownModal.querySelector('[data-breakdown-description]'),
+      };
+      const statusBadge = breakdownModal.querySelector('[data-breakdown-status-badge]');
+      const badgeBaseClass = 'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold';
+
+      function getStatusBadgeClass(statusKey) {
+        switch ((statusKey || '').toLowerCase()) {
+          case 'fixed':
+            return 'border border-emerald-400/40 bg-emerald-400/10 text-emerald-200';
+          case 'in_progress':
+          case 'in-progress':
+            return 'border border-amber-400/40 bg-amber-400/10 text-amber-200';
+          case 'open':
+            return 'border border-rose-400/40 bg-rose-400/10 text-rose-200';
+          case 'accounts_clearance':
+            return 'border border-sky-400/40 bg-sky-400/10 text-sky-200';
+          default:
+            return 'border border-slate-700/70 bg-slate-800/60 text-slate-200';
+        }
+      }
+
+      function setField(element, value, fallback) {
+        if (!element) return;
+        const trimmed = typeof value === 'string' ? value.trim() : value;
+        element.textContent = trimmed ? trimmed : fallback;
+      }
+
+      function openBreakdownDetail(trigger) {
+        if (!trigger) return;
+        setField(breakdownFields.type, trigger.getAttribute('data-breakdown-type'), '—');
+        setField(breakdownFields.date, trigger.getAttribute('data-breakdown-date'), '—');
+        setField(breakdownFields.reference, trigger.getAttribute('data-breakdown-reference'), '—');
+        setField(breakdownFields.reportedBy, trigger.getAttribute('data-breakdown-reported-by'), '—');
+        setField(
+          breakdownFields.description,
+          trigger.getAttribute('data-breakdown-description'),
+          'No additional details provided.'
+        );
+        if (statusBadge) {
+          const statusKey = trigger.getAttribute('data-breakdown-status-key');
+          const statusText = trigger.getAttribute('data-breakdown-status') || '—';
+          statusBadge.className = `${badgeBaseClass} ${getStatusBadgeClass(statusKey)}`;
+          statusBadge.textContent = statusText;
+        }
+        openModal(breakdownModal);
+      }
+
+      document.querySelectorAll('[data-breakdown-entry]').forEach((row) => {
+        row.addEventListener('click', () => openBreakdownDetail(row));
+        row.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openBreakdownDetail(row);
+          }
+        });
+      });
+    }
 
     const amcDurationMonths = {{ amc_duration_months | tojson }};
     const amcStartInput = document.getElementById('liftAmcStartDetail');
