@@ -7813,7 +7813,7 @@ def admin_users_update(user_id):
 
     db.session.commit()
     flash(f"User '{user.username}' updated.", "success")
-    return redirect(url_for("admin_users") + f"#user-{user.id}")
+    return redirect(url_for("admin_users") + "#users")
 
 
 @app.route("/admin/departments/create", methods=["POST"])
