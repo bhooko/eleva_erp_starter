@@ -561,7 +561,7 @@
 
               const author = document.createElement('div');
               author.className = 'text-sm font-semibold text-slate-100';
-              author.textContent = event.actor || 'System';
+              author.textContent = event.actor_label || event.actor || 'System';
               header.appendChild(author);
 
               const timestamp = document.createElement('div');
@@ -644,8 +644,8 @@
               if (event.timestamp_display) {
                 subtitleParts.push(event.timestamp_display);
               }
-              if (event.actor) {
-                subtitleParts.push(event.actor);
+              if (event.actor_label || event.actor) {
+                subtitleParts.push(event.actor_label || event.actor);
               }
               subtitle.textContent = subtitleParts.join(' · ');
               meta.appendChild(subtitle);
@@ -695,10 +695,10 @@
 
               wrapper.appendChild(header);
 
-              if (event.actor) {
+              if (event.actor_label || event.actor) {
                 const actor = document.createElement('p');
                 actor.className = 'text-xs text-slate-500';
-                actor.textContent = `By ${event.actor}`;
+                actor.textContent = `By ${event.actor_label || event.actor}`;
                 wrapper.appendChild(actor);
               }
 

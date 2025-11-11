@@ -208,7 +208,15 @@
                   <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
                   <span class="text-xs text-slate-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
                 </div>
-                <div class="text-xs text-slate-400 mt-1">{% if log.actor %}by {{ log.actor.username }}{% else %}system{% endif %}</div>
+                <div class="text-xs text-slate-400 mt-1">
+                  {% if log.actor %}
+                    {% set actor_name = log.actor.display_name or log.actor.username %}
+                    {% set role_label = 'Admin' if log.actor.is_admin else 'User' %}
+                    by {{ role_label }} · {{ actor_name }}
+                  {% else %}
+                    System
+                  {% endif %}
+                </div>
                 {% if log.action == 'comment_added' %}
                   {% if log.details.body %}
                     <p class="mt-2 text-sm text-slate-200 whitespace-pre-line">{{ log.details.body }}</p>
