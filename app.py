@@ -7752,6 +7752,15 @@ def admin_users_create():
         department=department.name if department else None,
         active=active_flag,
     )
+    user.set_module_permissions(
+        {
+            module["key"]: {
+                "visibility": False,
+                "assignment": False,
+            }
+            for module in WORKSPACE_MODULES
+        }
+    )
     if position:
         user.position = position
         if not user.department and position.department:
