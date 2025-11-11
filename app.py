@@ -2871,6 +2871,16 @@ def build_lift_payload(lift):
         },
     ]
 
+    stored_metrics = lift.lifetime_metrics
+    if stored_metrics:
+        lifetime_metrics = [
+            {
+                "label": item.get("label", "Metric"),
+                "display": item.get("display", "—"),
+            }
+            for item in stored_metrics
+        ]
+
     amc_config = insight_config.get("amc", {}) or {}
     amc_start = amc_config.get("start") or lift.amc_start
     amc_end = amc_config.get("end") or lift.amc_end
@@ -2930,6 +2940,30 @@ def build_lift_payload(lift):
             for item in amc_config.get("attachments", [])
         ],
     }
+
+    contacts_source = lift.amc_contacts or amc_config.get("contacts", []) or []
+    amc_contacts = []
+    for contact in contacts_source:
+        if not isinstance(contact, dict):
+            continue
+        amc_contacts.append(
+            {
+                "name": contact.get("name") or "—",
+                "designation": contact.get("designation") or "—",
+                "phone": contact.get("phone") or "—",
+                "email": contact.get("email") or "—",
+            }
+        )
+    if not amc_contacts and amc_payload["service_owner"] != "—":
+        amc_contacts.append(
+            {
+                "name": amc_payload["service_owner"],
+                "designation": "Service Owner",
+                "phone": amc_payload["service_contact"],
+                "email": "—",
+            }
+        )
+    amc_payload["contacts"] = amc_contacts
 
     if linked_contract and linked_contract.get("id"):
         amc_payload["contract"] = {
@@ -3025,15 +3059,27 @@ def build_lift_payload(lift):
         for item in insight_config.get("breakdowns", [])
     ]
 
-    timeline_entries = [
-        {
-            "date_display": format_service_date(item.get("date")),
-            "title": item.get("title", "—"),
-            "detail": item.get("detail", ""),
-            "category": item.get("category", "Update"),
-        }
-        for item in insight_config.get("timeline", [])
-    ]
+    timeline_entries = []
+    stored_timeline = lift.timeline_entries
+    if stored_timeline:
+        for item in stored_timeline:
+            timeline_entries.append(
+                {
+                    "date_display": format_service_date(item.get("date")),
+                    "title": item.get("title", "—"),
+                    "detail": item.get("detail", ""),
+                    "category": item.get("category", "Update"),
+                }
+            )
+    for item in insight_config.get("timeline", []) or []:
+        timeline_entries.append(
+            {
+                "date_display": format_service_date(item.get("date")),
+                "title": item.get("title", "—"),
+                "detail": item.get("detail", ""),
+                "category": item.get("category", "Update"),
+            }
+        )
 
     sorted_comments = sorted(
         lift.comments,
@@ -3132,6 +3178,7 @@ def build_lift_payload(lift):
         or "—",
         "geo_location": lift.geo_location or "—",
         "qr_code_url": lift.qr_code_url or None,
+        "service_notes": lift.notes or "—",
         "comments": [
             {
                 "body": comment.body,
@@ -4305,6 +4352,9 @@ class Lift(db.Model):
     preferred_service_date = db.Column(db.Date, nullable=True)
     preferred_service_time = db.Column(db.Time, nullable=True)
     preferred_service_days_json = db.Column(db.Text, nullable=True)
+    lifetime_metrics_json = db.Column(db.Text, nullable=True)
+    amc_contacts_json = db.Column(db.Text, nullable=True)
+    timeline_entries_json = db.Column(db.Text, nullable=True)
     last_updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -4394,6 +4444,167 @@ class Lift(db.Model):
         else:
             self.preferred_service_day = None
             self.preferred_service_days_json = None
+
+    @property
+    def lifetime_metrics(self):
+        if not self.lifetime_metrics_json:
+            return []
+        try:
+            data = json.loads(self.lifetime_metrics_json)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        normalized = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            label = clean_str(item.get("label")) or "Metric"
+            display = item.get("display")
+            if display is None:
+                display = clean_str(item.get("value")) or "—"
+            normalized.append({"label": label, "display": display})
+        return normalized
+
+    @lifetime_metrics.setter
+    def lifetime_metrics(self, values):
+        if not values:
+            self.lifetime_metrics_json = None
+            return
+        cleaned = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            label = clean_str(item.get("label"))
+            display = item.get("display")
+            if display is None:
+                display = clean_str(item.get("value"))
+            if not label and not display:
+                continue
+            cleaned.append(
+                {
+                    "label": label or "Metric",
+                    "display": display or "—",
+                }
+            )
+        self.lifetime_metrics_json = json.dumps(cleaned, ensure_ascii=False)
+
+    @property
+    def amc_contacts(self):
+        if not self.amc_contacts_json:
+            return []
+        try:
+            data = json.loads(self.amc_contacts_json)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        contacts = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            contacts.append(
+                {
+                    "name": clean_str(item.get("name")) or "—",
+                    "designation": clean_str(item.get("designation")) or "—",
+                    "phone": clean_str(item.get("phone")) or "—",
+                    "email": clean_str(item.get("email")) or "—",
+                }
+            )
+        return contacts
+
+    @amc_contacts.setter
+    def amc_contacts(self, values):
+        if not values:
+            self.amc_contacts_json = None
+            return
+        cleaned = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            name = clean_str(item.get("name"))
+            designation = clean_str(item.get("designation"))
+            phone = clean_str(item.get("phone"))
+            email = clean_str(item.get("email"))
+            if not any([name, designation, phone, email]):
+                continue
+            cleaned.append(
+                {
+                    "name": name or "—",
+                    "designation": designation or "—",
+                    "phone": phone or "—",
+                    "email": email or "—",
+                }
+            )
+        self.amc_contacts_json = json.dumps(cleaned, ensure_ascii=False)
+
+    @property
+    def timeline_entries(self):
+        if not self.timeline_entries_json:
+            return []
+        try:
+            data = json.loads(self.timeline_entries_json)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        entries = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            raw_date = item.get("date")
+            parsed_date = None
+            if isinstance(raw_date, datetime.date):
+                parsed_date = raw_date
+            elif isinstance(raw_date, str) and raw_date:
+                try:
+                    parsed_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+                except ValueError:
+                    parsed_date = None
+            entries.append(
+                {
+                    "date": parsed_date,
+                    "title": item.get("title") or "—",
+                    "detail": item.get("detail") or "",
+                    "category": item.get("category") or "Update",
+                }
+            )
+        return entries
+
+    @timeline_entries.setter
+    def timeline_entries(self, values):
+        if not values:
+            self.timeline_entries_json = None
+            return
+        cleaned = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            title = clean_str(item.get("title")) or "—"
+            detail = clean_str(item.get("detail"))
+            category = clean_str(item.get("category")) or "Update"
+            raw_date = item.get("date")
+            iso_date = None
+            if isinstance(raw_date, datetime.date):
+                iso_date = raw_date.isoformat()
+            elif isinstance(raw_date, datetime.datetime):
+                iso_date = raw_date.date().isoformat()
+            else:
+                date_str = clean_str(raw_date)
+                if date_str:
+                    try:
+                        iso_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date().isoformat()
+                    except ValueError:
+                        iso_date = None
+            cleaned.append(
+                {
+                    "date": iso_date,
+                    "title": title,
+                    "detail": detail or "",
+                    "category": category,
+                }
+            )
+        self.timeline_entries_json = json.dumps(cleaned, ensure_ascii=False)
 
 
 class LiftFile(db.Model):
@@ -4827,6 +5038,18 @@ def ensure_lift_columns():
     if "preferred_service_days_json" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_days_json TEXT;")
         added_cols.append("preferred_service_days_json")
+
+    if "lifetime_metrics_json" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN lifetime_metrics_json TEXT;")
+        added_cols.append("lifetime_metrics_json")
+
+    if "amc_contacts_json" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN amc_contacts_json TEXT;")
+        added_cols.append("amc_contacts_json")
+
+    if "timeline_entries_json" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN timeline_entries_json TEXT;")
+        added_cols.append("timeline_entries_json")
 
     conn.commit()
     conn.close()
@@ -9721,13 +9944,26 @@ def service_lift_detail(lift_id):
         .all()
     )
 
+    customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
+    service_routes = ServiceRoute.query.order_by(
+        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
+    ).all()
+    dropdown_options = get_dropdown_options_map()
+
     return render_template(
         "service/lift_detail.html",
         lift=lift,
         payload=payload,
         attachments=attachments,
         comments=comments,
-        next_customer_code=generate_next_customer_code(),
+        customers=customers,
+        service_routes=service_routes,
+        service_contracts=SERVICE_CONTRACTS,
+        service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
+        dropdown_options=dropdown_options,
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        amc_duration_choices=AMC_DURATION_CHOICES,
+        amc_duration_months=AMC_DURATION_MONTHS,
     )
 
 
@@ -9783,7 +10019,238 @@ def service_lift_update(lift_id):
         return redirect(url_for("service_lifts"))
 
     redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
+    form_section = (request.form.get("form_section") or "full").strip().lower()
 
+    if form_section == "summary":
+        customer_code_input = clean_str(request.form.get("customer_code"))
+        if customer_code_input:
+            new_customer_code = customer_code_input.upper()
+            customer = Customer.query.filter(
+                func.lower(Customer.customer_code) == new_customer_code.lower()
+            ).first()
+            if not customer:
+                flash("Select a valid customer from the list or create a new customer.", "error")
+                return redirect(redirect_url)
+            lift.customer_code = new_customer_code
+        else:
+            lift.customer_code = None
+
+        install_date, error = parse_date_field(request.form.get("install_date"), "Completion date")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        warranty_expiry, error = parse_date_field(request.form.get("warranty_expiry"), "Warranty expiry")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        lift.external_lift_id = clean_str(request.form.get("external_lift_id"))
+        lift.site_address_line1 = clean_str(request.form.get("site_address_line1"))
+        lift.site_address_line2 = clean_str(request.form.get("site_address_line2"))
+        lift.building_villa_number = clean_str(request.form.get("building_villa_number"))
+        lift.city = clean_str(request.form.get("city"))
+        lift.state = clean_str(request.form.get("state"))
+        lift.pincode = clean_str(request.form.get("pincode"))
+        lift.geo_location = clean_str(request.form.get("geo_location"))
+        lift.country = "India"
+        lift.install_date = install_date
+        lift.warranty_expiry = warranty_expiry
+        lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+
+        db.session.commit()
+        flash("Lift summary updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "specifications":
+        capacity_persons, error = parse_int_field(
+            request.form.get("capacity_persons"), "Capacity (persons)"
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        capacity_kg, error = parse_int_field(request.form.get("capacity_kg"), "Capacity (kg)")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        speed_mps, error = parse_float_field(request.form.get("speed_mps"), "Speed (m/s)")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        lift.lift_type = clean_str(request.form.get("lift_type"))
+        lift.building_floors = clean_str(request.form.get("building_floors"))
+        lift.capacity_persons = capacity_persons
+        lift.capacity_kg = capacity_kg
+        lift.speed_mps = speed_mps
+        lift.machine_type = clean_str(request.form.get("machine_type"))
+        lift.machine_brand = clean_str(request.form.get("machine_brand"))
+        lift.controller_brand = clean_str(request.form.get("controller_brand"))
+        lift.door_type = clean_str(request.form.get("door_type"))
+        lift.door_finish = clean_str(request.form.get("door_finish"))
+        lift.cabin_finish = clean_str(request.form.get("cabin_finish"))
+        lift.power_supply = clean_str(request.form.get("power_supply"))
+        lift.remarks = clean_str(request.form.get("remarks"))
+        lift.set_capacity_display()
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+
+        db.session.commit()
+        flash("Lift specifications updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "amc_details":
+        route_value = clean_str(request.form.get("route"))
+        if route_value:
+            valid_route = ServiceRoute.query.filter(
+                func.lower(ServiceRoute.state) == route_value.lower()
+            ).first()
+            if not valid_route:
+                flash("Select a valid service route from the dropdown.", "error")
+                return redirect(redirect_url)
+            route_value = valid_route.state
+        else:
+            route_value = None
+
+        amc_start, error = parse_date_field(request.form.get("amc_start"), "AMC start date")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        amc_duration_value = clean_str(request.form.get("amc_duration_key"))
+        amc_duration_key = amc_duration_value.lower() if amc_duration_value else None
+        if amc_duration_key and amc_duration_key not in AMC_DURATION_MONTHS:
+            flash("Select a valid AMC duration option.", "error")
+            return redirect(redirect_url)
+        computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
+
+        preferred_date, error = parse_preferred_service_date(
+            request.form.get("preferred_service_date")
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        preferred_time, error = parse_time_field(
+            request.form.get("preferred_service_time"), "Preferred PM time"
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        preferred_days_raw = request.form.getlist("preferred_service_days")
+        preferred_days, day_error = parse_preferred_service_days(preferred_days_raw)
+        if day_error:
+            flash(day_error, "error")
+            return redirect(redirect_url)
+
+        contract_input = clean_str(request.form.get("amc_contract_id"))
+        amc_contract_id = None
+        if contract_input:
+            contract_record = get_service_contract_by_id(contract_input)
+            if not contract_record:
+                flash("Select a valid AMC contract.", "error")
+                return redirect(redirect_url)
+            amc_contract_id = contract_record.get("id")
+
+        last_service_date, error = parse_date_field(
+            request.form.get("last_service_date"), "Last service date"
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        lift.amc_status = clean_str(request.form.get("amc_status"))
+        lift.amc_start = amc_start
+        lift.amc_end = computed_amc_end
+        lift.amc_duration_key = amc_duration_key
+        lift.amc_contract_id = amc_contract_id
+        lift.route = route_value
+        lift.preferred_service_date = preferred_date
+        lift.preferred_service_time = preferred_time
+        lift.preferred_service_days = preferred_days
+        lift.last_service_date = last_service_date
+        lift.notes = clean_str(request.form.get("service_notes"))
+        lift.status = clean_str(request.form.get("status"))
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+
+        db.session.commit()
+        flash("AMC details updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "amc_contacts":
+        names = request.form.getlist("contact_name")
+        designations = request.form.getlist("contact_designation")
+        phones = request.form.getlist("contact_phone")
+        emails = request.form.getlist("contact_email")
+        max_len = max(len(names), len(designations), len(phones), len(emails))
+        contacts = []
+        for idx in range(max_len):
+            name = clean_str(names[idx]) if idx < len(names) else None
+            designation = clean_str(designations[idx]) if idx < len(designations) else None
+            phone = clean_str(phones[idx]) if idx < len(phones) else None
+            email = clean_str(emails[idx]) if idx < len(emails) else None
+            if not any([name, designation, phone, email]):
+                continue
+            contacts.append(
+                {
+                    "name": name,
+                    "designation": designation,
+                    "phone": phone,
+                    "email": email,
+                }
+            )
+        lift.amc_contacts = contacts
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+        db.session.commit()
+        flash("AMC contacts updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "lifetime_metrics":
+        labels = request.form.getlist("metric_label")
+        displays = request.form.getlist("metric_display")
+        max_len = max(len(labels), len(displays))
+        metrics = []
+        for idx in range(max_len):
+            label = clean_str(labels[idx]) if idx < len(labels) else None
+            display_raw = displays[idx] if idx < len(displays) else ""
+            display = display_raw.strip() if isinstance(display_raw, str) else None
+            if not label and not display:
+                continue
+            metrics.append({"label": label or "Metric", "display": display or "—"})
+        lift.lifetime_metrics = metrics
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+        db.session.commit()
+        flash("Lifetime value metrics updated.", "success")
+        return redirect(redirect_url)
+
+    if form_section == "timeline":
+        timeline_date, error = parse_date_field(request.form.get("timeline_date"), "Timeline date")
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+        title = clean_str(request.form.get("timeline_title")) or "Update"
+        detail = clean_str(request.form.get("timeline_detail"))
+        category = clean_str(request.form.get("timeline_category")) or "Update"
+        entries = list(lift.timeline_entries)
+        entries.insert(
+            0,
+            {
+                "date": timeline_date,
+                "title": title,
+                "detail": detail,
+                "category": category,
+            },
+        )
+        lift.timeline_entries = entries
+        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+        db.session.commit()
+        flash("Timeline entry added.", "success")
+        return redirect(redirect_url)
+
+    # Fallback to full update
     customer_code_input = clean_str(request.form.get("customer_code"))
     if customer_code_input:
         new_customer_code = customer_code_input.upper()
@@ -9901,6 +10368,11 @@ def service_lift_update(lift_id):
     lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
     lift.status = clean_str(request.form.get("status"))
     lift.remarks = clean_str(request.form.get("remarks"))
+    service_notes_value = request.form.get("service_notes")
+    if service_notes_value is not None:
+        lift.notes = clean_str(service_notes_value)
+    elif "notes" in request.form:
+        lift.notes = clean_str(request.form.get("notes"))
     lift.preferred_service_date = preferred_date
     lift.preferred_service_time = preferred_time
     lift.preferred_service_days = preferred_days
@@ -9910,7 +10382,7 @@ def service_lift_update(lift_id):
     db.session.commit()
 
     flash("Lift details updated.", "success")
-    return redirect(url_for("service_lift_edit", lift_id=lift.id))
+    return redirect(redirect_url)
 
 
 @app.route("/service/lifts/<int:lift_id>/notes", methods=["POST"])
