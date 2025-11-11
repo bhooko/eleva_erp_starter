@@ -7648,7 +7648,6 @@ def admin_users_create():
     last_name = (request.form.get("last_name") or "").strip()
     email = (request.form.get("email") or "").strip()
     mobile_number = (request.form.get("mobile_number") or "").strip()
-    role = (request.form.get("role") or "").strip()
     department_id_raw = request.form.get("department_id")
     position_id_raw = request.form.get("position_id")
     active_flag = _form_truthy(request.form.get("active", "1"))
@@ -7705,7 +7704,6 @@ def admin_users_create():
         last_name=last_name or None,
         email=email or None,
         mobile_number=mobile_number or None,
-        role=role or None,
         department=department.name if department else None,
         active=active_flag,
     )
@@ -7749,7 +7747,6 @@ def admin_users_update(user_id):
     last_name = (request.form.get("last_name") or "").strip()
     email = (request.form.get("email") or "").strip()
     mobile_number = (request.form.get("mobile_number") or "").strip()
-    role = (request.form.get("role") or "").strip()
     department_id_raw = request.form.get("department_id")
     position_id_raw = request.form.get("position_id")
     active_flag = _form_truthy(request.form.get("active"))
@@ -7790,7 +7787,6 @@ def admin_users_update(user_id):
     user.last_name = last_name or None
     user.email = email or None
     user.mobile_number = mobile_number or None
-    user.role = role or None
     user.department = department.name if department else None
     user.active = active_flag
     user.position = position
