@@ -300,6 +300,76 @@
     </section>
 
     <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-theme-primary">Service schedule</h2>
+          <p class="text-xs text-slate-400">Planned preventive visits for the current AMC period.</p>
+        </div>
+        <button
+          type="button"
+          data-modal-open="lift-service-schedule"
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800/70"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+            <path d="M10.75 3.5a.75.75 0 0 0-1.5 0V9.25H3.5a.75.75 0 0 0 0 1.5H9.25V16.5a.75.75 0 0 0 1.5 0V10.75H16.5a.75.75 0 0 0 0-1.5H10.75V3.5Z" />
+          </svg>
+          Edit schedule
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-800 text-sm">
+          <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="px-4 py-2 text-left">Service date</th>
+              <th class="px-4 py-2 text-left">Service slip</th>
+              <th class="px-4 py-2 text-left">Technician</th>
+              <th class="px-4 py-2 text-left">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80 text-slate-200">
+            {% if payload.service_schedule %}
+              {% for visit in payload.service_schedule %}
+                <tr>
+                  <td class="px-4 py-2 font-semibold text-slate-100">{{ visit.date_display }}</td>
+                  <td class="px-4 py-2">
+                    {% if visit.has_slip %}
+                      <a
+                        href="{{ visit.slip_url }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-400/10 text-emerald-200 transition hover:bg-emerald-400/20"
+                        title="{{ visit.slip_label }}"
+                      >
+                        <span class="sr-only">{{ visit.slip_label }}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13.5A2.25 2.25 0 0 1 3 15.75v-9A2.25 2.25 0 0 1 5.25 4.5h9l6.75 6.75" />
+                        </svg>
+                      </a>
+                    {% else %}
+                      <span class="text-slate-500">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-2">{{ visit.technician_display }}</td>
+                  <td class="px-4 py-2">
+                    {% set badge_class = 'border border-emerald-400/40 bg-emerald-400/10 text-emerald-200' %}
+                    {% if visit.status_key == 'due' %}
+                      {% set badge_class = 'border border-amber-400/40 bg-amber-400/10 text-amber-200' %}
+                    {% endif %}
+                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ badge_class }}">{{ visit.status_display }}</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">No service visits planned for this AMC period yet.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-theme-primary">AMC contact details</h2>
         <button type="button" data-modal-open="lift-contacts" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
@@ -754,6 +824,66 @@
     </div>
   </form>
 </dialog>
+<dialog id="liftServiceScheduleModal" class="modal-dialog">
+  <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-theme-primary">Edit service schedule</h2>
+        <p class="text-xs text-slate-400">Adjust visit dates, assigned technicians and signed slips for this AMC period.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
+    </div>
+    <input type="hidden" name="form_section" value="service_schedule" />
+    <input type="hidden" name="next" value="{{ request.full_path }}" />
+    <div class="space-y-3">
+      <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-5">
+        <div>Service date</div>
+        <div>Technician</div>
+        <div>Status</div>
+        <div>Service slip URL</div>
+        <div>Slip label</div>
+      </div>
+      <div id="serviceScheduleList" class="space-y-3">
+        {% set schedule_entries = payload.service_schedule if payload.service_schedule else [{'date_iso': '', 'technician_value': '', 'status_key': 'scheduled', 'slip_url': '', 'slip_label': ''}] %}
+        {% for visit in schedule_entries %}
+          <div class="grid gap-3 service-row md:grid-cols-2 xl:grid-cols-5">
+            <label class="space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service date</span>
+              <input type="date" name="service_date" value="{{ visit.date_iso }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+            </label>
+            <label class="space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Technician</span>
+              <input name="service_technician" value="{{ visit.technician_value }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="{{ payload.route_display if payload.route_display != '—' else 'Route technician' }}" />
+            </label>
+            <label class="space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</span>
+              <select name="service_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+                {% for value, label in service_visit_status_options %}
+                  <option value="{{ value }}" {% if visit.status_key == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service slip URL</span>
+              <input name="service_slip_url" value="{{ visit.slip_url or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="https://example.com/slip.pdf" />
+            </label>
+            <div class="space-y-2">
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Slip label</span>
+                <input name="service_slip_label" value="{{ visit.slip_label or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Service slip" />
+              </label>
+              <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" data-add-service class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Add service</button>
+    </div>
+    <div class="flex items-center justify-end gap-3">
+      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save schedule</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="liftContactsModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
     <div class="flex items-start justify-between gap-4">
@@ -902,6 +1032,7 @@
     setupModal('[data-modal-open="lift-lifetime"]', 'liftLifetimeModal');
     setupModal('[data-modal-open="lift-specs"]', 'liftSpecsModal');
     setupModal('[data-modal-open="lift-amc"]', 'liftAmcModal');
+    setupModal('[data-modal-open="lift-service-schedule"]', 'liftServiceScheduleModal');
     setupModal('[data-modal-open="lift-contacts"]', 'liftContactsModal');
     setupModal('[data-modal-open="lift-attachments"]', 'liftAttachmentsModal');
     setupModal('[data-modal-open="lift-comments"]', 'liftCommentsModal');
@@ -1001,6 +1132,89 @@
 
     const lifetimeList = document.getElementById('lifetimeMetricsList');
     const addMetricButton = document.querySelector('[data-add-metric]');
+
+    const scheduleStatusOptions = {{ service_visit_status_options | tojson }};
+    const scheduleList = document.getElementById('serviceScheduleList');
+    const addServiceButton = document.querySelector('[data-add-service]');
+    const routeTechnicianPlaceholder = {{ (payload.route_display if payload.route_display != '—' else 'Route technician') | tojson }};
+
+    function createServiceRow() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'grid gap-3 service-row md:grid-cols-2 xl:grid-cols-5';
+      const optionsHtml = (scheduleStatusOptions || [])
+        .map(([value, label]) => `<option value="${value}">${label}</option>`)
+        .join('');
+      wrapper.innerHTML = `
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service date</span>
+          <input type="date" name="service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Technician</span>
+          <input name="service_technician" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="${routeTechnicianPlaceholder}" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</span>
+          <select name="service_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+            ${optionsHtml}
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service slip URL</span>
+          <input name="service_slip_url" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="https://example.com/slip.pdf" />
+        </label>
+        <div class="space-y-2">
+          <label class="space-y-1">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Slip label</span>
+            <input name="service_slip_label" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Service slip" />
+          </label>
+          <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Remove</button>
+        </div>
+      `;
+      const select = wrapper.querySelector('select[name="service_status"]');
+      if (select && scheduleStatusOptions && scheduleStatusOptions.length) {
+        select.value = scheduleStatusOptions[0][0];
+      }
+      return wrapper;
+    }
+
+    function refreshServiceRemoveButtons() {
+      if (!scheduleList) return;
+      const rows = scheduleList.querySelectorAll('.service-row');
+      rows.forEach((row) => {
+        const removeButton = row.querySelector('.remove-service');
+        if (!removeButton) return;
+        if (rows.length > 1) {
+          removeButton.classList.remove('hidden');
+        } else {
+          removeButton.classList.add('hidden');
+        }
+        removeButton.onclick = () => {
+          if (scheduleList.querySelectorAll('.service-row').length > 1) {
+            row.remove();
+            refreshServiceRemoveButtons();
+          } else {
+            row.querySelectorAll('input').forEach((input) => {
+              input.value = '';
+            });
+            const select = row.querySelector('select[name="service_status"]');
+            if (select && scheduleStatusOptions && scheduleStatusOptions.length) {
+              select.value = scheduleStatusOptions[0][0];
+            } else if (select) {
+              select.selectedIndex = 0;
+            }
+          }
+        };
+      });
+    }
+
+    if (addServiceButton && scheduleList) {
+      addServiceButton.addEventListener('click', () => {
+        scheduleList.appendChild(createServiceRow());
+        refreshServiceRemoveButtons();
+      });
+      refreshServiceRemoveButtons();
+    }
 
     function createMetricRow() {
       const wrapper = document.createElement('div');
