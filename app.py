@@ -996,10 +996,14 @@ SERVICE_AUTOMATIONS = {
 DEFAULT_LIFT_INSIGHT = {
     "lifetime_value": {
         "total_breakdowns_this_year": 0,
-        "last_year_breakdowns": 0,
+        "breakdowns_completed_this_year": 0,
+        "breakdowns_pending_this_year": 0,
         "total_amc_value": 0,
         "total_repair_revenue": 0,
+        "repair_revenue_this_year": 0,
         "total_cost": 0,
+        "total_cost_this_year": 0,
+        "total_revenue_till_date": 0,
         "net_lifetime_profitability": 0,
     },
     "amc": {
@@ -1053,10 +1057,14 @@ LIFT_INSIGHT_LIBRARY = {
         },
         "lifetime_value": {
             "total_breakdowns_this_year": 3,
-            "last_year_breakdowns": 5,
+            "breakdowns_completed_this_year": 2,
+            "breakdowns_pending_this_year": 1,
             "total_amc_value": 780000,
             "total_repair_revenue": 210000,
+            "repair_revenue_this_year": 95000,
             "total_cost": 430000,
+            "total_cost_this_year": 185000,
+            "total_revenue_till_date": 990000,
             "net_lifetime_profitability": 560000,
         },
         "amc": {
@@ -1210,10 +1218,14 @@ LIFT_INSIGHT_LIBRARY = {
         },
         "lifetime_value": {
             "total_breakdowns_this_year": 2,
-            "last_year_breakdowns": 1,
+            "breakdowns_completed_this_year": 1,
+            "breakdowns_pending_this_year": 1,
             "total_amc_value": 540000,
             "total_repair_revenue": 95000,
+            "repair_revenue_this_year": 60000,
             "total_cost": 285000,
+            "total_cost_this_year": 120000,
+            "total_revenue_till_date": 635000,
             "net_lifetime_profitability": 350000,
         },
         "amc": {
@@ -1317,10 +1329,14 @@ LIFT_INSIGHT_LIBRARY = {
         },
         "lifetime_value": {
             "total_breakdowns_this_year": 1,
-            "last_year_breakdowns": 2,
+            "breakdowns_completed_this_year": 1,
+            "breakdowns_pending_this_year": 0,
             "total_amc_value": 120000,
             "total_repair_revenue": 60000,
+            "repair_revenue_this_year": 30000,
             "total_cost": 95000,
+            "total_cost_this_year": 42000,
+            "total_revenue_till_date": 180000,
             "net_lifetime_profitability": 85000,
         },
         "amc": {
@@ -2923,30 +2939,112 @@ def build_lift_payload(lift):
     machine_serial = machine_details.get("serial") or "—"
 
     lifetime_value = insight_config.get("lifetime_value", {}) or {}
+    amc_config = insight_config.get("amc", {}) or {}
+    total_breakdowns = lifetime_value.get("total_breakdowns_this_year", 0)
+    average_response_value = (
+        lifetime_value.get("average_call_response_time_hours")
+        or lifetime_value.get("avg_call_response_time_hours")
+        or lifetime_value.get("avg_response_time_hours")
+    )
+    if average_response_value is not None:
+        average_response_display = format_duration_hours(average_response_value)
+    else:
+        average_response_raw = (
+            lifetime_value.get("average_call_response_time")
+            or lifetime_value.get("avg_call_response_time")
+            or lifetime_value.get("average_response_time")
+        )
+        average_response_display = (
+            format_duration_hours(average_response_raw)
+            if average_response_raw not in (None, "")
+            else "—"
+        )
+
+    average_close_value = (
+        lifetime_value.get("average_call_close_time_hours")
+        or lifetime_value.get("avg_call_close_time_hours")
+        or lifetime_value.get("avg_close_time_hours")
+    )
+    if average_close_value is not None:
+        average_close_display = format_duration_hours(average_close_value)
+    else:
+        average_close_raw = (
+            lifetime_value.get("average_call_close_time")
+            or lifetime_value.get("avg_call_close_time")
+            or lifetime_value.get("average_close_time")
+        )
+        average_close_display = (
+            format_duration_hours(average_close_raw)
+            if average_close_raw not in (None, "")
+            else "—"
+        )
+
+    repair_revenue_this_year = lifetime_value.get("repair_revenue_this_year")
+    if repair_revenue_this_year is None:
+        repair_revenue_this_year = lifetime_value.get("total_repair_revenue", 0)
+    total_cost_this_year = lifetime_value.get("total_cost_this_year")
+    if total_cost_this_year is None:
+        total_cost_this_year = lifetime_value.get("total_cost", 0)
+
+    months_to_renewal_value = (
+        lifetime_value.get("months_to_renewal")
+        if lifetime_value.get("months_to_renewal") not in (None, "")
+        else lifetime_value.get("months_until_renewal")
+    )
+
+    amc_end_source = amc_config.get("end") or lift.amc_end
+    amc_end_date = None
+    if isinstance(amc_end_source, datetime.datetime):
+        amc_end_date = amc_end_source.date()
+    elif isinstance(amc_end_source, datetime.date):
+        amc_end_date = amc_end_source
+    elif isinstance(amc_end_source, str):
+        for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%d %b %Y", "%d %B %Y"):
+            try:
+                amc_end_date = datetime.datetime.strptime(amc_end_source, fmt).date()
+                break
+            except ValueError:
+                continue
+
+    if months_to_renewal_value in (None, "") and amc_end_date:
+        today = datetime.date.today()
+        delta_months = (amc_end_date.year - today.year) * 12 + (amc_end_date.month - today.month)
+        if amc_end_date.day < today.day:
+            delta_months -= 1
+        months_to_renewal_value = max(0, delta_months)
+
+    if months_to_renewal_value in (None, ""):
+        months_to_renewal_display = "—"
+    else:
+        try:
+            months_to_renewal_display = str(int(float(months_to_renewal_value)))
+        except (TypeError, ValueError):
+            months_to_renewal_display = str(months_to_renewal_value)
+
     lifetime_metrics = [
         {
-            "label": "Total Breakdowns this year",
-            "display": str(lifetime_value.get("total_breakdowns_this_year", 0)),
+            "label": "Total breakdowns this year",
+            "display": str(total_breakdowns),
         },
         {
-            "label": "Last years breakdowns",
-            "display": str(lifetime_value.get("last_year_breakdowns", 0)),
+            "label": "Average call response time",
+            "display": average_response_display,
         },
         {
-            "label": "Total AMC Value till Date",
-            "display": format_currency(lifetime_value.get("total_amc_value", 0)),
+            "label": "Average call close time",
+            "display": average_close_display,
         },
         {
-            "label": "Total Repair Revenue till Date",
-            "display": format_currency(lifetime_value.get("total_repair_revenue", 0)),
+            "label": "Repair revenue this year",
+            "display": format_currency(repair_revenue_this_year or 0),
         },
         {
-            "label": "Total Cost (spares, labour, AMC visits)",
-            "display": format_currency(lifetime_value.get("total_cost", 0)),
+            "label": "Total cost this year",
+            "display": format_currency(total_cost_this_year or 0),
         },
         {
-            "label": "Net Lifetime Profitability",
-            "display": format_currency(lifetime_value.get("net_lifetime_profitability", 0)),
+            "label": "Months to renewal",
+            "display": months_to_renewal_display,
         },
     ]
 
@@ -2960,7 +3058,6 @@ def build_lift_payload(lift):
             for item in stored_metrics
         ]
 
-    amc_config = insight_config.get("amc", {}) or {}
     amc_start = amc_config.get("start") or lift.amc_start
     amc_end = amc_config.get("end") or lift.amc_end
     linked_contract = get_service_contract_by_id(lift.amc_contract_id)
