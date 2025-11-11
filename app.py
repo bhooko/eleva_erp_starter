@@ -1032,6 +1032,7 @@ DEFAULT_LIFT_INSIGHT = {
     "commissioned_date": None,
     "floors_served": None,
     "breakdowns": [],
+    "breakdown_summary": [],
     "uploads": {
         "documents": [],
         "media": [],
@@ -1147,6 +1148,24 @@ LIFT_INSIGHT_LIBRARY = {
                 "status": "Under Observation",
                 "media": ["Calibration report"],
                 "call_reference": "CALL-2025-012",
+            },
+        ],
+        "breakdown_summary": [
+            {
+                "date": datetime.date(2024, 10, 12),
+                "type": "Door sensor fault",
+                "status": "Fixed",
+                "description": "Door close sensor kit replaced and lift tested successfully.",
+                "call_reference": "CALL-2025-028",
+                "reported_by": "Security desk",
+            },
+            {
+                "date": datetime.date(2024, 8, 18),
+                "type": "Overload sensor alert",
+                "status": "In Progress",
+                "description": "Monitoring overload sensor after recalibration; technician revisit planned.",
+                "call_reference": "CALL-2025-012",
+                "reported_by": "Facility manager",
             },
         ],
         "uploads": {
@@ -1267,6 +1286,24 @@ LIFT_INSIGHT_LIBRARY = {
                 "call_reference": "CALL-2025-019",
             }
         ],
+        "breakdown_summary": [
+            {
+                "date": datetime.date(2024, 10, 14),
+                "type": "Goods lift stoppage",
+                "status": "Fixed",
+                "description": "Reset limit switches and replaced brake shoe set after stoppage between floors.",
+                "call_reference": "CALL-2025-019",
+                "reported_by": "Warehouse manager",
+            },
+            {
+                "date": datetime.date(2024, 9, 5),
+                "type": "Brake wear inspection",
+                "status": "Open",
+                "description": "Awaiting approval on quotation for additional brake set replacement across twin car.",
+                "call_reference": "CALL-2024-255",
+                "reported_by": "Service planner",
+            },
+        ],
         "uploads": {
             "documents": [
                 {
@@ -1377,6 +1414,24 @@ LIFT_INSIGHT_LIBRARY = {
                 "media": ["Leakage photos"],
                 "call_reference": "CALL-2024-198",
             }
+        ],
+        "breakdown_summary": [
+            {
+                "date": datetime.date(2024, 7, 22),
+                "type": "Hydraulic hose leak",
+                "status": "Fixed",
+                "description": "Replaced hydraulic hose assembly and topped up oil level.",
+                "call_reference": "CALL-2024-198",
+                "reported_by": "Society chairman",
+            },
+            {
+                "date": datetime.date(2023, 12, 18),
+                "type": "AMC renewal follow-up",
+                "status": "Accounts Clearance",
+                "description": "Awaiting confirmation of outstanding AMC invoices before renewal discussion.",
+                "call_reference": "AMC-2023-REN",
+                "reported_by": "Accounts team",
+            },
         ],
         "uploads": {
             "documents": [
@@ -3043,7 +3098,7 @@ def build_lift_payload(lift):
             "display": format_currency(total_cost_this_year or 0),
         },
         {
-            "label": "Months to renewal",
+            "label": "Months to next renewal",
             "display": months_to_renewal_display,
         },
     ]
@@ -3309,6 +3364,55 @@ def build_lift_payload(lift):
         for item in insight_config.get("breakdowns", [])
     ]
 
+    summary_source = insight_config.get("breakdown_summary") or []
+    breakdown_summary = []
+    for item in summary_source:
+        if not isinstance(item, dict):
+            continue
+        raw_date = item.get("date")
+        summary_date = None
+        if isinstance(raw_date, datetime.datetime):
+            summary_date = raw_date.date()
+        elif isinstance(raw_date, datetime.date):
+            summary_date = raw_date
+        elif isinstance(raw_date, str):
+            try:
+                summary_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
+            except ValueError:
+                summary_date = None
+        status_raw = clean_str(item.get("status"))
+        status_key = clean_str(item.get("status_key")) or (
+            status_raw.lower().replace(" ", "_") if status_raw else ""
+        )
+        breakdown_summary.append(
+            {
+                "date": summary_date,
+                "date_display": format_service_date(summary_date),
+                "date_iso": summary_date.isoformat() if isinstance(summary_date, datetime.date) else "",
+                "type": item.get("type") or item.get("fault_type") or "—",
+                "status": status_raw or "—",
+                "status_key": status_key or "",
+                "description": item.get("description")
+                or item.get("detail")
+                or "No additional details provided.",
+                "call_reference": item.get("call_reference")
+                or item.get("reference")
+                or "—",
+                "reported_by": item.get("reported_by")
+                or item.get("reported_by_name")
+                or item.get("reported_by_contact"),
+            }
+        )
+
+    if breakdown_summary:
+        breakdown_summary.sort(
+            key=lambda entry: (
+                entry.get("date") is None,
+                entry.get("date") or datetime.date.min,
+            ),
+            reverse=True,
+        )
+
     timeline_entries = []
     stored_timeline = lift.timeline_entries
     if stored_timeline:
@@ -3422,6 +3526,7 @@ def build_lift_payload(lift):
         "other_uploads": additional_uploads,
         "amc": amc_payload,
         "breakdowns": breakdowns,
+        "breakdown_summary": breakdown_summary,
         "timeline": timeline_entries,
         "lifetime_metrics": lifetime_metrics,
         "service_schedule": service_schedule,
