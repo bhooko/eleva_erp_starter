@@ -7603,11 +7603,7 @@ def _position_cycle(position, candidate_manager):
 
 
 # ---------------------- ADMINISTRATION ----------------------
-@app.route("/admin/users")
-@login_required
-def admin_users():
-    _require_admin()
-
+def _admin_users_context(create_defaults=None, show_create=False):
     departments = sorted(
         Department.query.order_by(Department.name.asc()).all(),
         key=lambda d: (d.full_name or "").lower(),
@@ -7616,21 +7612,29 @@ def admin_users():
         Position.query.order_by(Position.title.asc()).all(),
         key=lambda p: (p.display_label or "").lower(),
     )
-    department_options = departments
-    position_options = positions
-    users = User.query.order_by(User.username.asc()).all()
+    defaults = dict(create_defaults or {})
+    defaults.setdefault("active", "1")
 
-    return render_template(
-        "admin_users.html",
-        users=users,
+    return dict(
+        users=User.query.order_by(User.username.asc()).all(),
         departments=departments,
-        department_options=department_options,
+        department_options=departments,
         department_branches=DEPARTMENT_BRANCHES,
         positions=positions,
-        position_options=position_options,
+        position_options=positions,
         category_label="Admin",
         category_url=url_for("admin_users"),
+        create_user_defaults=defaults,
+        show_create_user_form=show_create,
     )
+
+
+@app.route("/admin/users")
+@login_required
+def admin_users():
+    _require_admin()
+
+    return render_template("admin_users.html", **_admin_users_context())
 
 
 @app.route("/admin/users/create", methods=["POST"])
@@ -7651,7 +7655,16 @@ def admin_users_create():
 
     if not username or not password:
         flash("Username and password are required to create a user.", "error")
-        return redirect(url_for("admin_users"))
+        create_defaults = request.form.to_dict(flat=True)
+        if "active" not in create_defaults:
+            create_defaults["active"] = ""
+        return render_template(
+            "admin_users.html",
+            **_admin_users_context(
+                create_defaults=create_defaults,
+                show_create=True,
+            ),
+        )
 
     existing = (
         User.query.filter(func.lower(User.username) == username.lower()).first()
@@ -7660,7 +7673,16 @@ def admin_users_create():
     )
     if existing:
         flash("A user with that username already exists.", "error")
-        return redirect(url_for("admin_users"))
+        create_defaults = request.form.to_dict(flat=True)
+        if "active" not in create_defaults:
+            create_defaults["active"] = ""
+        return render_template(
+            "admin_users.html",
+            **_admin_users_context(
+                create_defaults=create_defaults,
+                show_create=True,
+            ),
+        )
 
     department = None
     if department_id_raw:
