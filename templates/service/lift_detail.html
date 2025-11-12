@@ -9,8 +9,14 @@
       <h1 class="text-2xl font-semibold text-theme-primary">Lift {{ lift.lift_code }}</h1>
       <p class="text-sm text-slate-400">{{ lift.lift_type or 'Type not set' }} · {{ lift.capacity_display or 'Capacity not set' }}</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="{{ url_for('service_lifts') }}" class="rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70">Back to lifts</a>
+      {% if current_user.is_admin %}
+        <form method="post" action="{{ url_for('service_lift_delete', lift_id=lift.id) }}" class="inline-flex" onsubmit="return confirm('Delete lift {{ lift.lift_code }}? This action cannot be undone.');">
+          <input type="hidden" name="next" value="{{ url_for('service_lifts') }}" />
+          <button type="submit" class="rounded-xl border border-rose-500/50 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20">Delete lift</button>
+        </form>
+      {% endif %}
     </div>
   </header>
 

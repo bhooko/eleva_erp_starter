@@ -20,7 +20,7 @@ from flask_login import (
     current_user,
 )
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil
 import importlib.util
 from io import BytesIO
 from collections import OrderedDict, Counter, defaultdict
@@ -2484,6 +2484,62 @@ def format_currency(amount, currency="₹"):
     return f"{currency or '₹'}{amount:,.2f}"
 
 
+def _cleanup_empty_directories(start_path, stop_path):
+    current = os.path.dirname(start_path)
+    stop_path = os.path.abspath(stop_path)
+    while True:
+        current = os.path.abspath(current)
+        if not current.startswith(stop_path) or current == stop_path:
+            break
+        try:
+            os.rmdir(current)
+        except OSError:
+            break
+        current = os.path.dirname(current)
+
+
+def remove_static_file(relative_path):
+    if not relative_path:
+        return False
+
+    static_root = os.path.join(BASE_DIR, "static")
+    target_path = os.path.normpath(os.path.join(static_root, relative_path))
+    if not target_path.startswith(os.path.abspath(static_root)):
+        return False
+
+    if not os.path.isfile(target_path):
+        return False
+
+    try:
+        os.remove(target_path)
+    except OSError:
+        return False
+
+    _cleanup_empty_directories(target_path, static_root)
+    return True
+
+
+def remove_static_directory(path):
+    if not path:
+        return False
+
+    static_root = os.path.join(BASE_DIR, "static")
+    target_path = os.path.abspath(path)
+    if not target_path.startswith(os.path.abspath(static_root)):
+        return False
+
+    if not os.path.isdir(target_path):
+        return False
+
+    try:
+        shutil.rmtree(target_path)
+    except OSError:
+        return False
+
+    _cleanup_empty_directories(target_path, static_root)
+    return True
+
+
 def normalize_lifecycle_stage(value):
     value = (value or "").strip()
     if not value:
@@ -2493,12 +2549,104 @@ def normalize_lifecycle_stage(value):
     return value
 
 
+def delete_lift_record(lift):
+    if not lift:
+        return
+
+    for attachment in list(getattr(lift, "attachments", [])):
+        remove_static_file(attachment.stored_path)
+
+    remove_static_directory(
+        os.path.join(BASE_DIR, app.config["UPLOAD_FOLDER"], "lifts", str(lift.id))
+    )
+    remove_static_directory(
+        os.path.join(BASE_DIR, app.config["UPLOAD_FOLDER"], "service_slips", str(lift.id))
+    )
+
+    db.session.delete(lift)
+
+
+def delete_sales_opportunity_record(opportunity):
+    if not opportunity:
+        return
+
+    for file_record in list(getattr(opportunity, "files", [])):
+        remove_static_file(file_record.stored_path)
+
+    remove_static_directory(
+        os.path.join(BASE_DIR, app.config["UPLOAD_FOLDER"], "opportunities", str(opportunity.id))
+    )
+
+    db.session.delete(opportunity)
+
+
 def format_service_date(value):
     if not value:
         return "—"
     if isinstance(value, datetime.datetime):
         value = value.date()
     return value.strftime("%d %b %Y")
+
+
+def reset_workspace_data():
+    summary = {}
+
+    lifts = (
+        Lift.query.options(subqueryload(Lift.attachments)).all()
+        if "Lift" in globals()
+        else []
+    )
+    summary["lifts"] = len(lifts)
+    for lift in lifts:
+        delete_lift_record(lift)
+
+    customers = Customer.query.all() if "Customer" in globals() else []
+    summary["customers"] = len(customers)
+    for customer in customers:
+        db.session.delete(customer)
+
+    qc_tasks = QCWork.query.all() if "QCWork" in globals() else []
+    summary["qc_tasks"] = len(qc_tasks)
+    for task in qc_tasks:
+        db.session.delete(task)
+
+    opportunities = (
+        SalesOpportunity.query.options(subqueryload(SalesOpportunity.files)).all()
+        if "SalesOpportunity" in globals()
+        else []
+    )
+    summary["opportunities"] = len(opportunities)
+    for opportunity in opportunities:
+        delete_sales_opportunity_record(opportunity)
+
+    clients = SalesClient.query.all() if "SalesClient" in globals() else []
+    summary["sales_clients"] = len(clients)
+    for client in clients:
+        db.session.delete(client)
+
+    activities_deleted = (
+        db.session.query(SalesActivity).delete(synchronize_session=False)
+        if "SalesActivity" in globals()
+        else 0
+    )
+    summary["sales_activities"] = activities_deleted or 0
+
+    global SERVICE_COMPLAINTS, SERVICE_CONTRACTS, SERVICE_PARTS_LEDGER, SRT_SITES
+
+    summary["service_complaints"] = len(SERVICE_COMPLAINTS)
+    SERVICE_COMPLAINTS = []
+
+    summary["service_contracts"] = len(SERVICE_CONTRACTS)
+    SERVICE_CONTRACTS = []
+
+    parts_removed = sum(len(SERVICE_PARTS_LEDGER.get(key, [])) for key in ("stock_alerts", "consumption", "returns"))
+    summary["service_parts_entries"] = parts_removed
+    SERVICE_PARTS_LEDGER = {"stock_alerts": [], "consumption": [], "returns": []}
+
+    summary["srt_sites"] = len(SRT_SITES)
+    SRT_SITES = []
+
+    return summary
 
 
 def format_duration_hours(value):
@@ -6148,6 +6296,56 @@ def settings_service_route_delete(route_id):
     db.session.commit()
     flash(f"Route '{route.display_name}' removed.", "success")
     return redirect(url_for("settings", tab="modules"))
+
+
+@app.route("/admin/reset-workspace", methods=["POST"])
+@login_required
+def admin_reset_workspace():
+    if not current_user.is_admin:
+        abort(403)
+
+    redirect_target = url_for("settings", tab="admin")
+    password = (request.form.get("confirm_password") or "").strip()
+
+    if not password:
+        flash("Enter your password to confirm the workspace reset.", "error")
+        return redirect(redirect_target)
+
+    if password != current_user.password:
+        flash("Password verification failed. Reset cancelled.", "error")
+        return redirect(redirect_target)
+
+    try:
+        summary = reset_workspace_data()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Workspace reset failed")
+        flash("An unexpected error occurred while resetting the workspace.", "error")
+        return redirect(redirect_target)
+
+    removed_parts = []
+    labels = [
+        ("customers", "customer"),
+        ("lifts", "lift"),
+        ("opportunities", "opportunity"),
+        ("sales_clients", "sales client"),
+        ("qc_tasks", "QC task"),
+        ("service_complaints", "complaint"),
+        ("service_contracts", "contract"),
+        ("service_parts_entries", "parts/material entry"),
+        ("srt_sites", "SRT site"),
+    ]
+
+    for key, label in labels:
+        count = summary.get(key, 0)
+        if count:
+            plural = "s" if count != 1 else ""
+            removed_parts.append(f"{count} {label}{plural}")
+
+    details = ", ".join(removed_parts) if removed_parts else "no records"
+    flash(f"Workspace reset complete. Removed {details}.", "success")
+    return redirect(redirect_target)
 
 
 def _get_dropdown_definition_or_404(field_key):
@@ -10707,6 +10905,38 @@ def service_customer_update_address(customer_id):
     return redirect(redirect_url)
 
 
+@app.route("/service/customers/<int:customer_id>/delete", methods=["POST"])
+@login_required
+def service_customer_delete(customer_id):
+    _module_visibility_required("service")
+
+    if not current_user.is_admin:
+        abort(403)
+
+    customer = db.session.get(Customer, customer_id)
+    if not customer:
+        flash("Customer not found.", "error")
+        return redirect(url_for("service_customers"))
+
+    redirect_url = request.form.get("next") or url_for("service_customers")
+    if not redirect_url.startswith("/"):
+        redirect_url = url_for("service_customers")
+
+    lifts = (
+        Lift.query.options(subqueryload(Lift.attachments))
+        .filter_by(customer_code=customer.customer_code)
+        .all()
+    )
+    for lift in lifts:
+        delete_lift_record(lift)
+
+    db.session.delete(customer)
+    db.session.commit()
+
+    flash(f"Customer {customer.customer_code} deleted.", "success")
+    return redirect(redirect_url)
+
+
 @app.route("/service/customers/<int:customer_id>/comments", methods=["POST"])
 @login_required
 def service_customer_add_comment(customer_id):
@@ -12552,6 +12782,30 @@ def service_lift_update(lift_id):
     db.session.commit()
 
     flash("Lift details updated.", "success")
+    return redirect(redirect_url)
+
+
+@app.route("/service/lifts/<int:lift_id>/delete", methods=["POST"])
+@login_required
+def service_lift_delete(lift_id):
+    _module_visibility_required("service")
+
+    if not current_user.is_admin:
+        abort(403)
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lifts")
+    if not redirect_url.startswith("/"):
+        redirect_url = url_for("service_lifts")
+
+    delete_lift_record(lift)
+    db.session.commit()
+
+    flash(f"Lift {lift.lift_code} deleted.", "success")
     return redirect(redirect_url)
 
 
