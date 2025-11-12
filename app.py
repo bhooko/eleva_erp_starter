@@ -5651,6 +5651,7 @@ def ensure_tables():
         Position.__table__,
         User.__table__,
         Project.__table__,
+        ProjectComment.__table__,
         FormSchema.__table__,
         Submission.__table__,
         ProjectTemplate.__table__,
