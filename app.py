@@ -2288,6 +2288,10 @@ def _handle_customer_support_ticket_creation():
     due_raw = (request.form.get("due_datetime") or "").strip()
     remarks = (request.form.get("remarks") or "").strip()
     uploaded_files = request.files.getlist("attachments") or []
+    linked_sales_client_id_raw = (request.form.get("linked_sales_client_id") or "").strip()
+    linked_project_id_raw = (request.form.get("linked_project_id") or "").strip()
+    linked_customer_id_raw = (request.form.get("linked_customer_id") or "").strip()
+    linked_lift_id_raw = (request.form.get("linked_lift_id") or "").strip()
 
     errors = []
     assignee_user = None
@@ -2300,6 +2304,7 @@ def _handle_customer_support_ticket_creation():
         errors.append("Select the intake channel for the ticket.")
 
     category_label = None
+    category_requires_customer = True
     if category_id:
         category_label = next(
             (item.get("label") for item in CUSTOMER_SUPPORT_CATEGORIES if item.get("id") == category_id),
@@ -2307,6 +2312,9 @@ def _handle_customer_support_ticket_creation():
         )
         if not category_label:
             errors.append("Choose a valid ticket category.")
+        lowered_category = category_id.lower()
+        if lowered_category in {"other-dept", "other-query"}:
+            category_requires_customer = False
 
     amc_site_record = None
     if category_id.lower() == "support-amc".lower():
@@ -2326,7 +2334,67 @@ def _handle_customer_support_ticket_creation():
         if linked_customer_name and not customer:
             customer = linked_customer_name
 
-    if not customer:
+    linked_sales_client = None
+    if linked_sales_client_id_raw:
+        try:
+            linked_sales_client_id = int(linked_sales_client_id_raw)
+        except (TypeError, ValueError):
+            errors.append("Select a valid sales client to link.")
+        else:
+            linked_sales_client = db.session.get(SalesClient, linked_sales_client_id)
+            if not linked_sales_client:
+                errors.append("Select a valid sales client to link.")
+            elif not customer:
+                customer = (
+                    linked_sales_client.display_name
+                    or linked_sales_client.company_name
+                    or linked_sales_client.description
+                    or f"Client {linked_sales_client.id}"
+                )
+
+    linked_project = None
+    if linked_project_id_raw:
+        try:
+            linked_project_id = int(linked_project_id_raw)
+        except (TypeError, ValueError):
+            errors.append("Select a valid installation project to link.")
+        else:
+            linked_project = db.session.get(Project, linked_project_id)
+            if not linked_project:
+                errors.append("Select a valid installation project to link.")
+            elif not customer:
+                customer = linked_project.customer_name or linked_project.name
+
+    linked_customer = None
+    if linked_customer_id_raw:
+        try:
+            linked_customer_id = int(linked_customer_id_raw)
+        except (TypeError, ValueError):
+            errors.append("Select a valid AMC customer to link.")
+        else:
+            linked_customer = db.session.get(Customer, linked_customer_id)
+            if not linked_customer:
+                errors.append("Select a valid AMC customer to link.")
+            elif not customer:
+                customer = linked_customer.company_name or linked_customer.customer_code
+
+    linked_lift = None
+    if linked_lift_id_raw:
+        try:
+            linked_lift_id = int(linked_lift_id_raw)
+        except (TypeError, ValueError):
+            errors.append("Select a valid lift to link.")
+        else:
+            linked_lift = db.session.get(Lift, linked_lift_id)
+            if not linked_lift:
+                errors.append("Select a valid lift to link.")
+            elif not customer:
+                if linked_lift.customer and linked_lift.customer.company_name:
+                    customer = linked_lift.customer.company_name
+                elif linked_lift.customer_code:
+                    customer = linked_lift.customer_code
+
+    if category_requires_customer and not customer:
         errors.append("Enter the customer name for the ticket.")
 
     channel_label = _resolve_customer_support_channel_label(channel_value)
@@ -2389,6 +2457,82 @@ def _handle_customer_support_ticket_creation():
 
     attachments_added = _save_customer_support_attachments(uploaded_files)
 
+    ticket_summary_parts = [ticket_id]
+    if subject:
+        ticket_summary_parts.append(subject)
+    ticket_summary = " · ".join(part for part in ticket_summary_parts if part)
+    ticket_url = url_for("customer_support_tasks", ticket=ticket_id, _external=True)
+    comment_message = (
+        f"Support ticket {ticket_summary} linked from customer support.\n{ticket_url}"
+        if ticket_summary
+        else f"Support ticket linked from customer support.\n{ticket_url}"
+    )
+
+    linked_entities = []
+    if linked_sales_client:
+        name = (
+            linked_sales_client.display_name
+            or linked_sales_client.company_name
+            or linked_sales_client.description
+            or f"Client {linked_sales_client.id}"
+        )
+        entity = {
+            "type": "sales_client",
+            "label": "Sales client",
+            "name": name,
+            "url": url_for("sales_client_detail", client_id=linked_sales_client.id),
+        }
+        if linked_sales_client.company_name and linked_sales_client.company_name != name:
+            entity["description"] = linked_sales_client.company_name
+        linked_entities.append(entity)
+
+    if linked_project:
+        project_name = linked_project.name or f"Project {linked_project.id}"
+        entity = {
+            "type": "installation_project",
+            "label": "Installation project",
+            "name": project_name,
+            "url": url_for("project_detail", project_id=linked_project.id),
+        }
+        if linked_project.customer_name:
+            entity["description"] = linked_project.customer_name
+        linked_entities.append(entity)
+
+    if linked_customer:
+        customer_name = (
+            linked_customer.company_name
+            or linked_customer.customer_code
+            or f"Customer {linked_customer.id}"
+        )
+        entity = {
+            "type": "amc_customer",
+            "label": "AMC customer",
+            "name": customer_name,
+            "url": url_for("service_customer_detail", customer_id=linked_customer.id),
+        }
+        if linked_customer.customer_code:
+            entity["description"] = linked_customer.customer_code
+        linked_entities.append(entity)
+
+    if linked_lift:
+        lift_name = linked_lift.lift_code or f"Lift {linked_lift.id}"
+        entity = {
+            "type": "lift",
+            "label": "Lift",
+            "name": lift_name,
+            "url": url_for("service_lift_detail", lift_id=linked_lift.id),
+        }
+        lift_details = []
+        if linked_lift.customer and linked_lift.customer.company_name:
+            lift_details.append(linked_lift.customer.company_name)
+        elif linked_lift.customer_code:
+            lift_details.append(linked_lift.customer_code)
+        if linked_lift.city:
+            lift_details.append(linked_lift.city)
+        if lift_details:
+            entity["description"] = " · ".join(lift_details)
+        linked_entities.append(entity)
+
     ticket_record = {
         "id": ticket_id,
         "subject": subject,
@@ -2440,6 +2584,55 @@ def _handle_customer_support_ticket_creation():
             ticket_record["amc_site"]["customer_code"] = amc_site_record.get("customer_code")
         if amc_site_record.get("amc_status"):
             ticket_record["amc_site"]["amc_status"] = amc_site_record.get("amc_status")
+
+    if linked_entities:
+        ticket_record["linked_entities"] = linked_entities
+        for entity in linked_entities:
+            ticket_record[f"linked_{entity['type']}"] = entity
+
+    comments_added = False
+    if linked_sales_client:
+        log_sales_activity(
+            "client",
+            linked_sales_client.id,
+            f"Support ticket {ticket_id} linked",
+            notes=comment_message,
+            actor=current_user if current_user.is_authenticated else None,
+        )
+        comments_added = True
+
+    if linked_project:
+        db.session.add(
+            ProjectComment(
+                project=linked_project,
+                body=comment_message,
+                author=current_user if current_user.is_authenticated else None,
+            )
+        )
+        comments_added = True
+
+    if linked_customer:
+        db.session.add(
+            CustomerComment(
+                customer=linked_customer,
+                body=comment_message,
+                author=current_user if current_user.is_authenticated else None,
+            )
+        )
+        comments_added = True
+
+    if linked_lift:
+        db.session.add(
+            LiftComment(
+                lift=linked_lift,
+                body=comment_message,
+                author=current_user if current_user.is_authenticated else None,
+            )
+        )
+        comments_added = True
+
+    if comments_added:
+        db.session.commit()
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
     flash(f"Ticket {ticket_id} created successfully.", "success")
@@ -4338,6 +4531,25 @@ class Project(db.Model):
     priority = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
+    comments = db.relationship(
+        "ProjectComment",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProjectComment(db.Model):
+    __tablename__ = "project_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    project = db.relationship("Project", back_populates="comments")
+    author = db.relationship("User")
+
 
 class FormSchema(db.Model):
     __tablename__ = "form_schema"
@@ -4906,8 +5118,27 @@ class Customer(db.Model):
         primaryjoin="Customer.customer_code==Lift.customer_code",
     )
 
+    comments = db.relationship(
+        "CustomerComment",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+    )
+
     def display_name(self):
         return f"{self.customer_code} – {self.company_name}" if self.company_name else self.customer_code
+
+
+class CustomerComment(db.Model):
+    __tablename__ = "customer_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    customer = db.relationship("Customer", back_populates="comments")
+    author = db.relationship("User")
 
 
 class Lift(db.Model):
@@ -9152,6 +9383,12 @@ def project_detail(project_id):
     templates = ProjectTemplate.query.order_by(ProjectTemplate.name.asc()).all()
     form_templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
     users = get_assignable_users_for_module("operations", order_by="username")
+    comments = (
+        ProjectComment.query.filter_by(project_id=project.id)
+        .order_by(ProjectComment.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "project_detail.html",
         project=project,
@@ -9162,6 +9399,7 @@ def project_detail(project_id):
         templates=templates,
         form_templates=form_templates,
         users=users,
+        comments=comments,
         LIFT_TYPES=LIFT_TYPES,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
         STAGES=STAGES,
@@ -9279,6 +9517,29 @@ def project_edit(project_id):
 
     db.session.commit()
     flash("Project updated.", "success")
+    return redirect(url_for("project_detail", project_id=project.id))
+
+
+@app.route("/projects/<int:project_id>/comments", methods=["POST"])
+@login_required
+def project_add_comment(project_id):
+    _module_visibility_required("operations")
+
+    project = Project.query.get_or_404(project_id)
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("project_detail", project_id=project.id))
+
+    comment = ProjectComment(
+        project=project,
+        body=body,
+        author=current_user if current_user.is_authenticated else None,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    flash("Comment added.", "success")
     return redirect(url_for("project_detail", project_id=project.id))
 
 
@@ -10030,6 +10291,14 @@ def customer_support_tasks():
         user for user in get_assignable_users_for_module("customer_support") if user.is_active
     ]
 
+    sales_clients = (
+        SalesClient.query.order_by(func.lower(func.coalesce(SalesClient.display_name, ""))).all()
+    )
+    installation_projects = Project.query.order_by(func.lower(Project.name)).all()
+    amc_customers = (
+        Customer.query.order_by(func.lower(func.coalesce(Customer.company_name, ""))).all()
+    )
+
     return render_template(
         "customer_support_tasks.html",
         tickets=tickets,
@@ -10049,6 +10318,9 @@ def customer_support_tasks():
         ticket_open_task_map=ticket_open_task_map,
         active_support_users=active_support_users,
         amc_lifts=_customer_support_amc_site_options(),
+        sales_clients=sales_clients,
+        installation_projects=installation_projects,
+        amc_customers=amc_customers,
     )
 
 
@@ -10588,10 +10860,16 @@ def service_customer_detail(customer_id):
     )
 
     customer.open_lifts = [lift for lift in lifts if is_lift_open(lift)]
+    comments = (
+        CustomerComment.query.filter_by(customer_id=customer.id)
+        .order_by(CustomerComment.created_at.desc())
+        .all()
+    )
     return render_template(
         "service/customer_detail.html",
         customer=customer,
         lifts=lifts,
+        comments=comments,
     )
 
 
@@ -10668,6 +10946,33 @@ def service_customer_update_address(customer_id):
     db.session.commit()
     flash(success_message, "success")
     return redirect(redirect_url)
+
+
+@app.route("/service/customers/<int:customer_id>/comments", methods=["POST"])
+@login_required
+def service_customer_add_comment(customer_id):
+    _module_visibility_required("service")
+
+    customer = db.session.get(Customer, customer_id)
+    if not customer:
+        flash("Customer not found.", "error")
+        return redirect(url_for("service_customers"))
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("service_customer_detail", customer_id=customer.id))
+
+    comment = CustomerComment(
+        customer=customer,
+        body=body,
+        author=current_user if current_user.is_authenticated else None,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    flash("Comment added.", "success")
+    return redirect(url_for("service_customer_detail", customer_id=customer.id))
 
 
 @app.route("/service/lifts")
