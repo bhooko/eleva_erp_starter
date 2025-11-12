@@ -21,6 +21,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar
+import importlib.util
 from io import BytesIO
 from collections import OrderedDict, Counter, defaultdict
 
@@ -28,8 +29,13 @@ from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font
+OPENPYXL_AVAILABLE = importlib.util.find_spec("openpyxl") is not None
+
+if OPENPYXL_AVAILABLE:
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.styles import Alignment, Font
+else:
+    Workbook = load_workbook = Alignment = Font = None  # type: ignore[assignment]
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -46,6 +52,21 @@ os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+
+
+class MissingDependencyError(RuntimeError):
+    """Raised when an optional dependency required for a feature is unavailable."""
+
+
+OPENPYXL_MISSING_MESSAGE = (
+    "Excel support requires the openpyxl package. Install dependencies with "
+    "`pip install -r requirements.txt` and restart the application."
+)
+
+
+def _ensure_openpyxl():
+    if not OPENPYXL_AVAILABLE:
+        raise MissingDependencyError(OPENPYXL_MISSING_MESSAGE)
 
 
 def _random_digits(length=10):
@@ -280,6 +301,7 @@ def stringify_cell(value):
 
 
 def build_customer_upload_workbook():
+    _ensure_openpyxl()
     workbook = Workbook()
     instructions_sheet = workbook.active
     instructions_sheet.title = "Instructions"
@@ -338,6 +360,7 @@ def build_customer_upload_workbook():
 
 
 def build_amc_lift_upload_workbook():
+    _ensure_openpyxl()
     workbook = Workbook()
     instructions_sheet = workbook.active
     instructions_sheet.title = "Instructions"
@@ -10715,7 +10738,11 @@ def service_customer_add_comment(customer_id):
 def service_lifts_upload_template():
     _module_visibility_required("service")
 
-    workbook = build_amc_lift_upload_workbook()
+    try:
+        workbook = build_amc_lift_upload_workbook()
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("service_lifts"))
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
@@ -10733,7 +10760,11 @@ def service_lifts_upload_template():
 def service_customers_upload_template():
     _module_visibility_required("service")
 
-    workbook = build_customer_upload_workbook()
+    try:
+        workbook = build_customer_upload_workbook()
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("service_lifts"))
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
@@ -10754,6 +10785,10 @@ def service_customers_upload():
     upload = request.files.get("customer_upload_file")
     if not upload or not upload.filename:
         flash("Select an Excel workbook to upload.", "error")
+        return redirect(url_for("service_lifts"))
+
+    if not OPENPYXL_AVAILABLE:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
         return redirect(url_for("service_lifts"))
 
     filename = upload.filename.lower()
@@ -11079,6 +11114,10 @@ def service_lifts_upload():
     upload = request.files.get("amc_lift_file")
     if not upload or not upload.filename:
         flash("Select an Excel workbook to upload.", "error")
+        return redirect(url_for("service_lifts"))
+
+    if not OPENPYXL_AVAILABLE:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
         return redirect(url_for("service_lifts"))
 
     filename = upload.filename.lower()
