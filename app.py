@@ -2590,6 +2590,39 @@ def format_service_date(value):
 
 def reset_workspace_data():
     summary = {}
+    static_root = os.path.join(BASE_DIR, "static")
+
+    def _cleanup_submission_files(raw_json):
+        if not raw_json:
+            return
+        try:
+            entries = json.loads(raw_json)
+        except (TypeError, ValueError):
+            entries = []
+        if not isinstance(entries, list):
+            return
+        for stored_path in entries:
+            if not stored_path or not isinstance(stored_path, str):
+                continue
+            normalized = stored_path.replace("\\", "/")
+            if normalized.startswith("static/"):
+                normalized = normalized[len("static/"):]
+            removed = remove_static_file(normalized)
+            if removed:
+                continue
+            candidate = normalized
+            if not os.path.isabs(candidate):
+                candidate = os.path.join(BASE_DIR, candidate)
+            candidate = os.path.abspath(candidate)
+            if not candidate.startswith(static_root):
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            try:
+                os.remove(candidate)
+            except OSError:
+                continue
+            _cleanup_empty_directories(candidate, static_root)
 
     lifts = (
         Lift.query.options(subqueryload(Lift.attachments)).all()
@@ -2604,6 +2637,18 @@ def reset_workspace_data():
     summary["customers"] = len(customers)
     for customer in customers:
         db.session.delete(customer)
+
+    projects = Project.query.all() if "Project" in globals() else []
+    summary["projects"] = len(projects)
+    for project in projects:
+        db.session.delete(project)
+
+    submissions = Submission.query.all() if "Submission" in globals() else []
+    summary["submissions"] = len(submissions)
+    for submission in submissions:
+        _cleanup_submission_files(getattr(submission, "photos_json", "[]"))
+        _cleanup_submission_files(getattr(submission, "videos_json", "[]"))
+        db.session.delete(submission)
 
     qc_tasks = QCWork.query.all() if "QCWork" in globals() else []
     summary["qc_tasks"] = len(qc_tasks)
@@ -6330,6 +6375,8 @@ def admin_reset_workspace():
         ("lifts", "lift"),
         ("opportunities", "opportunity"),
         ("sales_clients", "sales client"),
+        ("projects", "project"),
+        ("submissions", "submission"),
         ("qc_tasks", "QC task"),
         ("service_complaints", "complaint"),
         ("service_contracts", "contract"),
