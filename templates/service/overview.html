@@ -44,47 +44,67 @@
       <div class="grid gap-6 p-6 lg:grid-cols-2">
         <div>
           <h4 class="text-sm font-medium text-slate-300 mb-2">Complaints by category</h4>
-          <ul class="space-y-2">
-            {% for item in chart_sets.complaints_by_category %}
-              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
-                <span class="text-slate-300">{{ item.label }}</span>
-                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
-              </li>
-            {% endfor %}
-          </ul>
+          {% set complaints = chart_sets.complaints_by_category or [] %}
+          {% if complaints %}
+            <ul class="space-y-2">
+              {% for item in complaints %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                  <span class="text-slate-300">{{ item.label }}</span>
+                  <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-xs text-slate-500">{{ chart_notes.complaints_by_category }}</p>
+          {% endif %}
         </div>
         <div>
           <h4 class="text-sm font-medium text-slate-300 mb-2">Tasks by status</h4>
-          <ul class="space-y-2">
-            {% for item in chart_sets.tasks_by_status %}
-              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
-                <span class="text-slate-300">{{ item.label }}</span>
-                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
-              </li>
-            {% endfor %}
-          </ul>
+          {% set status_items = chart_sets.tasks_by_status or [] %}
+          {% if status_items %}
+            <ul class="space-y-2">
+              {% for item in status_items %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                  <span class="text-slate-300">{{ item.label }}</span>
+                  <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-xs text-slate-500">{{ chart_notes.tasks_by_status }}</p>
+          {% endif %}
         </div>
         <div>
           <h4 class="text-sm font-medium text-slate-300 mb-2">Parts consumption (month)</h4>
-          <ul class="space-y-2">
-            {% for item in chart_sets.parts_consumption %}
-              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
-                <span class="text-slate-300">{{ item.label }}</span>
-                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
-              </li>
-            {% endfor %}
-          </ul>
+          {% set consumption_items = chart_sets.parts_consumption or [] %}
+          {% if consumption_items %}
+            <ul class="space-y-2">
+              {% for item in consumption_items %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                  <span class="text-slate-300">{{ item.label }}</span>
+                  <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-xs text-slate-500">{{ chart_notes.parts_consumption }}</p>
+          {% endif %}
         </div>
         <div>
           <h4 class="text-sm font-medium text-slate-300 mb-2">Technician workload</h4>
-          <ul class="space-y-2">
-            {% for item in chart_sets.technician_workload %}
-              <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
-                <span class="text-slate-300">{{ item.label }}</span>
-                <span class="font-semibold text-theme-primary">{{ item.value }}</span>
-              </li>
-            {% endfor %}
-          </ul>
+          {% set workload_items = chart_sets.technician_workload or [] %}
+          {% if workload_items %}
+            <ul class="space-y-2">
+              {% for item in workload_items %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-sm">
+                  <span class="text-slate-300">{{ item.label }}</span>
+                  <span class="font-semibold text-theme-primary">{{ item.value }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-xs text-slate-500">{{ chart_notes.technician_workload }}</p>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -104,7 +124,7 @@
             <p class="mt-2 text-xs text-slate-400">{{ item.date }}{% if item.delta %} · {{ item.delta }}{% endif %}</p>
           </li>
         {% else %}
-          <li class="px-6 py-6 text-center text-xs text-slate-400">No upcoming visits logged.</li>
+          <li class="px-6 py-6 text-center text-xs text-slate-400">{{ calendar_empty_message }}</li>
         {% endfor %}
       </ul>
     </div>
@@ -119,49 +139,60 @@
       <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-xs text-slate-300 hover:text-white">Export snapshot</button>
     </div>
     <div class="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-3">
-      {% for technician in technicians %}
-        <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-5 space-y-3">
-          <header>
-            <h4 class="text-sm font-semibold text-slate-200">{{ technician.name }}</h4>
-            <div class="flex items-center gap-1 text-xs text-amber-300">
-              <span aria-hidden="true">{{ "★" * technician.rating_stars }}</span>
-              <span class="ml-1 text-slate-400">({{ technician.rating }})</span>
-            </div>
-          </header>
-          <dl class="grid grid-cols-2 gap-3 text-xs text-slate-300">
-            <div>
-              <dt class="text-slate-500">Tasks closed</dt>
-              <dd class="font-semibold text-theme-primary">{{ technician.tasks_closed }}</dd>
-            </div>
-            <div>
-              <dt class="text-slate-500">First-time-fix</dt>
-              <dd class="font-semibold text-emerald-300">{{ technician.first_time_fix_rate }}</dd>
-            </div>
-            <div>
-              <dt class="text-slate-500">On-time %</dt>
-              <dd class="font-semibold text-sky-300">{{ technician.on_time }}</dd>
-            </div>
-            <div>
-              <dt class="text-slate-500">Avg travel</dt>
-              <dd class="font-semibold text-slate-200">{{ technician.travel_time }}</dd>
-            </div>
-            <div>
-              <dt class="text-slate-500">Avg repair</dt>
-              <dd class="font-semibold text-slate-200">{{ technician.repair_time }}</dd>
-            </div>
-            <div class="col-span-2">
-              <dt class="text-slate-500">Customer rating</dt>
-              <dd class="mt-1 flex items-center gap-1 text-sm text-emerald-300">
-                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 text-xs font-semibold">{{ technician.rating }}</span>
-                <span class="text-slate-400">Latest survey trend steady</span>
-              </dd>
-            </div>
-          </dl>
-          <footer>
-            <button type="button" class="w-full rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white">View history & parts</button>
-          </footer>
-        </article>
-      {% endfor %}
+      {% if technicians %}
+        {% for technician in technicians %}
+          <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-5 space-y-3">
+            <header>
+              <h4 class="text-sm font-semibold text-slate-200">{{ technician.name }}</h4>
+              <div class="flex items-center gap-1 text-xs text-amber-300">
+                {% if technician.rating_value is not none %}
+                  <span aria-hidden="true">{{ "★" * technician.rating_stars }}</span>
+                  <span class="ml-1 text-slate-400">({{ technician.rating_display }})</span>
+                {% else %}
+                  <span class="text-slate-500">No rating captured</span>
+                {% endif %}
+              </div>
+            </header>
+            <dl class="grid grid-cols-2 gap-3 text-xs text-slate-300">
+              <div>
+                <dt class="text-slate-500">Tasks closed</dt>
+                <dd class="font-semibold text-theme-primary">{{ technician.tasks_closed }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">First-time-fix</dt>
+                <dd class="font-semibold text-emerald-300">{{ technician.first_time_fix_rate }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">On-time %</dt>
+                <dd class="font-semibold text-sky-300">{{ technician.on_time }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Avg travel</dt>
+                <dd class="font-semibold text-slate-200">{{ technician.travel_time }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Avg repair</dt>
+                <dd class="font-semibold text-slate-200">{{ technician.repair_time }}</dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="text-slate-500">Customer rating</dt>
+                <dd class="mt-1 flex items-center gap-1 text-sm text-emerald-300">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 text-xs font-semibold">{{ technician.rating_display }}</span>
+                  <span class="text-slate-400">{{ technician.rating_note or "Latest survey trend steady" }}</span>
+                </dd>
+              </div>
+            </dl>
+            {% if technician.notes %}
+              <p class="text-[11px] text-slate-500">{{ technician.notes }}</p>
+            {% endif %}
+            <footer>
+              <button type="button" class="w-full rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white">View history & parts</button>
+            </footer>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div class="md:col-span-2 xl:col-span-3 text-sm text-slate-400">{{ technician_empty_message }}</div>
+      {% endif %}
     </div>
   </section>
 </div>
