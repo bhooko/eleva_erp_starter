@@ -5686,8 +5686,26 @@ def ensure_tables():
         print(f"✅ Created missing tables: {', '.join(created_tables)}")
 
 
+def ensure_project_comment_table():
+    """Backfill the project_comment table for legacy databases."""
+    try:
+        inspector = inspect(db.engine)
+        table_names = {name.lower() for name in inspector.get_table_names()}
+    except OperationalError:
+        table_names = set()
+
+    if "project_comment" in table_names:
+        return
+
+    # Use SQLAlchemy metadata to create the table if it is missing. checkfirst
+    # guards against race conditions with ensure_tables.
+    ProjectComment.__table__.create(bind=db.engine, checkfirst=True)
+    print("✅ Backfilled missing table: project_comment")
+
+
 def bootstrap_db():
     ensure_tables()
+    ensure_project_comment_table()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
