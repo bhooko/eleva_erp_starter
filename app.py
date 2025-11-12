@@ -5325,6 +5325,7 @@ def ensure_tables():
         SalesOpportunityItem.__table__,
         ServiceRoute.__table__,
         Customer.__table__,
+        CustomerComment.__table__,
         Lift.__table__,
         LiftFile.__table__,
         LiftComment.__table__,
