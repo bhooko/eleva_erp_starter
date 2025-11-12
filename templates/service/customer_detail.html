@@ -9,8 +9,14 @@
       <h1 class="text-2xl font-semibold text-theme-primary">{{ customer.company_name }}</h1>
       <p class="text-sm text-slate-400">Customer code {{ customer.customer_code }}</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="{{ url_for('service_lifts') }}?q={{ customer.customer_code }}" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20">View lifts</a>
+      {% if current_user.is_admin %}
+        <form method="post" action="{{ url_for('service_customer_delete', customer_id=customer.id) }}" class="inline-flex" onsubmit="return confirm('Delete customer {{ customer.customer_code }} and all linked lifts? This action cannot be undone.');">
+          <input type="hidden" name="next" value="{{ url_for('service_customers') }}" />
+          <button type="submit" class="rounded-xl border border-rose-500/50 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20">Delete customer</button>
+        </form>
+      {% endif %}
     </div>
   </header>
 
