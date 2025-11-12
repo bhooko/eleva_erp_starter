@@ -20,7 +20,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar
-from collections import OrderedDict
+from collections import OrderedDict, Counter, defaultdict
 
 from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
@@ -554,134 +554,6 @@ SRT_SAMPLE_TASKS = []
 SRT_TASK_ACTIVITY = {}
 
 
-SERVICE_OVERVIEW_DATA = {
-    "kpis": [
-        {
-            "label": "Open service tasks",
-            "value": 42,
-            "descriptor": "Across AMC + non-AMC",
-            "tone": "emerald",
-        },
-        {
-            "label": "Overdue visits",
-            "value": 9,
-            "descriptor": "Beyond scheduled window",
-            "tone": "rose",
-        },
-        {
-            "label": "Breakdowns this month",
-            "value": 14,
-            "descriptor": "4 repeat incidents",
-            "tone": "amber",
-        },
-        {
-            "label": "AMC due (30 days)",
-            "value": 7,
-            "descriptor": "Renewal follow-ups",
-            "tone": "sky",
-        },
-        {
-            "label": "First-time-fix rate",
-            "value": "87%",
-            "descriptor": "Target 90%",
-            "tone": "emerald",
-        },
-        {
-            "label": "Avg response time",
-            "value": "2h 40m",
-            "descriptor": "Down 18 mins",
-            "tone": "sky",
-        },
-        {
-            "label": "Avg closure time",
-            "value": "1.8 days",
-            "descriptor": "Improved 12%",
-            "tone": "emerald",
-        },
-    ],
-    "charts": {
-        "complaints_by_category": [
-            {"label": "Door", "value": 18},
-            {"label": "Leveling", "value": 12},
-            {"label": "Noise", "value": 7},
-            {"label": "Breakdown", "value": 14},
-            {"label": "Other", "value": 6},
-        ],
-        "tasks_by_status": [
-            {"label": "Open", "value": 16},
-            {"label": "In Progress", "value": 11},
-            {"label": "Paused", "value": 4},
-            {"label": "Waiting for Parts", "value": 5},
-            {"label": "Completed", "value": 6},
-        ],
-        "parts_consumption": [
-            {"label": "May", "value": 58},
-            {"label": "Jun", "value": 72},
-            {"label": "Jul", "value": 64},
-        ],
-        "technician_workload": [
-            {"label": "Ravi Kumar", "value": 12},
-            {"label": "Sneha Kulkarni", "value": 10},
-            {"label": "Arjun Desai", "value": 9},
-            {"label": "Meera Patil", "value": 8},
-        ],
-    },
-    "calendar": [
-        {
-            "date": datetime.date(2024, 7, 18),
-            "label": "Preventive - Metro Heights",
-            "type": "Preventive",
-        },
-        {
-            "date": datetime.date(2024, 7, 19),
-            "label": "Scheduled Call - Harbour View",
-            "type": "Scheduled",
-        },
-        {
-            "date": datetime.date(2024, 7, 21),
-            "label": "AMC Visit - Oceanic Towers",
-            "type": "AMC",
-        },
-    ],
-    "filters": [
-        "Branch",
-        "Technician",
-        "Lift type",
-        "AMC/Non-AMC",
-        "Priority",
-    ],
-    "technicians": [
-        {
-            "name": "Ravi Kumar",
-            "tasks_closed": 28,
-            "first_time_fix_rate": "90%",
-            "on_time": "92%",
-            "travel_time": "38m",
-            "repair_time": "1.6h",
-            "rating": 4.7,
-        },
-        {
-            "name": "Sneha Kulkarni",
-            "tasks_closed": 24,
-            "first_time_fix_rate": "85%",
-            "on_time": "88%",
-            "travel_time": "42m",
-            "repair_time": "1.9h",
-            "rating": 4.6,
-        },
-        {
-            "name": "Arjun Desai",
-            "tasks_closed": 19,
-            "first_time_fix_rate": "82%",
-            "on_time": "84%",
-            "travel_time": "55m",
-            "repair_time": "2.1h",
-            "rating": 4.3,
-        },
-    ],
-}
-
-
 SERVICE_TASKS = []
 
 
@@ -747,46 +619,6 @@ SERVICE_PARTS_LEDGER = {
     ],
     "returns": [
         {"technician": "Ravi Kumar", "part": "Relay board", "qty": 1, "date": datetime.date(2024, 7, 10)},
-    ],
-}
-
-
-SERVICE_PREVENTIVE_PLAN = {
-    "upcoming": [
-        {
-            "site": "Metro Heights",
-            "lift": "LFT-MH-09",
-            "visit": datetime.date(2024, 7, 18),
-            "technician": "Ravi Kumar",
-            "checklist": "MRL-Gold",
-        },
-        {
-            "site": "Oceanic Towers",
-            "lift": "LFT-OC-02",
-            "visit": datetime.date(2024, 7, 25),
-            "technician": "Sneha Kulkarni",
-            "checklist": "Hydraulic-Core",
-        },
-    ],
-    "overdue": [
-        {
-            "site": "Nova Residency",
-            "lift": "LFT-NR-01",
-            "due": datetime.date(2024, 7, 10),
-            "days_overdue": 8,
-        },
-    ],
-    "checklists": [
-        {
-            "name": "MRL-Gold",
-            "items": 24,
-            "photo_rules": "Cabin, machine room, shaft mandatory",
-        },
-        {
-            "name": "Hydraulic-Core",
-            "items": 18,
-            "photo_rules": "Cabin + controller",
-        },
     ],
 }
 
@@ -884,438 +716,7 @@ DEFAULT_LIFT_INSIGHT = {
 }
 
 
-LIFT_INSIGHT_LIBRARY = {
-    "G300": {
-        "site_name": "Galaxy Residency Tower B",
-        "floors_served": "Ground + 12",
-        "commissioned_date": datetime.date(2021, 2, 15),
-        "drive_type": "Gearless",
-        "controller_type": "Siemens T3000",
-        "door_configuration": "Automatic center-opening doors",
-        "machine": {
-            "make": "Eleva Motors",
-            "model": "EMX-200",
-            "serial": "EMX200-8842",
-        },
-        "lifetime_value": {
-            "total_breakdowns_this_year": 3,
-            "breakdowns_completed_this_year": 2,
-            "breakdowns_pending_this_year": 1,
-            "total_amc_value": 780000,
-            "total_repair_revenue": 210000,
-            "repair_revenue_this_year": 95000,
-            "total_cost": 430000,
-            "total_cost_this_year": 185000,
-            "total_revenue_till_date": 990000,
-            "net_lifetime_profitability": 560000,
-        },
-        "amc": {
-            "status": "Active",
-            "type": "Comprehensive",
-            "start": datetime.date(2024, 4, 1),
-            "end": datetime.date(2025, 3, 31),
-            "contract_value": 420000,
-            "payment_terms": "Quarterly in advance",
-            "services_per_year": 12,
-            "pending_services_count": 2,
-            "service_owner": "Sonia D'Souza",
-            "service_contact": "+91-98220 11223",
-            "renewal_history": [
-                {
-                    "period": "FY 2023-24",
-                    "value": 400000,
-                    "renewed_on": datetime.date(2023, 3, 28),
-                },
-                {
-                    "period": "FY 2022-23",
-                    "value": 375000,
-                    "renewed_on": datetime.date(2022, 3, 24),
-                },
-            ],
-            "attachments": [
-                {
-                    "label": "Signed AMC FY24-25",
-                    "filename": "AMC_FY25_G300.pdf",
-                    "url": "#",
-                },
-                {
-                    "label": "Service schedule FY25",
-                    "filename": "ServiceScheduleFY25.xlsx",
-                    "url": "#",
-                },
-            ],
-            "service_schedule": [
-                {
-                    "date": datetime.date(2024, 4, 15),
-                    "status": "scheduled",
-                    "slip_url": "#",
-                    "slip_label": "April service slip",
-                },
-                {
-                    "date": datetime.date(2024, 6, 15),
-                    "technician": "Ramesh Pawar",
-                    "status": "scheduled",
-                    "slip_url": "#",
-                    "slip_label": "June service slip",
-                },
-                {
-                    "date": datetime.date(2024, 8, 14),
-                    "technician": "Sneha Kulkarni",
-                    "status": "due",
-                    "slip_url": "#",
-                    "slip_label": "August service slip",
-                },
-            ],
-        },
-        "breakdowns": [
-            {
-                "issue": "Door close sensor fault",
-                "technician": "Ramesh Pawar",
-                "response_hours": 2,
-                "resolution_hours": 6,
-                "fault_type": "Door",
-                "spares": ["Door sensor kit", "Relay module"],
-                "status": "Resolved",
-                "media": ["Door sensor photos"],
-                "call_reference": "CALL-2025-028",
-            },
-            {
-                "issue": "Overload sensor intermittently triggering",
-                "technician": "Sneha Kulkarni",
-                "response_hours": 3,
-                "resolution_hours": 4,
-                "fault_type": "Controller",
-                "spares": ["Load cell calibrator"],
-                "status": "Under Observation",
-                "media": ["Calibration report"],
-                "call_reference": "CALL-2025-012",
-            },
-        ],
-        "breakdown_summary": [
-            {
-                "date": datetime.date(2024, 10, 12),
-                "type": "Door sensor fault",
-                "status": "Fixed",
-                "description": "Door close sensor kit replaced and lift tested successfully.",
-                "call_reference": "CALL-2025-028",
-                "reported_by": "Security desk",
-            },
-            {
-                "date": datetime.date(2024, 8, 18),
-                "type": "Overload sensor alert",
-                "status": "In Progress",
-                "description": "Monitoring overload sensor after recalibration; technician revisit planned.",
-                "call_reference": "CALL-2025-012",
-                "reported_by": "Facility manager",
-            },
-        ],
-        "uploads": {
-            "documents": [
-                {
-                    "label": "GA Drawing",
-                    "filename": "G300_GA.pdf",
-                    "description": "Issued by design team on 12 Feb 2021",
-                    "updated": datetime.date(2021, 2, 12),
-                    "url": "#",
-                },
-                {
-                    "label": "Commissioning Certificate",
-                    "filename": "G300_Commissioning.pdf",
-                    "description": "Signed by client operations",
-                    "updated": datetime.date(2021, 2, 18),
-                    "url": "#",
-                },
-                {
-                    "label": "AMC Contract FY25",
-                    "filename": "G300_AMC_FY25.pdf",
-                    "description": "Fully executed contract",
-                    "updated": datetime.date(2024, 3, 28),
-                    "url": "#",
-                },
-            ],
-            "other": [
-                {
-                    "label": "Machine room photos",
-                    "filename": "G300_MachineRoom.zip",
-                    "description": "Photos captured post preventive visit",
-                    "updated": datetime.date(2024, 8, 4),
-                    "url": "#",
-                }
-            ],
-        },
-        "timeline": [
-            {
-                "date": datetime.date(2025, 1, 22),
-                "title": "Preventive service completed",
-                "detail": "Full checklist completed with no major findings.",
-                "category": "Service",
-            },
-            {
-                "date": datetime.date(2024, 11, 12),
-                "title": "Breakdown resolved",
-                "detail": "Door sensor replaced and calibrated.",
-                "category": "Breakdown",
-            },
-            {
-                "date": datetime.date(2024, 4, 1),
-                "title": "AMC renewed",
-                "detail": "Comprehensive AMC renewed for FY25.",
-                "category": "AMC",
-            },
-        ],
-    },
-    "G084": {
-        "site_name": "Kilowott Logistics Hub",
-        "floors_served": "Basement + 2",
-        "commissioned_date": datetime.date(2020, 9, 10),
-        "drive_type": "Geared",
-        "controller_type": "Omkar Logic S300",
-        "door_configuration": "Manual swing doors",
-        "machine": {
-            "make": "Sharp Motor",
-            "model": "SM-1500",
-            "serial": "SM1500-4421",
-        },
-        "lifetime_value": {
-            "total_breakdowns_this_year": 2,
-            "breakdowns_completed_this_year": 1,
-            "breakdowns_pending_this_year": 1,
-            "total_amc_value": 540000,
-            "total_repair_revenue": 95000,
-            "repair_revenue_this_year": 60000,
-            "total_cost": 285000,
-            "total_cost_this_year": 120000,
-            "total_revenue_till_date": 635000,
-            "net_lifetime_profitability": 350000,
-        },
-        "amc": {
-            "status": "Active",
-            "type": "Non-comprehensive",
-            "start": datetime.date(2024, 7, 1),
-            "end": datetime.date(2025, 6, 30),
-            "contract_value": 310000,
-            "payment_terms": "Bi-annual milestones",
-            "services_per_year": 6,
-            "pending_services_count": 1,
-            "service_owner": "Prakash Naik",
-            "service_contact": "+91-99224 88990",
-            "renewal_history": [
-                {
-                    "period": "FY 2023-24",
-                    "value": 295000,
-                    "renewed_on": datetime.date(2023, 6, 26),
-                }
-            ],
-            "attachments": [
-                {
-                    "label": "AMC Scope FY25",
-                    "filename": "Kilowott_AMC_Scope.pdf",
-                    "url": "#",
-                }
-            ],
-        },
-        "breakdowns": [
-            {
-                "issue": "Goods lift stopped between floors",
-                "technician": "Vishal Patil",
-                "response_hours": 1.5,
-                "resolution_hours": 3,
-                "fault_type": "Mechanical",
-                "spares": ["Brake shoe set"],
-                "status": "Resolved",
-                "media": ["Interlock alignment video"],
-                "call_reference": "CALL-2025-019",
-            }
-        ],
-        "breakdown_summary": [
-            {
-                "date": datetime.date(2024, 10, 14),
-                "type": "Goods lift stoppage",
-                "status": "Fixed",
-                "description": "Reset limit switches and replaced brake shoe set after stoppage between floors.",
-                "call_reference": "CALL-2025-019",
-                "reported_by": "Warehouse manager",
-            },
-            {
-                "date": datetime.date(2024, 9, 5),
-                "type": "Brake wear inspection",
-                "status": "Open",
-                "description": "Awaiting approval on quotation for additional brake set replacement across twin car.",
-                "call_reference": "CALL-2024-255",
-                "reported_by": "Service planner",
-            },
-        ],
-        "uploads": {
-            "documents": [
-                {
-                    "label": "GA Drawing",
-                    "filename": "G084_GA.pdf",
-                    "description": "Original handover drawing",
-                    "updated": datetime.date(2020, 8, 25),
-                    "url": "#",
-                },
-                {
-                    "label": "AMC Contract FY25",
-                    "filename": "G084_AMC.pdf",
-                    "description": "Signed non-comprehensive contract",
-                    "updated": datetime.date(2024, 6, 26),
-                    "url": "#",
-                },
-            ],
-            "other": [
-                {
-                    "label": "Spare parts quotations",
-                    "filename": "G084_Quotes.pdf",
-                    "description": "Quotes shared during Oct 2024 breakdown",
-                    "updated": datetime.date(2024, 10, 12),
-                    "url": "#",
-                }
-            ],
-        },
-        "timeline": [
-            {
-                "date": datetime.date(2024, 10, 14),
-                "title": "Breakdown task closed",
-                "detail": "Brake shoe set replaced and tested.",
-                "category": "Breakdown",
-            },
-            {
-                "date": datetime.date(2024, 7, 5),
-                "title": "AMC kick-off",
-                "detail": "Kick-off walkthrough completed with client.",
-                "category": "AMC",
-            },
-            {
-                "date": datetime.date(2024, 5, 2),
-                "title": "Quarterly billing",
-                "detail": "Invoice raised for Q1 services.",
-                "category": "Finance",
-            },
-        ],
-    },
-    "G044": {
-        "site_name": "Satguru Apartments",
-        "floors_served": "Ground + 2",
-        "commissioned_date": datetime.date(2019, 12, 1),
-        "drive_type": "Hydraulic",
-        "controller_type": "Omkar Classic",
-        "door_configuration": "Automatic telescopic doors",
-        "machine": {
-            "make": "GMV",
-            "model": "GMV-HP45",
-            "serial": "GMVHP45-1022",
-        },
-        "lifetime_value": {
-            "total_breakdowns_this_year": 1,
-            "breakdowns_completed_this_year": 1,
-            "breakdowns_pending_this_year": 0,
-            "total_amc_value": 120000,
-            "total_repair_revenue": 60000,
-            "repair_revenue_this_year": 30000,
-            "total_cost": 95000,
-            "total_cost_this_year": 42000,
-            "total_revenue_till_date": 180000,
-            "net_lifetime_profitability": 85000,
-        },
-        "amc": {
-            "status": "AMC Expired",
-            "type": "Call basis",
-            "start": datetime.date(2022, 1, 1),
-            "end": datetime.date(2023, 1, 1),
-            "contract_value": 90000,
-            "payment_terms": "Per visit billing",
-            "services_per_year": 4,
-            "pending_services_count": 0,
-            "service_owner": "Service Desk",
-            "service_contact": "+91-83224 70011",
-            "renewal_history": [
-                {
-                    "period": "FY 2021-22",
-                    "value": 85000,
-                    "renewed_on": datetime.date(2021, 12, 18),
-                }
-            ],
-            "attachments": [
-                {
-                    "label": "Last AMC contract",
-                    "filename": "G044_AMC_2022.pdf",
-                    "url": "#",
-                }
-            ],
-        },
-        "breakdowns": [
-            {
-                "issue": "Oil leakage near pump unit",
-                "technician": "Raju Sawant",
-                "response_hours": 4,
-                "resolution_hours": 9,
-                "fault_type": "Hydraulic",
-                "spares": ["Hydraulic hose", "Oil top-up"],
-                "status": "Resolved",
-                "media": ["Leakage photos"],
-                "call_reference": "CALL-2024-198",
-            }
-        ],
-        "breakdown_summary": [
-            {
-                "date": datetime.date(2024, 7, 22),
-                "type": "Hydraulic hose leak",
-                "status": "Fixed",
-                "description": "Replaced hydraulic hose assembly and topped up oil level.",
-                "call_reference": "CALL-2024-198",
-                "reported_by": "Society chairman",
-            },
-            {
-                "date": datetime.date(2023, 12, 18),
-                "type": "AMC renewal follow-up",
-                "status": "Accounts Clearance",
-                "description": "Awaiting confirmation of outstanding AMC invoices before renewal discussion.",
-                "call_reference": "AMC-2023-REN",
-                "reported_by": "Accounts team",
-            },
-        ],
-        "uploads": {
-            "documents": [
-                {
-                    "label": "GA Drawing",
-                    "filename": "G044_GA.pdf",
-                    "description": "Layout updated after lobby renovation",
-                    "updated": datetime.date(2022, 5, 18),
-                    "url": "#",
-                }
-            ],
-            "other": [
-                {
-                    "label": "Site photos",
-                    "filename": "G044_SitePhotos.zip",
-                    "description": "Site conditions captured before AMC expiry",
-                    "updated": datetime.date(2023, 12, 12),
-                    "url": "#",
-                }
-            ],
-        },
-        "timeline": [
-            {
-                "date": datetime.date(2024, 7, 22),
-                "title": "Breakdown visit",
-                "detail": "Hydraulic hose replaced and tested.",
-                "category": "Breakdown",
-            },
-            {
-                "date": datetime.date(2023, 2, 15),
-                "title": "AMC expired",
-                "detail": "Client opted for call-basis visits post expiry.",
-                "category": "AMC",
-            },
-            {
-                "date": datetime.date(2021, 12, 18),
-                "title": "AMC renewed",
-                "detail": "Annual AMC renewed for FY22.",
-                "category": "AMC",
-            },
-        ],
-    },
-}
+LIFT_INSIGHT_LIBRARY = {}
 
 
 CUSTOMER_SUPPORT_CATEGORIES = [
@@ -2827,17 +2228,6 @@ def normalize_lifecycle_stage(value):
     return value
 
 
-def merge_nested_dict(base, updates):
-    if not updates:
-        return base
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            merge_nested_dict(base[key], value)
-        else:
-            base[key] = value
-    return base
-
-
 def format_service_date(value):
     if not value:
         return "—"
@@ -2912,7 +2302,6 @@ def is_lift_open(lift):
 
 def build_lift_payload(lift):
     insight_config = copy.deepcopy(DEFAULT_LIFT_INSIGHT)
-    merge_nested_dict(insight_config, LIFT_INSIGHT_LIBRARY.get(lift.lift_code, {}))
 
     customer = lift.customer
     route_display = "—"
@@ -3155,7 +2544,7 @@ def build_lift_payload(lift):
         route_display if route_display and route_display != "—" else "Route technician"
     )
 
-    schedule_source = lift.service_schedule or amc_config.get("service_schedule") or []
+    schedule_source = lift.service_schedule or []
     service_schedule = []
     for item in schedule_source:
         if not isinstance(item, dict):
@@ -10217,6 +9606,600 @@ def customer_support_calls():
 
 
 # ---------------------- SERVICE MODULE ----------------------
+
+
+def _coerce_date(value):
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        for fmt in (
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%f",
+        ):
+            try:
+                return datetime.datetime.strptime(cleaned, fmt).date()
+            except ValueError:
+                continue
+    return None
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"yes", "true", "1"}:
+            return True
+        if lowered in {"no", "false", "0"}:
+            return False
+    return None
+
+
+def _coerce_float(value):
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_minutes(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if not cleaned:
+            return None
+        time_match = re.match(r"^(-?\d+):(\d{1,2})$", cleaned)
+        if time_match:
+            hours_part = float(time_match.group(1))
+            minutes_part = float(time_match.group(2))
+            return hours_part * 60 + minutes_part
+        hour_match = re.search(r"(-?\d+(?:\.\d+)?)\s*h", cleaned)
+        minute_match = re.search(r"(-?\d+(?:\.\d+)?)\s*m", cleaned)
+        total_minutes = 0.0
+        matched = False
+        if hour_match:
+            total_minutes += float(hour_match.group(1)) * 60
+            matched = True
+        if minute_match:
+            total_minutes += float(minute_match.group(1))
+            matched = True
+        if matched:
+            return total_minutes
+        for suffix in ("minutes", "minute", "mins", "min", "m"):
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[: -len(suffix)].strip()
+                break
+        if cleaned.endswith("h"):
+            try:
+                return float(cleaned[:-1].strip()) * 60
+            except ValueError:
+                return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _format_minutes_display(value):
+    numeric = _coerce_float(value)
+    if numeric is None:
+        return "—"
+    total_minutes = int(round(numeric))
+    sign = "-" if total_minutes < 0 else ""
+    minutes_abs = abs(total_minutes)
+    hours, minutes = divmod(minutes_abs, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes or not parts:
+        parts.append(f"{minutes}m")
+    return sign + " ".join(parts)
+
+
+def _format_percentage(numerator, denominator):
+    if not denominator:
+        return None
+    try:
+        ratio = (numerator / denominator) * 100
+    except ZeroDivisionError:
+        return None
+    if ratio.is_integer():
+        return f"{int(ratio)}%"
+    return f"{ratio:.1f}%"
+
+
+def _format_delta_label(delta_days):
+    if delta_days == 0:
+        return "Today"
+    if delta_days == 1:
+        return "Tomorrow"
+    if delta_days > 1:
+        return f"In {delta_days} days"
+    if delta_days == -1:
+        return "Yesterday"
+    return f"{abs(delta_days)} days ago"
+
+
+def get_service_schedule_snapshot():
+    today = datetime.date.today()
+    lifts = (
+        Lift.query.options(joinedload(Lift.customer))
+        .order_by(func.lower(Lift.lift_code))
+        .all()
+    )
+    entries = []
+    lifts_with_schedule = 0
+    branches = set()
+
+    for lift in lifts:
+        branch_value = clean_str(lift.route)
+        if branch_value:
+            branches.add(branch_value)
+        schedule = lift.service_schedule or []
+        if schedule:
+            lifts_with_schedule += 1
+        for raw_entry in schedule:
+            visit_date = _coerce_date(raw_entry.get("date"))
+            status_value = clean_str(raw_entry.get("status")) or "scheduled"
+            status_key = status_value.lower()
+            if status_key not in SERVICE_VISIT_STATUS_LABELS:
+                status_key = "scheduled"
+            technician = clean_str(raw_entry.get("technician"))
+            entries.append(
+                {
+                    "lift": lift,
+                    "date": visit_date,
+                    "status": status_key,
+                    "technician": technician,
+                    "first_time_fix": _coerce_bool(raw_entry.get("first_time_fix")),
+                    "on_time": _coerce_bool(
+                        raw_entry.get("on_time")
+                        or raw_entry.get("on_time_completion")
+                    ),
+                    "travel_minutes": _coerce_minutes(
+                        raw_entry.get("travel_minutes")
+                        or raw_entry.get("travel_time")
+                    ),
+                    "repair_minutes": _coerce_minutes(
+                        raw_entry.get("repair_minutes")
+                        or raw_entry.get("duration_minutes")
+                    ),
+                    "rating": _coerce_float(raw_entry.get("rating")),
+                    "checklist": clean_str(raw_entry.get("checklist")),
+                }
+            )
+
+    return {
+        "today": today,
+        "lifts": lifts,
+        "entries": entries,
+        "branches": branches,
+        "lifts_with_schedule": lifts_with_schedule,
+    }
+
+
+def build_service_overview_payload():
+    snapshot = get_service_schedule_snapshot()
+    entries = snapshot["entries"]
+    lifts = snapshot["lifts"]
+    today = snapshot["today"]
+
+    status_counts = Counter()
+    technicians_assigned = set()
+    branches = snapshot.get("branches", set())
+
+    def _initial_tech_stats():
+        return {
+            "name": "Unassigned",
+            "open": 0,
+            "completed": 0,
+            "overdue": 0,
+            "first_time_fix_total": 0,
+            "first_time_fix_success": 0,
+            "on_time_total": 0,
+            "on_time_success": 0,
+            "travel_minutes_total": 0.0,
+            "travel_entries": 0,
+            "repair_minutes_total": 0.0,
+            "repair_entries": 0,
+            "ratings": [],
+        }
+
+    technician_stats = defaultdict(_initial_tech_stats)
+
+    overall_completed_this_month = 0
+    overall_first_time_fix_total = 0
+    overall_first_time_fix_success = 0
+    overall_on_time_total = 0
+    overall_on_time_success = 0
+
+    for entry in entries:
+        status_counts[entry["status"]] += 1
+        if entry["technician"]:
+            technicians_assigned.add(entry["technician"])
+        entry["is_overdue"] = (
+            entry["status"] == "overdue"
+            or (
+                entry["status"] != "completed"
+                and isinstance(entry.get("date"), datetime.date)
+                and entry["date"] < today
+            )
+        )
+        if (
+            entry["status"] == "completed"
+            and isinstance(entry.get("date"), datetime.date)
+            and entry["date"].year == today.year
+            and entry["date"].month == today.month
+        ):
+            overall_completed_this_month += 1
+        if entry["status"] == "completed" and entry["first_time_fix"] is not None:
+            overall_first_time_fix_total += 1
+            if entry["first_time_fix"]:
+                overall_first_time_fix_success += 1
+        if entry["status"] == "completed" and entry["on_time"] is not None:
+            overall_on_time_total += 1
+            if entry["on_time"]:
+                overall_on_time_success += 1
+
+        stat_key = entry["technician"] or "__unassigned__"
+        stat = technician_stats[stat_key]
+        stat["name"] = entry["technician"] or "Unassigned"
+        if entry["status"] == "completed":
+            stat["completed"] += 1
+        else:
+            stat["open"] += 1
+        if entry["is_overdue"]:
+            stat["overdue"] += 1
+        if entry["status"] == "completed" and entry["first_time_fix"] is not None:
+            stat["first_time_fix_total"] += 1
+            if entry["first_time_fix"]:
+                stat["first_time_fix_success"] += 1
+        if entry["status"] == "completed" and entry["on_time"] is not None:
+            stat["on_time_total"] += 1
+            if entry["on_time"]:
+                stat["on_time_success"] += 1
+        if entry["travel_minutes"] is not None:
+            stat["travel_minutes_total"] += entry["travel_minutes"]
+            stat["travel_entries"] += 1
+        if entry["repair_minutes"] is not None:
+            stat["repair_minutes_total"] += entry["repair_minutes"]
+            stat["repair_entries"] += 1
+        if entry["rating"] is not None:
+            stat["ratings"].append(entry["rating"])
+
+    open_entries = [entry for entry in entries if entry["status"] != "completed"]
+    open_count = len(open_entries)
+    overdue_count = sum(1 for entry in entries if entry.get("is_overdue"))
+    unassigned_stats = technician_stats.get("__unassigned__")
+    unassigned_open = unassigned_stats["open"] if unassigned_stats else 0
+
+    lifts_without_schedule = len(lifts) - snapshot.get("lifts_with_schedule", 0)
+
+    amc_due_within_30 = 0
+    amc_dates_recorded = 0
+    for lift in lifts:
+        if isinstance(lift.amc_end, datetime.date):
+            amc_dates_recorded += 1
+            delta = (lift.amc_end - today).days
+            if 0 <= delta <= 30:
+                amc_due_within_30 += 1
+
+    first_time_fix_display = _format_percentage(
+        overall_first_time_fix_success,
+        overall_first_time_fix_total,
+    )
+    first_time_fix_rate_value = None
+    if first_time_fix_display:
+        first_time_fix_rate_value = (
+            (overall_first_time_fix_success / overall_first_time_fix_total) * 100
+            if overall_first_time_fix_total
+            else None
+        )
+
+    on_time_display = _format_percentage(
+        overall_on_time_success, overall_on_time_total
+    )
+    on_time_rate_value = None
+    if on_time_display:
+        on_time_rate_value = (
+            (overall_on_time_success / overall_on_time_total) * 100
+            if overall_on_time_total
+            else None
+        )
+
+    kpis = []
+    kpis.append(
+        {
+            "label": "Open service visits",
+            "value": str(open_count),
+            "descriptor": (
+                "Visits awaiting completion"
+                if entries
+                else "Add service schedule entries on lifts to start tracking workload."
+            ),
+            "tone": "emerald" if open_count == 0 else "amber",
+        }
+    )
+    kpis.append(
+        {
+            "label": "Overdue visits",
+            "value": str(overdue_count),
+            "descriptor": (
+                "Past-due or marked overdue visits"
+                if entries
+                else "Overdue metrics appear once visits are scheduled."
+            ),
+            "tone": "emerald" if overdue_count == 0 else "rose",
+        }
+    )
+    kpis.append(
+        {
+            "label": "Visits completed this month",
+            "value": str(overall_completed_this_month),
+            "descriptor": (
+                f"{today.strftime('%b %Y')} closures"
+                if overall_completed_this_month
+                else "Complete a visit to track monthly closures."
+            ),
+            "tone": "emerald" if overall_completed_this_month else "slate",
+        }
+    )
+    kpis.append(
+        {
+            "label": "AMC renewals due (30 days)",
+            "value": str(amc_due_within_30),
+            "descriptor": (
+                f"Across {amc_dates_recorded} lifts with AMC end dates"
+                if amc_dates_recorded
+                else "Capture AMC end dates on lifts to monitor renewals."
+            ),
+            "tone": (
+                "slate"
+                if not amc_dates_recorded
+                else ("amber" if amc_due_within_30 else "emerald")
+            ),
+        }
+    )
+    kpis.append(
+        {
+            "label": "Lifts without schedule",
+            "value": str(max(lifts_without_schedule, 0)),
+            "descriptor": (
+                "Lifts without any recorded service visits"
+                if lifts
+                else "Add lifts to begin tracking service schedules."
+            ),
+            "tone": (
+                "slate"
+                if not lifts
+                else ("rose" if lifts_without_schedule else "emerald")
+            ),
+        }
+    )
+    kpis.append(
+        {
+            "label": "First-time-fix rate",
+            "value": first_time_fix_display or "—",
+            "descriptor": (
+                f"Based on {overall_first_time_fix_total} completed visits"
+                if first_time_fix_display
+                else "Record first-time-fix outcome on completed visits to populate this metric."
+            ),
+            "tone": (
+                "slate"
+                if not first_time_fix_display
+                else ("emerald" if first_time_fix_rate_value and first_time_fix_rate_value >= 90 else "amber")
+            ),
+        }
+    )
+    kpis.append(
+        {
+            "label": "On-time completion",
+            "value": on_time_display or "—",
+            "descriptor": (
+                f"Across {overall_on_time_total} completed visits"
+                if on_time_display
+                else "Capture on-time status when closing visits to see this KPI."
+            ),
+            "tone": (
+                "slate"
+                if not on_time_display
+                else ("emerald" if on_time_rate_value and on_time_rate_value >= 90 else "amber")
+            ),
+        }
+    )
+    if unassigned_open:
+        kpis.append(
+            {
+                "label": "Unassigned visits",
+                "value": str(unassigned_open),
+                "descriptor": "Assign technicians to clear these visits from the queue.",
+                "tone": "rose",
+            }
+        )
+
+    calendar_candidates = [
+        entry
+        for entry in entries
+        if entry["status"] != "completed" and isinstance(entry.get("date"), datetime.date)
+    ]
+    calendar_candidates.sort(key=lambda item: item["date"])
+    calendar_items = []
+    for entry in calendar_candidates:
+        lift = entry["lift"]
+        label_bits = []
+        if lift.customer and lift.customer.company_name:
+            label_bits.append(lift.customer.company_name)
+        if lift.lift_code:
+            label_bits.append(lift.lift_code)
+        label = " · ".join(label_bits) or (lift.lift_code or f"Lift #{lift.id}")
+        delta_days = (entry["date"] - today).days
+        calendar_items.append(
+            {
+                "label": label,
+                "type": "Overdue" if entry.get("is_overdue") else "Scheduled",
+                "date": entry["date"].strftime("%d %b %Y"),
+                "delta": _format_delta_label(delta_days),
+            }
+        )
+
+    if entries and not calendar_items:
+        calendar_empty_message = "All tracked visits are completed."
+    elif not entries:
+        calendar_empty_message = "Add service visits to lifts to build the preventive calendar."
+    else:
+        calendar_empty_message = "No upcoming visits logged."
+
+    filters = []
+    for branch in sorted(branches):
+        filters.append(f"Branch · {branch}")
+    for technician in sorted(technicians_assigned):
+        filters.append(f"Technician · {technician}")
+    if not filters:
+        filters.append("Add branches and technician assignments to unlock filters.")
+    filters = filters[:8]
+
+    chart_sets = {
+        "complaints_by_category": [],
+        "tasks_by_status": [],
+        "parts_consumption": [],
+        "technician_workload": [],
+    }
+    chart_notes = {
+        "complaints_by_category": "Log support tickets with categories to populate this chart.",
+        "tasks_by_status": "Add service visits to lifts to see task status distribution.",
+        "parts_consumption": "Capture parts usage on service tasks to view monthly consumption.",
+        "technician_workload": "Assign technicians to service visits to see workload split.",
+    }
+
+    category_counts = Counter()
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        category_value = clean_str(ticket.get("category")) or "Uncategorised"
+        category_counts[category_value] += 1
+    if category_counts:
+        chart_sets["complaints_by_category"] = [
+            {"label": label, "value": count}
+            for label, count in category_counts.most_common()
+        ]
+        chart_notes["complaints_by_category"] = ""
+
+    status_items = []
+    for status_key in ("scheduled", "completed", "overdue"):
+        count = status_counts.get(status_key, 0)
+        if count:
+            status_label = SERVICE_VISIT_STATUS_LABELS.get(status_key, status_key.title())
+            status_items.append({"label": status_label, "value": count})
+    if status_items:
+        chart_sets["tasks_by_status"] = status_items
+        chart_notes["tasks_by_status"] = ""
+
+    workload_items = []
+    for stat in technician_stats.values():
+        if stat["open"] > 0:
+            workload_items.append({"label": stat["name"], "value": stat["open"]})
+    if workload_items:
+        chart_sets["technician_workload"] = sorted(
+            workload_items, key=lambda item: item["value"], reverse=True
+        )
+        chart_notes["technician_workload"] = ""
+
+    technician_cards = []
+    for key, stat in technician_stats.items():
+        total_handled = stat["completed"] + stat["open"]
+        if key == "__unassigned__" or total_handled == 0:
+            continue
+        first_time_fix_stat = _format_percentage(
+            stat["first_time_fix_success"], stat["first_time_fix_total"]
+        )
+        on_time_stat = _format_percentage(
+            stat["on_time_success"], stat["on_time_total"]
+        )
+        travel_average = (
+            stat["travel_minutes_total"] / stat["travel_entries"]
+            if stat["travel_entries"]
+            else None
+        )
+        repair_average = (
+            stat["repair_minutes_total"] / stat["repair_entries"]
+            if stat["repair_entries"]
+            else None
+        )
+        if stat["ratings"]:
+            rating_value = sum(stat["ratings"]) / len(stat["ratings"])
+            rating_display = f"{rating_value:.1f}".rstrip("0").rstrip(".")
+        else:
+            rating_value = None
+            rating_display = "—"
+        notes = []
+        if stat["completed"] == 0:
+            notes.append(
+                "Complete visits assigned to this technician to track closure metrics."
+            )
+        if stat["first_time_fix_total"] == 0:
+            notes.append("Record first-time-fix outcome on completed visits.")
+        if stat["on_time_total"] == 0:
+            notes.append("Capture on-time status when closing visits.")
+        if stat["travel_entries"] == 0:
+            notes.append("Log travel time against visits to compute averages.")
+        if stat["repair_entries"] == 0:
+            notes.append("Log repair duration to compute averages.")
+        if not stat["ratings"]:
+            notes.append("Collect customer feedback ratings to track satisfaction.")
+        technician_cards.append(
+            {
+                "name": stat["name"],
+                "tasks_closed": stat["completed"],
+                "first_time_fix_rate": first_time_fix_stat or "—",
+                "on_time": on_time_stat or "—",
+                "travel_time": _format_minutes_display(travel_average),
+                "repair_time": _format_minutes_display(repair_average),
+                "rating_display": rating_display,
+                "rating_value": rating_value,
+                "rating_stars": int(round(rating_value)) if rating_value is not None else 0,
+                "rating_note": None if rating_value is not None else "No rating captured yet.",
+                "notes": " • ".join(notes),
+            }
+        )
+
+    technician_cards.sort(key=lambda item: item["tasks_closed"], reverse=True)
+    technician_empty_message = (
+        "Assign technicians to service visits to populate performance metrics."
+        if not technician_cards
+        else ""
+    )
+
+    return {
+        "kpis": kpis,
+        "chart_sets": chart_sets,
+        "chart_notes": chart_notes,
+        "calendar_items": calendar_items,
+        "calendar_empty_message": calendar_empty_message,
+        "filters": filters,
+        "technicians": technician_cards,
+        "technician_empty_message": technician_empty_message,
+    }
+
+
 @app.route("/service")
 @login_required
 def service_home():
@@ -10228,52 +10211,8 @@ def service_home():
 @login_required
 def service_overview():
     _module_visibility_required("service")
-    calendar_items = []
-    today = datetime.date.today()
-    for entry in SERVICE_OVERVIEW_DATA.get("calendar", []):
-        date_value = entry.get("date")
-        if isinstance(date_value, datetime.date):
-            delta_days = (date_value - today).days
-            if delta_days == 0:
-                delta_label = "Today"
-            elif delta_days == 1:
-                delta_label = "Tomorrow"
-            elif delta_days > 1:
-                delta_label = f"In {delta_days} days"
-            elif delta_days == -1:
-                delta_label = "Yesterday"
-            else:
-                delta_label = f"{abs(delta_days)} days ago"
-            date_display = date_value.strftime("%d %b %Y")
-        else:
-            date_display = "—"
-            delta_label = ""
-        calendar_items.append(
-            {
-                "label": entry.get("label"),
-                "type": entry.get("type"),
-                "date": date_display,
-                "delta": delta_label,
-            }
-        )
-
-    technicians = []
-    for item in SERVICE_OVERVIEW_DATA.get("technicians", []):
-        technicians.append(
-            {
-                **item,
-                "rating_stars": int(round(item.get("rating", 0))),
-            }
-        )
-
-    return render_template(
-        "service/overview.html",
-        kpis=SERVICE_OVERVIEW_DATA.get("kpis", []),
-        chart_sets=SERVICE_OVERVIEW_DATA.get("charts", {}),
-        calendar_items=calendar_items,
-        filters=SERVICE_OVERVIEW_DATA.get("filters", []),
-        technicians=technicians,
-    )
+    payload = build_service_overview_payload()
+    return render_template("service/overview.html", **payload)
 
 
 @app.route("/service/tasks")
@@ -11457,84 +11396,106 @@ def service_parts_materials():
 @login_required
 def service_preventive_maintenance():
     _module_visibility_required("service")
-    plan = SERVICE_PREVENTIVE_PLAN
-    preference_lifts = {
-        lift.lift_code: lift
-        for lift in Lift.query.filter(
-            or_(
-                Lift.preferred_service_date.isnot(None),
-                Lift.preferred_service_time.isnot(None),
-                Lift.preferred_service_day.isnot(None),
-            )
-        ).all()
-    }
+    snapshot = get_service_schedule_snapshot()
+    today = snapshot["today"]
 
-    def preference_warning(lift_code, visit_date=None, visit_time=None):
-        lift_pref = preference_lifts.get(lift_code)
-        if not lift_pref:
+    def preference_warning(lift_obj, visit_date=None):
+        if not lift_obj:
             return None
-
         messages = []
-        if lift_pref.preferred_service_date:
+        if lift_obj.preferred_service_date:
             preferred_display = format_preferred_service_date(
-                lift_pref.preferred_service_date
+                lift_obj.preferred_service_date
             )
             if isinstance(visit_date, datetime.date):
                 if not preferred_service_date_matches(
-                    lift_pref.preferred_service_date, visit_date
+                    lift_obj.preferred_service_date, visit_date
                 ):
                     messages.append(f"Prefers {preferred_display}")
             else:
                 messages.append(f"Prefers {preferred_display}")
-        if lift_pref.preferred_service_time:
-            if isinstance(visit_time, datetime.time):
-                if lift_pref.preferred_service_time != visit_time:
-                    messages.append(
-                        f"Prefers {lift_pref.preferred_service_time.strftime('%H:%M')}"
-                    )
-            else:
-                messages.append(
-                    f"Prefers {lift_pref.preferred_service_time.strftime('%H:%M')}"
-                )
-        day_key = (lift_pref.preferred_service_day or "").strip().lower()
-        if day_key and day_key in SERVICE_PREFERRED_DAY_LABELS:
-            if day_key != "any":
+        if lift_obj.preferred_service_time:
+            messages.append(
+                f"Prefers {lift_obj.preferred_service_time.strftime('%H:%M')}"
+            )
+        for day_key in lift_obj.preferred_service_days:
+            if day_key and day_key in SERVICE_PREFERRED_DAY_LABELS and day_key != "any":
                 day_label = SERVICE_PREFERRED_DAY_LABELS.get(day_key)
                 if isinstance(visit_date, datetime.date):
                     if visit_date.strftime("%A").lower() != day_key:
                         messages.append(f"Prefers {day_label}")
                 else:
                     messages.append(f"Prefers {day_label}")
+                break
         if messages:
             return " · ".join(messages)
         return None
 
     upcoming = []
-    for visit in plan.get("upcoming", []):
-        visit_date = visit.get("visit") if isinstance(visit.get("visit"), datetime.date) else None
-        visit_time = visit.get("time") if isinstance(visit.get("time"), datetime.time) else None
-        upcoming.append(
-            {
-                **visit,
-                "visit_display": visit_date.strftime("%d %b %Y") if visit_date else "—",
-                "preference_warning": preference_warning(visit.get("lift"), visit_date, visit_time),
-            }
-        )
     overdue = []
-    for visit in plan.get("overdue", []):
-        due_date = visit.get("due") if isinstance(visit.get("due"), datetime.date) else None
-        overdue.append(
-            {
-                **visit,
-                "due_display": due_date.strftime("%d %b %Y") if due_date else "—",
-                "preference_warning": preference_warning(visit.get("lift"), due_date, None),
-            }
+    for entry in snapshot["entries"]:
+        visit_date = entry.get("date")
+        if not isinstance(visit_date, datetime.date):
+            continue
+        if entry.get("status") == "completed":
+            continue
+        lift = entry.get("lift")
+        site_name = (
+            (lift.customer.company_name if lift and lift.customer else None)
+            or (lift.customer.customer_code if lift and lift.customer else None)
+            or (lift.customer_code if lift and lift.customer_code else None)
+            or (lift.city if lift and lift.city else None)
+            or "—"
         )
+        base_payload = {
+            "site": site_name,
+            "lift": (lift.lift_code if lift and lift.lift_code else (f"Lift #{lift.id}" if lift else "Lift")),
+            "technician": entry.get("technician") or "Unassigned",
+            "checklist": entry.get("checklist") or "—",
+            "preference_warning": preference_warning(lift, visit_date),
+            "_sort_date": visit_date,
+        }
+        if visit_date >= today:
+            upcoming.append(
+                {
+                    **base_payload,
+                    "visit_display": visit_date.strftime("%d %b %Y"),
+                }
+            )
+        else:
+            overdue.append(
+                {
+                    **base_payload,
+                    "due_display": visit_date.strftime("%d %b %Y"),
+                    "days_overdue": (today - visit_date).days,
+                }
+            )
+
+    upcoming.sort(key=lambda item: item.get("_sort_date"))
+    overdue.sort(key=lambda item: item.get("_sort_date"))
+    for collection in (upcoming, overdue):
+        for item in collection:
+            item.pop("_sort_date", None)
+
+    checklist_counts = Counter(
+        entry.get("checklist")
+        for entry in snapshot["entries"]
+        if entry.get("checklist")
+    )
+    checklists = [
+        {
+            "name": name,
+            "items": count,
+            "photo_rules": "Logged via service schedule",
+        }
+        for name, count in sorted(checklist_counts.items())
+    ]
+
     return render_template(
         "service/preventive_maintenance.html",
         upcoming=upcoming,
         overdue=overdue,
-        checklists=plan.get("checklists", []),
+        checklists=checklists,
     )
 
 
