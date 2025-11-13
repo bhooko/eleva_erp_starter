@@ -33,6 +33,7 @@
             <th class="px-4 py-3 text-left">Lift code</th>
             <th class="px-4 py-3 text-left">Customer</th>
             <th class="px-4 py-3 text-left">Type</th>
+            <th class="px-4 py-3 text-left">Brand</th>
             <th class="px-4 py-3 text-left">Route</th>
             <th class="px-4 py-3 text-left">City</th>
             <th class="px-4 py-3 text-left">Status</th>
@@ -56,6 +57,7 @@
                 {% endif %}
               </td>
               <td class="px-4 py-3">{{ lift.lift_type or '—' }}</td>
+              <td class="px-4 py-3">{{ lift.lift_brand or '—' }}</td>
               <td class="px-4 py-3">{{ lift.route or '—' }}</td>
               <td class="px-4 py-3">{{ lift.city or '—' }}</td>
               <td class="px-4 py-3">{{ lift.status or '—' }}</td>
@@ -87,7 +89,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="9" class="px-4 py-6 text-center text-sm text-slate-400">No lifts available yet. Use the <strong class="text-slate-200">Add lift</strong> button to register a lift.</td>
+              <td colspan="10" class="px-4 py-6 text-center text-sm text-slate-400">No lifts available yet. Use the <strong class="text-slate-200">Add lift</strong> button to register a lift.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -180,6 +182,10 @@
             <option value="{{ option_value }}" {% if selected_lift_type and selected_lift_type.lower() == option_value.lower() %}selected{% endif %}>{{ option.label }}</option>
           {% endfor %}
         </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift brand</span>
+        <input name="lift_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Schindler" />
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>

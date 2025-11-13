@@ -96,6 +96,10 @@
         </select>
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift brand</span>
+        <input name="lift_brand" value="{{ lift.lift_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Schindler" />
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>
         {% set capacity_persons_value = lift.capacity_persons|string if lift.capacity_persons is not none else '' %}
         {% set passenger_capacity_options = dropdown_options.get('passenger_capacity', []) %}
