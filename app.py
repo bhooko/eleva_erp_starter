@@ -434,6 +434,175 @@ def build_customer_export_workbook(customers):
     return workbook
 
 
+def _sales_client_upload_row(client):
+    owner_email = ""
+    if client.owner and getattr(client.owner, "email", None):
+        owner_email = client.owner.email or ""
+    return [
+        client.display_name or "",
+        client.company_name or "",
+        client.email or "",
+        client.phone or "",
+        client.tag or "",
+        client.category or "",
+        owner_email,
+        client.lifecycle_stage or "",
+        client.description or "",
+    ]
+
+
+def build_sales_client_upload_workbook():
+    _ensure_openpyxl()
+    workbook = Workbook()
+    instructions = workbook.active
+    instructions.title = "Instructions"
+    instructions["A1"] = "Sales clients upload template"
+    instructions["A1"].font = Font(bold=True, size=14)
+    instructions["A3"] = "Add or update client records in bulk. One client per row."
+    instructions["A4"] = "Provide the owner email to assign the client. Leave blank to assign yourself."
+    if SALES_CLIENT_LIFECYCLE_STAGES:
+        instructions["A5"] = (
+            "Lifecycle Stage must be one of: "
+            + ", ".join(SALES_CLIENT_LIFECYCLE_STAGES)
+            + "."
+        )
+
+    data_sheet = workbook.create_sheet(SALES_CLIENT_TEMPLATE_SHEET_NAME)
+    data_sheet.append(SALES_CLIENT_UPLOAD_HEADERS)
+    data_sheet.append(["" for _ in SALES_CLIENT_UPLOAD_HEADERS])
+
+    for idx, header in enumerate(SALES_CLIENT_UPLOAD_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+def build_sales_client_export_workbook(clients):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = SALES_CLIENT_TEMPLATE_SHEET_NAME
+    data_sheet.append(SALES_CLIENT_UPLOAD_HEADERS)
+
+    for client in clients:
+        data_sheet.append(_sales_client_upload_row(client))
+
+    for idx, header in enumerate(SALES_CLIENT_UPLOAD_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+def _sales_opportunity_upload_row(opportunity):
+    owner_email = ""
+    if opportunity.owner and getattr(opportunity.owner, "email", None):
+        owner_email = opportunity.owner.email or ""
+    client_name = opportunity.client.display_name if opportunity.client else ""
+    expected_close = (
+        opportunity.expected_close_date.isoformat()
+        if opportunity.expected_close_date
+        else ""
+    )
+    return [
+        opportunity.title or "",
+        opportunity.pipeline or "",
+        opportunity.stage or "",
+        opportunity.status or "",
+        (opportunity.temperature or "") if opportunity.temperature else "",
+        opportunity.amount if opportunity.amount is not None else "",
+        opportunity.currency or "₹",
+        expected_close,
+        opportunity.probability if opportunity.probability is not None else "",
+        owner_email,
+        client_name,
+        opportunity.related_project or "",
+        opportunity.description or "",
+    ]
+
+
+def build_sales_opportunity_upload_workbook(pipeline_key):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    instructions = workbook.active
+    instructions.title = "Instructions"
+    instructions["A1"] = "Sales opportunities upload template"
+    instructions["A1"].font = Font(bold=True, size=14)
+    instructions["A3"] = "Populate the Opportunities sheet with one deal per row."
+    instructions["A4"] = (
+        "Pipeline accepts the keys: "
+        + ", ".join(f"{key} ({cfg['label']})" for key, cfg in SALES_PIPELINES.items())
+        + "."
+    )
+    instructions["A5"] = (
+        "Leave Pipeline blank to default to the selected pipeline in the app."
+    )
+
+    row_index = 7
+    for key, cfg in SALES_PIPELINES.items():
+        instructions[f"A{row_index}"] = f"{cfg['label']} pipeline stages ({key}):"
+        instructions[f"A{row_index + 1}"] = ", ".join(cfg.get("stages", []))
+        row_index += 2
+
+    data_sheet = workbook.create_sheet(SALES_OPPORTUNITY_TEMPLATE_SHEET_NAME)
+    data_sheet.append(SALES_OPPORTUNITY_UPLOAD_HEADERS)
+    config = get_pipeline_config(pipeline_key)
+    sample_stage = config["stages"][0] if config.get("stages") else ""
+    data_sheet.append(
+        [
+            "Sample Opportunity",
+            pipeline_key,
+            sample_stage,
+            "Open",
+            "warm",
+            "500000",
+            "₹",
+            datetime.date.today().isoformat(),
+            "40",
+            "sales@example.com",
+            "Sample Client",
+            "Reference Project",
+            "Notes about the deal",
+        ]
+    )
+
+    for idx, header in enumerate(SALES_OPPORTUNITY_UPLOAD_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+def build_sales_opportunity_export_workbook(opportunities):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = SALES_OPPORTUNITY_TEMPLATE_SHEET_NAME
+    data_sheet.append(SALES_OPPORTUNITY_UPLOAD_HEADERS)
+
+    for opportunity in opportunities:
+        data_sheet.append(_sales_opportunity_upload_row(opportunity))
+
+    for idx, header in enumerate(SALES_OPPORTUNITY_UPLOAD_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
 def _customer_query_for_export(search_query):
     query = Customer.query
     if search_query:
@@ -2389,6 +2558,36 @@ SALES_CLIENT_LIFECYCLE_STAGES = [
     "Negotiation",
     "Customer",
     "Post-Sales",
+]
+
+SALES_CLIENT_TEMPLATE_SHEET_NAME = "Clients"
+SALES_CLIENT_UPLOAD_HEADERS = [
+    "Display Name",
+    "Company Name",
+    "Email",
+    "Phone",
+    "Tag",
+    "Category",
+    "Owner Email",
+    "Lifecycle Stage",
+    "Description",
+]
+
+SALES_OPPORTUNITY_TEMPLATE_SHEET_NAME = "Opportunities"
+SALES_OPPORTUNITY_UPLOAD_HEADERS = [
+    "Title",
+    "Pipeline",
+    "Stage",
+    "Status",
+    "Temperature",
+    "Amount",
+    "Currency",
+    "Expected Close Date",
+    "Probability",
+    "Owner Email",
+    "Client Name",
+    "Related Project",
+    "Description",
 ]
 
 OPPORTUNITY_REMINDER_OPTIONS = [
@@ -5391,6 +5590,10 @@ def ensure_lift_columns():
         cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_day TEXT;")
         added_cols.append("preferred_service_day")
 
+    if "lift_brand" not in lift_cols:
+        cur.execute("ALTER TABLE lift ADD COLUMN lift_brand TEXT;")
+        added_cols.append("lift_brand")
+
     if "amc_contract_id" not in lift_cols:
         cur.execute("ALTER TABLE lift ADD COLUMN amc_contract_id TEXT;")
         added_cols.append("amc_contract_id")
@@ -6261,6 +6464,234 @@ def sales_clients():
     )
 
 
+@app.route("/sales/clients/export")
+@login_required
+def sales_clients_export():
+    _module_visibility_required("sales")
+
+    clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
+    filename = f"sales_clients_{timestamp}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_sales_client_export_workbook(clients)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_rows = [_sales_client_upload_row(client) for client in clients]
+    csv_output = _build_csv_output(SALES_CLIENT_UPLOAD_HEADERS, csv_rows)
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/sales/clients/upload-template")
+@login_required
+def sales_clients_upload_template():
+    _module_visibility_required("sales")
+
+    filename = f"sales_clients_template_{datetime.datetime.utcnow():%Y%m%d}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_sales_client_upload_workbook()
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_output = _build_csv_output(
+        SALES_CLIENT_UPLOAD_HEADERS,
+        [["" for _ in SALES_CLIENT_UPLOAD_HEADERS]],
+    )
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/sales/clients/upload", methods=["POST"])
+@login_required
+def sales_clients_upload():
+    _module_visibility_required("sales")
+
+    upload = request.files.get("client_upload_file")
+    if not upload or not upload.filename:
+        flash("Select an Excel or CSV file to upload.", "error")
+        return redirect(url_for("sales_clients"))
+
+    filename = (upload.filename or "").lower()
+    if not filename.endswith((".xlsx", ".csv")):
+        flash("Upload a .xlsx or .csv file exported from the clients template.", "error")
+        return redirect(url_for("sales_clients"))
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(
+            upload, sheet_name=SALES_CLIENT_TEMPLATE_SHEET_NAME
+        )
+    except MissingDependencyError:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(url_for("sales_clients"))
+    except ValueError:
+        flash("Upload a .xlsx or .csv file exported from the clients template.", "error")
+        return redirect(url_for("sales_clients"))
+    except Exception:
+        flash("Could not read the uploaded file. Ensure it is a valid spreadsheet.", "error")
+        return redirect(url_for("sales_clients"))
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        header_label = stringify_cell(header)
+        if header_label:
+            header_map[header_label] = idx
+
+    if "Display Name" not in header_map:
+        flash("The uploaded sheet must include the 'Display Name' column.", "error")
+        return redirect(url_for("sales_clients"))
+
+    users = User.query.all()
+    user_lookup = {}
+    for user in users:
+        email_value = clean_str(getattr(user, "email", None))
+        if email_value:
+            user_lookup[email_value.lower()] = user
+
+    existing_clients = SalesClient.query.all()
+    client_lookup = {
+        (client.display_name or "").strip().lower(): client
+        for client in existing_clients
+        if client.display_name
+    }
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors = []
+
+    for row_index, row in enumerate(data_rows, start=2):
+        row_data = {}
+        for header, column_index in header_map.items():
+            if column_index < len(row):
+                row_data[header] = stringify_cell(row[column_index])
+            else:
+                row_data[header] = None
+
+        name = clean_str(row_data.get("Display Name"))
+        if not name:
+            skipped += 1
+            continue
+
+        email = clean_str(row_data.get("Email"))
+        phone = clean_str(row_data.get("Phone"))
+        tag = clean_str(row_data.get("Tag"))
+        category = clean_str(row_data.get("Category")) or "Individual"
+        lifecycle = clean_str(row_data.get("Lifecycle Stage"))
+        description = clean_str(row_data.get("Description"))
+        owner_email = clean_str(row_data.get("Owner Email"))
+
+        row_errors = []
+        owner_user = None
+        if owner_email:
+            candidate = user_lookup.get(owner_email.lower())
+            if not candidate or not candidate.can_be_assigned_module("sales"):
+                row_errors.append(
+                    f"Row {row_index}: Owner email '{owner_email}' is not linked to a sales user."
+                )
+            else:
+                owner_user = candidate
+
+        if lifecycle and lifecycle not in SALES_CLIENT_LIFECYCLE_STAGES:
+            row_errors.append(
+                f"Row {row_index}: Lifecycle Stage '{lifecycle}' is not valid."
+            )
+
+        if row_errors:
+            errors.extend(row_errors)
+            skipped += 1
+            continue
+
+        client = client_lookup.get(name.lower())
+        is_new = client is None
+        if is_new:
+            client = SalesClient(display_name=name)
+            client.lifecycle_stage = lifecycle or (
+                SALES_CLIENT_LIFECYCLE_STAGES[0]
+                if SALES_CLIENT_LIFECYCLE_STAGES
+                else None
+            )
+            client.owner = owner_user or current_user
+            db.session.add(client)
+            db.session.flush()
+            log_sales_activity(
+                "client",
+                client.id,
+                "Client created via bulk upload",
+                actor=current_user,
+            )
+            client_lookup[name.lower()] = client
+            created += 1
+        else:
+            updated += 1
+
+        client.company_name = clean_str(row_data.get("Company Name"))
+        client.email = email
+        client.phone = phone
+        client.tag = tag
+        client.category = category
+        if owner_user:
+            client.owner = owner_user
+        if lifecycle:
+            client.lifecycle_stage = lifecycle
+        client.description = description
+
+    if created or updated:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Could not save the uploaded clients due to a database error.", "error")
+            return redirect(url_for("sales_clients"))
+
+    summary_bits = []
+    if created:
+        summary_bits.append(f"{created} created")
+    if updated:
+        summary_bits.append(f"{updated} updated")
+    if skipped:
+        summary_bits.append(f"{skipped} skipped")
+
+    if summary_bits:
+        flash("Client import complete: " + ", ".join(summary_bits) + ".", "success")
+    else:
+        flash("No client rows were imported.", "warning")
+
+    if errors:
+        preview = errors[:5]
+        more = len(errors) - len(preview)
+        message = "\n".join(preview)
+        if more > 0:
+            message += f"\n…and {more} more issue(s)."
+        flash(message, "warning")
+
+    return redirect(url_for("sales_clients"))
+
+
 @app.route("/sales/clients/create", methods=["POST"])
 @login_required
 def sales_clients_create():
@@ -6368,6 +6799,8 @@ def sales_client_detail(client_id):
 def sales_opportunities_pipeline(pipeline_key):
     _module_visibility_required("sales")
     pipeline_key = (pipeline_key or "lift").lower()
+    if pipeline_key not in SALES_PIPELINES:
+        pipeline_key = "lift"
     config = get_pipeline_config(pipeline_key)
     stages = list(config["stages"])
     opportunities = (
@@ -6415,6 +6848,338 @@ def sales_opportunities_pipeline(pipeline_key):
         stage_totals_raw=stage_totals_raw,
         stage_currencies=stage_currencies,
     )
+
+
+@app.route("/sales/opportunities/<pipeline_key>/export")
+@login_required
+def sales_opportunities_export(pipeline_key):
+    _module_visibility_required("sales")
+
+    pipeline_key = (pipeline_key or "lift").lower()
+    if pipeline_key not in SALES_PIPELINES:
+        pipeline_key = "lift"
+
+    opportunities = (
+        SalesOpportunity.query
+        .filter(SalesOpportunity.pipeline == pipeline_key)
+        .order_by(SalesOpportunity.stage.asc(), SalesOpportunity.updated_at.desc())
+        .all()
+    )
+
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
+    filename = f"sales_opportunities_{pipeline_key}_{timestamp}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_sales_opportunity_export_workbook(opportunities)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_rows = [_sales_opportunity_upload_row(opp) for opp in opportunities]
+    csv_output = _build_csv_output(SALES_OPPORTUNITY_UPLOAD_HEADERS, csv_rows)
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/sales/opportunities/<pipeline_key>/upload-template")
+@login_required
+def sales_opportunities_upload_template(pipeline_key):
+    _module_visibility_required("sales")
+
+    pipeline_key = (pipeline_key or "lift").lower()
+    if pipeline_key not in SALES_PIPELINES:
+        pipeline_key = "lift"
+
+    filename = f"sales_opportunities_template_{pipeline_key}_{datetime.datetime.utcnow():%Y%m%d}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_sales_opportunity_upload_workbook(pipeline_key)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_output = _build_csv_output(
+        SALES_OPPORTUNITY_UPLOAD_HEADERS,
+        [["" for _ in SALES_OPPORTUNITY_UPLOAD_HEADERS]],
+    )
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/sales/opportunities/upload", methods=["POST"])
+@login_required
+def sales_opportunities_upload():
+    _module_visibility_required("sales")
+
+    default_pipeline = (request.form.get("pipeline") or "lift").lower()
+    if default_pipeline not in SALES_PIPELINES:
+        default_pipeline = "lift"
+
+    redirect_url = url_for("sales_opportunities_pipeline", pipeline_key=default_pipeline)
+
+    upload = request.files.get("opportunity_upload_file")
+    if not upload or not upload.filename:
+        flash("Select an Excel or CSV file to upload.", "error")
+        return redirect(redirect_url)
+
+    filename = (upload.filename or "").lower()
+    if not filename.endswith((".xlsx", ".csv")):
+        flash("Upload a .xlsx or .csv file exported from the opportunity template.", "error")
+        return redirect(redirect_url)
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(
+            upload, sheet_name=SALES_OPPORTUNITY_TEMPLATE_SHEET_NAME
+        )
+    except MissingDependencyError:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(redirect_url)
+    except ValueError:
+        flash("Upload a .xlsx or .csv file exported from the opportunity template.", "error")
+        return redirect(redirect_url)
+    except Exception:
+        flash("Could not read the uploaded file. Ensure it is a valid spreadsheet.", "error")
+        return redirect(redirect_url)
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        header_label = stringify_cell(header)
+        if header_label:
+            header_map[header_label] = idx
+
+    if "Title" not in header_map:
+        flash("The uploaded sheet must include the 'Title' column.", "error")
+        return redirect(redirect_url)
+
+    allowed_temperatures = {value for value, _ in SALES_TEMPERATURES}
+
+    users = User.query.all()
+    user_lookup = {}
+    for user in users:
+        email_value = clean_str(getattr(user, "email", None))
+        if email_value:
+            user_lookup[email_value.lower()] = user
+
+    existing_clients = SalesClient.query.all()
+    client_lookup = {
+        (client.display_name or "").strip().lower(): client
+        for client in existing_clients
+        if client.display_name
+    }
+
+    created = 0
+    updated = 0
+    skipped = 0
+    created_clients = 0
+    errors = []
+
+    for row_index, row in enumerate(data_rows, start=2):
+        row_data = {}
+        for header, column_index in header_map.items():
+            if column_index < len(row):
+                row_data[header] = stringify_cell(row[column_index])
+            else:
+                row_data[header] = None
+
+        title = clean_str(row_data.get("Title"))
+        if not title:
+            skipped += 1
+            continue
+
+        pipeline_value = clean_str(row_data.get("Pipeline")) or default_pipeline
+        pipeline_key = (pipeline_value or "lift").lower()
+        if pipeline_key not in SALES_PIPELINES:
+            pipeline_key = default_pipeline
+        config = get_pipeline_config(pipeline_key)
+        stages = config.get("stages", [])
+
+        stage_value = clean_str(row_data.get("Stage")) or (stages[0] if stages else None)
+        if stage_value and stage_value not in stages:
+            errors.append(
+                f"Row {row_index}: Stage '{stage_value}' is not valid for the {config['label']} pipeline."
+            )
+            skipped += 1
+            continue
+
+        status_value = clean_str(row_data.get("Status")) or "Open"
+        temperature_raw = clean_str(row_data.get("Temperature"))
+        temperature_value = None
+        if temperature_raw:
+            lowered = temperature_raw.lower()
+            if lowered not in allowed_temperatures:
+                errors.append(
+                    f"Row {row_index}: Temperature '{temperature_raw}' is not valid."
+                )
+                skipped += 1
+                continue
+            temperature_value = lowered
+
+        amount_value, amount_error = parse_float_field(row_data.get("Amount"), "Amount")
+        if amount_error:
+            errors.append(f"Row {row_index}: {amount_error}")
+            skipped += 1
+            continue
+
+        currency_value = clean_str(row_data.get("Currency")) or "₹"
+
+        expected_close_value, date_error = parse_date_field(
+            row_data.get("Expected Close Date"), "Expected Close Date"
+        )
+        if date_error:
+            errors.append(f"Row {row_index}: {date_error}")
+            skipped += 1
+            continue
+
+        probability_value, probability_error = parse_int_field(
+            row_data.get("Probability"), "Probability"
+        )
+        if probability_error:
+            errors.append(f"Row {row_index}: {probability_error}")
+            skipped += 1
+            continue
+        if probability_value is not None and not (0 <= probability_value <= 100):
+            errors.append(
+                f"Row {row_index}: Probability '{probability_value}' must be between 0 and 100."
+            )
+            skipped += 1
+            continue
+
+        owner_email = clean_str(row_data.get("Owner Email"))
+        owner_user = None
+        if owner_email:
+            candidate = user_lookup.get(owner_email.lower())
+            if not candidate or not candidate.can_be_assigned_module("sales"):
+                errors.append(
+                    f"Row {row_index}: Owner email '{owner_email}' is not linked to a sales user."
+                )
+                skipped += 1
+                continue
+            owner_user = candidate
+
+        client_name = clean_str(row_data.get("Client Name"))
+        related_project = clean_str(row_data.get("Related Project"))
+        description = clean_str(row_data.get("Description"))
+
+        client = None
+        if client_name:
+            client = client_lookup.get(client_name.lower())
+            if not client:
+                client = SalesClient(
+                    display_name=client_name,
+                    owner=owner_user or current_user,
+                    lifecycle_stage=(
+                        SALES_CLIENT_LIFECYCLE_STAGES[0]
+                        if SALES_CLIENT_LIFECYCLE_STAGES
+                        else None
+                    ),
+                )
+                db.session.add(client)
+                db.session.flush()
+                log_sales_activity(
+                    "client",
+                    client.id,
+                    "Client created via opportunity upload",
+                    actor=current_user,
+                )
+                client_lookup[client_name.lower()] = client
+                created_clients += 1
+
+        query = (
+            SalesOpportunity.query
+            .filter(func.lower(SalesOpportunity.title) == title.lower())
+            .filter(SalesOpportunity.pipeline == pipeline_key)
+        )
+        if client:
+            query = query.filter(SalesOpportunity.client_id == client.id)
+        else:
+            query = query.filter(SalesOpportunity.client_id.is_(None))
+
+        opportunity = query.first()
+        is_new = opportunity is None
+        if is_new:
+            opportunity = SalesOpportunity(title=title, pipeline=pipeline_key)
+            db.session.add(opportunity)
+            created += 1
+        else:
+            updated += 1
+
+        opportunity.stage = stage_value or opportunity.stage
+        opportunity.status = status_value
+        opportunity.temperature = temperature_value
+        opportunity.amount = amount_value
+        opportunity.currency = currency_value
+        opportunity.expected_close_date = expected_close_value
+        opportunity.probability = probability_value
+        if owner_user:
+            opportunity.owner = owner_user
+        elif is_new and not opportunity.owner:
+            opportunity.owner = current_user
+        if client:
+            opportunity.client = client
+        opportunity.related_project = related_project
+        opportunity.description = description
+
+        if is_new:
+            db.session.flush()
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Opportunity imported via bulk upload",
+                actor=current_user,
+            )
+
+    if created or updated or created_clients:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Could not save the uploaded opportunities due to a database error.", "error")
+            return redirect(redirect_url)
+
+    summary_bits = []
+    if created:
+        summary_bits.append(f"{created} created")
+    if updated:
+        summary_bits.append(f"{updated} updated")
+    if created_clients:
+        summary_bits.append(f"{created_clients} client(s) created")
+    if skipped:
+        summary_bits.append(f"{skipped} skipped")
+
+    if summary_bits:
+        flash("Opportunity import complete: " + ", ".join(summary_bits) + ".", "success")
+    else:
+        flash("No opportunity rows were imported.", "warning")
+
+    if errors:
+        preview = errors[:5]
+        more = len(errors) - len(preview)
+        message = "\n".join(preview)
+        if more > 0:
+            message += f"\n…and {more} more issue(s)."
+        flash(message, "warning")
+
+    return redirect(redirect_url)
 
 
 @app.route("/sales/opportunities/create", methods=["POST"])
