@@ -691,6 +691,79 @@ DROPDOWN_FIELD_DEFINITIONS = {
 }
 
 
+LEGACY_DEMO_CUSTOMERS = {
+    "CUS0001": "St. Marys Convent",
+    "CUS0002": "Kilowott Agency Pvt. Ltd.",
+    "CUS0003": "Satguru Apartments Society",
+    "CUS0004": "Jonathan Fernandes",
+    "CUS0005": "Mr. Anirudh",
+}
+
+LEGACY_DEMO_LIFTS = {
+    "G192": ("CUS0001", LEGACY_DEMO_CUSTOMERS["CUS0001"]),
+    "G208": ("CUS0005", LEGACY_DEMO_CUSTOMERS["CUS0005"]),
+    "G167": ("CUS0004", LEGACY_DEMO_CUSTOMERS["CUS0004"]),
+    "G084": ("CUS0002", LEGACY_DEMO_CUSTOMERS["CUS0002"]),
+    "G044": ("CUS0003", LEGACY_DEMO_CUSTOMERS["CUS0003"]),
+}
+
+
+def purge_legacy_demo_records():
+    """Remove legacy demo customers and lifts shipped in earlier seeds."""
+
+    removed_lifts = []
+    removed_customers = []
+
+    if "Lift" in globals():
+        legacy_lift_codes = list(LEGACY_DEMO_LIFTS.keys())
+        if legacy_lift_codes:
+            lifts = (
+                Lift.query.filter(Lift.lift_code.in_(legacy_lift_codes)).all()
+            )
+            for lift in lifts:
+                expected_customer_code, expected_customer_name = LEGACY_DEMO_LIFTS.get(
+                    lift.lift_code, (None, None)
+                )
+                customer_code_matches = (
+                    (lift.customer_code or "").strip().upper() == expected_customer_code
+                )
+                customer_name_matches = True
+                related_customer = getattr(lift, "customer", None)
+                if related_customer and expected_customer_name:
+                    customer_name_matches = (
+                        (related_customer.company_name or "").strip()
+                        == expected_customer_name
+                    )
+                if customer_code_matches and customer_name_matches:
+                    delete_lift_record(lift)
+                    removed_lifts.append(lift.lift_code)
+
+    if removed_lifts:
+        db.session.flush()
+
+    if "Customer" in globals():
+        legacy_customer_codes = list(LEGACY_DEMO_CUSTOMERS.keys())
+        if legacy_customer_codes:
+            customers = (
+                Customer.query.filter(Customer.customer_code.in_(legacy_customer_codes)).all()
+            )
+            for customer in customers:
+                expected_name = LEGACY_DEMO_CUSTOMERS.get(customer.customer_code)
+                if (customer.company_name or "").strip() == expected_name:
+                    db.session.delete(customer)
+                    removed_customers.append(customer.customer_code)
+
+    if removed_lifts:
+        print(
+            "♻️ Removed legacy demo lifts: " + ", ".join(sorted(removed_lifts))
+        )
+    if removed_customers:
+        print(
+            "♻️ Removed legacy demo customers: "
+            + ", ".join(sorted(removed_customers))
+        )
+
+
 def ensure_dropdown_options_seed():
     for field_key, definition in DROPDOWN_FIELD_DEFINITIONS.items():
         if DropdownOption.query.filter_by(field_key=field_key).count() > 0:
@@ -5431,6 +5504,7 @@ def bootstrap_db():
     ensure_service_route_columns()
     ensure_customer_columns()
     ensure_dropdown_options_seed()
+    purge_legacy_demo_records()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
     for u, p in default_users:
