@@ -22,7 +22,8 @@ from flask_login import (
 from werkzeug.utils import secure_filename
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil
 import importlib.util
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from collections import OrderedDict, Counter, defaultdict
 
 from sqlalchemy import case, inspect, func, or_, and_
@@ -67,6 +68,45 @@ OPENPYXL_MISSING_MESSAGE = (
 def _ensure_openpyxl():
     if not OPENPYXL_AVAILABLE:
         raise MissingDependencyError(OPENPYXL_MISSING_MESSAGE)
+
+
+def _extract_tabular_upload(upload, *, sheet_name=None):
+    filename = (upload.filename or "").lower()
+    if filename.endswith(".xlsx"):
+        _ensure_openpyxl()
+        upload.stream.seek(0)
+        workbook = load_workbook(upload, data_only=True)
+        worksheet = (
+            workbook[sheet_name]
+            if sheet_name and sheet_name in workbook.sheetnames
+            else workbook.active
+        )
+        header = next(
+            worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+            [],
+        )
+
+        def row_iter():
+            for row in worksheet.iter_rows(min_row=2, values_only=True):
+                yield row
+
+        return header, row_iter()
+
+    if filename.endswith(".csv"):
+        upload.stream.seek(0)
+        raw_bytes = upload.read()
+        upload.stream.seek(0)
+        try:
+            text = raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw_bytes.decode("latin-1")
+        reader = csv.reader(StringIO(text))
+        rows = list(reader)
+        header = rows[0] if rows else []
+        data_rows = rows[1:] if len(rows) > 1 else []
+        return header, data_rows
+
+    raise ValueError("Unsupported file type")
 
 
 def _random_digits(length=10):
@@ -11318,33 +11358,37 @@ def service_customers_upload():
     upload = request.files.get("customer_upload_file")
     if not upload or not upload.filename:
         flash("Select an Excel workbook to upload.", "error")
-        return redirect(url_for("service_lifts"))
+        return redirect(url_for("service_customers"))
 
-    if not OPENPYXL_AVAILABLE:
-        flash(OPENPYXL_MISSING_MESSAGE, "error")
-        return redirect(url_for("service_lifts"))
-
-    filename = upload.filename.lower()
-    if not filename.endswith(".xlsx"):
+    filename = (upload.filename or "").lower()
+    if not filename.endswith((".xlsx", ".csv")):
         flash(
-            "Upload the .xlsx template exported from the customer upload modal.",
+            "Upload the .xlsx or .csv template exported from the customer upload modal.",
             "error",
         )
-        return redirect(url_for("service_lifts"))
+        return redirect(url_for("service_customers"))
 
     try:
-        workbook = load_workbook(upload, data_only=True)
+        header_cells, data_rows = _extract_tabular_upload(
+            upload, sheet_name=CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME
+        )
+    except MissingDependencyError:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(url_for("service_customers"))
+    except ValueError:
+        flash(
+            "Upload the .xlsx or .csv template exported from the customer upload modal.",
+            "error",
+        )
+        return redirect(url_for("service_customers"))
     except Exception:
-        flash("Could not read the uploaded workbook. Ensure it is a valid .xlsx file.", "error")
-        return redirect(url_for("service_lifts"))
+        flash(
+            "Could not read the uploaded workbook. Ensure it is a valid .xlsx or .csv file.",
+            "error",
+        )
+        return redirect(url_for("service_customers"))
 
-    worksheet = (
-        workbook[CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME]
-        if CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME in workbook.sheetnames
-        else workbook.active
-    )
-
-    header_cells = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), [])
+    header_cells = header_cells or []
     header_map = {}
     for idx, header in enumerate(header_cells or []):
         header_label = stringify_cell(header)
@@ -11353,7 +11397,7 @@ def service_customers_upload():
 
     if not header_map:
         flash("The uploaded workbook is missing header labels.", "error")
-        return redirect(url_for("service_lifts"))
+        return redirect(url_for("service_customers"))
 
     missing_headers = []
     if "Company Name" not in header_map:
@@ -11367,7 +11411,7 @@ def service_customers_upload():
             + ".",
             "error",
         )
-        return redirect(url_for("service_lifts"))
+        return redirect(url_for("service_customers"))
 
     customers = Customer.query.all()
     existing_by_code = {
@@ -11404,10 +11448,7 @@ def service_customers_upload():
     processed_rows = 0
     row_errors = []
 
-    for row_index, row_values in enumerate(
-        worksheet.iter_rows(min_row=2, values_only=True),
-        start=2,
-    ):
+    for row_index, row_values in enumerate(data_rows, start=2):
         if not row_values:
             continue
         row_data = {}
@@ -11636,7 +11677,7 @@ def service_customers_upload():
             "warning",
         )
 
-    return redirect(url_for("service_lifts"))
+    return redirect(url_for("service_customers"))
 
 
 @app.route("/service/lifts/upload", methods=["POST"])
@@ -11649,28 +11690,35 @@ def service_lifts_upload():
         flash("Select an Excel workbook to upload.", "error")
         return redirect(url_for("service_lifts"))
 
-    if not OPENPYXL_AVAILABLE:
-        flash(OPENPYXL_MISSING_MESSAGE, "error")
-        return redirect(url_for("service_lifts"))
-
-    filename = upload.filename.lower()
-    if not filename.endswith(".xlsx"):
-        flash("Upload the .xlsx template exported from the AMC lifts modal.", "error")
+    filename = (upload.filename or "").lower()
+    if not filename.endswith((".xlsx", ".csv")):
+        flash(
+            "Upload the .xlsx or .csv template exported from the AMC lifts modal.",
+            "error",
+        )
         return redirect(url_for("service_lifts"))
 
     try:
-        workbook = load_workbook(upload, data_only=True)
+        header_cells, data_rows = _extract_tabular_upload(
+            upload, sheet_name=AMC_LIFT_TEMPLATE_SHEET_NAME
+        )
+    except MissingDependencyError:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(url_for("service_lifts"))
+    except ValueError:
+        flash(
+            "Upload the .xlsx or .csv template exported from the AMC lifts modal.",
+            "error",
+        )
+        return redirect(url_for("service_lifts"))
     except Exception:
-        flash("Could not read the uploaded workbook. Ensure it is a valid .xlsx file.", "error")
+        flash(
+            "Could not read the uploaded workbook. Ensure it is a valid .xlsx or .csv file.",
+            "error",
+        )
         return redirect(url_for("service_lifts"))
 
-    worksheet = (
-        workbook[AMC_LIFT_TEMPLATE_SHEET_NAME]
-        if AMC_LIFT_TEMPLATE_SHEET_NAME in workbook.sheetnames
-        else workbook.active
-    )
-
-    header_cells = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), [])
+    header_cells = header_cells or []
     header_map = {}
     for idx, header in enumerate(header_cells or []):
         header_label = stringify_cell(header)
@@ -11743,10 +11791,7 @@ def service_lifts_upload():
     processed_rows = 0
     row_errors = []
 
-    for row_index, row_values in enumerate(
-        worksheet.iter_rows(min_row=2, values_only=True),
-        start=2,
-    ):
+    for row_index, row_values in enumerate(data_rows, start=2):
         if not row_values:
             continue
         row_data = {}
