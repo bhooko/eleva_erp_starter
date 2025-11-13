@@ -340,6 +340,45 @@ def stringify_cell(value):
     return str(value).strip()
 
 
+def _customer_upload_row(customer):
+    return [
+        customer.external_customer_id or "",
+        customer.customer_code or "",
+        customer.company_name or "",
+        customer.contact_person or "",
+        customer.phone or "",
+        customer.mobile or "",
+        customer.email or "",
+        customer.gst_no or "",
+        customer.billing_address_line1 or "",
+        customer.billing_address_line2 or "",
+        customer.city or "",
+        customer.state or "",
+        customer.pincode or "",
+        customer.country or "",
+        customer.route or "",
+        customer.sector or "",
+        customer.branch or "",
+        customer.notes or "",
+        customer.office_address_line1 or "",
+        customer.office_address_line2 or "",
+        customer.office_city or "",
+        customer.office_state or "",
+        customer.office_pincode or "",
+    ]
+
+
+def _build_csv_output(headers, rows):
+    csv_buffer = StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    output = BytesIO(csv_buffer.getvalue().encode("utf-8-sig"))
+    output.seek(0)
+    return output
+
+
 def build_customer_upload_workbook():
     _ensure_openpyxl()
     workbook = Workbook()
@@ -373,6 +412,46 @@ def build_customer_upload_workbook():
         data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
 
     return workbook
+
+
+def build_customer_export_workbook(customers):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME
+    data_sheet.append(CUSTOMER_UPLOAD_TEMPLATE_HEADERS)
+
+    for customer in customers:
+        data_sheet.append(_customer_upload_row(customer))
+
+    for idx, header in enumerate(CUSTOMER_UPLOAD_TEMPLATE_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+def _customer_query_for_export(search_query):
+    query = Customer.query
+    if search_query:
+        like = f"%{search_query.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Customer.customer_code).like(like),
+                func.lower(Customer.company_name).like(like),
+                func.lower(Customer.contact_person).like(like),
+                func.lower(Customer.city).like(like),
+                func.lower(Customer.state).like(like),
+                func.lower(Customer.route).like(like),
+                func.lower(Customer.branch).like(like),
+                func.lower(Customer.sector).like(like),
+                func.lower(Customer.notes).like(like),
+            )
+        )
+    return query.order_by(func.lower(Customer.company_name))
 
 
 def build_amc_lift_upload_workbook():
@@ -10220,24 +10299,10 @@ def service_customers():
     _module_visibility_required("service")
     search_query = (request.args.get("q") or "").strip()
 
-    query = Customer.query.options(joinedload(Customer.lifts))
-    if search_query:
-        like = f"%{search_query.lower()}%"
-        query = query.filter(
-            or_(
-                func.lower(Customer.customer_code).like(like),
-                func.lower(Customer.company_name).like(like),
-                func.lower(Customer.contact_person).like(like),
-                func.lower(Customer.city).like(like),
-                func.lower(Customer.state).like(like),
-                func.lower(Customer.route).like(like),
-                func.lower(Customer.branch).like(like),
-                func.lower(Customer.sector).like(like),
-                func.lower(Customer.notes).like(like),
-            )
-        )
+    query = _customer_query_for_export(search_query)
+    query = query.options(joinedload(Customer.lifts))
 
-    customers = query.order_by(func.lower(Customer.company_name)).all()
+    customers = query.all()
     for customer in customers:
         open_lifts = [lift for lift in customer.lifts if is_lift_open(lift)]
         customer.open_lifts = open_lifts
@@ -10247,6 +10312,39 @@ def service_customers():
         customers=customers,
         search_query=search_query,
         next_customer_code=next_customer_code,
+    )
+
+
+@app.route("/service/customers/export")
+@login_required
+def service_customers_export():
+    _module_visibility_required("service")
+
+    search_query = (request.args.get("q") or "").strip()
+    customers = _customer_query_for_export(search_query).all()
+
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
+    filename = f"customers_export_{timestamp}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_customer_export_workbook(customers)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_rows = [_customer_upload_row(customer) for customer in customers]
+    csv_output = _build_csv_output(CUSTOMER_UPLOAD_TEMPLATE_HEADERS, csv_rows)
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
     )
 
 
@@ -10731,14 +10829,16 @@ def service_lifts_upload_template():
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    fallback_response = _serve_base64_excel_template(
-        AMC_LIFT_TEMPLATE_FALLBACK_B64, filename
+    csv_output = _build_csv_output(
+        AMC_LIFT_TEMPLATE_HEADERS,
+        [["" for _ in AMC_LIFT_TEMPLATE_HEADERS]],
     )
-    if fallback_response:
-        return fallback_response
-
-    flash(OPENPYXL_MISSING_MESSAGE, "error")
-    return redirect(url_for("service_lifts"))
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
 
 
 @app.route("/service/customers/upload-template")
@@ -10760,14 +10860,16 @@ def service_customers_upload_template():
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    fallback_response = _serve_base64_excel_template(
-        CUSTOMER_TEMPLATE_FALLBACK_B64, filename
+    csv_output = _build_csv_output(
+        CUSTOMER_UPLOAD_TEMPLATE_HEADERS,
+        [["" for _ in CUSTOMER_UPLOAD_TEMPLATE_HEADERS]],
     )
-    if fallback_response:
-        return fallback_response
-
-    flash(OPENPYXL_MISSING_MESSAGE, "error")
-    return redirect(url_for("service_customers"))
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
 
 
 @app.route("/service/customers/upload", methods=["POST"])
