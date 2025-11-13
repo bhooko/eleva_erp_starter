@@ -341,13 +341,31 @@ def stringify_cell(value):
 
 
 def _customer_upload_row(customer):
-    row = []
-    for _, attribute in CUSTOMER_UPLOAD_TEMPLATE_FIELDS:
-        value = getattr(customer, attribute, "")
-        row.append(value or "")
-    if len(row) != len(CUSTOMER_UPLOAD_TEMPLATE_HEADERS):
-        raise ValueError("Customer export row length does not match template headers")
-    return row
+    return [
+        customer.external_customer_id or "",
+        customer.customer_code or "",
+        customer.company_name or "",
+        customer.contact_person or "",
+        customer.phone or "",
+        customer.mobile or "",
+        customer.email or "",
+        customer.gst_no or "",
+        customer.billing_address_line1 or "",
+        customer.billing_address_line2 or "",
+        customer.city or "",
+        customer.state or "",
+        customer.pincode or "",
+        customer.country or "",
+        customer.route or "",
+        customer.sector or "",
+        customer.branch or "",
+        customer.notes or "",
+        customer.office_address_line1 or "",
+        customer.office_address_line2 or "",
+        customer.office_city or "",
+        customer.office_state or "",
+        customer.office_pincode or "",
+    ]
 
 
 def _build_csv_output(headers, rows):
