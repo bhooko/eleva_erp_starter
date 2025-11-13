@@ -362,31 +362,7 @@ def build_customer_upload_workbook():
 
     data_sheet = workbook.create_sheet(CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME)
     data_sheet.append(CUSTOMER_UPLOAD_TEMPLATE_HEADERS)
-    example_row = [
-        "CUST-EXT-001",
-        "CUS0001",
-        "Example Industries",
-        "Alex Carter",
-        "+91-832-1234567",
-        "+91-9876543210",
-        "ops@example.com",
-        "27ABCDE1234F1Z5",
-        "12A",
-        "Innovation Park",
-        "Goa",
-        "Goa",
-        "403001",
-        "India",
-        "Goa",
-        "Commercial",
-        "Goa",
-        "Prefers quarterly review calls",
-        "Suite 302",
-        "Skyline Towers",
-        "Goa",
-        "Goa",
-        "403001",
-    ]
+    example_row = ["" for _ in CUSTOMER_UPLOAD_TEMPLATE_HEADERS]
     data_sheet.append(example_row)
 
     for idx, header in enumerate(CUSTOMER_UPLOAD_TEMPLATE_HEADERS, start=1):
@@ -417,33 +393,7 @@ def build_amc_lift_upload_workbook():
 
     data_sheet = workbook.create_sheet(AMC_LIFT_TEMPLATE_SHEET_NAME)
     data_sheet.append(AMC_LIFT_TEMPLATE_HEADERS)
-    example_row = [
-        "CUST-EXT-001",
-        "",
-        "EXT-1234",
-        "CUS0001",
-        "Example Industries",
-        "12A",
-        "Example Plaza",
-        "Central Avenue",
-        "Goa",
-        "Goa",
-        "403001",
-        "Goa",
-        "MRL",
-        "8",
-        "544",
-        "1.0",
-        "Active",
-        "2024-04-01",
-        "1_year",
-        "2025-03-31",
-        "Monday,Wednesday",
-        "15",
-        "10:00",
-        "2024-07-01",
-        "Renewal due in Q1",
-    ]
+    example_row = ["" for _ in AMC_LIFT_TEMPLATE_HEADERS]
     data_sheet.append(example_row)
 
     for idx, header in enumerate(AMC_LIFT_TEMPLATE_HEADERS, start=1):
@@ -1017,13 +967,7 @@ CUSTOMER_SUPPORT_CHANNELS = [
     {"id": "whatsapp", "label": "WhatsApp", "icon": "💬"},
 ]
 
-CUSTOMER_SUPPORT_AMC_SITES = [
-    {"id": "nova-residency", "label": "Nova Residency", "client": "Silverline Developers"},
-    {"id": "galaxy-towers", "label": "Galaxy Towers", "client": "Galaxy Developers"},
-    {"id": "coastal-business-park", "label": "Coastal Business Park", "client": "Coastal Holdings"},
-    {"id": "harbour-view-tower", "label": "Harbour View Tower", "client": "Bluewater Properties"},
-    {"id": "metro-arcade", "label": "Metro Arcade", "client": "Metro Realty"},
-]
+CUSTOMER_SUPPORT_AMC_SITES = []
 
 CUSTOMER_SUPPORT_SLA_PRESETS = [
     {
