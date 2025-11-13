@@ -6,7 +6,7 @@
 - Dynamic forms/checklist builder (edit schema in the UI, no code)
 - QC form demo with photo/video upload rules
 - TailwindCSS (CDN) + HTMX + Alpine for fast, animated UI
-- SQLite database (file in `instance/eleva.db`)
+- SQLite database auto-created in `instance/eleva.db`
 
 ### How to run (Windows + XAMPP or anywhere)
 1) Install Python 3.10+
@@ -18,6 +18,8 @@ pip install -r requirements.txt
 flask run --debug
 ```
 3) Open http://127.0.0.1:5000
+
+If you're starting from a fresh clone, the database file will be created automatically on first run (or via `flask initdb`).
 
 **Auto-reload**: Any change in `.py` or `templates/` will reload the server/browser.
 
