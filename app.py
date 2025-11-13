@@ -665,31 +665,32 @@ AMC_LIFT_TEMPLATE_HEADERS = [
 ]
 
 CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME = "Customers"
-CUSTOMER_UPLOAD_TEMPLATE_HEADERS = [
-    "External Customer ID",
-    "Customer Code",
-    "Company Name",
-    "Contact Person",
-    "Phone",
-    "Mobile",
-    "Email",
-    "GST No",
-    "Billing Address Line 1",
-    "Billing Address Line 2",
-    "City",
-    "State",
-    "Pincode",
-    "Country",
-    "Route",
-    "Sector",
-    "Branch",
-    "Notes",
-    "Office Address Line 1",
-    "Office Address Line 2",
-    "Office City",
-    "Office State",
-    "Office Pincode",
+CUSTOMER_UPLOAD_TEMPLATE_FIELDS = [
+    ("External Customer ID", "external_customer_id"),
+    ("Customer Code", "customer_code"),
+    ("Company Name", "company_name"),
+    ("Contact Person", "contact_person"),
+    ("Phone", "phone"),
+    ("Mobile", "mobile"),
+    ("Email", "email"),
+    ("GST No", "gst_no"),
+    ("Billing Address Line 1", "billing_address_line1"),
+    ("Billing Address Line 2", "billing_address_line2"),
+    ("City", "city"),
+    ("State", "state"),
+    ("Pincode", "pincode"),
+    ("Country", "country"),
+    ("Route", "route"),
+    ("Sector", "sector"),
+    ("Branch", "branch"),
+    ("Notes", "notes"),
+    ("Office Address Line 1", "office_address_line1"),
+    ("Office Address Line 2", "office_address_line2"),
+    ("Office City", "office_city"),
+    ("Office State", "office_state"),
+    ("Office Pincode", "office_pincode"),
 ]
+CUSTOMER_UPLOAD_TEMPLATE_HEADERS = [label for label, _ in CUSTOMER_UPLOAD_TEMPLATE_FIELDS]
 
 DROPDOWN_FIELD_DEFINITIONS = {
     "lift_type": {
