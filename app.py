@@ -2347,7 +2347,7 @@ def normalize_lifecycle_stage(value):
     return value
 
 
-def delete_lift_record(lift):
+def delete_lift_record(lift, *, remove_from_session=True):
     if not lift:
         return
 
@@ -2361,10 +2361,11 @@ def delete_lift_record(lift):
         os.path.join(BASE_DIR, app.config["UPLOAD_FOLDER"], "service_slips", str(lift.id))
     )
 
-    db.session.delete(lift)
+    if remove_from_session:
+        db.session.delete(lift)
 
 
-def delete_sales_opportunity_record(opportunity):
+def delete_sales_opportunity_record(opportunity, *, remove_from_session=True):
     if not opportunity:
         return
 
@@ -2375,7 +2376,8 @@ def delete_sales_opportunity_record(opportunity):
         os.path.join(BASE_DIR, app.config["UPLOAD_FOLDER"], "opportunities", str(opportunity.id))
     )
 
-    db.session.delete(opportunity)
+    if remove_from_session:
+        db.session.delete(opportunity)
 
 
 def format_service_date(value):
@@ -2422,6 +2424,41 @@ def reset_workspace_data():
                 continue
             _cleanup_empty_directories(candidate, static_root)
 
+    def _cleanup_comment_attachments(raw_json):
+        if not raw_json:
+            return
+        try:
+            entries = json.loads(raw_json)
+        except (TypeError, ValueError):
+            entries = []
+        if not isinstance(entries, list):
+            return
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            path = entry.get("path") or entry.get("stored_path") or entry.get("web_path")
+            if not path:
+                continue
+            normalized = str(path).replace("\\", "/")
+            if normalized.startswith("static/"):
+                normalized = normalized[len("static/"):]
+            removed = remove_static_file(normalized)
+            if removed:
+                continue
+            candidate = normalized
+            if not os.path.isabs(candidate):
+                candidate = os.path.join(BASE_DIR, candidate)
+            candidate = os.path.abspath(candidate)
+            if not candidate.startswith(static_root):
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            try:
+                os.remove(candidate)
+            except OSError:
+                continue
+            _cleanup_empty_directories(candidate, static_root)
+
     lifts = (
         Lift.query.options(subqueryload(Lift.attachments)).all()
         if "Lift" in globals()
@@ -2429,29 +2466,51 @@ def reset_workspace_data():
     )
     summary["lifts"] = len(lifts)
     for lift in lifts:
-        delete_lift_record(lift)
+        delete_lift_record(lift, remove_from_session=False)
 
-    customers = Customer.query.all() if "Customer" in globals() else []
-    summary["customers"] = len(customers)
-    for customer in customers:
-        db.session.delete(customer)
+    if "LiftFile" in globals():
+        db.session.query(LiftFile).delete(synchronize_session=False)
+    if "LiftComment" in globals():
+        db.session.query(LiftComment).delete(synchronize_session=False)
+    if "Lift" in globals():
+        db.session.query(Lift).delete(synchronize_session=False)
 
-    projects = Project.query.all() if "Project" in globals() else []
-    summary["projects"] = len(projects)
-    for project in projects:
-        db.session.delete(project)
+    customer_count = Customer.query.count() if "Customer" in globals() else 0
+    summary["customers"] = customer_count
+    if "CustomerComment" in globals():
+        db.session.query(CustomerComment).delete(synchronize_session=False)
+    if "Customer" in globals():
+        db.session.query(Customer).delete(synchronize_session=False)
 
     submissions = Submission.query.all() if "Submission" in globals() else []
     summary["submissions"] = len(submissions)
     for submission in submissions:
         _cleanup_submission_files(getattr(submission, "photos_json", "[]"))
         _cleanup_submission_files(getattr(submission, "videos_json", "[]"))
-        db.session.delete(submission)
+    if summary["submissions"]:
+        db.session.query(Submission).delete(synchronize_session=False)
 
-    qc_tasks = QCWork.query.all() if "QCWork" in globals() else []
-    summary["qc_tasks"] = len(qc_tasks)
-    for task in qc_tasks:
-        db.session.delete(task)
+    qc_task_count = 0
+    if "QCWork" in globals():
+        qc_task_count = QCWork.query.count()
+        if "QCWorkComment" in globals():
+            comments = QCWorkComment.query.all()
+            for comment in comments:
+                _cleanup_comment_attachments(getattr(comment, "attachments_json", "[]"))
+            db.session.query(QCWorkComment).delete(synchronize_session=False)
+        if "QCWorkLog" in globals():
+            db.session.query(QCWorkLog).delete(synchronize_session=False)
+        if "QCWorkDependency" in globals():
+            db.session.query(QCWorkDependency).delete(synchronize_session=False)
+        db.session.query(QCWork).delete(synchronize_session=False)
+    summary["qc_tasks"] = qc_task_count
+
+    project_count = Project.query.count() if "Project" in globals() else 0
+    summary["projects"] = project_count
+    if "ProjectComment" in globals():
+        db.session.query(ProjectComment).delete(synchronize_session=False)
+    if "Project" in globals():
+        db.session.query(Project).delete(synchronize_session=False)
 
     opportunities = (
         SalesOpportunity.query.options(subqueryload(SalesOpportunity.files)).all()
@@ -2460,12 +2519,23 @@ def reset_workspace_data():
     )
     summary["opportunities"] = len(opportunities)
     for opportunity in opportunities:
-        delete_sales_opportunity_record(opportunity)
+        delete_sales_opportunity_record(opportunity, remove_from_session=False)
 
-    clients = SalesClient.query.all() if "SalesClient" in globals() else []
-    summary["sales_clients"] = len(clients)
-    for client in clients:
-        db.session.delete(client)
+    if summary["opportunities"]:
+        if "SalesOpportunityItem" in globals():
+            db.session.query(SalesOpportunityItem).delete(synchronize_session=False)
+        if "SalesOpportunityEngagement" in globals():
+            db.session.query(SalesOpportunityEngagement).delete(synchronize_session=False)
+        if "SalesOpportunityFile" in globals():
+            db.session.query(SalesOpportunityFile).delete(synchronize_session=False)
+        if "SalesOpportunityComment" in globals():
+            db.session.query(SalesOpportunityComment).delete(synchronize_session=False)
+        db.session.query(SalesOpportunity).delete(synchronize_session=False)
+
+    client_count = SalesClient.query.count() if "SalesClient" in globals() else 0
+    summary["sales_clients"] = client_count
+    if "SalesClient" in globals():
+        db.session.query(SalesClient).delete(synchronize_session=False)
 
     activities_deleted = (
         db.session.query(SalesActivity).delete(synchronize_session=False)
