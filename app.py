@@ -650,6 +650,7 @@ AMC_LIFT_TEMPLATE_HEADERS = [
     "Pincode",
     "Route",
     "Lift Type",
+    "Lift Brand",
     "Capacity (persons)",
     "Capacity (kg)",
     "Speed (m/s)",
@@ -3339,6 +3340,7 @@ def build_lift_payload(lift):
         "site_summary": " · ".join(site_lines) if site_lines else "—",
         "customer_summary": " · ".join(customer_lines) if customer_lines else "—",
         "lift_type": lift.lift_type or "—",
+        "lift_brand": lift.lift_brand or "—",
         "drive_type": machine_type_display,
         "machine_type": machine_type_display,
         "controller_type": controller_type_value or "—",
@@ -4594,6 +4596,7 @@ class Lift(db.Model):
     route = db.Column(db.String(20), nullable=True)
     building_floors = db.Column(db.String(40), nullable=True)
     lift_type = db.Column(db.String(40), nullable=True)
+    lift_brand = db.Column(db.String(120), nullable=True)
     capacity_persons = db.Column(db.Integer, nullable=True)
     capacity_kg = db.Column(db.Integer, nullable=True)
     speed_mps = db.Column(db.Float, nullable=True)
@@ -11272,6 +11275,8 @@ def service_lifts_upload():
         )
         return redirect(url_for("service_lifts"))
 
+    lift_brand_present = "Lift Brand" in header_map
+
     customers = Customer.query.all()
     customer_by_code = {
         customer.customer_code.lower(): customer
@@ -11531,6 +11536,7 @@ def service_lifts_upload():
             continue
 
         lift_type_value = clean_str(stringify_cell(row_data.get("Lift Type")))
+        lift_brand_value = clean_str(stringify_cell(row_data.get("Lift Brand")))
         site_address_line1 = clean_str(stringify_cell(row_data.get("Site Address Line 1")))
         site_address_line2 = clean_str(stringify_cell(row_data.get("Site Address Line 2")))
         building_villa_number = clean_str(stringify_cell(row_data.get("Building / Villa No.")))
@@ -11584,6 +11590,8 @@ def service_lifts_upload():
             lift.route = customer.route
         if lift_type_value:
             lift.lift_type = lift_type_value
+        if lift_brand_present:
+            lift.lift_brand = lift_brand_value
         if capacity_persons is not None:
             lift.capacity_persons = capacity_persons
         if capacity_kg is not None:
@@ -11659,6 +11667,7 @@ def service_lifts():
                 func.lower(Lift.state).like(like),
                 func.lower(Lift.route).like(like),
                 func.lower(Lift.lift_type).like(like),
+                func.lower(Lift.lift_brand).like(like),
                 func.lower(Lift.status).like(like),
             )
         )
@@ -11801,6 +11810,7 @@ def service_lifts_create():
         route=route_value,
         building_floors=clean_str(request.form.get("building_floors")),
         lift_type=clean_str(request.form.get("lift_type")),
+        lift_brand=clean_str(request.form.get("lift_brand")),
         capacity_persons=capacity_persons,
         capacity_kg=capacity_kg,
         speed_mps=speed_mps,
@@ -11996,6 +12006,7 @@ def service_lift_update(lift_id):
             return redirect(redirect_url)
 
         lift.lift_type = clean_str(request.form.get("lift_type"))
+        lift.lift_brand = clean_str(request.form.get("lift_brand"))
         lift.building_floors = clean_str(request.form.get("building_floors"))
         lift.capacity_persons = capacity_persons
         lift.capacity_kg = capacity_kg
