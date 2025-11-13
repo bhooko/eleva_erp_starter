@@ -1,22 +1,4 @@
 <div class="space-y-10">
-  <section class="rounded-2xl border border-rose-500/50 bg-rose-500/10 p-6 text-sm text-slate-100 shadow-inner shadow-rose-500/10">
-    <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h2 class="text-lg font-semibold text-rose-100">Reset workspace data</h2>
-        <p class="text-xs text-rose-200/80">Delete customers, lifts, complaints, contracts, parts, SRT sites, QC tasks and all sales clients &amp; opportunities.</p>
-      </div>
-      <span class="rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-100">Irreversible</span>
-    </header>
-    <p class="text-xs text-rose-100/90">Enter your password to confirm the reset. All linked files will be removed from storage.</p>
-    <form method="post" action="{{ url_for('admin_reset_workspace') }}" class="flex flex-col gap-4 sm:flex-row sm:items-end" onsubmit="return confirm('This will permanently delete the listed records. Continue?');">
-      <label class="flex-1 space-y-1 text-xs">
-        <span class="font-semibold uppercase tracking-wide text-rose-100">Confirm with password</span>
-        <input type="password" name="confirm_password" autocomplete="current-password" required class="w-full rounded-xl border border-rose-400/40 bg-rose-500/20 px-3 py-2 text-sm text-slate-100 placeholder:text-rose-100/70 focus:border-rose-200 focus:outline-none" placeholder="Enter admin password" />
-      </label>
-      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/60 bg-rose-500/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/40">Reset workspace</button>
-    </form>
-  </section>
-
   <div class="flex justify-end">
     <button type="button"
             class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold"
@@ -109,72 +91,86 @@
         <h2 class="text-xl font-semibold text-slate-100">Existing Users</h2>
         <p class="text-sm text-slate-400">Update profile information, reset credentials, or deactivate accounts.</p>
       </div>
-      <span class="text-xs text-slate-500 uppercase tracking-wide">{{ users|length }} users</span>
-    </header>
-    {% if users %}
-      <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/30">
-        <table class="table-enhanced min-w-full divide-y divide-slate-800 text-sm">
-          <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th scope="col" class="px-4 py-3 text-left font-semibold">Name</th>
-              <th scope="col" class="px-4 py-3 text-left font-semibold">Username</th>
-              <th scope="col" class="px-4 py-3 text-left font-semibold">Department</th>
-              <th scope="col" class="px-4 py-3 text-left font-semibold">Position</th>
-              <th scope="col" class="px-4 py-3 text-left font-semibold">Status</th>
-              <th scope="col" class="px-4 py-3 text-right font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800 bg-slate-950/40">
-            {% for user in users %}
-              <tr class="transition-colors">
-                <td class="px-4 py-3 font-medium text-slate-100">
-                  {{ user.display_name or user.username }}
-                  <div class="text-xs text-slate-400">
-                    {{ user.email or 'No email provided' }}
-                  </div>
-                </td>
-                <td class="px-4 py-3 text-slate-200">{{ user.username }}</td>
-                <td class="px-4 py-3 text-slate-300">
-                  {% if user.position and user.position.department %}
-                    {{ user.position.department.full_name }}
-                  {% elif user.department %}
-                    {{ user.department }}
-                  {% else %}
-                    <span class="text-slate-500">No department assigned</span>
-                  {% endif %}
-                </td>
-                <td class="px-4 py-3 text-slate-300">
-                  {% if user.position %}
-                    {{ user.position.display_label }}
-                  {% else %}
-                    <span class="text-slate-500">No position</span>
-                  {% endif %}
-                </td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center rounded-lg border px-2 py-1 text-xs {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' if user.is_active else 'border-rose-400/40 bg-rose-500/20 text-rose-100' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <div class="flex justify-end gap-2">
-                    <button type="button"
-                            class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-                            data-modal-target="user-modal-{{ user.id }}">
-                      View
-                    </button>
-                    <button type="submit"
-                            form="user-reset-{{ user.id }}"
-                            class="inline-flex items-center rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/20">
-                      Sign out
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-slate-500 uppercase tracking-wide">{{ users|length }} users</span>
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                data-section-toggle
+                data-section-target="users-content"
+                data-label-expanded="Collapse"
+                data-label-collapsed="Expand"
+                aria-controls="users-content"
+                aria-expanded="false">
+          Expand
+        </button>
       </div>
-    {% else %}
-      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No users found.</div>
-    {% endif %}
+    </header>
+    <div id="users-content" class="space-y-6 hidden" data-section-content>
+      {% if users %}
+        <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/30">
+          <table class="table-enhanced min-w-full divide-y divide-slate-800 text-sm">
+            <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th scope="col" class="px-4 py-3 text-left font-semibold">Name</th>
+                <th scope="col" class="px-4 py-3 text-left font-semibold">Username</th>
+                <th scope="col" class="px-4 py-3 text-left font-semibold">Department</th>
+                <th scope="col" class="px-4 py-3 text-left font-semibold">Position</th>
+                <th scope="col" class="px-4 py-3 text-left font-semibold">Status</th>
+                <th scope="col" class="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+              {% for user in users %}
+                <tr class="transition-colors">
+                  <td class="px-4 py-3 font-medium text-slate-100">
+                    {{ user.display_name or user.username }}
+                    <div class="text-xs text-slate-400">
+                      {{ user.email or 'No email provided' }}
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-slate-200">{{ user.username }}</td>
+                  <td class="px-4 py-3 text-slate-300">
+                    {% if user.position and user.position.department %}
+                      {{ user.position.department.full_name }}
+                    {% elif user.department %}
+                      {{ user.department }}
+                    {% else %}
+                      <span class="text-slate-500">No department assigned</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-slate-300">
+                    {% if user.position %}
+                      {{ user.position.display_label }}
+                    {% else %}
+                      <span class="text-slate-500">No position</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="inline-flex items-center rounded-lg border px-2 py-1 text-xs {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' if user.is_active else 'border-rose-400/40 bg-rose-500/20 text-rose-100' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <div class="flex justify-end gap-2">
+                      <button type="button"
+                              class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                              data-modal-target="user-modal-{{ user.id }}">
+                        View
+                      </button>
+                      <button type="submit"
+                              form="user-reset-{{ user.id }}"
+                              class="inline-flex items-center rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/20">
+                        Sign out
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">No users found.</div>
+      {% endif %}
+    </div>
   </section>
 
     {% for user in users %}
@@ -309,11 +305,11 @@
               data-label-expanded="Collapse"
               data-label-collapsed="Expand"
               aria-controls="departments-content"
-              aria-expanded="true">
-        Collapse
+              aria-expanded="false">
+        Expand
       </button>
     </header>
-    <div id="departments-content" class="space-y-6" data-section-content>
+    <div id="departments-content" class="space-y-6 hidden" data-section-content>
     <form method="post" action="{{ url_for('admin_departments_create') }}" class="grid gap-4 md:grid-cols-2">
       <div class="space-y-1">
         <label class="text-sm text-slate-300">Name</label>
@@ -480,11 +476,11 @@
               data-label-expanded="Collapse"
               data-label-collapsed="Expand"
               aria-controls="positions-content"
-              aria-expanded="true">
-        Collapse
+              aria-expanded="false">
+        Expand
       </button>
     </header>
-    <div id="positions-content" class="space-y-6" data-section-content>
+    <div id="positions-content" class="space-y-6 hidden" data-section-content>
       <div class="flex justify-end">
         <button type="button"
                 class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-500/20 transition hover:shadow-emerald-500/30 hover:bg-emerald-500"
@@ -492,9 +488,8 @@
                 data-target="positions-create-panel"
                 data-open-label="+ New position"
                 data-close-label="Hide form"
-                data-initial-state="open"
                 aria-controls="positions-create-panel"
-                aria-expanded="true">
+                aria-expanded="false">
           + New position
         </button>
       </div>
@@ -638,6 +633,25 @@
       </div>
     {% endfor %}
     </div>
+  </section>
+
+
+  <section class="rounded-2xl border border-rose-500/50 bg-rose-500/10 p-6 text-sm text-slate-100 shadow-inner shadow-rose-500/10">
+    <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-rose-100">Reset workspace data</h2>
+        <p class="text-xs text-rose-200/80">Delete customers, lifts, complaints, contracts, parts, SRT sites, QC tasks and all sales clients &amp; opportunities.</p>
+      </div>
+      <span class="rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-100">Irreversible</span>
+    </header>
+    <p class="text-xs text-rose-100/90">Enter your password to confirm the reset. All linked files will be removed from storage.</p>
+    <form method="post" action="{{ url_for('admin_reset_workspace') }}" class="flex flex-col gap-4 sm:flex-row sm:items-end" onsubmit="return confirm('This will permanently delete the listed records. Continue?');">
+      <label class="flex-1 space-y-1 text-xs">
+        <span class="font-semibold uppercase tracking-wide text-rose-100">Confirm with password</span>
+        <input type="password" name="confirm_password" autocomplete="current-password" required class="w-full rounded-xl border border-rose-400/40 bg-rose-500/20 px-3 py-2 text-sm text-slate-100 placeholder:text-rose-100/70 focus:border-rose-200 focus:outline-none" placeholder="Enter admin password" />
+      </label>
+      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/60 bg-rose-500/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/40">Reset workspace</button>
+    </form>
   </section>
 
 
