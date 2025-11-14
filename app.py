@@ -531,6 +531,13 @@ def process_customer_upload_file(file_path, *, apply_changes):
     return outcome
 
 
+def _normalize_lookup_key(value):
+    normalized = clean_str(stringify_cell(value))
+    if isinstance(normalized, str) and normalized:
+        return normalized.lower()
+    return None
+
+
 def process_lift_upload_file(file_path, *, apply_changes):
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=AMC_LIFT_TEMPLATE_SHEET_NAME
@@ -550,21 +557,19 @@ def process_lift_upload_file(file_path, *, apply_changes):
     )
 
     customers = Customer.query.all()
-    customer_by_code = {
-        customer.customer_code.lower(): customer
-        for customer in customers
-        if customer.customer_code
-    }
-    customer_by_external = {
-        customer.external_customer_id.lower(): customer
-        for customer in customers
-        if customer.external_customer_id
-    }
-    customer_by_name = {
-        customer.company_name.lower(): customer
-        for customer in customers
-        if customer.company_name
-    }
+    customer_by_code = {}
+    customer_by_external = {}
+    customer_by_name = {}
+    for customer in customers:
+        code_key = _normalize_lookup_key(customer.customer_code)
+        if code_key:
+            customer_by_code[code_key] = customer
+        external_key = _normalize_lookup_key(customer.external_customer_id)
+        if external_key:
+            customer_by_external[external_key] = customer
+        name_key = _normalize_lookup_key(customer.company_name)
+        if name_key:
+            customer_by_name[name_key] = customer
 
     service_routes = ServiceRoute.query.all()
     route_lookup: Dict[str, Any] = {}
@@ -614,26 +619,31 @@ def process_lift_upload_file(file_path, *, apply_changes):
         )
         customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
         customer_name_value = clean_str(stringify_cell(row_data.get("Customer Name")))
+        customer_external_id_key = (
+            customer_external_id_value.lower() if customer_external_id_value else None
+        )
+        customer_code_key = customer_code_value.lower() if customer_code_value else None
+        customer_name_key = customer_name_value.lower() if customer_name_value else None
 
         customer = None
-        if customer_external_id_value and customer_external_id_value.lower() in customer_by_external:
-            customer = customer_by_external[customer_external_id_value.lower()]
-        if customer_code_value and customer_code_value.lower() in customer_by_code:
-            customer = customer_by_code[customer_code_value.lower()]
+        if customer_external_id_key and customer_external_id_key in customer_by_external:
+            customer = customer_by_external[customer_external_id_key]
+        if customer_code_key and customer_code_key in customer_by_code:
+            customer = customer_by_code[customer_code_key]
         if (
-            customer_external_id_value
-            and customer_code_value
-            and customer_external_id_value.lower() in customer_by_external
-            and customer_code_value.lower() in customer_by_code
-            and customer_by_external[customer_external_id_value.lower()].id
-            != customer_by_code[customer_code_value.lower()].id
+            customer_external_id_key
+            and customer_code_key
+            and customer_external_id_key in customer_by_external
+            and customer_code_key in customer_by_code
+            and customer_by_external[customer_external_id_key].id
+            != customer_by_code[customer_code_key].id
         ):
             outcome.row_errors.append(
                 f"Row {row_index}: Customer code '{customer_code_value}' does not match external ID '{customer_external_id_value}'."
             )
             continue
-        if not customer and customer_name_value and customer_name_value.lower() in customer_by_name:
-            customer = customer_by_name[customer_name_value.lower()]
+        if not customer and customer_name_key and customer_name_key in customer_by_name:
+            customer = customer_by_name[customer_name_key]
         if not customer:
             missing_reference = (
                 customer_external_id_value
