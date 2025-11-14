@@ -1162,22 +1162,56 @@ def normalize_amc_duration(value):
     if not value:
         return None, None
     lowered = value.lower().strip()
-    normalized = re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")
-    if normalized in AMC_DURATION_MONTHS:
-        return normalized, None
-    for key, label in AMC_DURATION_CHOICES:
-        if not key or not label:
+
+    def _add_candidate(bucket, candidate):
+        candidate = (candidate or "").strip()
+        if candidate and candidate not in bucket:
+            bucket.append(candidate)
+
+    candidates: List[str] = []
+    _add_candidate(candidates, lowered)
+
+    # Split by parentheses/brackets so values like "1 year (1_year)" are supported.
+    for part in re.split(r"[()\[\]]", lowered):
+        _add_candidate(candidates, part)
+
+    # Also split by other separators that users may copy from the UI (commas, pipes, slashes).
+    for part in re.split(r"[\|/,;]+", lowered):
+        _add_candidate(candidates, part)
+
+    # Hyphen or dash separated values are also common in manually typed inputs.
+    for part in re.split(r"[-–—]+", lowered):
+        _add_candidate(candidates, part)
+
+    for candidate in candidates:
+        normalized = re.sub(r"[^a-z0-9]+", "_", candidate).strip("_")
+        if normalized in AMC_DURATION_MONTHS and ("_" in candidate or normalized == candidate):
+            return normalized, None
+
+    for candidate in candidates:
+        normalized = re.sub(r"[^a-z0-9]+", "_", candidate).strip("_")
+        if normalized in AMC_DURATION_MONTHS:
+            return normalized, None
+        for key, label in AMC_DURATION_CHOICES:
+            if not key or not label:
+                continue
+            if label.lower() == candidate:
+                return key, None
+
+    for candidate in candidates:
+        match = re.search(r"(\d+(?:\.\d+)?)", candidate)
+        if not match:
             continue
-        if label.lower() == lowered:
-            return key, None
-    try:
-        months = int(float(value))
-    except (TypeError, ValueError):
-        months = None
-    if months:
+        try:
+            months = int(float(match.group(1)))
+        except (TypeError, ValueError):
+            continue
+        if not months:
+            continue
         for key, duration_months in AMC_DURATION_MONTHS.items():
             if duration_months == months:
                 return key, None
+
     valid_options = ", ".join(sorted(AMC_DURATION_LABELS.values()))
     return None, f"AMC duration must match one of: {valid_options}."
 
