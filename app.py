@@ -125,18 +125,49 @@ class UploadOutcome:
     row_errors: List[str] = field(default_factory=list)
 
 
+def _normalize_extension(extension):
+    if not extension:
+        return ""
+    ext = extension.lower().strip()
+    if ext and not ext.startswith("."):
+        ext = f".{ext}"
+    return ext
+
+
 def save_pending_upload_file(upload):
     upload_root = app.config["UPLOAD_FOLDER"]
     pending_root = os.path.join(upload_root, PENDING_UPLOAD_SUBDIR)
     os.makedirs(pending_root, exist_ok=True)
     original_name = upload.filename or "upload"
-    extension = os.path.splitext(original_name)[1].lower()
+    extension = _normalize_extension(os.path.splitext(original_name)[1])
     token = uuid.uuid4().hex
     dest_path = os.path.join(pending_root, f"{token}{extension}")
     upload.stream.seek(0)
     upload.save(dest_path)
     upload.stream.seek(0)
-    return dest_path
+    return token, extension
+
+
+def _build_pending_upload_path(token, extension):
+    if not token:
+        return None
+    upload_root = app.config["UPLOAD_FOLDER"]
+    pending_root = os.path.join(upload_root, PENDING_UPLOAD_SUBDIR)
+    os.makedirs(pending_root, exist_ok=True)
+    ext = _normalize_extension(extension)
+    if ext:
+        candidate = os.path.join(pending_root, f"{token}{ext}")
+        if os.path.exists(candidate):
+            return candidate
+    try:
+        for name in os.listdir(pending_root):
+            if name.startswith(token):
+                return os.path.join(pending_root, name)
+    except FileNotFoundError:
+        return None
+    if ext:
+        return os.path.join(pending_root, f"{token}{ext}")
+    return os.path.join(pending_root, token)
 
 
 def _clear_pending_upload(pending_token, *, remove_file=False):
@@ -145,7 +176,12 @@ def _clear_pending_upload(pending_token, *, remove_file=False):
     session["pending_uploads"] = pending_uploads
     session.modified = True
     if remove_file:
-        file_path = (pending or {}).get("path")
+        pending_data = pending or {}
+        file_path = pending_data.get("path")
+        if not file_path:
+            file_path = _build_pending_upload_path(
+                pending_data.get("token"), pending_data.get("extension")
+            )
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
@@ -12494,6 +12530,10 @@ def service_customers_upload():
             return redirect(url_for("service_customers"))
 
         file_path = pending.get("path")
+        if not file_path:
+            file_path = _build_pending_upload_path(
+                pending.get("token"), pending.get("extension")
+            )
         if not file_path or not os.path.exists(file_path):
             pending_uploads.pop(pending_token, None)
             session["pending_uploads"] = pending_uploads
@@ -12563,25 +12603,30 @@ def service_customers_upload():
         )
         return redirect(url_for("service_customers"))
 
+    saved_token = None
+    saved_extension = None
     saved_path = None
     try:
-        saved_path = save_pending_upload_file(upload)
+        saved_token, saved_extension = save_pending_upload_file(upload)
+        saved_path = _build_pending_upload_path(saved_token, saved_extension)
         outcome = process_customer_upload_file(
             saved_path,
             apply_changes=False,
         )
     except MissingDependencyError:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(OPENPYXL_MISSING_MESSAGE, "error")
         return redirect(url_for("service_customers"))
     except ValueError:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(
@@ -12590,9 +12635,10 @@ def service_customers_upload():
         )
         return redirect(url_for("service_customers"))
     except Exception:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(
@@ -12602,10 +12648,12 @@ def service_customers_upload():
         return redirect(url_for("service_customers"))
 
     if not outcome.header_map:
-        try:
-            os.remove(saved_path)
-        except OSError:
-            pass
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         flash("The uploaded workbook is missing header labels.", "error")
         return redirect(url_for("service_customers"))
 
@@ -12615,10 +12663,12 @@ def service_customers_upload():
     if "Customer Code" not in outcome.header_map and "External Customer ID" not in outcome.header_map:
         missing_headers.append("Customer Code / External Customer ID")
     if missing_headers:
-        try:
-            os.remove(saved_path)
-        except OSError:
-            pass
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         flash(
             "The uploaded workbook is missing required columns: "
             + ", ".join(missing_headers)
@@ -12631,7 +12681,8 @@ def service_customers_upload():
     pending_uploads = session.get("pending_uploads", {})
     pending_uploads[pending_token] = {
         "type": "service_customers",
-        "path": saved_path,
+        "token": saved_token,
+        "extension": saved_extension,
         "original_filename": upload.filename,
     }
     session["pending_uploads"] = pending_uploads
@@ -12661,6 +12712,10 @@ def service_lifts_upload():
             return redirect(url_for("service_lifts"))
 
         file_path = pending.get("path")
+        if not file_path:
+            file_path = _build_pending_upload_path(
+                pending.get("token"), pending.get("extension")
+            )
         if not file_path or not os.path.exists(file_path):
             pending_uploads.pop(pending_token, None)
             session["pending_uploads"] = pending_uploads
@@ -12730,25 +12785,30 @@ def service_lifts_upload():
         )
         return redirect(url_for("service_lifts"))
 
+    saved_token = None
+    saved_extension = None
     saved_path = None
     try:
-        saved_path = save_pending_upload_file(upload)
+        saved_token, saved_extension = save_pending_upload_file(upload)
+        saved_path = _build_pending_upload_path(saved_token, saved_extension)
         outcome = process_lift_upload_file(
             saved_path,
             apply_changes=False,
         )
     except MissingDependencyError:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(OPENPYXL_MISSING_MESSAGE, "error")
         return redirect(url_for("service_lifts"))
     except ValueError:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(
@@ -12757,9 +12817,10 @@ def service_lifts_upload():
         )
         return redirect(url_for("service_lifts"))
     except Exception:
-        if saved_path:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
             try:
-                os.remove(saved_path)
+                os.remove(file_path)
             except OSError:
                 pass
         flash(
@@ -12770,10 +12831,12 @@ def service_lifts_upload():
 
     header_map = outcome.header_map
     if not header_map:
-        try:
-            os.remove(saved_path)
-        except OSError:
-            pass
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         flash("The uploaded workbook is missing header labels.", "error")
         return redirect(url_for("service_lifts"))
 
@@ -12789,10 +12852,12 @@ def service_lifts_upload():
     ):
         missing_headers.append("Customer External ID / Customer Code / Customer Name")
     if missing_headers:
-        try:
-            os.remove(saved_path)
-        except OSError:
-            pass
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         flash(
             "The uploaded workbook is missing required columns: "
             + ", ".join(missing_headers)
@@ -12805,7 +12870,8 @@ def service_lifts_upload():
     pending_uploads = session.get("pending_uploads", {})
     pending_uploads[pending_token] = {
         "type": "service_lifts",
-        "path": saved_path,
+        "token": saved_token,
+        "extension": saved_extension,
         "original_filename": upload.filename,
     }
     session["pending_uploads"] = pending_uploads
@@ -12866,6 +12932,10 @@ def service_upload_review(upload_type, pending_token):
         return redirect(url_for(config["redirect_endpoint"]))
 
     file_path = pending.get("path")
+    if not file_path:
+        file_path = _build_pending_upload_path(
+            pending.get("token"), pending.get("extension")
+        )
     if not file_path or not os.path.exists(file_path):
         _clear_pending_upload(pending_token, remove_file=True)
         flash("The staged upload file was not found. Please try uploading again.", "error")
