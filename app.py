@@ -20,7 +20,8 @@ from flask_login import (
     current_user,
 )
 from werkzeug.utils import secure_filename
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import importlib.util
 import csv
 from io import BytesIO, StringIO
@@ -77,33 +78,53 @@ def _extract_tabular_upload(upload, *, sheet_name=None):
     if filename.endswith(".xlsx"):
         _ensure_openpyxl()
         upload.stream.seek(0)
-        workbook = load_workbook(upload, data_only=True)
-        worksheet = (
-            workbook[sheet_name]
-            if sheet_name and sheet_name in workbook.sheetnames
-            else workbook.active
+        workbook = _execute_with_timeout(
+            lambda: load_workbook(upload, data_only=True),
+            stage="reading the uploaded Excel workbook",
         )
-        header = next(
-            worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
-            [],
-        )
+        try:
+            worksheet = (
+                workbook[sheet_name]
+                if sheet_name and sheet_name in workbook.sheetnames
+                else workbook.active
+            )
+            header = _execute_with_timeout(
+                lambda: next(
+                    worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+                    [],
+                ),
+                stage="reading header row from the uploaded workbook",
+            )
+            data_rows = _execute_with_timeout(
+                lambda: list(worksheet.iter_rows(min_row=2, values_only=True)),
+                stage="reading data rows from the uploaded workbook",
+            )
+        finally:
+            workbook.close()
 
-        def row_iter():
-            for row in worksheet.iter_rows(min_row=2, values_only=True):
-                yield row
-
-        return header, row_iter()
+        return header, data_rows
 
     if filename.endswith(".csv"):
         upload.stream.seek(0)
-        raw_bytes = upload.read()
+        raw_bytes = _execute_with_timeout(
+            upload.read,
+            stage="reading the uploaded CSV file",
+        )
         upload.stream.seek(0)
-        try:
-            text = raw_bytes.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            text = raw_bytes.decode("latin-1")
-        reader = csv.reader(StringIO(text))
-        rows = list(reader)
+        def _decode_csv_bytes():
+            try:
+                return raw_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                return raw_bytes.decode("latin-1")
+
+        text = _execute_with_timeout(
+            _decode_csv_bytes,
+            stage="decoding the uploaded CSV file",
+        )
+        rows = _execute_with_timeout(
+            lambda: list(csv.reader(StringIO(text))),
+            stage="parsing the uploaded CSV file",
+        )
         header = rows[0] if rows else []
         data_rows = rows[1:] if len(rows) > 1 else []
         return header, data_rows
@@ -123,6 +144,38 @@ class UploadOutcome:
     created_items: List[Dict[str, Any]] = field(default_factory=list)
     updated_items: List[Dict[str, Any]] = field(default_factory=list)
     row_errors: List[str] = field(default_factory=list)
+
+
+UPLOAD_STAGE_TIMEOUT_SECONDS = 5
+
+
+class UploadStageTimeoutError(RuntimeError):
+    """Raised when a stage of the upload workflow exceeds the allowed time."""
+
+    def __init__(self, stage: str, *, timeout: int = UPLOAD_STAGE_TIMEOUT_SECONDS):
+        super().__init__(f"Timed out after {timeout} seconds while {stage}.")
+        self.stage = stage
+        self.timeout = timeout
+
+
+def _execute_with_timeout(func, *, stage: str, timeout: int = UPLOAD_STAGE_TIMEOUT_SECONDS):
+    """Execute ``func`` enforcing a timeout, raising ``UploadStageTimeoutError`` on delay."""
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError as exc:
+            raise UploadStageTimeoutError(stage, timeout=timeout) from exc
+
+
+def _stage_start() -> float:
+    return time.monotonic()
+
+
+def _check_stage_timeout(start_time: float, stage: str, *, timeout: int = UPLOAD_STAGE_TIMEOUT_SECONDS):
+    if time.monotonic() - start_time > timeout:
+        raise UploadStageTimeoutError(stage, timeout=timeout)
 
 
 def _normalize_extension(extension):
@@ -194,29 +247,55 @@ def _extract_tabular_upload_from_path(file_path, *, sheet_name=None):
     filename = file_path.lower()
     if filename.endswith(".xlsx"):
         _ensure_openpyxl()
-        workbook = load_workbook(file_path, data_only=True)
-        worksheet = (
-            workbook[sheet_name]
-            if sheet_name and sheet_name in workbook.sheetnames
-            else workbook.active
+        workbook = _execute_with_timeout(
+            lambda: load_workbook(file_path, data_only=True),
+            stage="reading the staged Excel workbook",
         )
-        header = next(
-            worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
-            [],
-        )
-        data_rows = [row for row in worksheet.iter_rows(min_row=2, values_only=True)]
-        workbook.close()
+        try:
+            worksheet = (
+                workbook[sheet_name]
+                if sheet_name and sheet_name in workbook.sheetnames
+                else workbook.active
+            )
+            header = _execute_with_timeout(
+                lambda: next(
+                    worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+                    [],
+                ),
+                stage="reading header row from the staged workbook",
+            )
+            data_rows = _execute_with_timeout(
+                lambda: list(worksheet.iter_rows(min_row=2, values_only=True)),
+                stage="reading data rows from the staged workbook",
+            )
+        finally:
+            workbook.close()
         return header, data_rows
 
     if filename.endswith(".csv"):
-        with open(file_path, "rb") as fh:
-            raw_bytes = fh.read()
-        try:
-            text = raw_bytes.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            text = raw_bytes.decode("latin-1")
-        reader = csv.reader(StringIO(text))
-        rows = list(reader)
+        def _read_csv_file():
+            with open(file_path, "rb") as fh:
+                return fh.read()
+
+        raw_bytes = _execute_with_timeout(
+            _read_csv_file,
+            stage="reading the staged CSV file",
+        )
+
+        def _decode_bytes():
+            try:
+                return raw_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                return raw_bytes.decode("latin-1")
+
+        text = _execute_with_timeout(
+            _decode_bytes,
+            stage="decoding the staged CSV file",
+        )
+        rows = _execute_with_timeout(
+            lambda: list(csv.reader(StringIO(text))),
+            stage="parsing the staged CSV file",
+        )
         header = rows[0] if rows else []
         data_rows = rows[1:] if len(rows) > 1 else []
         return header, data_rows
@@ -234,12 +313,14 @@ def process_customer_upload_file(file_path, *, apply_changes):
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME
     )
+    header_timer = _stage_start()
     header_cells = header_cells or []
     header_map: Dict[str, int] = {}
     for idx, header in enumerate(header_cells or []):
         label = stringify_cell(header)
         if label:
             header_map[label] = idx
+    _check_stage_timeout(header_timer, "reading header labels from the upload")
 
     outcome = UploadOutcome(
         header_map=header_map,
@@ -248,6 +329,7 @@ def process_customer_upload_file(file_path, *, apply_changes):
         processed_rows=0,
     )
 
+    customer_reference_timer = _stage_start()
     customers = Customer.query.all()
     existing_by_code: Dict[str, Any] = {
         customer.customer_code.lower(): customer
@@ -259,7 +341,12 @@ def process_customer_upload_file(file_path, *, apply_changes):
         for customer in customers
         if customer.external_customer_id
     }
+    _check_stage_timeout(
+        customer_reference_timer,
+        "loading existing customer records",
+    )
 
+    service_route_timer = _stage_start()
     service_routes = ServiceRoute.query.all()
     route_lookup: Dict[str, Any] = {}
     for route in service_routes:
@@ -273,294 +360,303 @@ def process_customer_upload_file(file_path, *, apply_changes):
             options.add(f"{route.state.lower()}-{route.branch.lower()}")
         for option in options:
             route_lookup[option] = route
+    _check_stage_timeout(
+        service_route_timer,
+        "loading service route reference data",
+    )
 
     processed_codes: Dict[str, str] = {}
     processed_external_ids: Dict[str, str] = {}
     generated_codes: set[str] = set()
 
     for row_index, row_values in enumerate(data_rows, start=2):
-        if not row_values:
-            continue
-        row_data: Dict[str, Any] = {}
-        for header, position in header_map.items():
-            value = row_values[position] if position < len(row_values) else None
-            row_data[header] = value
-
-        key_fields = [
-            row_data.get("External Customer ID"),
-            row_data.get("Customer Code"),
-            row_data.get("Company Name"),
-            row_data.get("Email"),
-            row_data.get("Phone"),
-        ]
-        if not any(clean_str(stringify_cell(value)) for value in key_fields):
-            continue
-
-        outcome.processed_rows += 1
-
-        external_id_value = clean_str(stringify_cell(row_data.get("External Customer ID")))
-        customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
-        company_name_value = clean_str(stringify_cell(row_data.get("Company Name")))
-        contact_person_value = clean_str(stringify_cell(row_data.get("Contact Person")))
-        phone_value = clean_str(stringify_cell(row_data.get("Phone")))
-        mobile_value = clean_str(stringify_cell(row_data.get("Mobile")))
-        email_value = clean_str(stringify_cell(row_data.get("Email")))
-        gst_value = clean_str(stringify_cell(row_data.get("GST Number")))
-        billing_line1 = clean_str(stringify_cell(row_data.get("Billing Address Line 1")))
-        billing_line2 = clean_str(stringify_cell(row_data.get("Billing Address Line 2")))
-        city_value = clean_str(stringify_cell(row_data.get("City")))
-        state_value = clean_str(stringify_cell(row_data.get("State")))
-        pincode_value = clean_str(stringify_cell(row_data.get("Pincode")))
-        country_value = clean_str(stringify_cell(row_data.get("Country")))
-        route_value_raw = clean_str(stringify_cell(row_data.get("Route")))
-        sector_value = clean_str(stringify_cell(row_data.get("Sector")))
-        notes_value = clean_str(stringify_cell(row_data.get("Notes")))
-        office_line1 = clean_str(stringify_cell(row_data.get("Office Address Line 1")))
-        office_line2 = clean_str(stringify_cell(row_data.get("Office Address Line 2")))
-        office_city_value = clean_str(stringify_cell(row_data.get("Office City")))
-        office_state_value = clean_str(stringify_cell(row_data.get("Office State")))
-        office_pincode_value = clean_str(stringify_cell(row_data.get("Office Pincode")))
-
-        branch_value = None
-        branch_error = None
-        if "Branch" in header_map:
-            branch_value, branch_error = validate_branch(
-                row_data.get("Branch"), label="Branch", required=False
-            )
-            if branch_error:
-                outcome.row_errors.append(f"Row {row_index}: {branch_error}")
+        row_stage = _stage_start()
+        row_stage_label = f"processing row {row_index}"
+        try:
+            if not row_values:
                 continue
-
-        route_value = None
-        if route_value_raw:
-            lookup_key = route_value_raw.lower()
-            route = route_lookup.get(lookup_key)
-            if not route:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Route '{route_value_raw}' does not match an active service route."
+            row_data: Dict[str, Any] = {}
+            for header, position in header_map.items():
+                value = row_values[position] if position < len(row_values) else None
+                row_data[header] = value
+    
+            key_fields = [
+                row_data.get("External Customer ID"),
+                row_data.get("Customer Code"),
+                row_data.get("Company Name"),
+                row_data.get("Email"),
+                row_data.get("Phone"),
+            ]
+            if not any(clean_str(stringify_cell(value)) for value in key_fields):
+                continue
+    
+            outcome.processed_rows += 1
+    
+            external_id_value = clean_str(stringify_cell(row_data.get("External Customer ID")))
+            customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
+            company_name_value = clean_str(stringify_cell(row_data.get("Company Name")))
+            contact_person_value = clean_str(stringify_cell(row_data.get("Contact Person")))
+            phone_value = clean_str(stringify_cell(row_data.get("Phone")))
+            mobile_value = clean_str(stringify_cell(row_data.get("Mobile")))
+            email_value = clean_str(stringify_cell(row_data.get("Email")))
+            gst_value = clean_str(stringify_cell(row_data.get("GST Number")))
+            billing_line1 = clean_str(stringify_cell(row_data.get("Billing Address Line 1")))
+            billing_line2 = clean_str(stringify_cell(row_data.get("Billing Address Line 2")))
+            city_value = clean_str(stringify_cell(row_data.get("City")))
+            state_value = clean_str(stringify_cell(row_data.get("State")))
+            pincode_value = clean_str(stringify_cell(row_data.get("Pincode")))
+            country_value = clean_str(stringify_cell(row_data.get("Country")))
+            route_value_raw = clean_str(stringify_cell(row_data.get("Route")))
+            sector_value = clean_str(stringify_cell(row_data.get("Sector")))
+            notes_value = clean_str(stringify_cell(row_data.get("Notes")))
+            office_line1 = clean_str(stringify_cell(row_data.get("Office Address Line 1")))
+            office_line2 = clean_str(stringify_cell(row_data.get("Office Address Line 2")))
+            office_city_value = clean_str(stringify_cell(row_data.get("Office City")))
+            office_state_value = clean_str(stringify_cell(row_data.get("Office State")))
+            office_pincode_value = clean_str(stringify_cell(row_data.get("Office Pincode")))
+    
+            branch_value = None
+            branch_error = None
+            if "Branch" in header_map:
+                branch_value, branch_error = validate_branch(
+                    row_data.get("Branch"), label="Branch", required=False
                 )
-                continue
-            route_value = route.state
-
-        existing_customer = None
-        if customer_code_value:
-            lookup_code = customer_code_value.lower()
-            existing_customer = existing_by_code.get(lookup_code)
-
-        if external_id_value:
-            lookup_external = external_id_value.lower()
-            external_match = existing_by_external.get(lookup_external)
-            if isinstance(existing_customer, Customer) and isinstance(external_match, Customer):
-                if existing_customer.id != external_match.id:
+                if branch_error:
+                    outcome.row_errors.append(f"Row {row_index}: {branch_error}")
+                    continue
+    
+            route_value = None
+            if route_value_raw:
+                lookup_key = route_value_raw.lower()
+                route = route_lookup.get(lookup_key)
+                if not route:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: Route '{route_value_raw}' does not match an active service route."
+                    )
+                    continue
+                route_value = route.state
+    
+            existing_customer = None
+            if customer_code_value:
+                lookup_code = customer_code_value.lower()
+                existing_customer = existing_by_code.get(lookup_code)
+    
+            if external_id_value:
+                lookup_external = external_id_value.lower()
+                external_match = existing_by_external.get(lookup_external)
+                if isinstance(existing_customer, Customer) and isinstance(external_match, Customer):
+                    if existing_customer.id != external_match.id:
+                        outcome.row_errors.append(
+                            f"Row {row_index}: Customer code '{customer_code_value}' does not match the external customer ID '{external_id_value}'."
+                        )
+                        continue
+                elif external_match and existing_customer and external_match is not existing_customer:
                     outcome.row_errors.append(
                         f"Row {row_index}: Customer code '{customer_code_value}' does not match the external customer ID '{external_id_value}'."
                     )
                     continue
-            elif external_match and existing_customer and external_match is not existing_customer:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Customer code '{customer_code_value}' does not match the external customer ID '{external_id_value}'."
-                )
-                continue
-            if isinstance(external_match, Customer):
-                existing_customer = external_match
-
-        updates = []
-        if company_name_value:
-            updates.append(("company_name", company_name_value, "Company Name"))
-        if contact_person_value is not None:
-            updates.append(("contact_person", contact_person_value, "Contact Person"))
-        if phone_value is not None:
-            updates.append(("phone", phone_value, "Phone"))
-        if mobile_value is not None:
-            updates.append(("mobile", mobile_value, "Mobile"))
-        if email_value is not None:
-            updates.append(("email", email_value, "Email"))
-        if gst_value is not None:
-            updates.append(("gst_no", gst_value, "GST Number"))
-        if billing_line1 is not None:
-            updates.append(("billing_address_line1", billing_line1, "Billing Address Line 1"))
-        if billing_line2 is not None:
-            updates.append(("billing_address_line2", billing_line2, "Billing Address Line 2"))
-        if city_value is not None:
-            updates.append(("city", city_value, "City"))
-        if state_value is not None:
-            updates.append(("state", state_value, "State"))
-        if pincode_value is not None:
-            updates.append(("pincode", pincode_value, "Pincode"))
-        if country_value is not None:
-            updates.append(("country", country_value, "Country"))
-        if route_value is not None:
-            updates.append(("route", route_value, "Route"))
-        if sector_value is not None:
-            updates.append(("sector", sector_value, "Sector"))
-        if branch_value is not None:
-            updates.append(("branch", branch_value, "Branch"))
-        if notes_value is not None:
-            updates.append(("notes", notes_value, "Notes"))
-        if office_line1 is not None:
-            updates.append(("office_address_line1", office_line1, "Office Address Line 1"))
-        if office_line2 is not None:
-            updates.append(("office_address_line2", office_line2, "Office Address Line 2"))
-        if office_city_value is not None:
-            updates.append(("office_city", office_city_value, "Office City"))
-        if office_state_value is not None:
-            updates.append(("office_state", office_state_value, "Office State"))
-        if office_pincode_value is not None:
-            updates.append(("office_pincode", office_pincode_value, "Office Pincode"))
-
-        if existing_customer:
-            customer = existing_customer
-            if not customer.customer_code:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Customer record is missing a customer code and cannot be updated."
-                )
-                continue
-            code_key = customer.customer_code.lower()
-            identifier = _customer_identifier(customer, fallback=f"existing:{id(customer)}")
-            owner = processed_codes.get(code_key)
-            if owner and owner != identifier:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Customer code '{customer.customer_code}' is duplicated in the upload."
-                )
-                continue
-            processed_codes[code_key] = identifier
-            outcome.updated_count += 1
-
-            changes = []
-            for attr, value, label in updates:
-                if value is None:
-                    continue
-                current = getattr(customer, attr)
-                if (current or None) != value:
-                    changes.append({
-                        "field": label,
-                        "from": current,
-                        "to": value,
-                    })
-                    if apply_changes:
-                        setattr(customer, attr, value)
-
-            if apply_changes:
-                if country_value is None and not customer.country:
-                    customer.country = "India"
-                if customer.office_country is None:
-                    customer.office_country = "India"
-
-            if changes and len(outcome.updated_items) < 20:
-                outcome.updated_items.append(
-                    {
-                        "customer_code": customer.customer_code,
-                        "company_name": customer.company_name,
-                        "changes": changes,
-                    }
-                )
-
-        else:
-            if not company_name_value:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Company name is required for new customers."
-                )
-                continue
-
-            if customer_code_value:
-                normalized_code = customer_code_value.lower()
-                if normalized_code in existing_by_code:
+                if isinstance(external_match, Customer):
+                    existing_customer = external_match
+    
+            updates = []
+            if company_name_value:
+                updates.append(("company_name", company_name_value, "Company Name"))
+            if contact_person_value is not None:
+                updates.append(("contact_person", contact_person_value, "Contact Person"))
+            if phone_value is not None:
+                updates.append(("phone", phone_value, "Phone"))
+            if mobile_value is not None:
+                updates.append(("mobile", mobile_value, "Mobile"))
+            if email_value is not None:
+                updates.append(("email", email_value, "Email"))
+            if gst_value is not None:
+                updates.append(("gst_no", gst_value, "GST Number"))
+            if billing_line1 is not None:
+                updates.append(("billing_address_line1", billing_line1, "Billing Address Line 1"))
+            if billing_line2 is not None:
+                updates.append(("billing_address_line2", billing_line2, "Billing Address Line 2"))
+            if city_value is not None:
+                updates.append(("city", city_value, "City"))
+            if state_value is not None:
+                updates.append(("state", state_value, "State"))
+            if pincode_value is not None:
+                updates.append(("pincode", pincode_value, "Pincode"))
+            if country_value is not None:
+                updates.append(("country", country_value, "Country"))
+            if route_value is not None:
+                updates.append(("route", route_value, "Route"))
+            if sector_value is not None:
+                updates.append(("sector", sector_value, "Sector"))
+            if branch_value is not None:
+                updates.append(("branch", branch_value, "Branch"))
+            if notes_value is not None:
+                updates.append(("notes", notes_value, "Notes"))
+            if office_line1 is not None:
+                updates.append(("office_address_line1", office_line1, "Office Address Line 1"))
+            if office_line2 is not None:
+                updates.append(("office_address_line2", office_line2, "Office Address Line 2"))
+            if office_city_value is not None:
+                updates.append(("office_city", office_city_value, "Office City"))
+            if office_state_value is not None:
+                updates.append(("office_state", office_state_value, "Office State"))
+            if office_pincode_value is not None:
+                updates.append(("office_pincode", office_pincode_value, "Office Pincode"))
+    
+            if existing_customer:
+                customer = existing_customer
+                if not customer.customer_code:
                     outcome.row_errors.append(
-                        f"Row {row_index}: Customer code '{customer_code_value}' already exists."
+                        f"Row {row_index}: Customer record is missing a customer code and cannot be updated."
                     )
                     continue
-                if normalized_code in processed_codes:
+                code_key = customer.customer_code.lower()
+                identifier = _customer_identifier(customer, fallback=f"existing:{id(customer)}")
+                owner = processed_codes.get(code_key)
+                if owner and owner != identifier:
                     outcome.row_errors.append(
-                        f"Row {row_index}: Customer code '{customer_code_value}' is duplicated in the upload."
+                        f"Row {row_index}: Customer code '{customer.customer_code}' is duplicated in the upload."
                     )
                     continue
-                customer_code = customer_code_value
+                processed_codes[code_key] = identifier
+                outcome.updated_count += 1
+    
+                changes = []
+                for attr, value, label in updates:
+                    if value is None:
+                        continue
+                    current = getattr(customer, attr)
+                    if (current or None) != value:
+                        changes.append({
+                            "field": label,
+                            "from": current,
+                            "to": value,
+                        })
+                        if apply_changes:
+                            setattr(customer, attr, value)
+    
+                if apply_changes:
+                    if country_value is None and not customer.country:
+                        customer.country = "India"
+                    if customer.office_country is None:
+                        customer.office_country = "India"
+    
+                if changes and len(outcome.updated_items) < 20:
+                    outcome.updated_items.append(
+                        {
+                            "customer_code": customer.customer_code,
+                            "company_name": customer.company_name,
+                            "changes": changes,
+                        }
+                    )
+    
             else:
-                customer_code = generate_next_customer_code()
-                while (
-                    customer_code.lower() in existing_by_code
-                    or customer_code.lower() in processed_codes
-                    or customer_code.lower() in generated_codes
-                ):
+                if not company_name_value:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: Company name is required for new customers."
+                    )
+                    continue
+    
+                if customer_code_value:
+                    normalized_code = customer_code_value.lower()
+                    if normalized_code in existing_by_code:
+                        outcome.row_errors.append(
+                            f"Row {row_index}: Customer code '{customer_code_value}' already exists."
+                        )
+                        continue
+                    if normalized_code in processed_codes:
+                        outcome.row_errors.append(
+                            f"Row {row_index}: Customer code '{customer_code_value}' is duplicated in the upload."
+                        )
+                        continue
+                    customer_code = customer_code_value
+                else:
                     customer_code = generate_next_customer_code()
-                generated_codes.add(customer_code.lower())
-
-            identifier = f"new:{customer_code.lower()}"
-            processed_codes[customer_code.lower()] = identifier
-
-            if apply_changes:
-                customer = Customer(
-                    customer_code=customer_code,
-                    company_name=company_name_value,
-                )
-                db.session.add(customer)
-                existing_by_code[customer_code.lower()] = customer
+                    while (
+                        customer_code.lower() in existing_by_code
+                        or customer_code.lower() in processed_codes
+                        or customer_code.lower() in generated_codes
+                    ):
+                        customer_code = generate_next_customer_code()
+                    generated_codes.add(customer_code.lower())
+    
+                identifier = f"new:{customer_code.lower()}"
+                processed_codes[customer_code.lower()] = identifier
+    
+                if apply_changes:
+                    customer = Customer(
+                        customer_code=customer_code,
+                        company_name=company_name_value,
+                    )
+                    db.session.add(customer)
+                    existing_by_code[customer_code.lower()] = customer
+                else:
+                    customer = Customer(
+                        customer_code=customer_code,
+                        company_name=company_name_value,
+                    )
+                    existing_by_code[customer_code.lower()] = customer
+    
+                outcome.created_count += 1
+                if len(outcome.created_items) < 20:
+                    outcome.created_items.append(
+                        {
+                            "customer_code": customer_code,
+                            "company_name": company_name_value,
+                            "route": route_value,
+                            "branch": branch_value,
+                        }
+                    )
+    
+                if apply_changes:
+                    for attr, value, _ in updates:
+                        if value is not None:
+                            setattr(customer, attr, value)
+                    if not customer.country:
+                        customer.country = "India"
+                    if not customer.office_country:
+                        customer.office_country = "India"
+    
+            target_identifier = None
+            if existing_customer:
+                customer_ref = existing_customer
             else:
-                customer = Customer(
-                    customer_code=customer_code,
-                    company_name=company_name_value,
-                )
-                existing_by_code[customer_code.lower()] = customer
-
-            outcome.created_count += 1
-            if len(outcome.created_items) < 20:
-                outcome.created_items.append(
-                    {
-                        "customer_code": customer_code,
-                        "company_name": company_name_value,
-                        "route": route_value,
-                        "branch": branch_value,
-                    }
-                )
-
-            if apply_changes:
-                for attr, value, _ in updates:
-                    if value is not None:
-                        setattr(customer, attr, value)
-                if not customer.country:
-                    customer.country = "India"
-                if not customer.office_country:
-                    customer.office_country = "India"
-
-        target_identifier = None
-        if existing_customer:
-            customer_ref = existing_customer
-        else:
-            customer_ref = customer
-        if isinstance(customer_ref, Customer):
-            if getattr(customer_ref, "customer_code", None):
-                target_identifier = processed_codes.get(customer_ref.customer_code.lower())
-            else:
-                target_identifier = identifier or f"new:{id(customer_ref)}"
-
-        if external_id_value:
-            normalized_external = external_id_value.lower()
-            conflict = existing_by_external.get(normalized_external)
-            conflict_identifier = None
-            if isinstance(conflict, Customer):
-                conflict_identifier = _customer_identifier(conflict, fallback=f"existing:{id(conflict)}")
-            elif isinstance(conflict, str):
-                conflict_identifier = conflict
-            if conflict_identifier and target_identifier and conflict_identifier != target_identifier:
-                outcome.row_errors.append(
-                    f"Row {row_index}: External customer ID '{external_id_value}' is already linked to another customer."
-                )
-                continue
-            previous = processed_external_ids.get(normalized_external)
-            if previous and target_identifier and previous != target_identifier:
-                outcome.row_errors.append(
-                    f"Row {row_index}: External customer ID '{external_id_value}' is duplicated in the upload."
-                )
-                continue
-            processed_external_ids[normalized_external] = target_identifier or conflict_identifier or identifier or normalized_external
-            if apply_changes and isinstance(customer_ref, Customer):
-                customer_ref.external_customer_id = external_id_value
-                existing_by_external[normalized_external] = customer_ref
-            elif not apply_changes:
-                existing_by_external[normalized_external] = target_identifier or identifier or normalized_external
-        elif isinstance(customer_ref, Customer) and customer_ref.external_customer_id:
-            processed_external_ids[customer_ref.external_customer_id.lower()] = target_identifier or identifier or f"existing:{id(customer_ref)}"
-
+                customer_ref = customer
+            if isinstance(customer_ref, Customer):
+                if getattr(customer_ref, "customer_code", None):
+                    target_identifier = processed_codes.get(customer_ref.customer_code.lower())
+                else:
+                    target_identifier = identifier or f"new:{id(customer_ref)}"
+    
+            if external_id_value:
+                normalized_external = external_id_value.lower()
+                conflict = existing_by_external.get(normalized_external)
+                conflict_identifier = None
+                if isinstance(conflict, Customer):
+                    conflict_identifier = _customer_identifier(conflict, fallback=f"existing:{id(conflict)}")
+                elif isinstance(conflict, str):
+                    conflict_identifier = conflict
+                if conflict_identifier and target_identifier and conflict_identifier != target_identifier:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: External customer ID '{external_id_value}' is already linked to another customer."
+                    )
+                    continue
+                previous = processed_external_ids.get(normalized_external)
+                if previous and target_identifier and previous != target_identifier:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: External customer ID '{external_id_value}' is duplicated in the upload."
+                    )
+                    continue
+                processed_external_ids[normalized_external] = target_identifier or conflict_identifier or identifier or normalized_external
+                if apply_changes and isinstance(customer_ref, Customer):
+                    customer_ref.external_customer_id = external_id_value
+                    existing_by_external[normalized_external] = customer_ref
+                elif not apply_changes:
+                    existing_by_external[normalized_external] = target_identifier or identifier or normalized_external
+            elif isinstance(customer_ref, Customer) and customer_ref.external_customer_id:
+                processed_external_ids[customer_ref.external_customer_id.lower()] = target_identifier or identifier or f"existing:{id(customer_ref)}"
+    
+        finally:
+            _check_stage_timeout(row_stage, row_stage_label)
     if apply_changes and (outcome.created_count or outcome.updated_count):
         db.session.commit()
 
@@ -578,12 +674,14 @@ def process_lift_upload_file(file_path, *, apply_changes):
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=AMC_LIFT_TEMPLATE_SHEET_NAME
     )
+    header_timer = _stage_start()
     header_cells = header_cells or []
     header_map: Dict[str, int] = {}
     for idx, header in enumerate(header_cells or []):
         label = stringify_cell(header)
         if label:
             header_map[label] = idx
+    _check_stage_timeout(header_timer, "reading header labels from the upload")
 
     outcome = UploadOutcome(
         header_map=header_map,
@@ -592,6 +690,7 @@ def process_lift_upload_file(file_path, *, apply_changes):
         processed_rows=0,
     )
 
+    customer_reference_timer = _stage_start()
     customers = Customer.query.all()
     customer_by_code = {}
     customer_by_external = {}
@@ -606,7 +705,12 @@ def process_lift_upload_file(file_path, *, apply_changes):
         name_key = _normalize_lookup_key(customer.company_name)
         if name_key:
             customer_by_name[name_key] = customer
+    _check_stage_timeout(
+        customer_reference_timer,
+        "loading existing customer records",
+    )
 
+    service_route_timer = _stage_start()
     service_routes = ServiceRoute.query.all()
     route_lookup: Dict[str, Any] = {}
     for route in service_routes:
@@ -620,6 +724,10 @@ def process_lift_upload_file(file_path, *, apply_changes):
             options.add(f"{route.state.lower()}-{route.branch.lower()}")
         for option in options:
             route_lookup[option] = route
+    _check_stage_timeout(
+        service_route_timer,
+        "loading service route reference data",
+    )
 
     existing_by_code: Dict[str, Optional[Lift]] = {}
     existing_by_external: Dict[str, Optional[Lift]] = {}
@@ -630,268 +738,284 @@ def process_lift_upload_file(file_path, *, apply_changes):
     lift_brand_present = "Lift Brand" in header_map
 
     for row_index, row_values in enumerate(data_rows, start=2):
-        if not row_values:
-            continue
-        row_data: Dict[str, Any] = {}
-        for header, position in header_map.items():
-            value = row_values[position] if position < len(row_values) else None
-            row_data[header] = value
-
-        key_fields = [
-            row_data.get("Customer External ID"),
-            row_data.get("Customer Code"),
-            row_data.get("Customer Name"),
-            row_data.get("External Lift ID"),
-            row_data.get("Lift Code"),
-            row_data.get("AMC Status"),
-        ]
-        if not any(clean_str(stringify_cell(value)) for value in key_fields):
-            continue
-
-        outcome.processed_rows += 1
-
-        customer_external_id_value = clean_str(
-            stringify_cell(row_data.get("Customer External ID"))
-        )
-        customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
-        customer_name_value = clean_str(stringify_cell(row_data.get("Customer Name")))
-        customer_external_id_key = (
-            customer_external_id_value.lower() if customer_external_id_value else None
-        )
-        customer_code_key = customer_code_value.lower() if customer_code_value else None
-        customer_name_key = customer_name_value.lower() if customer_name_value else None
-
-        customer = None
-        if customer_external_id_key and customer_external_id_key in customer_by_external:
-            customer = customer_by_external[customer_external_id_key]
-        if customer_code_key and customer_code_key in customer_by_code:
-            customer = customer_by_code[customer_code_key]
-        if (
-            customer_external_id_key
-            and customer_code_key
-            and customer_external_id_key in customer_by_external
-            and customer_code_key in customer_by_code
-            and customer_by_external[customer_external_id_key].id
-            != customer_by_code[customer_code_key].id
-        ):
-            outcome.row_errors.append(
-                f"Row {row_index}: Customer code '{customer_code_value}' does not match external ID '{customer_external_id_value}'."
+        row_stage = _stage_start()
+        row_stage_label = f"processing row {row_index}"
+        try:
+            if not row_values:
+                continue
+            row_data: Dict[str, Any] = {}
+            for header, position in header_map.items():
+                value = row_values[position] if position < len(row_values) else None
+                row_data[header] = value
+    
+            key_fields = [
+                row_data.get("Customer External ID"),
+                row_data.get("Customer Code"),
+                row_data.get("Customer Name"),
+                row_data.get("External Lift ID"),
+                row_data.get("Lift Code"),
+                row_data.get("AMC Status"),
+            ]
+            if not any(clean_str(stringify_cell(value)) for value in key_fields):
+                continue
+    
+            outcome.processed_rows += 1
+    
+            customer_external_id_value = clean_str(
+                stringify_cell(row_data.get("Customer External ID"))
             )
-            continue
-        if not customer and customer_name_key and customer_name_key in customer_by_name:
-            customer = customer_by_name[customer_name_key]
-        if not customer:
-            missing_reference = (
-                customer_external_id_value
-                or customer_code_value
-                or customer_name_value
-                or "—"
+            customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
+            customer_name_value = clean_str(stringify_cell(row_data.get("Customer Name")))
+            customer_external_id_key = (
+                customer_external_id_value.lower() if customer_external_id_value else None
             )
-            outcome.row_errors.append(
-                f"Row {row_index}: Customer '{missing_reference}' was not found. Upload customers first or use customer external ID."
-            )
-            continue
-
-        route_value_raw = clean_str(stringify_cell(row_data.get("Route")))
-        route_value = None
-        if route_value_raw:
-            lookup_key = route_value_raw.lower()
-            route = route_lookup.get(lookup_key)
-            if not route:
+            customer_code_key = customer_code_value.lower() if customer_code_value else None
+            customer_name_key = customer_name_value.lower() if customer_name_value else None
+    
+            customer = None
+            if customer_external_id_key and customer_external_id_key in customer_by_external:
+                customer = customer_by_external[customer_external_id_key]
+            if customer_code_key and customer_code_key in customer_by_code:
+                customer = customer_by_code[customer_code_key]
+            if (
+                customer_external_id_key
+                and customer_code_key
+                and customer_external_id_key in customer_by_external
+                and customer_code_key in customer_by_code
+                and customer_by_external[customer_external_id_key].id
+                != customer_by_code[customer_code_key].id
+            ):
                 outcome.row_errors.append(
-                    f"Row {row_index}: Route '{route_value_raw}' does not match an active service route."
+                    f"Row {row_index}: Customer code '{customer_code_value}' does not match external ID '{customer_external_id_value}'."
                 )
                 continue
-            route_value = route.state
-
-        existing_lift = None
-        provided_code = clean_str(stringify_cell(row_data.get("Lift Code")))
-        provided_external = clean_str(stringify_cell(row_data.get("External Lift ID")))
-
-        if provided_code:
-            lookup_code = provided_code.lower()
-            if lookup_code in existing_by_code:
-                existing_lift = existing_by_code[lookup_code]
-            else:
-                existing_lift = (
-                    Lift.query.filter(func.lower(Lift.lift_code) == lookup_code).first()
+            if not customer and customer_name_key and customer_name_key in customer_by_name:
+                customer = customer_by_name[customer_name_key]
+            if not customer:
+                missing_reference = (
+                    customer_external_id_value
+                    or customer_code_value
+                    or customer_name_value
+                    or "—"
                 )
-                existing_by_code[lookup_code] = existing_lift
-        if not existing_lift and provided_external:
-            lookup_external = provided_external.lower()
-            if lookup_external in existing_by_external:
-                existing_lift = existing_by_external[lookup_external]
-            else:
-                existing_lift = (
-                    Lift.query.filter(func.lower(Lift.external_lift_id) == lookup_external).first()
-                )
-                existing_by_external[lookup_external] = existing_lift
-
-        if existing_lift and existing_lift.lift_code:
-            existing_by_code[existing_lift.lift_code.lower()] = existing_lift
-            if existing_lift.external_lift_id:
-                existing_by_external[existing_lift.external_lift_id.lower()] = existing_lift
-
-        if provided_external:
-            normalized_external = provided_external.lower()
-            if normalized_external in processed_external_ids:
                 outcome.row_errors.append(
-                    f"Row {row_index}: External lift ID '{provided_external}' is duplicated in the upload."
+                    f"Row {row_index}: Customer '{missing_reference}' was not found. Upload customers first or use customer external ID."
                 )
                 continue
-            processed_external_ids.add(normalized_external)
-
-        code_key = None
-        if existing_lift and existing_lift.lift_code:
-            code_key = existing_lift.lift_code.lower()
-        elif provided_code:
-            code_key = provided_code.lower()
-        if code_key and code_key in processed_codes:
-            display_code = provided_code or (existing_lift.lift_code if existing_lift else None)
-            outcome.row_errors.append(
-                f"Row {row_index}: Lift code '{display_code}' is duplicated in the upload."
-            )
-            continue
-
-        amc_status_value, status_error = normalize_amc_status(row_data.get("AMC Status"))
-        if status_error:
-            outcome.row_errors.append(f"Row {row_index}: {status_error}")
-            continue
-        if not amc_status_value:
-            outcome.row_errors.append(f"Row {row_index}: AMC status is required.")
-            continue
-
-        duration_key, duration_error = normalize_amc_duration(row_data.get("AMC Duration"))
-        if duration_error:
-            outcome.row_errors.append(f"Row {row_index}: {duration_error}")
-            continue
-        if not duration_key:
-            outcome.row_errors.append(f"Row {row_index}: AMC duration is required.")
-            continue
-
-        amc_start, error = parse_date_field(
-            row_data.get("AMC Start (YYYY-MM-DD)"),
-            "AMC start date",
-        )
-        if error:
-            outcome.row_errors.append(f"Row {row_index}: {error}")
-            continue
-        if not amc_start:
-            outcome.row_errors.append(f"Row {row_index}: AMC start date is required.")
-            continue
-
-        amc_end, error = parse_date_field(
-            row_data.get("AMC End (YYYY-MM-DD)"),
-            "AMC end date",
-        )
-        if error:
-            outcome.row_errors.append(f"Row {row_index}: {error}")
-            continue
-        if not amc_end:
-            amc_end = calculate_amc_end_date(amc_start, duration_key)
-
-        preferred_days_source = row_data.get("Preferred Service Days")
-        preferred_days_display = (
-            clean_str(stringify_cell(preferred_days_source))
-            if preferred_days_source is not None
-            else None
-        )
-        preferred_days = preferred_days_display
-
-        preferred_date_source = row_data.get("Preferred Service Date")
-        preferred_date = None
-        if preferred_date_source not in (None, ""):
-            preferred_date, error = parse_date_field(
-                preferred_date_source,
-                "Preferred service date",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-
-        preferred_time_source = row_data.get("Preferred Service Time")
-        preferred_time = None
-        if preferred_time_source not in (None, ""):
-            preferred_time, error = parse_time_field(
-                preferred_time_source,
-                "Preferred service time",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-
-        next_service_due_source = row_data.get("Next Service Due")
-        next_service_due = None
-        if next_service_due_source not in (None, ""):
-            next_service_due, error = parse_date_field(
-                next_service_due_source,
-                "Next service due",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-
-        capacity_persons, error = parse_int_field(
-            row_data.get("Capacity (persons)"),
-            "Capacity (persons)",
-        )
-        if error:
-            outcome.row_errors.append(f"Row {row_index}: {error}")
-            continue
-
-        capacity_kg, error = parse_int_field(
-            row_data.get("Capacity (kg)"),
-            "Capacity (kg)",
-        )
-        if error:
-            outcome.row_errors.append(f"Row {row_index}: {error}")
-            continue
-
-        speed_mps, error = parse_float_field(
-            row_data.get("Speed (m/s)"),
-            "Speed (m/s)",
-        )
-        if error:
-            outcome.row_errors.append(f"Row {row_index}: {error}")
-            continue
-
-        lift_type_value = clean_str(stringify_cell(row_data.get("Lift Type")))
-        lift_brand_value = clean_str(stringify_cell(row_data.get("Lift Brand")))
-        site_address_line1 = clean_str(stringify_cell(row_data.get("Site Address Line 1")))
-        site_address_line2 = clean_str(stringify_cell(row_data.get("Site Address Line 2")))
-        building_villa_number = clean_str(stringify_cell(row_data.get("Building / Villa No.")))
-        city_value = clean_str(stringify_cell(row_data.get("City")))
-        state_value = clean_str(stringify_cell(row_data.get("State")))
-        pincode_value = clean_str(stringify_cell(row_data.get("Pincode")))
-        notes_value = clean_str(stringify_cell(row_data.get("Notes")))
-
-        if existing_lift:
-            lift = existing_lift
-            if not lift.lift_code:
-                outcome.row_errors.append(
-                    f"Row {row_index}: Lift record is missing a lift code and cannot be updated."
-                )
-                continue
-            outcome.updated_count += 1
-        else:
+    
+            route_value_raw = clean_str(stringify_cell(row_data.get("Route")))
+            route_value = None
+            if route_value_raw:
+                lookup_key = route_value_raw.lower()
+                route = route_lookup.get(lookup_key)
+                if not route:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: Route '{route_value_raw}' does not match an active service route."
+                    )
+                    continue
+                route_value = route.state
+    
+            existing_lift = None
+            provided_code = clean_str(stringify_cell(row_data.get("Lift Code")))
+            provided_external = clean_str(stringify_cell(row_data.get("External Lift ID")))
+    
             if provided_code:
-                lift_code = provided_code
+                lookup_code = provided_code.lower()
+                if lookup_code in existing_by_code:
+                    existing_lift = existing_by_code[lookup_code]
+                else:
+                    existing_lift = (
+                        Lift.query.filter(func.lower(Lift.lift_code) == lookup_code).first()
+                    )
+                    existing_by_code[lookup_code] = existing_lift
+            if not existing_lift and provided_external:
+                lookup_external = provided_external.lower()
+                if lookup_external in existing_by_external:
+                    existing_lift = existing_by_external[lookup_external]
+                else:
+                    existing_lift = (
+                        Lift.query.filter(func.lower(Lift.external_lift_id) == lookup_external).first()
+                    )
+                    existing_by_external[lookup_external] = existing_lift
+    
+            if existing_lift and existing_lift.lift_code:
+                existing_by_code[existing_lift.lift_code.lower()] = existing_lift
+                if existing_lift.external_lift_id:
+                    existing_by_external[existing_lift.external_lift_id.lower()] = existing_lift
+    
+            if provided_external:
+                normalized_external = provided_external.lower()
+                if normalized_external in processed_external_ids:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: External lift ID '{provided_external}' is duplicated in the upload."
+                    )
+                    continue
+                processed_external_ids.add(normalized_external)
+    
+            code_key = None
+            if existing_lift and existing_lift.lift_code:
+                code_key = existing_lift.lift_code.lower()
+            elif provided_code:
+                code_key = provided_code.lower()
+            if code_key and code_key in processed_codes:
+                display_code = provided_code or (existing_lift.lift_code if existing_lift else None)
+                outcome.row_errors.append(
+                    f"Row {row_index}: Lift code '{display_code}' is duplicated in the upload."
+                )
+                continue
+    
+            amc_status_value, status_error = normalize_amc_status(row_data.get("AMC Status"))
+            if status_error:
+                outcome.row_errors.append(f"Row {row_index}: {status_error}")
+                continue
+            if not amc_status_value:
+                outcome.row_errors.append(f"Row {row_index}: AMC status is required.")
+                continue
+    
+            duration_key, duration_error = normalize_amc_duration(row_data.get("AMC Duration"))
+            if duration_error:
+                outcome.row_errors.append(f"Row {row_index}: {duration_error}")
+                continue
+            if not duration_key:
+                outcome.row_errors.append(f"Row {row_index}: AMC duration is required.")
+                continue
+    
+            amc_start, error = parse_date_field(
+                row_data.get("AMC Start (YYYY-MM-DD)"),
+                "AMC start date",
+            )
+            if error:
+                outcome.row_errors.append(f"Row {row_index}: {error}")
+                continue
+            if not amc_start:
+                outcome.row_errors.append(f"Row {row_index}: AMC start date is required.")
+                continue
+    
+            amc_end, error = parse_date_field(
+                row_data.get("AMC End (YYYY-MM-DD)"),
+                "AMC end date",
+            )
+            if error:
+                outcome.row_errors.append(f"Row {row_index}: {error}")
+                continue
+            if not amc_end:
+                amc_end = calculate_amc_end_date(amc_start, duration_key)
+    
+            preferred_days_source = row_data.get("Preferred Service Days")
+            preferred_days_display = (
+                clean_str(stringify_cell(preferred_days_source))
+                if preferred_days_source is not None
+                else None
+            )
+            preferred_days = preferred_days_display
+    
+            preferred_date_source = row_data.get("Preferred Service Date")
+            preferred_date = None
+            if preferred_date_source not in (None, ""):
+                preferred_date, error = parse_date_field(
+                    preferred_date_source,
+                    "Preferred service date",
+                )
+                if error:
+                    outcome.row_errors.append(f"Row {row_index}: {error}")
+                    continue
+    
+            preferred_time_source = row_data.get("Preferred Service Time")
+            preferred_time = None
+            if preferred_time_source not in (None, ""):
+                preferred_time, error = parse_time_field(
+                    preferred_time_source,
+                    "Preferred service time",
+                )
+                if error:
+                    outcome.row_errors.append(f"Row {row_index}: {error}")
+                    continue
+    
+            next_service_due_source = row_data.get("Next Service Due")
+            next_service_due = None
+            if next_service_due_source not in (None, ""):
+                next_service_due, error = parse_date_field(
+                    next_service_due_source,
+                    "Next service due",
+                )
+                if error:
+                    outcome.row_errors.append(f"Row {row_index}: {error}")
+                    continue
+    
+            capacity_persons, error = parse_int_field(
+                row_data.get("Capacity (persons)"),
+                "Capacity (persons)",
+            )
+            if error:
+                outcome.row_errors.append(f"Row {row_index}: {error}")
+                continue
+    
+            capacity_kg, error = parse_int_field(
+                row_data.get("Capacity (kg)"),
+                "Capacity (kg)",
+            )
+            if error:
+                outcome.row_errors.append(f"Row {row_index}: {error}")
+                continue
+    
+            speed_mps, error = parse_float_field(
+                row_data.get("Speed (m/s)"),
+                "Speed (m/s)",
+            )
+            if error:
+                outcome.row_errors.append(f"Row {row_index}: {error}")
+                continue
+    
+            lift_type_value = clean_str(stringify_cell(row_data.get("Lift Type")))
+            lift_brand_value = clean_str(stringify_cell(row_data.get("Lift Brand")))
+            site_address_line1 = clean_str(stringify_cell(row_data.get("Site Address Line 1")))
+            site_address_line2 = clean_str(stringify_cell(row_data.get("Site Address Line 2")))
+            building_villa_number = clean_str(stringify_cell(row_data.get("Building / Villa No.")))
+            city_value = clean_str(stringify_cell(row_data.get("City")))
+            state_value = clean_str(stringify_cell(row_data.get("State")))
+            pincode_value = clean_str(stringify_cell(row_data.get("Pincode")))
+            notes_value = clean_str(stringify_cell(row_data.get("Notes")))
+    
+            if existing_lift:
+                lift = existing_lift
+                if not lift.lift_code:
+                    outcome.row_errors.append(
+                        f"Row {row_index}: Lift record is missing a lift code and cannot be updated."
+                    )
+                    continue
+                outcome.updated_count += 1
             else:
-                lift_code = generate_next_lift_code()
-                while (
-                    lift_code.lower() in generated_codes
-                    or lift_code.lower() in processed_codes
-                ):
+                if provided_code:
+                    lift_code = provided_code
+                else:
                     lift_code = generate_next_lift_code()
-            if apply_changes:
-                lift = Lift(lift_code=lift_code)
-                db.session.add(lift)
-            else:
-                lift = Lift(lift_code=lift_code)
-            generated_codes.add(lift.lift_code.lower())
-            outcome.created_count += 1
-            if len(outcome.created_items) < 20:
-                outcome.created_items.append(
+                    while (
+                        lift_code.lower() in generated_codes
+                        or lift_code.lower() in processed_codes
+                    ):
+                        lift_code = generate_next_lift_code()
+                if apply_changes:
+                    lift = Lift(lift_code=lift_code)
+                    db.session.add(lift)
+                else:
+                    lift = Lift(lift_code=lift_code)
+                generated_codes.add(lift.lift_code.lower())
+                outcome.created_count += 1
+                if len(outcome.created_items) < 20:
+                    outcome.created_items.append(
+                        {
+                            "lift_code": lift.lift_code,
+                            "customer_code": customer.customer_code,
+                            "amc_status": amc_status_value,
+                            "amc_start": amc_start.isoformat(),
+                            "amc_end": amc_end.isoformat() if amc_end else None,
+                        }
+                    )
+    
+            processed_codes.add((lift.lift_code or "").lower())
+    
+            if len(outcome.updated_items) < 20 and existing_lift:
+                outcome.updated_items.append(
                     {
                         "lift_code": lift.lift_code,
                         "customer_code": customer.customer_code,
@@ -900,82 +1024,71 @@ def process_lift_upload_file(file_path, *, apply_changes):
                         "amc_end": amc_end.isoformat() if amc_end else None,
                     }
                 )
-
-        processed_codes.add((lift.lift_code or "").lower())
-
-        if len(outcome.updated_items) < 20 and existing_lift:
-            outcome.updated_items.append(
-                {
-                    "lift_code": lift.lift_code,
-                    "customer_code": customer.customer_code,
-                    "amc_status": amc_status_value,
-                    "amc_start": amc_start.isoformat(),
-                    "amc_end": amc_end.isoformat() if amc_end else None,
-                }
-            )
-
-        if apply_changes:
+    
+            if apply_changes:
+                if provided_external:
+                    lift.external_lift_id = provided_external
+                lift.customer_code = customer.customer_code
+                lift.customer = customer
+                if building_villa_number is not None:
+                    lift.building_villa_number = building_villa_number
+                if site_address_line1 is not None:
+                    lift.site_address_line1 = site_address_line1
+                if site_address_line2 is not None:
+                    lift.site_address_line2 = site_address_line2
+                if city_value is not None:
+                    lift.city = city_value
+                elif not existing_lift and not lift.city and customer.city:
+                    lift.city = customer.city
+                if state_value is not None:
+                    lift.state = state_value
+                elif not existing_lift and not lift.state and customer.state:
+                    lift.state = customer.state
+                if pincode_value is not None:
+                    lift.pincode = pincode_value
+                elif not existing_lift and not lift.pincode and customer.pincode:
+                    lift.pincode = customer.pincode
+                if route_value:
+                    lift.route = route_value
+                elif not existing_lift and not lift.route and customer.route:
+                    lift.route = customer.route
+                if lift_type_value:
+                    lift.lift_type = lift_type_value
+                if lift_brand_present:
+                    lift.lift_brand = lift_brand_value
+                if capacity_persons is not None:
+                    lift.capacity_persons = capacity_persons
+                if capacity_kg is not None:
+                    lift.capacity_kg = capacity_kg
+                if speed_mps is not None:
+                    lift.speed_mps = speed_mps
+                lift.amc_status = amc_status_value
+                lift.amc_start = amc_start
+                lift.amc_duration_key = duration_key
+                lift.amc_end = amc_end
+                if preferred_days_display is not None:
+                    lift.preferred_service_days = preferred_days
+                elif not existing_lift:
+                    lift.preferred_service_days = preferred_days
+                if preferred_date_source not in (None, ""):
+                    lift.preferred_service_date = preferred_date
+                if preferred_time_source not in (None, ""):
+                    lift.preferred_service_time = preferred_time
+                if next_service_due is not None:
+                    lift.next_service_due = next_service_due
+                if notes_value is not None:
+                    lift.notes = notes_value
+                lift.last_updated_by = current_user.id
+                lift.set_capacity_display()
+    
+            existing_by_code[lift.lift_code.lower()] = lift
             if provided_external:
-                lift.external_lift_id = provided_external
-            lift.customer_code = customer.customer_code
-            lift.customer = customer
-            if building_villa_number is not None:
-                lift.building_villa_number = building_villa_number
-            if site_address_line1 is not None:
-                lift.site_address_line1 = site_address_line1
-            if site_address_line2 is not None:
-                lift.site_address_line2 = site_address_line2
-            if city_value is not None:
-                lift.city = city_value
-            elif not existing_lift and not lift.city and customer.city:
-                lift.city = customer.city
-            if state_value is not None:
-                lift.state = state_value
-            elif not existing_lift and not lift.state and customer.state:
-                lift.state = customer.state
-            if pincode_value is not None:
-                lift.pincode = pincode_value
-            elif not existing_lift and not lift.pincode and customer.pincode:
-                lift.pincode = customer.pincode
-            if route_value:
-                lift.route = route_value
-            elif not existing_lift and not lift.route and customer.route:
-                lift.route = customer.route
-            if lift_type_value:
-                lift.lift_type = lift_type_value
-            if lift_brand_present:
-                lift.lift_brand = lift_brand_value
-            if capacity_persons is not None:
-                lift.capacity_persons = capacity_persons
-            if capacity_kg is not None:
-                lift.capacity_kg = capacity_kg
-            if speed_mps is not None:
-                lift.speed_mps = speed_mps
-            lift.amc_status = amc_status_value
-            lift.amc_start = amc_start
-            lift.amc_duration_key = duration_key
-            lift.amc_end = amc_end
-            if preferred_days_display is not None:
-                lift.preferred_service_days = preferred_days
-            elif not existing_lift:
-                lift.preferred_service_days = preferred_days
-            if preferred_date_source not in (None, ""):
-                lift.preferred_service_date = preferred_date
-            if preferred_time_source not in (None, ""):
-                lift.preferred_service_time = preferred_time
-            if next_service_due is not None:
-                lift.next_service_due = next_service_due
-            if notes_value is not None:
-                lift.notes = notes_value
-            lift.last_updated_by = current_user.id
-            lift.set_capacity_display()
-
-        existing_by_code[lift.lift_code.lower()] = lift
-        if provided_external:
-            existing_by_external[provided_external.lower()] = lift
-        elif lift.external_lift_id:
-            existing_by_external[lift.external_lift_id.lower()] = lift
-
+                existing_by_external[provided_external.lower()] = lift
+            elif lift.external_lift_id:
+                existing_by_external[lift.external_lift_id.lower()] = lift
+    
+        finally:
+            _check_stage_timeout(row_stage, row_stage_label)
     if apply_changes and (outcome.created_count or outcome.updated_count):
         db.session.commit()
 
@@ -7458,6 +7571,9 @@ def sales_clients_upload():
     except ValueError:
         flash("Upload a .xlsx or .csv file exported from the clients template.", "error")
         return redirect(url_for("sales_clients"))
+    except UploadStageTimeoutError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("sales_clients"))
     except Exception:
         flash("Could not read the uploaded file. Ensure it is a valid spreadsheet.", "error")
         return redirect(url_for("sales_clients"))
@@ -7863,6 +7979,9 @@ def sales_opportunities_upload():
         return redirect(redirect_url)
     except ValueError:
         flash("Upload a .xlsx or .csv file exported from the opportunity template.", "error")
+        return redirect(redirect_url)
+    except UploadStageTimeoutError as exc:
+        flash(str(exc), "error")
         return redirect(redirect_url)
     except Exception:
         flash("Could not read the uploaded file. Ensure it is a valid spreadsheet.", "error")
@@ -12590,10 +12709,14 @@ def service_customers_upload():
             flash("Select a valid action for the upload.", "error")
             return redirect(url_for("service_customers"))
 
-        outcome = process_customer_upload_file(
-            file_path,
-            apply_changes=True,
-        )
+        try:
+            outcome = process_customer_upload_file(
+                file_path,
+                apply_changes=True,
+            )
+        except UploadStageTimeoutError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("service_customers"))
 
         pending_uploads.pop(pending_token, None)
         session["pending_uploads"] = pending_uploads
@@ -12667,6 +12790,15 @@ def service_customers_upload():
             "Upload the .xlsx or .csv template exported from the customer upload modal.",
             "error",
         )
+        return redirect(url_for("service_customers"))
+    except UploadStageTimeoutError as exc:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        flash(str(exc), "error")
         return redirect(url_for("service_customers"))
     except Exception:
         file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
@@ -12772,10 +12904,14 @@ def service_lifts_upload():
             flash("Select a valid action for the upload.", "error")
             return redirect(url_for("service_lifts"))
 
-        outcome = process_lift_upload_file(
-            file_path,
-            apply_changes=True,
-        )
+        try:
+            outcome = process_lift_upload_file(
+                file_path,
+                apply_changes=True,
+            )
+        except UploadStageTimeoutError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("service_lifts"))
 
         pending_uploads.pop(pending_token, None)
         session["pending_uploads"] = pending_uploads
@@ -12849,6 +12985,15 @@ def service_lifts_upload():
             "Upload the .xlsx or .csv template exported from the AMC lifts modal.",
             "error",
         )
+        return redirect(url_for("service_lifts"))
+    except UploadStageTimeoutError as exc:
+        file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        flash(str(exc), "error")
         return redirect(url_for("service_lifts"))
     except Exception:
         file_path = saved_path or _build_pending_upload_path(saved_token, saved_extension)
