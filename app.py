@@ -139,6 +139,21 @@ def save_pending_upload_file(upload):
     return dest_path
 
 
+def _clear_pending_upload(pending_token, *, remove_file=False):
+    pending_uploads = session.get("pending_uploads", {})
+    pending = pending_uploads.pop(pending_token, None)
+    session["pending_uploads"] = pending_uploads
+    session.modified = True
+    if remove_file:
+        file_path = (pending or {}).get("path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+    return pending
+
+
 def _extract_tabular_upload_from_path(file_path, *, sheet_name=None):
     filename = file_path.lower()
     if filename.endswith(".xlsx"):
@@ -12612,19 +12627,12 @@ def service_customers_upload():
     session["pending_uploads"] = pending_uploads
     session.modified = True
 
-    return render_template(
-        "service/upload_review.html",
-        review_title="Review customer upload",
-        original_filename=upload.filename,
-        confirm_url=url_for("service_customers_upload"),
-        pending_token=pending_token,
-        created_items=outcome.created_items,
-        updated_items=outcome.updated_items,
-        created_count=outcome.created_count,
-        updated_count=outcome.updated_count,
-        row_errors=outcome.row_errors,
-        processed_rows=outcome.processed_rows,
-        upload_type="customers",
+    return redirect(
+        url_for(
+            "service_upload_review",
+            upload_type="customers",
+            pending_token=pending_token,
+        )
     )
 
 @app.route("/service/lifts/upload", methods=["POST"])
@@ -12793,11 +12801,86 @@ def service_lifts_upload():
     session["pending_uploads"] = pending_uploads
     session.modified = True
 
+    return redirect(
+        url_for(
+            "service_upload_review",
+            upload_type="lifts",
+            pending_token=pending_token,
+        )
+    )
+
+
+@app.route("/service/upload-review/<upload_type>/<pending_token>")
+@login_required
+def service_upload_review(upload_type, pending_token):
+    _module_visibility_required("service")
+
+    upload_key = (upload_type or "").strip().lower()
+    config_map = {
+        "customers": {
+            "session_type": "service_customers",
+            "processor": process_customer_upload_file,
+            "redirect_endpoint": "service_customers",
+            "confirm_endpoint": "service_customers_upload",
+            "review_title": "Review customer upload",
+            "invalid_template_message": (
+                "Upload the .xlsx or .csv template exported from the customer upload modal."
+            ),
+            "read_error_message": (
+                "Could not read the staged workbook. Ensure it is a valid .xlsx or .csv file."
+            ),
+        },
+        "lifts": {
+            "session_type": "service_lifts",
+            "processor": process_lift_upload_file,
+            "redirect_endpoint": "service_lifts",
+            "confirm_endpoint": "service_lifts_upload",
+            "review_title": "Review AMC lift upload",
+            "invalid_template_message": (
+                "Upload the .xlsx or .csv template exported from the AMC lifts modal."
+            ),
+            "read_error_message": (
+                "Could not read the staged workbook. Ensure it is a valid .xlsx or .csv file."
+            ),
+        },
+    }
+
+    config = config_map.get(upload_key)
+    if not config:
+        abort(404)
+
+    pending_uploads = session.get("pending_uploads", {})
+    pending = pending_uploads.get(pending_token)
+    if not pending or pending.get("type") != config["session_type"]:
+        flash("The upload preview has expired. Please re-upload the file.", "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+
+    file_path = pending.get("path")
+    if not file_path or not os.path.exists(file_path):
+        _clear_pending_upload(pending_token, remove_file=True)
+        flash("The staged upload file was not found. Please try uploading again.", "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+
+    try:
+        outcome = config["processor"](file_path, apply_changes=False)
+    except MissingDependencyError:
+        _clear_pending_upload(pending_token, remove_file=True)
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+    except ValueError:
+        _clear_pending_upload(pending_token, remove_file=True)
+        flash(config["invalid_template_message"], "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+    except Exception:
+        _clear_pending_upload(pending_token, remove_file=True)
+        flash(config["read_error_message"], "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+
     return render_template(
         "service/upload_review.html",
-        review_title="Review AMC lift upload",
-        original_filename=upload.filename,
-        confirm_url=url_for("service_lifts_upload"),
+        review_title=config["review_title"],
+        original_filename=pending.get("original_filename"),
+        confirm_url=url_for(config["confirm_endpoint"]),
         pending_token=pending_token,
         created_items=outcome.created_items,
         updated_items=outcome.updated_items,
@@ -12805,8 +12888,9 @@ def service_lifts_upload():
         updated_count=outcome.updated_count,
         row_errors=outcome.row_errors,
         processed_rows=outcome.processed_rows,
-        upload_type="lifts",
+        upload_type=upload_key,
     )
+
 
 @app.route("/service/lifts")
 @login_required
