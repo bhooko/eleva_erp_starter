@@ -92,92 +92,354 @@
     </div>
   </div>
 
-  <div class="space-y-6">
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-6 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Client Information</h3>
-        <p class="text-xs text-slate-400">Update core contact details.</p>
-      </div>
-      <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="px-6 py-5 space-y-4">
-        <input type="hidden" name="form_action" value="update">
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client Name</label>
-          <input type="text" name="display_name" value="{{ client.display_name }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Company</label>
-          <input type="text" name="company_name" value="{{ client.company_name or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Email</label>
-            <input type="email" name="email" value="{{ client.email or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Phone</label>
-            <input type="text" name="phone" value="{{ client.phone or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
-            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Unassigned</option>
-              {% for owner in owners %}
-              <option value="{{ owner.id }}" {% if client.owner and client.owner.id == owner.id %}selected{% endif %}>{{ owner.display_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Category</label>
-            <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="Individual" {% if client.category == 'Individual' %}selected{% endif %}>Individual</option>
-              <option value="Company" {% if client.category == 'Company' %}selected{% endif %}>Company</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
-            <select name="lifecycle_stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="">Not set</option>
-              {% for stage in lifecycle_options %}
-              <option value="{{ stage }}" {% if client.lifecycle_stage == stage %}selected{% endif %}>{{ stage }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
-          <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">{{ client.description or '' }}</textarea>
-        </div>
-        <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Changes</button>
-      </form>
+  <div class="space-y-4">
+    <div class="inline-flex rounded-xl border border-slate-800/80 bg-slate-900/80 p-1 text-sm">
+      <button type="button" class="tab-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-300" data-client-tab="client">Client</button>
+      <button type="button" class="tab-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-300" data-client-tab="company">Company</button>
     </div>
 
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
-      <div class="px-6 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Contact Details</h3>
+    <div class="space-y-6" data-client-panel="client">
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-800/80">
+          <h3 class="text-lg font-semibold">Client Information</h3>
+          <p class="text-xs text-slate-400">Update core contact details.</p>
+        </div>
+        <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="px-6 py-5 space-y-4">
+          <input type="hidden" name="form_action" value="update">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client Name</label>
+            <input type="text" name="display_name" value="{{ client.display_name }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" required>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Linked Company</label>
+            <div class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm">
+              <span>{{ client.company.display_label if client.company else client.company_name or 'Not linked' }}</span>
+              <button type="button" class="text-emerald-200 text-xs hover:underline" data-tab-jump="company">Manage</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Email</label>
+              <input type="email" name="email" value="{{ client.email or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Phone</label>
+              <input type="text" name="phone" value="{{ client.phone or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Email Opt-Out</label>
+              <select name="email_opt_out" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                <option value="">Select</option>
+                <option value="Yes" {% if client.email_opt_out == 'Yes' %}selected{% endif %}>Yes</option>
+                <option value="No" {% if client.email_opt_out == 'No' %}selected{% endif %}>No</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Owner</label>
+              <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                <option value="">Unassigned</option>
+                {% for owner in owners %}
+                <option value="{{ owner.id }}" {% if client.owner and client.owner.id == owner.id %}selected{% endif %}>{{ owner.display_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Category</label>
+              <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                <option value="Individual" {% if client.category == 'Individual' %}selected{% endif %}>Individual</option>
+                <option value="Company" {% if client.category == 'Company' %}selected{% endif %}>Company</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
+              <select name="lifecycle_stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                <option value="">Not set</option>
+                {% for stage in lifecycle_options %}
+                <option value="{{ stage }}" {% if client.lifecycle_stage == stage %}selected{% endif %}>{{ stage }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Description</label>
+            <textarea name="description" rows="4" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">{{ client.description or '' }}</textarea>
+          </div>
+          <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Changes</button>
+        </form>
       </div>
-      <dl class="px-6 py-5 grid grid-cols-1 gap-4 text-sm text-slate-300">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Email</dt>
-          <dd>{{ client.email or 'Not provided' }}</dd>
+
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-800/80">
+          <h3 class="text-lg font-semibold">Contact Details</h3>
         </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Phone</dt>
-          <dd>{{ client.phone or 'Not provided' }}</dd>
+        <dl class="px-6 py-5 grid grid-cols-1 gap-4 text-sm text-slate-300">
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Email</dt>
+            <dd>{{ client.email or 'Not provided' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Phone</dt>
+            <dd>{{ client.phone or 'Not provided' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Email Opt-Out</dt>
+            <dd>{{ client.email_opt_out_label }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Created</dt>
+            <dd>{{ client.created_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
+            <dd>{{ client.updated_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="space-y-6 hidden" data-client-panel="company">
+      <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-xl" data-company-card data-blacklisted="{{ 'true' if client.company and client.company.blacklisted else 'false' }}">
+        <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold">Company Information</h3>
+            <p class="text-xs text-slate-400">Store the company relationship and contacts.</p>
+          </div>
+          <button type="button" class="px-3 py-2 rounded-xl border border-slate-800/80 text-xs text-slate-200 hover:bg-slate-800/60" data-open-company-modal data-company-target="#detailCompanySelect">New Company</button>
         </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Created</dt>
-          <dd>{{ client.created_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+        <div class="px-6 py-5 space-y-4">
+          <div class="hidden rounded-xl border border-slate-200/60 bg-black px-4 py-3 text-sm font-semibold text-rose-200" data-company-blacklist-banner>
+            Company Blacklisted
+          </div>
+          <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="space-y-4" id="companyForm">
+            <input type="hidden" name="form_action" value="update_company">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Linked Company</label>
+                <select name="company_id" id="detailCompanySelect" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                  <option value="">No company</option>
+                  {% for company in companies %}
+                  <option value="{{ company.id }}" data-blacklisted="{{ 'true' if company.blacklisted else 'false' }}" {% if client.company and client.company.id == company.id %}selected{% endif %}>{{ company.display_label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Company Name</label>
+                <input type="text" name="company_name" id="detailCompanyName" value="{{ client.company.display_label if client.company else client.company_name or '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">No. of projects / year</label>
+                <input type="number" name="projects_per_year" value="{{ client.company.projects_per_year if client.company and client.company.projects_per_year is not none else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" min="0">
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Blacklisted</label>
+                <select name="blacklisted" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                  <option value="No" {% if not client.company or not client.company.blacklisted %}selected{% endif %}>No</option>
+                  <option value="Yes" {% if client.company and client.company.blacklisted %}selected{% endif %}>Yes</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Contact Person Name</label>
+                <input type="text" name="contact_person_name" value="{{ client.company.contact_person_name if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Designation</label>
+                <input type="text" name="contact_person_designation" value="{{ client.company.contact_person_designation if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Contact Number</label>
+                <input type="text" name="contact_person_number" value="{{ client.company.contact_person_number if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Contact Email</label>
+                <input type="email" name="contact_person_email" value="{{ client.company.contact_person_email if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Purchase Manager Name</label>
+                <input type="text" name="purchase_manager_name" value="{{ client.company.purchase_manager_name if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Purchase Manager Number</label>
+                <input type="text" name="purchase_manager_number" value="{{ client.company.purchase_manager_number if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Purchase Manager Email</label>
+                <input type="email" name="purchase_manager_email" value="{{ client.company.purchase_manager_email if client.company else '' }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
+                <textarea name="company_notes" rows="3" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">{{ client.company.notes if client.company else '' }}</textarea>
+              </div>
+            </div>
+            <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Save Company</button>
+          </form>
         </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
-          <dd>{{ client.updated_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
-        </div>
-      </dl>
+      </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% include "sales/_company_modal.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (() => {
+      const tabButtons = document.querySelectorAll('[data-client-tab]');
+      const tabPanels = document.querySelectorAll('[data-client-panel]');
+      const setActiveTab = (target) => {
+        tabButtons.forEach((button) => {
+          const isActive = button.dataset.clientTab === target;
+          button.classList.toggle('bg-slate-800/80', isActive);
+          button.classList.toggle('text-slate-100', isActive);
+          button.classList.toggle('text-slate-300', !isActive);
+        });
+        tabPanels.forEach((panel) => {
+          panel.classList.toggle('hidden', panel.dataset.clientPanel !== target);
+        });
+      };
+
+      setActiveTab('client');
+      tabButtons.forEach((button) => {
+        button.addEventListener('click', () => setActiveTab(button.dataset.clientTab));
+      });
+      document.querySelectorAll('[data-tab-jump]').forEach((button) => {
+        button.addEventListener('click', () => setActiveTab(button.dataset.tabJump));
+      });
+
+      const companySelect = document.getElementById('detailCompanySelect');
+      const companyNameInput = document.getElementById('detailCompanyName');
+      const companyCard = document.querySelector('[data-company-card]');
+      const blacklistBanner = document.querySelector('[data-company-blacklist-banner]');
+
+      const updateCompanyState = (selectEl) => {
+        if (!selectEl) return;
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        if (companyNameInput) {
+          if (selectedOption && selectedOption.value) {
+            companyNameInput.value = (selectedOption.textContent || '').trim();
+          } else if (selectedOption && !selectedOption.value) {
+            companyNameInput.value = '';
+          }
+        }
+        const isBlacklisted = selectedOption && selectedOption.dataset.blacklisted === 'true';
+        if (companyCard) {
+          companyCard.classList.toggle('bg-black', isBlacklisted);
+          companyCard.classList.toggle('text-rose-200', isBlacklisted);
+          companyCard.classList.toggle('border-slate-200/60', isBlacklisted);
+          companyCard.classList.toggle('bg-slate-900/60', !isBlacklisted);
+          companyCard.classList.toggle('text-slate-200', !isBlacklisted);
+          companyCard.classList.toggle('border-slate-800/80', !isBlacklisted);
+        }
+        if (blacklistBanner) {
+          blacklistBanner.classList.toggle('hidden', !isBlacklisted);
+        }
+      };
+
+      if (companySelect) {
+        updateCompanyState(companySelect);
+        companySelect.addEventListener('change', () => updateCompanyState(companySelect));
+      }
+
+      const companyModal = document.getElementById('companyModal');
+      const companyModalForm = companyModal ? companyModal.querySelector('[data-company-form]') : null;
+      let activeCompanySelect = companySelect;
+
+      const openCompanyModal = (selectEl) => {
+        activeCompanySelect = selectEl || companySelect;
+        if (!companyModal) return;
+        companyModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        const nameInput = companyModal.querySelector('input[name="company_name"]');
+        if (nameInput) {
+          nameInput.focus();
+        }
+      };
+
+      const closeCompanyModal = () => {
+        if (!companyModal) return;
+        companyModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      };
+
+      if (companyModal) {
+        companyModal.querySelectorAll('[data-close-company-modal]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeCompanyModal();
+          });
+        });
+
+        companyModal.addEventListener('click', (event) => {
+          if (event.target === companyModal) {
+            closeCompanyModal();
+          }
+        });
+
+        document.querySelectorAll('[data-open-company-modal]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const targetSelector = button.getAttribute('data-company-target');
+            const targetSelect = targetSelector ? document.querySelector(targetSelector) : companySelect;
+            openCompanyModal(targetSelect);
+          });
+        });
+      }
+
+      if (companyModalForm) {
+        const errorTarget = companyModalForm.querySelector('[data-company-error]');
+        companyModalForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          if (errorTarget) {
+            errorTarget.classList.add('hidden');
+            errorTarget.textContent = '';
+          }
+          const submitButton = companyModalForm.querySelector('[data-submit-company]');
+          if (submitButton) submitButton.disabled = true;
+          try {
+            const response = await fetch(companyModalForm.action, { method: 'POST', body: new FormData(companyModalForm) });
+            const data = await response.json();
+            if (!data.success) {
+              throw new Error(data.message || 'Could not save company');
+            }
+            const selectEl = activeCompanySelect || companySelect;
+            if (selectEl && data.company) {
+              let option = Array.from(selectEl.options).find((opt) => opt.value === String(data.company.id));
+              if (!option) {
+                option = document.createElement('option');
+                selectEl.appendChild(option);
+              }
+              option.value = data.company.id;
+              option.textContent = data.company.name;
+              option.dataset.blacklisted = data.company.blacklisted ? 'true' : 'false';
+              selectEl.value = String(data.company.id);
+              selectEl.dispatchEvent(new Event('change'));
+            }
+            companyModalForm.reset();
+            closeCompanyModal();
+          } catch (error) {
+            if (errorTarget) {
+              errorTarget.textContent = error.message || 'Could not save company';
+              errorTarget.classList.remove('hidden');
+            }
+          } finally {
+            if (submitButton) submitButton.disabled = false;
+          }
+        });
+      }
+    })();
+  </script>
 {% endblock %}

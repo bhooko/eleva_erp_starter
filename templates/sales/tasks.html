@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% block title %}Sales · Tasks{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+  <div>
+    <p class="text-sm text-slate-400">Sales Workspace</p>
+    <h2 class="text-3xl font-semibold tracking-tight">Sales Tasks</h2>
+    <p class="text-xs text-slate-400">Stay on top of today's calls, activities, reminders and events.</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <button type="button" data-open-task-modal class="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">
+      + Add Task
+    </button>
+  </div>
+</div>
+
+<div class="inline-flex rounded-xl border border-slate-800/80 bg-slate-900/80 p-1 text-sm mb-4">
+  <button type="button" class="task-tab px-3 py-2 rounded-lg text-xs font-semibold text-slate-300" data-task-tab="taskboard">Taskboard</button>
+  <button type="button" class="task-tab px-3 py-2 rounded-lg text-xs font-semibold text-slate-300" data-task-tab="calendar">Calendar</button>
+</div>
+
+<div class="space-y-6" data-task-panel="taskboard">
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-xl">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+        <div>
+          <h4 class="text-base font-semibold text-slate-100">Due today</h4>
+          <p class="text-xs text-slate-400">Tasks scheduled for {{ today.strftime('%d %b') }}</p>
+        </div>
+        <span class="text-xs rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-3 py-1">{{ tasks_today|length }} open</span>
+      </div>
+      <div class="divide-y divide-slate-800/80">
+        {% for task in tasks_today %}
+        <div class="px-5 py-4 flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-slate-100">{{ task.title }}</p>
+            <p class="text-xs text-slate-400 mt-1">{{ task.category_label }}{% if task.description %} · {{ task.description }}{% endif %}</p>
+            <p class="text-[11px] text-emerald-200 mt-1">{{ task.related_display }}</p>
+          </div>
+          <form method="post" action="{{ url_for('sales_task_toggle', task_id=task.id) }}" class="shrink-0">
+            <input type="hidden" name="active_tab" value="taskboard" />
+            <button type="submit" class="text-xs rounded-lg border border-emerald-400/40 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20">Mark Done</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="px-5 py-6 text-sm text-slate-400">Nothing due today. Add a reminder above.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% set board_sections = [
+      ('activity', 'Activities'),
+      ('reminder', 'Reminders'),
+      ('call', 'Calls'),
+      ('event', 'Events')
+    ] %}
+    {% for key, label in board_sections %}
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-xl">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+        <h4 class="text-base font-semibold text-slate-100">{{ label }}</h4>
+        <span class="text-xs text-slate-400">{{ (category_board.get(key) or [])|length }} items</span>
+      </div>
+      <div class="divide-y divide-slate-800/80">
+        {% for task in category_board.get(key) or [] %}
+        <div class="px-5 py-4 flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-slate-100">{{ task.title }}</p>
+            <p class="text-xs text-slate-400 mt-1">Due {{ task.due_date.strftime('%d %b') if task.due_date else '—' }}{% if task.description %} · {{ task.description }}{% endif %}</p>
+            <p class="text-[11px] text-emerald-200 mt-1">{{ task.related_display }}</p>
+            {% if task.is_completed %}
+            <span class="mt-1 inline-flex items-center rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-200 border border-emerald-400/30">Completed</span>
+            {% endif %}
+          </div>
+          <form method="post" action="{{ url_for('sales_task_toggle', task_id=task.id) }}" class="shrink-0">
+            <input type="hidden" name="active_tab" value="taskboard" />
+            <button type="submit" class="text-xs rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:bg-slate-800/70">{{ 'Reopen' if task.is_completed else 'Mark Done' }}</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="px-5 py-6 text-sm text-slate-400">No {{ label|lower }} planned.</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="space-y-4 hidden" data-task-panel="calendar">
+  <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl">
+    <div class="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div>
+        <h4 class="text-lg font-semibold text-slate-100">Calendar</h4>
+        <p class="text-xs text-slate-400">{{ calendar_month_label }}</p>
+      </div>
+      <span class="text-xs text-slate-400">Click a day to view or add tasks</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-7 gap-1 p-4 text-sm">
+      {% for day in calendar_days %}
+      {% set date_key = day.date.isoformat() %}
+      {% set day_tasks = tasks_by_date.get(date_key) or [] %}
+      <button type="button" data-calendar-day="{{ date_key }}" class="rounded-xl border px-3 py-3 text-left {{ 'border-slate-700/80 bg-slate-900/80 text-slate-100' if day.in_month else 'border-slate-800/70 bg-slate-950/70 text-slate-500' }} hover:border-emerald-400/40 hover:bg-slate-900/90">
+        <div class="flex items-center justify-between text-xs font-semibold">
+          <span>{{ day.date.day }}</span>
+          {% if date_key == today.isoformat() %}
+          <span class="rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 text-[10px]">Today</span>
+          {% endif %}
+        </div>
+        <ul class="mt-3 space-y-1 text-xs text-slate-300">
+          {% for task in day_tasks[:4] %}
+          <li class="truncate">• {{ task.title }}</li>
+          {% endfor %}
+          {% if (day_tasks|length) > 4 %}
+          <li class="text-[11px] text-slate-400">+{{ day_tasks|length - 4 }} more</li>
+          {% elif day_tasks|length == 0 %}
+          <li class="text-[11px] text-slate-500">No tasks</li>
+          {% endif %}
+        </ul>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div id="taskCreateModal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-create-modal></div>
+  <div class="relative mx-auto mt-12 w-full max-w-2xl px-4">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800/80">
+        <div>
+          <p class="text-xs text-slate-400">Create</p>
+          <h3 class="text-lg font-semibold">New Sales Task</h3>
+        </div>
+        <button type="button" class="text-slate-400 hover:text-slate-200" data-close-create-modal>&times;</button>
+      </div>
+      <form method="post" action="{{ url_for('sales_tasks') }}" class="px-6 py-5 space-y-4">
+        <input type="hidden" name="form_action" value="create" />
+        <input type="hidden" name="active_tab" value="{{ active_tab }}" class="js-active-tab" />
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title</label>
+          <input type="text" name="title" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Call client to confirm proposal" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Due Date</label>
+            <input type="date" name="due_date" value="{{ today.isoformat() }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Type</label>
+            <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              {% for value, label in task_categories %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-2" data-related-picker>
+            <label class="block text-xs uppercase tracking-wide text-slate-400">Related to</label>
+            <input type="text" data-related-search class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Search opportunity or client" />
+            <select name="related_ref" data-related-select class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="general" selected>General (not linked)</option>
+              <optgroup label="Opportunities">
+                {% for opp in opportunities %}
+                <option value="opportunity:{{ opp.id }}" data-label="{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}">{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}</option>
+                {% endfor %}
+              </optgroup>
+              <optgroup label="Clients">
+                {% for client in clients %}
+                <option value="client:{{ client.id }}" data-label="{{ client.display_name }}">{{ client.display_name }}</option>
+                {% endfor %}
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
+            <input type="text" name="description" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Add context or follow-up steps" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button type="button" data-close-create-modal class="rounded-xl border border-slate-800/80 px-4 py-2 text-slate-200 hover:bg-slate-800/60">Cancel</button>
+          <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Add Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="taskDayModal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-day-modal></div>
+  <div class="relative mx-auto mt-12 w-full max-w-3xl px-4">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800/80">
+        <div>
+          <p class="text-xs text-slate-400">Tasks for</p>
+          <h3 class="text-lg font-semibold" data-modal-date>—</h3>
+        </div>
+        <button type="button" class="text-slate-400 hover:text-slate-200" data-close-day-modal>&times;</button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 p-4">
+          <h4 class="text-sm font-semibold text-slate-100 mb-2">Planned tasks</h4>
+          <ul class="space-y-2 text-sm text-slate-300" data-modal-task-list>
+            <li class="text-slate-500">Select a date to load tasks.</li>
+          </ul>
+        </div>
+        <form method="post" action="{{ url_for('sales_tasks') }}" class="space-y-3">
+          <input type="hidden" name="form_action" value="create" />
+          <input type="hidden" name="active_tab" value="calendar" class="js-active-tab" />
+          <input type="hidden" name="due_date" data-modal-due />
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Title</label>
+            <input type="text" name="title" required class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Add new task" />
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Type</label>
+              <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                {% for value, label in task_categories %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="space-y-2" data-related-picker>
+              <label class="block text-xs uppercase tracking-wide text-slate-400">Related to</label>
+              <input type="text" data-related-search class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Search opportunity or client" />
+              <select name="related_ref" data-related-select class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+                <option value="general" selected>General (not linked)</option>
+                <optgroup label="Opportunities">
+                  {% for opp in opportunities %}
+                  <option value="opportunity:{{ opp.id }}" data-label="{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}">{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}</option>
+                  {% endfor %}
+                </optgroup>
+                <optgroup label="Clients">
+                  {% for client in clients %}
+                  <option value="client:{{ client.id }}" data-label="{{ client.display_name }}">{{ client.display_name }}</option>
+                  {% endfor %}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
+            <input type="text" name="description" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" />
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-emerald-100 font-semibold hover:bg-emerald-500/30">Add Task</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (() => {
+      const taskTabs = document.querySelectorAll('[data-task-tab]');
+      const taskPanels = document.querySelectorAll('[data-task-panel]');
+      const activeTabInputs = document.querySelectorAll('.js-active-tab');
+      const setActiveTab = (target) => {
+        taskTabs.forEach((tab) => {
+          const isActive = tab.dataset.taskTab === target;
+          tab.classList.toggle('bg-slate-800/80', isActive);
+          tab.classList.toggle('text-slate-100', isActive);
+          tab.classList.toggle('text-slate-300', !isActive);
+        });
+        taskPanels.forEach((panel) => {
+          panel.classList.toggle('hidden', panel.dataset.taskPanel !== target);
+        });
+        activeTabInputs.forEach((input) => {
+          input.value = target;
+        });
+      };
+
+      setActiveTab('{{ active_tab }}');
+      taskTabs.forEach((tab) => {
+        tab.addEventListener('click', () => setActiveTab(tab.dataset.taskTab));
+      });
+
+      const tasksByDate = {{ tasks_by_date_json|tojson }};
+      const modal = document.getElementById('taskDayModal');
+      const modalDate = modal ? modal.querySelector('[data-modal-date]') : null;
+      const modalList = modal ? modal.querySelector('[data-modal-task-list]') : null;
+      const modalDueInput = modal ? modal.querySelector('[data-modal-due]') : null;
+
+      const createModal = document.getElementById('taskCreateModal');
+
+      const wireRelatedPicker = (picker) => {
+        const searchInput = picker.querySelector('[data-related-search]');
+        const select = picker.querySelector('[data-related-select]');
+        if (!searchInput || !select) return;
+
+        const filterOptions = () => {
+          const term = (searchInput.value || '').toLowerCase();
+          Array.from(select.options).forEach((option) => {
+            if (!option.value || option.value === 'general') {
+              option.hidden = false;
+              return;
+            }
+            const label = (option.dataset.label || option.textContent || '').toLowerCase();
+            option.hidden = term && !label.includes(term);
+          });
+
+          if (select.selectedOptions.length && select.selectedOptions[0].hidden) {
+            select.value = 'general';
+          }
+        };
+
+        searchInput.addEventListener('input', filterOptions);
+        filterOptions();
+      };
+
+      document.querySelectorAll('[data-related-picker]').forEach(wireRelatedPicker);
+
+      const openModalForDate = (dateKey) => {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        if (modalDate) modalDate.textContent = dateKey;
+        if (modalDueInput) modalDueInput.value = dateKey;
+        const items = tasksByDate[dateKey] || [];
+        if (modalList) {
+          modalList.innerHTML = '';
+          if (!items.length) {
+            const li = document.createElement('li');
+            li.textContent = 'No tasks yet.';
+            li.className = 'text-slate-500';
+            modalList.appendChild(li);
+          } else {
+            items.forEach((task) => {
+              const li = document.createElement('li');
+              li.innerHTML = `<div class="flex items-start justify-between gap-3">` +
+                `<div><p class="font-semibold text-slate-100">${task.title}</p>` +
+                `<p class="text-xs text-slate-400">${task.category}${task.related ? ' · ' + task.related : ''}${task.description ? ' · ' + task.description : ''}</p></div>` +
+                `<span class="text-[11px] text-slate-400">${task.status}</span>` +
+                `</div>`;
+              modalList.appendChild(li);
+            });
+          }
+        }
+      };
+
+      const closeModal = () => {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      };
+
+      document.querySelectorAll('[data-calendar-day]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const dateKey = button.getAttribute('data-calendar-day');
+          setActiveTab('calendar');
+          openModalForDate(dateKey);
+        });
+      });
+
+      document.querySelectorAll('[data-close-day-modal]').forEach((btn) => {
+        btn.addEventListener('click', closeModal);
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal && !modal.classList.contains('hidden')) closeModal();
+        if (createModal && !createModal.classList.contains('hidden')) closeCreateModal();
+      });
+
+      const openCreateModal = () => {
+        if (!createModal) return;
+        createModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        const firstInput = createModal.querySelector('input[name="title"]');
+        if (firstInput) firstInput.focus();
+      };
+
+      const closeCreateModal = () => {
+        if (!createModal) return;
+        createModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      };
+
+      document.querySelectorAll('[data-open-task-modal]').forEach((btn) => {
+        btn.addEventListener('click', openCreateModal);
+      });
+
+      document.querySelectorAll('[data-close-create-modal]').forEach((btn) => {
+        btn.addEventListener('click', closeCreateModal);
+      });
+    })();
+  </script>
+{% endblock %}
