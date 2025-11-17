@@ -1463,6 +1463,7 @@ def _sales_client_upload_row(client):
         client.company_name or "",
         client.email or "",
         client.phone or "",
+        client.email_opt_out or "",
         client.tag or "",
         client.category or "",
         owner_email,
@@ -3586,12 +3587,23 @@ SALES_CLIENT_UPLOAD_HEADERS = [
     "Company Name",
     "Email",
     "Phone",
+    "Email Opt Out",
     "Tag",
     "Category",
     "Owner Email",
     "Lifecycle Stage",
     "Description",
 ]
+
+SALES_TASK_CATEGORIES = [
+    ("task", "Task"),
+    ("activity", "Activity"),
+    ("reminder", "Reminder"),
+    ("call", "Call"),
+    ("event", "Event"),
+]
+
+SALES_TASK_CATEGORY_LABELS = {value: label for value, label in SALES_TASK_CATEGORIES}
 
 SALES_OPPORTUNITY_TEMPLATE_SHEET_NAME = "Opportunities"
 SALES_OPPORTUNITY_UPLOAD_HEADERS = [
@@ -3718,6 +3730,31 @@ def normalize_lifecycle_stage(value):
     if value not in SALES_CLIENT_LIFECYCLE_STAGES:
         return SALES_CLIENT_LIFECYCLE_STAGES[0]
     return value
+
+
+def normalize_email_opt_out(value):
+    if value is None:
+        return None
+    lowered = str(value).strip().lower()
+    if not lowered:
+        return None
+    if lowered in {"yes", "true", "1", "y"}:
+        return "Yes"
+    if lowered in {"no", "false", "0", "n"}:
+        return "No"
+    return None
+
+
+def parse_optional_int(value):
+    try:
+        if value is None:
+            return None
+        text_value = str(value).strip()
+        if text_value == "":
+            return None
+        return int(text_value)
+    except (TypeError, ValueError):
+        return None
 
 
 def delete_lift_record(lift, *, remove_from_session=True):
@@ -5346,14 +5383,45 @@ class TaskTemplate(db.Model):
         return 0
 
 
+class SalesCompany(db.Model):
+    __tablename__ = "sales_company"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False, unique=True)
+    projects_per_year = db.Column(db.Integer, nullable=True)
+    contact_person_name = db.Column(db.String(150), nullable=True)
+    contact_person_designation = db.Column(db.String(150), nullable=True)
+    contact_person_number = db.Column(db.String(50), nullable=True)
+    contact_person_email = db.Column(db.String(200), nullable=True)
+    purchase_manager_name = db.Column(db.String(150), nullable=True)
+    purchase_manager_number = db.Column(db.String(50), nullable=True)
+    purchase_manager_email = db.Column(db.String(200), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    blacklisted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    clients = db.relationship("SalesClient", back_populates="company")
+
+    @property
+    def display_label(self):
+        return self.name or "Unnamed Company"
+
+
 class SalesClient(db.Model):
     __tablename__ = "sales_client"
 
     id = db.Column(db.Integer, primary_key=True)
     display_name = db.Column(db.String(150), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey("sales_company.id"), nullable=True)
     company_name = db.Column(db.String(200), nullable=True)
     email = db.Column(db.String(200), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
+    email_opt_out = db.Column(db.String(10), nullable=True)
     tag = db.Column(db.String(60), nullable=True)
     category = db.Column(db.String(60), default="Individual")
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -5367,6 +5435,7 @@ class SalesClient(db.Model):
     )
 
     owner = db.relationship("User")
+    company = db.relationship("SalesCompany", back_populates="clients")
     opportunities = db.relationship(
         "SalesOpportunity",
         back_populates="client",
@@ -5376,6 +5445,13 @@ class SalesClient(db.Model):
     @property
     def open_opportunity_count(self):
         return sum(1 for opp in self.opportunities if not opp.is_closed)
+
+    @property
+    def email_opt_out_label(self):
+        value = (self.email_opt_out or "").strip().lower()
+        if not value:
+            return "Not set"
+        return "Yes" if value in {"yes", "true", "1"} else "No"
 
 
 class SalesOpportunity(db.Model):
@@ -5463,6 +5539,47 @@ class SalesActivity(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     actor = db.relationship("User")
+
+
+class SalesTask(db.Model):
+    __tablename__ = "sales_task"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(40), nullable=False, default="task")
+    due_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(40), default="Pending")
+    description = db.Column(db.Text, nullable=True)
+    related_type = db.Column(db.String(30), default="general")
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    owner = db.relationship("User")
+    opportunity = db.relationship("SalesOpportunity")
+    client = db.relationship("SalesClient")
+
+    @property
+    def category_label(self):
+        return SALES_TASK_CATEGORY_LABELS.get(self.category, "Task")
+
+    @property
+    def is_completed(self):
+        return (self.status or "").strip().lower() == "completed"
+
+    @property
+    def related_display(self):
+        related_type = (self.related_type or "general").strip().lower()
+        if related_type == "opportunity" and self.opportunity:
+            name = self.opportunity.title
+            if self.opportunity.client:
+                name = f"{name} · {self.opportunity.client.display_name}"
+            return name
+        if related_type == "client" and self.client:
+            return self.client.display_name
+        return "General"
 
 
 class SalesOpportunityComment(db.Model):
@@ -6733,6 +6850,65 @@ def ensure_customer_columns():
         print("✔️ customer OK")
 
 
+def ensure_sales_client_columns():
+    db_path = os.path.join("instance", "eleva.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(sales_client)")
+    client_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    column_defs = [
+        ("email_opt_out", "TEXT"),
+        ("company_id", "INTEGER"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in client_cols:
+            cur.execute(f"ALTER TABLE sales_client ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in sales_client: {', '.join(added_cols)}")
+    else:
+        print("✔️ sales_client OK")
+
+
+def ensure_sales_task_columns():
+    db_path = os.path.join("instance", "eleva.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(sales_task)")
+    task_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    column_defs = [
+        ("related_type", "TEXT"),
+        ("opportunity_id", "INTEGER"),
+        ("client_id", "INTEGER"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in task_cols:
+            cur.execute(f"ALTER TABLE sales_task ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in sales_task: {', '.join(added_cols)}")
+    else:
+        print("✔️ sales_task OK")
+
+
 def ensure_tables():
     """Ensure all known tables exist. Creates them if missing."""
     created_tables = []
@@ -6756,9 +6932,11 @@ def ensure_tables():
         ProjectTemplateTask.__table__,
         ProjectTemplateTaskDependency.__table__,
         TaskTemplate.__table__,
+        SalesCompany.__table__,
         SalesClient.__table__,
         SalesOpportunity.__table__,
         SalesActivity.__table__,
+        SalesTask.__table__,
         SalesOpportunityComment.__table__,
         SalesOpportunityFile.__table__,
         SalesOpportunityEngagement.__table__,
@@ -6808,6 +6986,8 @@ def bootstrap_db():
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
+    ensure_sales_client_columns()
+    ensure_sales_task_columns()
     ensure_customer_columns()
     ensure_dropdown_options_seed()
     purge_legacy_demo_records()
@@ -7466,6 +7646,152 @@ def sales_home():
     )
 
 
+@app.route("/sales/tasks", methods=["GET", "POST"])
+@login_required
+def sales_tasks():
+    _module_visibility_required("sales")
+    today = datetime.date.today()
+    active_tab = (request.form.get("active_tab") or request.args.get("tab") or "taskboard").lower()
+    active_tab = active_tab if active_tab in {"taskboard", "calendar"} else "taskboard"
+
+    if request.method == "POST":
+        form_action = request.form.get("form_action") or "create"
+        if form_action == "create":
+            title = (request.form.get("title") or "").strip()
+            if not title:
+                flash("Task title is required.", "error")
+                return redirect(url_for("sales_tasks", tab=active_tab))
+
+            due_date_raw = request.form.get("due_date") or today.isoformat()
+            try:
+                due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                due_date = today
+
+            related_ref = (request.form.get("related_ref") or "general").strip().lower()
+            related_type = "general"
+            opportunity_id = None
+            client_id = None
+            if related_ref.startswith("opportunity:"):
+                related_type = "opportunity"
+                try:
+                    opportunity_id = int(related_ref.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    opportunity_id = None
+            elif related_ref.startswith("client:"):
+                related_type = "client"
+                try:
+                    client_id = int(related_ref.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    client_id = None
+            else:
+                related_type = "general"
+
+            task = SalesTask(
+                title=title,
+                category=(request.form.get("category") or "task").strip() or "task",
+                due_date=due_date,
+                description=(request.form.get("description") or "").strip() or None,
+                related_type=related_type,
+                opportunity_id=opportunity_id,
+                client_id=client_id,
+                owner=current_user,
+            )
+            db.session.add(task)
+            db.session.commit()
+            flash("Task created.", "success")
+        return redirect(url_for("sales_tasks", tab=active_tab))
+
+    tasks = (
+        SalesTask.query
+        .options(joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client), joinedload(SalesTask.client))
+        .order_by(SalesTask.due_date.asc(), SalesTask.created_at.asc())
+        .all()
+    )
+    tasks_today = [task for task in tasks if task.due_date == today and not task.is_completed]
+
+    category_board = defaultdict(list)
+    for task in tasks:
+        category_board.setdefault(task.category or "task", []).append(task)
+
+    tasks_by_date = defaultdict(list)
+    for task in tasks:
+        if task.due_date:
+            tasks_by_date[task.due_date.isoformat()].append(task)
+
+    month_start = today.replace(day=1)
+    _, month_days = calendar.monthrange(today.year, today.month)
+    grid_start = month_start - datetime.timedelta(days=month_start.weekday())
+    calendar_days = []
+    for offset in range(42):
+        day = grid_start + datetime.timedelta(days=offset)
+        calendar_days.append({
+            "date": day,
+            "in_month": day.month == month_start.month,
+        })
+
+    tasks_by_date_json = {
+        date_key: [
+            {
+                "id": task.id,
+                "title": task.title,
+                "category": task.category_label,
+                "status": task.status,
+                "description": task.description or "",
+                "related": task.related_display,
+            }
+            for task in items
+        ]
+        for date_key, items in tasks_by_date.items()
+    }
+
+    opportunities = (
+        SalesOpportunity.query.options(joinedload(SalesOpportunity.client))
+        .order_by(func.lower(SalesOpportunity.title))
+        .all()
+    )
+    clients = SalesClient.query.order_by(func.lower(SalesClient.display_name)).all()
+
+    return render_template(
+        "sales/tasks.html",
+        tasks=tasks,
+        tasks_today=tasks_today,
+        category_board=category_board,
+        calendar_days=calendar_days,
+        today=today,
+        active_tab=active_tab,
+        task_categories=SALES_TASK_CATEGORIES,
+        tasks_by_date_json=tasks_by_date_json,
+        tasks_by_date=tasks_by_date,
+        calendar_month_label=month_start.strftime("%B %Y"),
+        opportunities=opportunities,
+        clients=clients,
+    )
+
+
+@app.route("/sales/tasks/<int:task_id>/toggle", methods=["POST"])
+@login_required
+def sales_task_toggle(task_id):
+    _module_visibility_required("sales")
+    task = db.session.get(SalesTask, task_id)
+    if not task:
+        flash("Task not found.", "error")
+        return redirect(url_for("sales_tasks"))
+
+    if task.is_completed:
+        task.status = "Pending"
+        task.completed_at = None
+        message = "Task reopened."
+    else:
+        task.status = "Completed"
+        task.completed_at = datetime.datetime.utcnow()
+        message = "Task marked complete."
+
+    db.session.commit()
+    flash(message, "success")
+    return redirect(url_for("sales_tasks", tab=request.form.get("active_tab") or "taskboard"))
+
+
 @app.route("/sales/clients")
 @login_required
 def sales_clients():
@@ -7475,9 +7801,11 @@ def sales_clients():
         .order_by(SalesClient.display_name.asc())
         .all()
     )
+    companies = SalesCompany.query.order_by(func.lower(SalesCompany.name)).all()
     return render_template(
         "sales/clients_list.html",
         clients=clients,
+        companies=companies,
         pipeline_map=SALES_PIPELINES,
         temperature_choices=SALES_TEMPERATURES,
         lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
@@ -7595,6 +7923,13 @@ def sales_clients_upload():
         if email_value:
             user_lookup[email_value.lower()] = user
 
+    companies = SalesCompany.query.all()
+    company_lookup = {
+        (company.name or "").strip().lower(): company
+        for company in companies
+        if company.name
+    }
+
     existing_clients = SalesClient.query.all()
     client_lookup = {
         (client.display_name or "").strip().lower(): client
@@ -7622,6 +7957,8 @@ def sales_clients_upload():
 
         email = clean_str(row_data.get("Email"))
         phone = clean_str(row_data.get("Phone"))
+        email_opt_out_value = normalize_email_opt_out(row_data.get("Email Opt Out"))
+        company_name_value = clean_str(row_data.get("Company Name"))
         tag = clean_str(row_data.get("Tag"))
         category = clean_str(row_data.get("Category")) or "Individual"
         lifecycle = clean_str(row_data.get("Lifecycle Stage"))
@@ -7672,9 +8009,22 @@ def sales_clients_upload():
         else:
             updated += 1
 
-        client.company_name = clean_str(row_data.get("Company Name"))
+        if company_name_value:
+            company_key = company_name_value.lower()
+            company = company_lookup.get(company_key)
+            if not company:
+                company = SalesCompany(name=company_name_value)
+                db.session.add(company)
+                db.session.flush()
+                company_lookup[company_key] = company
+            client.company = company
+            client.company_name = company.name
+        else:
+            client.company = None
+            client.company_name = None
         client.email = email
         client.phone = phone
+        client.email_opt_out = email_opt_out_value
         client.tag = tag
         client.category = category
         if owner_user:
@@ -7728,11 +8078,35 @@ def sales_clients_create():
     if lifecycle_value is None and SALES_CLIENT_LIFECYCLE_STAGES:
         lifecycle_value = SALES_CLIENT_LIFECYCLE_STAGES[0]
 
+    company_name_raw = (request.form.get("company_name") or "").strip() or None
+    company_id_raw = request.form.get("company_id")
+    selected_company = None
+    if company_id_raw:
+        try:
+            selected_company = db.session.get(SalesCompany, int(company_id_raw))
+        except (TypeError, ValueError):
+            selected_company = None
+
+    if not selected_company and company_name_raw:
+        existing_company = (
+            SalesCompany.query.filter(
+                func.lower(SalesCompany.name) == company_name_raw.lower()
+            ).first()
+        )
+        if existing_company:
+            selected_company = existing_company
+        else:
+            selected_company = SalesCompany(name=company_name_raw)
+            db.session.add(selected_company)
+            db.session.flush()
+
     client = SalesClient(
         display_name=name,
-        company_name=(request.form.get("company_name") or "").strip() or None,
+        company_name=selected_company.name if selected_company else company_name_raw,
+        company=selected_company,
         email=(request.form.get("email") or "").strip() or None,
         phone=(request.form.get("phone") or "").strip() or None,
+        email_opt_out=normalize_email_opt_out(request.form.get("email_opt_out")),
         category=(request.form.get("category") or "Individual").strip() or "Individual",
         description=(request.form.get("description") or "").strip() or None,
     )
@@ -7748,6 +8122,46 @@ def sales_clients_create():
     return redirect(url_for("sales_client_detail", client_id=client.id))
 
 
+@app.route("/sales/companies/create", methods=["POST"])
+@login_required
+def sales_companies_create():
+    _module_visibility_required("sales")
+    company_name = (request.form.get("company_name") or "").strip()
+    if not company_name:
+        return jsonify({"success": False, "message": "Company Name is required."}), 400
+
+    company = (
+        SalesCompany.query.filter(func.lower(SalesCompany.name) == company_name.lower())
+        .first()
+    )
+    if not company:
+        company = SalesCompany(name=company_name)
+        db.session.add(company)
+
+    company.projects_per_year = parse_optional_int(request.form.get("projects_per_year"))
+    company.contact_person_name = (request.form.get("contact_person_name") or "").strip() or None
+    company.contact_person_designation = (request.form.get("contact_person_designation") or "").strip() or None
+    company.contact_person_number = (request.form.get("contact_person_number") or "").strip() or None
+    company.contact_person_email = (request.form.get("contact_person_email") or "").strip() or None
+    company.purchase_manager_name = (request.form.get("purchase_manager_name") or "").strip() or None
+    company.purchase_manager_number = (request.form.get("purchase_manager_number") or "").strip() or None
+    company.purchase_manager_email = (request.form.get("purchase_manager_email") or "").strip() or None
+    company.notes = (request.form.get("company_notes") or "").strip() or None
+    company.blacklisted = (request.form.get("blacklisted") or "").lower() == "yes"
+
+    db.session.commit()
+    return jsonify(
+        {
+            "success": True,
+            "company": {
+                "id": company.id,
+                "name": company.display_label,
+                "blacklisted": bool(company.blacklisted),
+            },
+        }
+    )
+
+
 @app.route("/sales/clients/<int:client_id>", methods=["GET", "POST"])
 @login_required
 def sales_client_detail(client_id):
@@ -7761,9 +8175,12 @@ def sales_client_detail(client_id):
         action = request.form.get("form_action") or "update"
         if action == "update":
             client.display_name = (request.form.get("display_name") or "").strip() or client.display_name
-            client.company_name = (request.form.get("company_name") or "").strip() or None
+            company_name_value = request.form.get("company_name")
+            if company_name_value is not None:
+                client.company_name = (company_name_value or "").strip() or client.company_name
             client.email = (request.form.get("email") or "").strip() or None
             client.phone = (request.form.get("phone") or "").strip() or None
+            client.email_opt_out = normalize_email_opt_out(request.form.get("email_opt_out"))
             client.category = (request.form.get("category") or "").strip() or "Individual"
             lifecycle_value = normalize_lifecycle_stage(request.form.get("lifecycle_stage"))
             client.lifecycle_stage = lifecycle_value
@@ -7787,6 +8204,46 @@ def sales_client_detail(client_id):
             flash("Client details updated.", "success")
             return redirect(url_for("sales_client_detail", client_id=client.id))
 
+        elif action == "update_company":
+            company_id_raw = request.form.get("company_id")
+            company_name = (request.form.get("company_name") or "").strip()
+            company = None
+            if company_id_raw:
+                try:
+                    company = db.session.get(SalesCompany, int(company_id_raw))
+                except (TypeError, ValueError):
+                    company = None
+            if not company and company_name:
+                company = (
+                    SalesCompany.query.filter(
+                        func.lower(SalesCompany.name) == company_name.lower()
+                    ).first()
+                )
+                if not company:
+                    company = SalesCompany(name=company_name)
+                    db.session.add(company)
+                    db.session.flush()
+
+            if company:
+                company.projects_per_year = parse_optional_int(request.form.get("projects_per_year"))
+                company.contact_person_name = (request.form.get("contact_person_name") or "").strip() or None
+                company.contact_person_designation = (request.form.get("contact_person_designation") or "").strip() or None
+                company.contact_person_number = (request.form.get("contact_person_number") or "").strip() or None
+                company.contact_person_email = (request.form.get("contact_person_email") or "").strip() or None
+                company.purchase_manager_name = (request.form.get("purchase_manager_name") or "").strip() or None
+                company.purchase_manager_number = (request.form.get("purchase_manager_number") or "").strip() or None
+                company.purchase_manager_email = (request.form.get("purchase_manager_email") or "").strip() or None
+                company.notes = (request.form.get("company_notes") or "").strip() or None
+                company.blacklisted = (request.form.get("blacklisted") or "").lower() == "yes"
+
+            client.company = company
+            client.company_name = company.name if company else None
+
+            log_sales_activity("client", client.id, "Company details updated", actor=current_user)
+            db.session.commit()
+            flash("Company details updated.", "success")
+            return redirect(url_for("sales_client_detail", client_id=client.id))
+
         elif action == "add_note":
             note_title = (request.form.get("note_title") or "").strip() or "Timeline update"
             note_body = (request.form.get("note_body") or "").strip() or None
@@ -7804,6 +8261,7 @@ def sales_client_detail(client_id):
     owners = get_assignable_users_for_module("sales", order_by="name")
     open_opportunities = [opp for opp in client.opportunities if not opp.is_closed]
     all_clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
+    companies = SalesCompany.query.order_by(func.lower(SalesCompany.name)).all()
     return render_template(
         "sales/client_detail.html",
         client=client,
@@ -7814,6 +8272,7 @@ def sales_client_detail(client_id):
         opportunity_clients=all_clients,
         temperature_choices=SALES_TEMPERATURES,
         lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
+        companies=companies,
     )
 
 

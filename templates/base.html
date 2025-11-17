@@ -840,7 +840,8 @@
         {% if current_user.is_authenticated and current_user.can_view_module('sales') %}
           {% set sales_endpoints = [
             'sales_home','sales_clients','sales_clients_create','sales_client_detail',
-            'sales_opportunities_pipeline','sales_opportunities_create','sales_opportunity_detail','sales_opportunity_stage'
+            'sales_opportunities_pipeline','sales_opportunities_create','sales_opportunity_detail','sales_opportunity_stage',
+            'sales_tasks','sales_task_toggle'
           ] %}
           {% set sales_parent_active = request.endpoint in sales_endpoints %}
           <div class="space-y-1">
@@ -864,6 +865,10 @@
               <a href="{{ url_for('sales_clients') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_clients','sales_client_detail'] else '' }}">
                 <span class="label">Clients</span>
+              </a>
+              <a href="{{ url_for('sales_tasks') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_tasks' else '' }}">
+                <span class="label">Sales Tasks</span>
               </a>
             </div>
           </div>
