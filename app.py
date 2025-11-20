@@ -162,12 +162,17 @@ class UploadStageTimeoutError(RuntimeError):
 def _execute_with_timeout(func, *, stage: str, timeout: int = UPLOAD_STAGE_TIMEOUT_SECONDS):
     """Execute ``func`` enforcing a timeout, raising ``UploadStageTimeoutError`` on delay."""
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeoutError as exc:
-            raise UploadStageTimeoutError(stage, timeout=timeout) from exc
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(func)
+    timed_out = False
+    try:
+        return future.result(timeout=timeout)
+    except FuturesTimeoutError as exc:
+        timed_out = True
+        future.cancel()
+        raise UploadStageTimeoutError(stage, timeout=timeout) from exc
+    finally:
+        executor.shutdown(wait=not timed_out, cancel_futures=True)
 
 
 def _stage_start() -> float:
