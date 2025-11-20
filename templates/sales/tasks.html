@@ -142,7 +142,14 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Due Date</label>
-            <input type="date" name="due_date" value="{{ today.isoformat() }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" />
+            <div class="relative">
+              <input id="taskDueDate" type="date" name="due_date" value="{{ today.isoformat() }}" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 pr-10 cursor-pointer" />
+              <button type="button" class="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-emerald-200" data-date-toggle data-input="taskDueDate" aria-label="Open calendar">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7 2a1 1 0 00-1 1v1H5a3 3 0 00-3 3v11a3 3 0 003 3h14a3 3 0 003-3V7a3 3 0 00-3-3h-1V3a1 1 0 10-2 0v1H9V3a1 1 0 00-1-1zm12 7H5v9a1 1 0 001 1h12a1 1 0 001-1z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Type</label>
@@ -286,6 +293,19 @@
       const modalDueInput = modal ? modal.querySelector('[data-modal-due]') : null;
 
       const createModal = document.getElementById('taskCreateModal');
+      document.querySelectorAll('[data-date-toggle]').forEach((button) => {
+        const inputId = button.getAttribute('data-input');
+        const input = inputId ? document.getElementById(inputId) : null;
+        if (!input) return;
+
+        button.addEventListener('click', () => {
+          if (typeof input.showPicker === 'function') {
+            input.showPicker();
+          } else {
+            input.focus();
+          }
+        });
+      });
 
       const wireRelatedPicker = (picker) => {
         const searchInput = picker.querySelector('[data-related-search]');
