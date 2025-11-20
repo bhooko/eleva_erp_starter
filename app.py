@@ -146,7 +146,8 @@ class UploadOutcome:
     row_errors: List[str] = field(default_factory=list)
 
 
-UPLOAD_STAGE_TIMEOUT_SECONDS = 5
+UPLOAD_STAGE_TIMEOUT_SECONDS = 15
+UPLOAD_TOTAL_TIMEOUT_SECONDS = 15
 
 
 class UploadStageTimeoutError(RuntimeError):
@@ -310,6 +311,7 @@ def _customer_identifier(customer, *, fallback):
 
 
 def process_customer_upload_file(file_path, *, apply_changes):
+    upload_timer = _stage_start()
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=CUSTOMER_UPLOAD_TEMPLATE_SHEET_NAME
     )
@@ -370,6 +372,11 @@ def process_customer_upload_file(file_path, *, apply_changes):
     generated_codes: set[str] = set()
 
     for row_index, row_values in enumerate(data_rows, start=2):
+        _check_stage_timeout(
+            upload_timer,
+            "processing the customer upload",
+            timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+        )
         row_stage = _stage_start()
         row_stage_label = f"processing row {row_index}"
         try:
@@ -654,10 +661,20 @@ def process_customer_upload_file(file_path, *, apply_changes):
                     existing_by_external[normalized_external] = target_identifier or identifier or normalized_external
             elif isinstance(customer_ref, Customer) and customer_ref.external_customer_id:
                 processed_external_ids[customer_ref.external_customer_id.lower()] = target_identifier or identifier or f"existing:{id(customer_ref)}"
-    
+
         finally:
             _check_stage_timeout(row_stage, row_stage_label)
+            _check_stage_timeout(
+                upload_timer,
+                "processing the customer upload",
+                timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+            )
     if apply_changes and (outcome.created_count or outcome.updated_count):
+        _check_stage_timeout(
+            upload_timer,
+            "saving customer upload changes",
+            timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+        )
         db.session.commit()
 
     return outcome
@@ -671,6 +688,7 @@ def _normalize_lookup_key(value):
 
 
 def process_lift_upload_file(file_path, *, apply_changes):
+    upload_timer = _stage_start()
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=AMC_LIFT_TEMPLATE_SHEET_NAME
     )
@@ -738,6 +756,11 @@ def process_lift_upload_file(file_path, *, apply_changes):
     lift_brand_present = "Lift Brand" in header_map
 
     for row_index, row_values in enumerate(data_rows, start=2):
+        _check_stage_timeout(
+            upload_timer,
+            "processing the AMC lift upload",
+            timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+        )
         row_stage = _stage_start()
         row_stage_label = f"processing row {row_index}"
         try:
@@ -1098,7 +1121,17 @@ def process_lift_upload_file(file_path, *, apply_changes):
             continue
         finally:
             _check_stage_timeout(row_stage, row_stage_label)
+            _check_stage_timeout(
+                upload_timer,
+                "processing the AMC lift upload",
+                timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+            )
     if apply_changes and (outcome.created_count or outcome.updated_count):
+        _check_stage_timeout(
+            upload_timer,
+            "saving AMC lift upload changes",
+            timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
+        )
         db.session.commit()
 
     return outcome
@@ -13780,6 +13813,10 @@ def service_upload_review(upload_type, pending_token):
     except ValueError:
         _clear_pending_upload(pending_token, remove_file=True)
         flash(config["invalid_template_message"], "error")
+        return redirect(url_for(config["redirect_endpoint"]))
+    except UploadStageTimeoutError as exc:
+        _clear_pending_upload(pending_token, remove_file=True)
+        flash(str(exc), "error")
         return redirect(url_for(config["redirect_endpoint"]))
     except Exception:
         _clear_pending_upload(pending_token, remove_file=True)
