@@ -858,6 +858,10 @@
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_home' else '' }}">
                 <span class="label">Sales Overview</span>
               </a>
+              <a href="{{ url_for('sales_tasks') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_tasks' else '' }}">
+                <span class="label">Sales Tasks</span>
+              </a>
               <a href="{{ url_for('sales_opportunities_pipeline', pipeline_key='lift') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_opportunities_pipeline','sales_opportunity_detail'] else '' }}">
                 <span class="label">Opportunities</span>
@@ -865,10 +869,6 @@
               <a href="{{ url_for('sales_clients') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['sales_clients','sales_client_detail'] else '' }}">
                 <span class="label">Clients</span>
-              </a>
-              <a href="{{ url_for('sales_tasks') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_tasks' else '' }}">
-                <span class="label">Sales Tasks</span>
               </a>
             </div>
           </div>
