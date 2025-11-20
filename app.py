@@ -33,6 +33,19 @@ from sqlalchemy import case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload
 
+def _get_timeout_env(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if not raw_value:
+        return default
+    try:
+        parsed = int(raw_value)
+        if parsed > 0:
+            return parsed
+    except ValueError:
+        pass
+    return default
+
+
 OPENPYXL_AVAILABLE = importlib.util.find_spec("openpyxl") is not None
 
 if OPENPYXL_AVAILABLE:
@@ -146,8 +159,12 @@ class UploadOutcome:
     row_errors: List[str] = field(default_factory=list)
 
 
-UPLOAD_STAGE_TIMEOUT_SECONDS = 15
-UPLOAD_TOTAL_TIMEOUT_SECONDS = 15
+UPLOAD_STAGE_TIMEOUT_SECONDS = _get_timeout_env(
+    "UPLOAD_STAGE_TIMEOUT_SECONDS", default=60
+)
+UPLOAD_TOTAL_TIMEOUT_SECONDS = _get_timeout_env(
+    "UPLOAD_TOTAL_TIMEOUT_SECONDS", default=180
+)
 
 
 class UploadStageTimeoutError(RuntimeError):
