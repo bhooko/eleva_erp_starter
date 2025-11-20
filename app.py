@@ -1399,6 +1399,22 @@ def _build_csv_output(headers, rows):
     return output
 
 
+def _format_date_iso(value):
+    if isinstance(value, datetime.datetime):
+        value = value.date()
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    return ""
+
+
+def _format_time_hhmm(value):
+    if isinstance(value, datetime.datetime):
+        value = value.time()
+    if isinstance(value, datetime.time):
+        return value.strftime("%H:%M")
+    return ""
+
+
 def build_customer_upload_workbook():
     _ensure_openpyxl()
     workbook = Workbook()
@@ -1445,6 +1461,119 @@ def build_customer_export_workbook(customers):
         data_sheet.append(_customer_upload_row(customer))
 
     for idx, header in enumerate(CUSTOMER_UPLOAD_TEMPLATE_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+def _lift_export_row(lift):
+    preferred_days = ", ".join(day.title() for day in (lift.preferred_service_days or []))
+    preferred_date = _format_date_iso(getattr(lift, "preferred_service_date", None))
+    preferred_time = _format_time_hhmm(getattr(lift, "preferred_service_time", None))
+    next_due = _format_date_iso(getattr(lift, "next_service_due", None))
+
+    customer = getattr(lift, "customer", None)
+    return [
+        (customer.external_customer_id if customer else "") or "",
+        lift.lift_code or "",
+        lift.external_lift_id or "",
+        lift.customer_code or "",
+        (customer.company_name if customer else "") or "",
+        lift.building_villa_number or "",
+        lift.site_address_line1 or "",
+        lift.site_address_line2 or "",
+        lift.city or "",
+        lift.state or "",
+        lift.pincode or "",
+        lift.route or "",
+        lift.lift_type or "",
+        lift.lift_brand or "",
+        lift.capacity_persons or "",
+        lift.capacity_kg or "",
+        lift.speed_mps or "",
+        lift.amc_status or "",
+        _format_date_iso(getattr(lift, "amc_start", None)),
+        lift.amc_duration_key or "",
+        _format_date_iso(getattr(lift, "amc_end", None)),
+        preferred_days,
+        preferred_date,
+        preferred_time,
+        next_due,
+        lift.notes or "",
+    ]
+
+
+def build_lift_export_workbook(lifts):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = AMC_LIFT_TEMPLATE_SHEET_NAME
+    data_sheet.append(AMC_LIFT_TEMPLATE_HEADERS)
+
+    for lift in lifts:
+        data_sheet.append(_lift_export_row(lift))
+
+    for idx, header in enumerate(AMC_LIFT_TEMPLATE_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
+SERVICE_CONTRACT_EXPORT_HEADERS = [
+    "Contract ID",
+    "Type",
+    "Coverage",
+    "Start",
+    "End",
+    "Visit frequency",
+    "SLA matrix",
+    "Renewal date",
+    "Pending invoices",
+    "Billing hooks",
+]
+
+
+def _contract_export_row(contract):
+    data = contract or {}
+
+    def _stringify(value):
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(item) for item in value if item not in (None, ""))
+        return value or ""
+
+    return [
+        data.get("id", ""),
+        data.get("type", ""),
+        data.get("coverage", ""),
+        _format_date_iso(data.get("start")),
+        _format_date_iso(data.get("end")),
+        data.get("visits", ""),
+        data.get("sla", ""),
+        _format_date_iso(data.get("renewal")),
+        data.get("pending_invoices", ""),
+        _stringify(data.get("billing_hooks", "")),
+    ]
+
+
+def build_contract_export_workbook(contracts):
+    _ensure_openpyxl()
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = "Contracts"
+    data_sheet.append(SERVICE_CONTRACT_EXPORT_HEADERS)
+
+    for contract in contracts:
+        data_sheet.append(_contract_export_row(contract))
+
+    for idx, header in enumerate(SERVICE_CONTRACT_EXPORT_HEADERS, start=1):
         cell = data_sheet.cell(row=1, column=idx)
         cell.font = Font(bold=True)
         cell.alignment = Alignment(wrap_text=True)
@@ -12573,6 +12702,8 @@ def service_customers():
 @login_required
 def service_customers_export():
     _module_visibility_required("service")
+    if not current_user.is_admin:
+        abort(403)
 
     search_query = (request.args.get("q") or "").strip()
     customers = _customer_query_for_export(search_query).all()
@@ -12594,6 +12725,58 @@ def service_customers_export():
 
     csv_rows = [_customer_upload_row(customer) for customer in customers]
     csv_output = _build_csv_output(CUSTOMER_UPLOAD_TEMPLATE_HEADERS, csv_rows)
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/service/lifts/export")
+@login_required
+def service_lifts_export():
+    _module_visibility_required("service")
+    if not current_user.is_admin:
+        abort(403)
+
+    search_query = (request.args.get("q") or "").strip()
+    query = Lift.query.options(joinedload(Lift.customer))
+
+    if search_query:
+        like = f"%{search_query.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Lift.lift_code).like(like),
+                func.lower(Lift.customer_code).like(like),
+                func.lower(Lift.city).like(like),
+                func.lower(Lift.state).like(like),
+                func.lower(Lift.route).like(like),
+                func.lower(Lift.lift_type).like(like),
+                func.lower(Lift.lift_brand).like(like),
+                func.lower(Lift.status).like(like),
+            )
+        )
+
+    lifts = query.order_by(func.lower(Lift.lift_code)).all()
+
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
+    filename = f"lifts_export_{timestamp}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_lift_export_workbook(lifts)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_rows = [_lift_export_row(lift) for lift in lifts]
+    csv_output = _build_csv_output(AMC_LIFT_TEMPLATE_HEADERS, csv_rows)
     return send_file(
         csv_output,
         as_attachment=True,
@@ -14534,6 +14717,38 @@ def service_lift_upload_file(lift_id):
 def service_complaints():
     _module_visibility_required("service")
     return render_template("service/complaints.html", complaints=SERVICE_COMPLAINTS)
+
+
+@app.route("/service/contracts/export")
+@login_required
+def service_contracts_export():
+    _module_visibility_required("service")
+    if not current_user.is_admin:
+        abort(403)
+
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
+    filename = f"contracts_export_{timestamp}.xlsx"
+
+    if OPENPYXL_AVAILABLE:
+        workbook = build_contract_export_workbook(SERVICE_CONTRACTS)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_rows = [_contract_export_row(contract) for contract in SERVICE_CONTRACTS]
+    csv_output = _build_csv_output(SERVICE_CONTRACT_EXPORT_HEADERS, csv_rows)
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
 
 
 @app.route("/service/contracts")
