@@ -1080,13 +1080,22 @@ def process_lift_upload_file(file_path, *, apply_changes):
                     lift.notes = notes_value
                 lift.last_updated_by = current_user.id
                 lift.set_capacity_display()
-    
+
             existing_by_code[lift.lift_code.lower()] = lift
             if provided_external:
                 existing_by_external[provided_external.lower()] = lift
             elif lift.external_lift_id:
                 existing_by_external[lift.external_lift_id.lower()] = lift
-    
+
+        except Exception as exc:
+            app.logger.exception(
+                "Unexpected error while processing AMC lift upload row",
+                extra={"row_index": row_index},
+            )
+            outcome.row_errors.append(
+                f"Row {row_index}: Could not process this row due to an unexpected error: {exc}."
+            )
+            continue
         finally:
             _check_stage_timeout(row_stage, row_stage_label)
     if apply_changes and (outcome.created_count or outcome.updated_count):
