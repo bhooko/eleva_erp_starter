@@ -197,61 +197,12 @@
               </option>
             {% endfor %}
           </select>
+          <input type="hidden" name="linked_lift_id" data-linked-lift-input />
           <p class="mt-2 text-[11px] text-slate-500">Only required for Support – AMC tickets.</p>
         </div>
         <div>
           <label class="text-xs uppercase tracking-wide text-slate-500">Customer name</label>
-          <input name="customer" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Customer or site" required />
-        </div>
-        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Link to existing records (optional)</h3>
-          <p class="mt-2 text-[11px] text-slate-500">Selecting a record fills the customer name and logs a comment with a link to this ticket.</p>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <label class="block text-xs text-slate-400">
-              <span class="block uppercase tracking-wide">Sales client</span>
-              <select name="linked_sales_client_id" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-linked-record-select data-linked-type="sales-client">
-                <option value="">No sales client</option>
-                {% for client in sales_clients %}
-                  <option value="{{ client.id }}" data-customer-name="{{ client.display_name or client.company_name or client.description or ('Client ' ~ client.id) }}">
-                    {{ client.display_name or client.company_name or ('Client ' ~ client.id) }}
-                  </option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="block text-xs text-slate-400">
-              <span class="block uppercase tracking-wide">Installation project</span>
-              <select name="linked_project_id" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-linked-record-select data-linked-type="installation-project">
-                <option value="">No project</option>
-                {% for project in installation_projects %}
-                  <option value="{{ project.id }}" data-customer-name="{{ project.customer_name or project.name }}">
-                    {{ project.name }}{% if project.customer_name %} · {{ project.customer_name }}{% endif %}
-                  </option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="block text-xs text-slate-400">
-              <span class="block uppercase tracking-wide">AMC customer</span>
-              <select name="linked_customer_id" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-linked-record-select data-linked-type="amc-customer">
-                <option value="">No AMC customer</option>
-                {% for customer in amc_customers %}
-                  <option value="{{ customer.id }}" data-customer-name="{{ customer.company_name or customer.customer_code }}">
-                    {{ customer.company_name }}{% if customer.customer_code %} · {{ customer.customer_code }}{% endif %}
-                  </option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="block text-xs text-slate-400">
-              <span class="block uppercase tracking-wide">Lift</span>
-              <select name="linked_lift_id" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-linked-record-select data-linked-type="lift">
-                <option value="">No lift</option>
-                {% for lift in amc_lifts %}
-                  <option value="{{ lift.id }}" data-customer-name="{{ lift.customer_name|default(lift.client, true)|default(lift.customer_code, true) }}">
-                    {{ lift.label }}{% if lift.client %} · {{ lift.client }}{% endif %}
-                  </option>
-                {% endfor %}
-              </select>
-            </label>
-          </div>
+          <input name="customer" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Customer or site" />
         </div>
         <div>
           <label class="text-xs uppercase tracking-wide text-slate-500">Ticket summary</label>
@@ -1040,24 +991,18 @@
       const amcSiteField = document.querySelector('[data-amc-site-field]');
       const amcSiteSelect = amcSiteField ? amcSiteField.querySelector('[data-amc-site-select]') : null;
       const customerNameInput = addTicketForm ? addTicketForm.querySelector('input[name="customer"]') : null;
-      const linkedRecordSelects = Array.from(document.querySelectorAll('[data-linked-record-select]'));
+      const linkedLiftInput = addTicketForm ? addTicketForm.querySelector('[data-linked-lift-input]') : null;
       const salesLeadSection = document.querySelector('[data-sales-lead-section]');
       const salesLeadToggle = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-toggle]') : null;
       const salesLeadFields = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-fields]') : null;
       const salesLeadLabel = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-label]') : null;
 
-      const optionalCategoryValues = ['other-dept', 'other-query'];
       const salesLeadCategoryValues = ['sales-ni', 'sales-amc'];
       const updateCustomerRequirement = () => {
         if (!customerNameInput) {
           return;
         }
-        const categoryValue = (categorySelect && categorySelect.value ? categorySelect.value : '').toLowerCase();
-        if (optionalCategoryValues.includes(categoryValue)) {
-          customerNameInput.removeAttribute('required');
-        } else {
-          customerNameInput.setAttribute('required', 'required');
-        }
+        customerNameInput.removeAttribute('required');
       };
 
       const setSalesLeadFieldsEnabled = (enabled) => {
@@ -1097,11 +1042,17 @@
           return;
         }
         if (!amcSiteSelect.value) {
+          if (linkedLiftInput) {
+            linkedLiftInput.value = '';
+          }
           return;
         }
         const selectedOption = amcSiteSelect.options[amcSiteSelect.selectedIndex];
         if (!selectedOption) {
           return;
+        }
+        if (linkedLiftInput) {
+          linkedLiftInput.value = selectedOption.value;
         }
         const linkedCustomer =
           selectedOption.getAttribute('data-customer-name') ||
@@ -1127,6 +1078,9 @@
             amcSiteSelect.setAttribute('disabled', 'disabled');
             amcSiteSelect.removeAttribute('required');
             amcSiteSelect.value = '';
+            if (linkedLiftInput) {
+              linkedLiftInput.value = '';
+            }
           }
         }
         updateCustomerRequirement();
@@ -1152,32 +1106,17 @@
         amcSiteSelect.addEventListener('change', syncCustomerNameForAmcSelection);
       }
 
-      if (linkedRecordSelects.length && customerNameInput) {
-        linkedRecordSelects.forEach((select) => {
-          select.addEventListener('change', () => {
-            const selectedOption = select.options[select.selectedIndex];
-            if (!selectedOption) {
-              return;
-            }
-            const linkedName = selectedOption.getAttribute('data-customer-name');
-            if (linkedName) {
-              customerNameInput.value = linkedName;
-            }
-          });
-        });
-      }
-
       if (addTicketForm) {
         addTicketForm.addEventListener('reset', () => {
           window.setTimeout(() => {
             if (amcSiteSelect) {
               amcSiteSelect.value = '';
             }
+            if (linkedLiftInput) {
+              linkedLiftInput.value = '';
+            }
             refreshAmcSiteVisibility();
             updateCustomerRequirement();
-            linkedRecordSelects.forEach((select) => {
-              select.value = '';
-            });
             if (salesLeadToggle) {
               salesLeadToggle.checked = false;
             }
