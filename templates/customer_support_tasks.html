@@ -224,11 +224,11 @@
           </div>
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
-            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-category-source="create-ticket">
               <option value="">Unassigned</option>
               {% if active_support_users %}
                 {% for user in active_support_users %}
-                  <option value="{{ user.id }}">{{ user.display_name }}</option>
+                  <option value="{{ user.id }}" data-position-id="{{ user.position_id or '' }}">{{ user.display_name }}</option>
                 {% endfor %}
               {% else %}
                 <option value="" disabled>No ERP users available</option>
@@ -293,10 +293,10 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
-            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
-              <option value="">Unassigned</option>
+            <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-category-source="linked-task">
+                <option value="">Unassigned</option>
               {% for user in active_support_users %}
-                <option value="{{ user.id }}">{{ user.display_name }}</option>
+                <option value="{{ user.id }}" data-position-id="{{ user.position_id or '' }}">{{ user.display_name }}</option>
               {% endfor %}
             </select>
             <p class="mt-1 text-[11px] text-slate-500">Only active portal users appear in this list.</p>
@@ -418,14 +418,14 @@
               </div>
               <div class="flex items-center justify-between gap-3">
                 <span>Assignee</span>
-                <select name="assignee" class="w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 text-xs">
-                  <option value="" {{ 'selected' if (selected_ticket.get('assignee_user_id') is none and (selected_ticket.assignee or 'Unassigned') == 'Unassigned') else '' }}>Unassigned</option>
-                  {% for user in active_support_users %}
-                    <option value="{{ user.id }}" {{ 'selected' if user.id == selected_ticket.get('assignee_user_id') else '' }}>{{ user.display_name }}</option>
-                  {% endfor %}
-                  {% if selected_ticket.assignee and selected_ticket.assignee not in ['Unassigned', ''] and selected_ticket.get('assignee_user_id') is none %}
-                    <option value="{{ selected_ticket.assignee }}" selected>{{ selected_ticket.assignee }} (not in ERP)</option>
-                  {% endif %}
+                <select name="assignee" class="w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 text-xs" data-fixed-category="{{ selected_ticket.category }}">
+                <option value="" {{ 'selected' if (selected_ticket.get('assignee_user_id') is none and (selected_ticket.assignee or 'Unassigned') == 'Unassigned') else '' }}>Unassigned</option>
+                {% for user in active_support_users %}
+                  <option value="{{ user.id }}" data-position-id="{{ user.position_id or '' }}" {{ 'selected' if user.id == selected_ticket.get('assignee_user_id') else '' }}>{{ user.display_name }}</option>
+                {% endfor %}
+                {% if selected_ticket.assignee and selected_ticket.assignee not in ['Unassigned', ''] and selected_ticket.get('assignee_user_id') is none %}
+                  <option value="{{ selected_ticket.assignee }}" selected>{{ selected_ticket.assignee }} (not in ERP)</option>
+                {% endif %}
                 </select>
               </div>
               <div class="flex items-center justify-between gap-3">
@@ -692,6 +692,67 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const body = document.body;
+
+      const categoryAssignments = {{ (support_settings.category_position_assignments or {}) | tojson }};
+
+      function getAllowedPositions(categoryId) {
+        const allowed = categoryAssignments?.[categoryId] || [];
+        return Array.isArray(allowed) ? allowed.map((value) => parseInt(value, 10)).filter((value) => !Number.isNaN(value)) : [];
+      }
+
+      function applyAssigneeFilter(select, categoryId) {
+        if (!select) return;
+        const allowed = getAllowedPositions(categoryId);
+        Array.from(select.options).forEach((option) => {
+          if (!option.value) {
+            option.disabled = false;
+            option.hidden = false;
+            return;
+          }
+
+          const positionIdRaw = option.dataset.positionId;
+          const positionId = positionIdRaw ? parseInt(positionIdRaw, 10) : NaN;
+          const isAllowed = !allowed.length || (!Number.isNaN(positionId) && allowed.includes(positionId));
+          option.disabled = !isAllowed;
+          option.hidden = !isAllowed;
+        });
+
+        if (select.value) {
+          const current = select.options[select.selectedIndex];
+          if (current && current.disabled) {
+            select.value = '';
+          }
+        }
+      }
+
+      const mainCategorySelect = document.querySelector('[data-ticket-category]');
+      const createAssigneeSelects = Array.from(document.querySelectorAll('[data-category-source="create-ticket"]'));
+
+      function refreshCreateAssignees() {
+        const categoryId = mainCategorySelect ? mainCategorySelect.value : '';
+        createAssigneeSelects.forEach((select) => applyAssigneeFilter(select, categoryId));
+      }
+
+      if (mainCategorySelect) {
+        refreshCreateAssignees();
+        mainCategorySelect.addEventListener('change', refreshCreateAssignees);
+      }
+
+      document.querySelectorAll('[data-category-source="linked-task"]').forEach((select) => {
+        const form = select.closest('form');
+        const categorySelect = form ? form.querySelector('select[name="category"]') : null;
+
+        const updateLinkedAssignees = () => applyAssigneeFilter(select, categorySelect ? categorySelect.value : '');
+        updateLinkedAssignees();
+
+        if (categorySelect) {
+          categorySelect.addEventListener('change', updateLinkedAssignees);
+        }
+      });
+
+      document.querySelectorAll('[data-fixed-category]').forEach((select) => {
+        applyAssigneeFilter(select, select.dataset.fixedCategory || '');
+      });
 
       function updateBodyScroll() {
         const anyOpen = Array.from(document.querySelectorAll('[data-modal]')).some((modal) => !modal.classList.contains('hidden'));

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Customer Support Settings · Eleva ERP{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-slate-950/70 text-slate-100">
+  <div class="mx-auto max-w-6xl px-6 py-10">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-amber-300">Customer Support</p>
+        <h1 class="text-2xl font-bold text-slate-100">CS Settings</h1>
+        <p class="mt-1 text-sm text-slate-400">Tune support behaviour without touching code. Updates apply instantly across the workspace.</p>
+      </div>
+      <a href="{{ url_for('customer_support_overview') }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/70">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6.75L5.25 12l5.25 5.25M5.25 12h13.5" />
+        </svg>
+        <span>Back to CS overview</span>
+      </a>
+    </div>
+
+    <form method="post" class="mt-8 space-y-6">
+      <section class="grid gap-4 md:grid-cols-2">
+        <label class="flex items-start gap-4 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5">
+          <input type="checkbox" name="auto_triage_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-amber-400 focus:ring-amber-400" {{ 'checked' if settings.auto_triage_enabled else '' }}>
+          <div class="space-y-1">
+            <p class="text-base font-semibold text-slate-100">Auto triage & routing</p>
+            <p class="text-sm text-slate-400">Keep the inbox lean with automatic triage that labels, prioritises and routes fresh tickets.</p>
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Applies to new tickets captured from any channel.</p>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-4 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5">
+          <input type="checkbox" name="escalation_notifications" value="1" class="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-amber-400 focus:ring-amber-400" {{ 'checked' if settings.escalation_notifications else '' }}>
+          <div class="space-y-1">
+            <p class="text-base font-semibold text-slate-100">Escalation notifications</p>
+            <p class="text-sm text-slate-400">Send proactive nudges when SLA timers are at risk or when callbacks breach thresholds.</p>
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Notifications respect module permissions and user availability.</p>
+          </div>
+        </label>
+      </section>
+
+      <section class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-5">
+        <div class="flex flex-col gap-1">
+          <h2 class="text-lg font-semibold text-slate-100">Category wise assignment by position</h2>
+          <p class="text-sm text-slate-400">Control which positions can own tickets inside each CS category. Assignments in the Tasks board will follow this matrix.</p>
+          <p class="text-[11px] uppercase tracking-wide text-slate-500">Positions missing from a category will be hidden from the assignee dropdown.</p>
+        </div>
+
+        {% set assignments = settings.category_position_assignments or {} %}
+        <div class="grid gap-4 lg:grid-cols-2">
+          {% for category in categories %}
+            <div class="rounded-xl border border-slate-800/60 bg-slate-950/60 p-5 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-500">{{ category.id }}</p>
+                  <h3 class="text-base font-semibold text-slate-100">{{ category.label }}</h3>
+                  <p class="text-sm text-slate-400">{{ category.description }}</p>
+                </div>
+                <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">Assignees</span>
+              </div>
+
+              {% set category_assignments = assignments.get(category.id) or [] %}
+              {% if positions %}
+                <div class="grid gap-2">
+                  {% for position in positions %}
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-800/50 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
+                      <input type="checkbox" name="category_positions_{{ category.id }}" value="{{ position.id }}" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400" {{ 'checked' if position.id in category_assignments else '' }}>
+                      <div class="flex flex-col">
+                        <span class="font-semibold">{{ position.display_label }}</span>
+                        {% if position.department %}
+                          <span class="text-xs text-slate-500">{{ position.department.full_name }}</span>
+                        {% endif %}
+                      </div>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-sm text-slate-400">No positions available. Add roles in <a href="{{ url_for('settings', tab='modules') }}" class="text-amber-300 hover:text-amber-200">Settings</a> to enable assignment controls.</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="flex items-center justify-end gap-3">
+        <a href="{{ url_for('customer_support_overview') }}" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Cancel</a>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span>Save CS settings</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
