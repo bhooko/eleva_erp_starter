@@ -2990,10 +2990,13 @@ def _handle_customer_support_ticket_creation():
     linked_project_id_raw = (request.form.get("linked_project_id") or "").strip()
     linked_customer_id_raw = (request.form.get("linked_customer_id") or "").strip()
     linked_lift_id_raw = (request.form.get("linked_lift_id") or "").strip()
+    create_sales_lead = _form_truthy(request.form.get("create_sales_lead"))
+    sales_lead_owner_id_raw = (request.form.get("sales_lead_owner_id") or "").strip()
 
     errors = []
     assignee_user = None
     assignee_user_id = None
+    sales_lead_owner = None
     if not subject:
         errors.append("Provide a summary of the customer issue.")
     if not category_id:
@@ -3131,6 +3134,18 @@ def _handle_customer_support_ticket_creation():
             ):
                 errors.append("Select a valid assignee from the ERP user list.")
 
+    if create_sales_lead and sales_lead_owner_id_raw:
+        try:
+            sales_lead_owner = db.session.get(User, int(sales_lead_owner_id_raw))
+        except (TypeError, ValueError):
+            sales_lead_owner = None
+        if (
+            not sales_lead_owner
+            or not sales_lead_owner.is_active
+            or not sales_lead_owner.can_view_module("sales")
+        ):
+            errors.append("Select a valid sales owner for the new enquiry.")
+
     if errors:
         for message in errors:
             flash(message, "error")
@@ -3231,6 +3246,42 @@ def _handle_customer_support_ticket_creation():
             entity["description"] = " · ".join(lift_details)
         linked_entities.append(entity)
 
+    created_opportunity = None
+    if create_sales_lead and category_id.lower() == "sales-ni":
+        pipeline_key = "lift"
+        pipeline_config = get_pipeline_config(pipeline_key)
+        stages = pipeline_config.get("stages", []) if isinstance(pipeline_config, dict) else []
+        lead_stage = stages[0] if stages else "New Enquiry"
+
+        lead_title = subject or customer or f"Ticket {ticket_id}"
+        created_opportunity = SalesOpportunity(
+            title=lead_title,
+            pipeline=pipeline_key,
+            stage=lead_stage,
+            description=remarks or None,
+        )
+        created_opportunity.owner = sales_lead_owner or (current_user if current_user.is_authenticated else None)
+        if linked_sales_client:
+            created_opportunity.client = linked_sales_client
+
+        db.session.add(created_opportunity)
+        db.session.flush()
+        log_sales_activity(
+            "opportunity",
+            created_opportunity.id,
+            f"Sales enquiry created from support ticket {ticket_id}",
+        )
+        linked_entities.append(
+            {
+                "type": "sales_opportunity",
+                "label": "Sales enquiry",
+                "name": lead_title,
+                "url": url_for(
+                    "sales_opportunity_detail", opportunity_id=created_opportunity.id
+                ),
+            }
+        )
+
     ticket_record = {
         "id": ticket_id,
         "subject": subject,
@@ -3288,6 +3339,15 @@ def _handle_customer_support_ticket_creation():
         for entity in linked_entities:
             ticket_record[f"linked_{entity['type']}"] = entity
 
+    if created_opportunity:
+        ticket_record["linked_sales_opportunity"] = {
+            "id": created_opportunity.id,
+            "title": created_opportunity.title,
+            "url": url_for(
+                "sales_opportunity_detail", opportunity_id=created_opportunity.id
+            ),
+        }
+
     comments_added = False
     if linked_sales_client:
         log_sales_activity(
@@ -3329,10 +3389,12 @@ def _handle_customer_support_ticket_creation():
         )
         comments_added = True
 
-    if comments_added:
+    if created_opportunity or comments_added:
         db.session.commit()
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
+    if created_opportunity:
+        flash("Sales enquiry created in the sales pipeline.", "success")
     flash(f"Ticket {ticket_id} created successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
@@ -5283,8 +5345,8 @@ class User(UserMixin, db.Model):
                 if not module_key:
                     continue
                 normalised[module_key] = {
-                    "visibility": bool(value.get("visibility", True)),
-                    "assignment": bool(value.get("assignment", True)),
+                    "visibility": bool(value.get("visibility", False)),
+                    "assignment": bool(value.get("assignment", False)),
                 }
             self._module_permissions_data = normalised
             cache = normalised
@@ -5294,8 +5356,8 @@ class User(UserMixin, db.Model):
         module_key = (module_key or "").strip().lower()
         data = self._module_permissions_cache().get(module_key, {})
         return {
-            "visibility": bool(data.get("visibility", True)),
-            "assignment": bool(data.get("assignment", True)),
+            "visibility": bool(data.get("visibility", False)),
+            "assignment": bool(data.get("assignment", False)),
         }
 
     def set_module_permissions(self, permissions):
@@ -5304,8 +5366,8 @@ class User(UserMixin, db.Model):
             module_key = (key or "").strip().lower()
             if not module_key:
                 continue
-            visibility = bool(value.get("visibility", True)) if isinstance(value, dict) else bool(value)
-            assignment = bool(value.get("assignment", True)) if isinstance(value, dict) else True
+            visibility = bool(value.get("visibility", False)) if isinstance(value, dict) else bool(value)
+            assignment = bool(value.get("assignment", False)) if isinstance(value, dict) else bool(value)
             cleaned[module_key] = {
                 "visibility": visibility,
                 "assignment": assignment,
@@ -9321,11 +9383,11 @@ def _position_cycle(position, candidate_manager):
 # ---------------------- ADMINISTRATION ----------------------
 def _admin_users_context(create_defaults=None, show_create=False):
     departments = sorted(
-        Department.query.order_by(Department.name.asc()).all(),
+        Department.query.options(joinedload(Department.parent)).order_by(Department.name.asc()).all(),
         key=lambda d: (d.full_name or "").lower(),
     )
     positions = sorted(
-        Position.query.order_by(Position.title.asc()).all(),
+        Position.query.options(joinedload(Position.department)).order_by(Position.title.asc()).all(),
         key=lambda p: (p.display_label or "").lower(),
     )
     defaults = dict(create_defaults or {})
@@ -11730,6 +11792,9 @@ def customer_support_tasks():
     active_support_users = [
         user for user in get_assignable_users_for_module("customer_support") if user.is_active
     ]
+    active_sales_users = [
+        user for user in get_assignable_users_for_module("sales") if user.is_active
+    ]
 
     sales_clients = (
         SalesClient.query.order_by(func.lower(func.coalesce(SalesClient.display_name, ""))).all()
@@ -11761,6 +11826,7 @@ def customer_support_tasks():
         sales_clients=sales_clients,
         installation_projects=installation_projects,
         amc_customers=amc_customers,
+        active_sales_users=active_sales_users,
     )
 
 
