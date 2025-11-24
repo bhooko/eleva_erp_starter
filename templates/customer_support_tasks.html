@@ -693,16 +693,16 @@
     document.addEventListener('DOMContentLoaded', function () {
       const body = document.body;
 
-      const categoryAssignments = {{ (support_settings.category_position_assignments or {}) | tojson }};
+      const assigneeWhitelist = {{ (assignee_whitelist or {}) | tojson }};
 
-      function getAllowedPositions(categoryId) {
-        const allowed = categoryAssignments?.[categoryId] || [];
+      function getAllowedUsers(categoryId) {
+        const allowed = assigneeWhitelist?.[categoryId] || [];
         return Array.isArray(allowed) ? allowed.map((value) => parseInt(value, 10)).filter((value) => !Number.isNaN(value)) : [];
       }
 
       function applyAssigneeFilter(select, categoryId) {
         if (!select) return;
-        const allowed = getAllowedPositions(categoryId);
+        const allowedUsers = getAllowedUsers(categoryId);
         Array.from(select.options).forEach((option) => {
           if (!option.value) {
             option.disabled = false;
@@ -710,9 +710,14 @@
             return;
           }
 
-          const positionIdRaw = option.dataset.positionId;
-          const positionId = positionIdRaw ? parseInt(positionIdRaw, 10) : NaN;
-          const isAllowed = !allowed.length || (!Number.isNaN(positionId) && allowed.includes(positionId));
+          const userId = parseInt(option.value, 10);
+          if (Number.isNaN(userId)) {
+            option.disabled = false;
+            option.hidden = false;
+            return;
+          }
+
+          const isAllowed = !allowedUsers.length || allowedUsers.includes(userId);
           option.disabled = !isAllowed;
           option.hidden = !isAllowed;
         });
