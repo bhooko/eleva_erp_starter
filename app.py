@@ -2566,6 +2566,98 @@ CUSTOMER_SUPPORT_CHANNELS = [
     {"id": "whatsapp", "label": "WhatsApp", "icon": "💬"},
 ]
 
+
+CUSTOMER_SUPPORT_SETTINGS_PATH = os.path.join(
+    BASE_DIR, "instance", "customer_support_settings.json"
+)
+
+
+def _default_customer_support_settings():
+    return {
+        "auto_triage_enabled": True,
+        "escalation_notifications": True,
+        "category_position_assignments": {},
+    }
+
+
+def _normalise_category_position_assignments(data):
+    assignments = {}
+    if not isinstance(data, dict):
+        return assignments
+
+    for key, value in data.items():
+        category_id = (key or "").strip()
+        if not category_id:
+            continue
+        positions = []
+        for item in value or []:
+            try:
+                position_id = int(item)
+            except (TypeError, ValueError):
+                continue
+            positions.append(position_id)
+
+        if positions:
+            assignments[category_id] = sorted(set(positions))
+
+    return assignments
+
+
+def _load_customer_support_settings():
+    settings = _default_customer_support_settings()
+    if not os.path.exists(CUSTOMER_SUPPORT_SETTINGS_PATH):
+        return settings
+
+    try:
+        with open(CUSTOMER_SUPPORT_SETTINGS_PATH, "r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+        if isinstance(payload, dict):
+            settings.update(
+                {
+                    "auto_triage_enabled": bool(payload.get("auto_triage_enabled", True)),
+                    "escalation_notifications": bool(
+                        payload.get("escalation_notifications", True)
+                    ),
+                    "category_position_assignments": _normalise_category_position_assignments(
+                        payload.get("category_position_assignments", {})
+                    ),
+                }
+            )
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return settings
+
+
+def _save_customer_support_settings(settings):
+    os.makedirs(os.path.dirname(CUSTOMER_SUPPORT_SETTINGS_PATH), exist_ok=True)
+    to_store = {
+        **_default_customer_support_settings(),
+        **(settings or {}),
+    }
+    to_store["category_position_assignments"] = _normalise_category_position_assignments(
+        to_store.get("category_position_assignments", {})
+    )
+
+    with open(CUSTOMER_SUPPORT_SETTINGS_PATH, "w", encoding="utf-8") as fp:
+        json.dump(to_store, fp, ensure_ascii=False, indent=2)
+
+
+def _category_allows_user_assignment(category_id, user, settings=None):
+    if not category_id or not user:
+        return True
+
+    settings = settings or _load_customer_support_settings()
+    mapping = settings.get("category_position_assignments") or {}
+    if not isinstance(mapping, dict):
+        return True
+
+    allowed_positions = mapping.get(category_id) or []
+    if not allowed_positions:
+        return True
+
+    return user.position_id in allowed_positions
+
 CUSTOMER_SUPPORT_AMC_SITES = []
 
 CUSTOMER_SUPPORT_SLA_PRESETS = [
@@ -3034,6 +3126,7 @@ def _handle_customer_support_ticket_creation():
     if form_name != "create_ticket":
         return None
 
+    support_settings = _load_customer_support_settings()
     customer = (request.form.get("customer") or "").strip()
     contact_name = (request.form.get("contact_name") or "").strip()
     contact_phone = (request.form.get("contact_phone") or "").strip()
@@ -3195,6 +3288,12 @@ def _handle_customer_support_ticket_creation():
                 or not assignee_user.can_be_assigned_module("customer_support")
             ):
                 errors.append("Select a valid assignee from the ERP user list.")
+            elif not _category_allows_user_assignment(
+                category_id, assignee_user, settings=support_settings
+            ):
+                errors.append(
+                    f"{assignee_user.display_name} cannot be assigned to this category based on CS settings."
+                )
 
     if create_sales_lead and sales_lead_owner_id_raw:
         try:
@@ -12264,6 +12363,8 @@ def customer_support_tasks():
         user for user in get_assignable_users_for_module("sales") if user.is_active
     ]
 
+    support_settings = _load_customer_support_settings()
+
     sales_clients = (
         SalesClient.query.order_by(func.lower(func.coalesce(SalesClient.display_name, ""))).all()
     )
@@ -12290,6 +12391,7 @@ def customer_support_tasks():
         has_open_linked_tasks=has_open_linked_tasks,
         ticket_open_task_map=ticket_open_task_map,
         active_support_users=active_support_users,
+        support_settings=support_settings,
         amc_lifts=_customer_support_amc_site_options(),
         sales_clients=sales_clients,
         installation_projects=installation_projects,
@@ -12311,6 +12413,8 @@ def customer_support_create_linked_task():
     if not ticket:
         flash("The referenced ticket could not be found.", "error")
         return redirect(url_for("customer_support_tasks"))
+
+    support_settings = _load_customer_support_settings()
 
     title = (request.form.get("title") or "").strip()
     details = (request.form.get("details") or "").strip()
@@ -12343,6 +12447,12 @@ def customer_support_create_linked_task():
             errors.append("The selected assignee is not active on the portal.")
         elif not assignee_user.can_be_assigned_module("customer_support"):
             errors.append("The selected user cannot be assigned to customer support tasks.")
+        elif not _category_allows_user_assignment(
+            category, assignee_user, settings=support_settings
+        ):
+            errors.append(
+                f"{assignee_user.display_name} cannot be assigned to this category based on CS settings."
+            )
 
     if errors:
         for message in errors:
@@ -12382,6 +12492,7 @@ def customer_support_update_ticket(ticket_id):
         flash("The requested ticket could not be found.", "error")
         return redirect(url_for("customer_support_tasks"))
 
+    support_settings = _load_customer_support_settings()
     status = (request.form.get("status") or ticket.get("status") or "Open").strip()
     priority = (request.form.get("priority") or ticket.get("priority") or "Medium").strip()
     assignee_value = (request.form.get("assignee") or "").strip()
@@ -12420,6 +12531,12 @@ def customer_support_update_ticket(ticket_id):
                 or not assignee_user.can_be_assigned_module("customer_support")
             ):
                 errors.append("Select an assignee from the available team members.")
+            elif not _category_allows_user_assignment(
+                ticket.get("category"), assignee_user, settings=support_settings
+            ):
+                errors.append(
+                    f"{assignee_user.display_name} cannot be assigned to this category based on CS settings."
+                )
             else:
                 new_assignee_label = assignee_user.display_name
                 new_assignee_id = assignee_user.id
@@ -12637,6 +12754,43 @@ def customer_support_calls():
         search_term=search_term,
         status_options=["Open", "In Progress", "Resolved", "Closed"],
         categories=CUSTOMER_SUPPORT_CATEGORIES,
+    )
+
+
+@app.route("/customer-support/settings", methods=["GET", "POST"])
+@login_required
+def customer_support_settings():
+    _module_visibility_required("customer_support")
+    _require_admin()
+
+    settings = _load_customer_support_settings()
+    if request.method == "POST":
+        updated = {
+            "auto_triage_enabled": _form_truthy(request.form.get("auto_triage_enabled")),
+            "escalation_notifications": _form_truthy(
+                request.form.get("escalation_notifications")
+            ),
+            "category_position_assignments": {},
+        }
+
+        for category in CUSTOMER_SUPPORT_CATEGORIES:
+            field_name = f"category_positions_{category.get('id')}"
+            updated["category_position_assignments"][category.get("id")] = request.form.getlist(
+                field_name
+            )
+
+        _save_customer_support_settings(updated)
+        flash("Customer Support settings saved.", "success")
+        return redirect(url_for("customer_support_settings"))
+
+    positions = Position.query.options(joinedload(Position.department)).order_by(Position.title.asc()).all()
+    positions = sorted(positions, key=lambda pos: (pos.display_label or "").lower())
+
+    return render_template(
+        "customer_support_settings.html",
+        settings=settings,
+        categories=CUSTOMER_SUPPORT_CATEGORIES,
+        positions=positions,
     )
 
 
