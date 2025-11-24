@@ -81,9 +81,22 @@ OPENPYXL_MISSING_MESSAGE = (
 )
 
 
+ORG_BACKUP_PATH = os.path.join(BASE_DIR, "instance", "org_structure_backup.json")
+
+
 def _ensure_openpyxl():
     if not OPENPYXL_AVAILABLE:
         raise MissingDependencyError(OPENPYXL_MISSING_MESSAGE)
+
+
+def _parse_boolean_cell(value, *, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on", "active"}
 
 
 def _extract_tabular_upload(upload, *, sheet_name=None):
@@ -2248,6 +2261,11 @@ def ensure_dropdown_options_seed():
 def ensure_default_org_structure_seed():
     """Seed a minimal department/position structure for fresh databases."""
 
+    if restore_org_structure_from_backup():
+        return True
+
+    seeded = False
+
     if Department.query.count() == 0:
         hq = Department(
             name="Management",
@@ -2270,6 +2288,7 @@ def ensure_default_org_structure_seed():
 
         db.session.add_all([hq, service, sales])
         db.session.flush()
+        seeded = True
 
     if Position.query.count() == 0:
         management = Department.query.filter_by(name="Management").first()
@@ -2282,6 +2301,10 @@ def ensure_default_org_structure_seed():
             Position(title="Sales Executive", department=sales, active=True),
         ]
         db.session.add_all([p for p in defaults if p.department is not None])
+
+        seeded = seeded or bool(defaults)
+
+    return seeded
 
 
 def get_dropdown_choices(field_key):
@@ -5330,6 +5353,126 @@ class Position(db.Model):
         return hierarchy
 
 
+def backup_org_structure():
+    """Persist a lightweight backup of departments and positions to disk."""
+
+    try:
+        departments = Department.query.options(joinedload(Department.parent)).all()
+        positions = Position.query.options(joinedload(Position.department), joinedload(Position.reports_to)).all()
+    except Exception as exc:  # pragma: no cover - defensive guard for DB issues
+        print(f"⚠️ Unable to read org structure for backup: {exc}")
+        return False
+
+    payload = {
+        "departments": [
+            {
+                "name": dept.name,
+                "branch": dept.branch,
+                "description": dept.description,
+                "active": bool(dept.active),
+                "parent": dept.parent.name if dept.parent else None,
+            }
+            for dept in departments
+        ],
+        "positions": [
+            {
+                "title": pos.title,
+                "department": pos.department.name if pos.department else None,
+                "reports_to": pos.reports_to.title if pos.reports_to else None,
+                "active": bool(pos.active),
+            }
+            for pos in positions
+        ],
+    }
+
+    try:
+        os.makedirs(os.path.dirname(ORG_BACKUP_PATH), exist_ok=True)
+        with open(ORG_BACKUP_PATH, "w", encoding="utf-8") as fp:
+            json.dump(payload, fp, ensure_ascii=False, indent=2)
+        return True
+    except OSError as exc:  # pragma: no cover - filesystem guard
+        print(f"⚠️ Unable to write org structure backup: {exc}")
+        return False
+
+
+def restore_org_structure_from_backup():
+    """Restore departments and positions from backup when the database is empty."""
+
+    if Department.query.count() > 0 or Position.query.count() > 0:
+        return False
+    if not os.path.exists(ORG_BACKUP_PATH):
+        return False
+
+    try:
+        with open(ORG_BACKUP_PATH, "r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+    except (OSError, json.JSONDecodeError) as exc:  # pragma: no cover - IO guard
+        print(f"⚠️ Unable to load org structure backup: {exc}")
+        return False
+
+    departments_data = payload.get("departments") or []
+    positions_data = payload.get("positions") or []
+    department_lookup = {}
+
+    for entry in departments_data:
+        name = (entry.get("name") or "").strip()
+        if not name:
+            continue
+        branch = entry.get("branch") or DEPARTMENT_BRANCHES[0]
+        if branch not in DEPARTMENT_BRANCHES:
+            branch = DEPARTMENT_BRANCHES[0]
+        dept = Department(
+            name=name,
+            branch=branch,
+            description=(entry.get("description") or None),
+            active=_parse_boolean_cell(entry.get("active"), default=True),
+        )
+        db.session.add(dept)
+        db.session.flush()
+        department_lookup[name.lower()] = dept
+
+    for entry in departments_data:
+        name = (entry.get("name") or "").strip()
+        parent_name = (entry.get("parent") or "").strip()
+        if not name or not parent_name:
+            continue
+        dept = department_lookup.get(name.lower())
+        parent = department_lookup.get(parent_name.lower())
+        if dept and parent:
+            dept.parent = parent
+
+    position_lookup = {}
+    for entry in positions_data:
+        title = (entry.get("title") or "").strip()
+        if not title:
+            continue
+        department_name = (entry.get("department") or "").strip().lower()
+        department = department_lookup.get(department_name) if department_name else None
+        position = Position(
+            title=title,
+            department=department,
+            active=_parse_boolean_cell(entry.get("active"), default=True),
+        )
+        db.session.add(position)
+        db.session.flush()
+        position_lookup[title.lower()] = position
+
+    for entry in positions_data:
+        title = (entry.get("title") or "").strip()
+        manager_title = (entry.get("reports_to") or "").strip()
+        if not title or not manager_title:
+            continue
+        position = position_lookup.get(title.lower())
+        manager = position_lookup.get(manager_title.lower())
+        if position and manager and not _position_cycle(position, manager):
+            position.reports_to = manager
+
+    db.session.commit()
+    backup_org_structure()
+    print("✅ Restored departments and positions from backup")
+    return True
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -7284,7 +7427,7 @@ def bootstrap_db():
     ensure_sales_task_columns()
     ensure_customer_columns()
     ensure_dropdown_options_seed()
-    ensure_default_org_structure_seed()
+    seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
@@ -7352,6 +7495,8 @@ def bootstrap_db():
         pass
 
     db.session.commit()
+    if seeded_org_structure:
+        backup_org_structure()
     synchronize_dependency_links()
 # -----------------------------------------------------------------------
 
@@ -9420,6 +9565,51 @@ def _position_cycle(position, candidate_manager):
     return False
 
 
+def _normalize_header(value):
+    return (value or "").strip().lower()
+
+
+def _column_index(header, *candidates):
+    mapping = {_normalize_header(col): idx for idx, col in enumerate(header or []) if col is not None}
+    for candidate in candidates:
+        key = _normalize_header(candidate)
+        if key in mapping:
+            return mapping[key]
+    return None
+
+
+def _org_upload_template(kind: str):
+    _ensure_openpyxl()
+
+    workbook = Workbook()
+    sheet = workbook.active
+
+    if kind == "departments":
+        sheet.title = "Departments"
+        sheet.append(["Name", "Branch", "Description", "Parent", "Active (Yes/No)"])
+    else:
+        sheet.title = "Positions"
+        sheet.append(["Title", "Department", "Reports To", "Active (Yes/No)"])
+
+    # Improve readability
+    header_font = Font(bold=True)
+    for cell in sheet[1]:
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return send_file(
+        stream,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=f"{kind}_upload_template.xlsx",
+    )
+
+
 # ---------------------- ADMINISTRATION ----------------------
 def _admin_users_context(create_defaults=None, show_create=False):
     departments = sorted(
@@ -9453,6 +9643,20 @@ def admin_users():
     _require_admin()
 
     return render_template("admin_users.html", **_admin_users_context())
+
+
+@app.route("/admin/departments/template")
+@login_required
+def admin_departments_template():
+    _require_admin()
+    return _org_upload_template("departments")
+
+
+@app.route("/admin/positions/template")
+@login_required
+def admin_positions_template():
+    _require_admin()
+    return _org_upload_template("positions")
 
 
 @app.route("/admin/users/create", methods=["POST"])
@@ -9680,6 +9884,7 @@ def admin_departments_create():
 
     db.session.add(department)
     db.session.commit()
+    backup_org_structure()
 
     flash(f"Department '{department.full_name}' created.", "success")
     return redirect(url_for("admin_users") + f"#department-{department.id}")
@@ -9734,6 +9939,7 @@ def admin_departments_update(department_id):
     department.parent = parent
 
     db.session.commit()
+    backup_org_structure()
     flash(f"Department '{department.full_name}' updated.", "success")
     return redirect(url_for("admin_users") + f"#department-{department.id}")
 
@@ -9755,8 +9961,94 @@ def admin_departments_delete(department_id):
 
     db.session.delete(department)
     db.session.commit()
+    backup_org_structure()
 
     flash(f"Department '{department.name}' deleted.", "success")
+    return redirect(url_for("admin_users") + "#departments")
+
+
+@app.route("/admin/departments/upload", methods=["POST"])
+@login_required
+def admin_departments_upload():
+    _require_admin()
+
+    upload = request.files.get("upload")
+    if not upload or not upload.filename:
+        flash("Please choose an Excel or CSV file to upload.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    try:
+        header, rows = _extract_tabular_upload(upload)
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_users") + "#departments")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        flash(f"Could not read the uploaded file: {exc}", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    name_idx = _column_index(header, "name", "department", "department name")
+    if name_idx is None:
+        flash("The upload must include a 'Name' column for departments.", "error")
+        return redirect(url_for("admin_users") + "#departments")
+
+    branch_idx = _column_index(header, "branch")
+    description_idx = _column_index(header, "description")
+    parent_idx = _column_index(header, "parent")
+    active_idx = _column_index(header, "active", "active (yes/no)")
+
+    created, skipped = 0, []
+    for row_number, row in enumerate(rows, start=2):
+        cells = list(row or [])
+        name_value = cells[name_idx] if len(cells) > name_idx else None
+        name = str(name_value).strip() if name_value is not None else ""
+        if not name:
+            continue
+
+        existing = Department.query.filter(func.lower(Department.name) == name.lower()).first()
+        if existing:
+            skipped.append(name)
+            continue
+
+        branch_value = cells[branch_idx] if branch_idx is not None and len(cells) > branch_idx else None
+        branch = str(branch_value).strip() if branch_value else DEPARTMENT_BRANCHES[0]
+        if branch not in DEPARTMENT_BRANCHES:
+            branch = DEPARTMENT_BRANCHES[0]
+
+        description_value = cells[description_idx] if description_idx is not None and len(cells) > description_idx else None
+        description = str(description_value).strip() if description_value else None
+
+        parent_value = cells[parent_idx] if parent_idx is not None and len(cells) > parent_idx else None
+        parent_name = str(parent_value).strip() if parent_value else None
+        parent = (
+            Department.query.filter(func.lower(Department.name) == parent_name.lower()).first()
+            if parent_name
+            else None
+        )
+
+        active_flag = (
+            _parse_boolean_cell(cells[active_idx])
+            if active_idx is not None and len(cells) > active_idx
+            else True
+        )
+
+        department = Department(
+            name=name,
+            branch=branch,
+            description=description or None,
+            active=active_flag,
+        )
+        if parent:
+            department.parent = parent
+
+        db.session.add(department)
+        created += 1
+
+    db.session.commit()
+    backup_org_structure()
+    flash(
+        f"Imported {created} departments. {len(skipped)} existing names were skipped.",
+        "success",
+    )
     return redirect(url_for("admin_users") + "#departments")
 
 
@@ -9796,6 +10088,7 @@ def admin_positions_create():
     )
     db.session.add(position)
     db.session.commit()
+    backup_org_structure()
 
     flash(f"Position '{position.display_label}' created.", "success")
     return redirect(url_for("admin_users") + f"#position-{position.id}")
@@ -9844,6 +10137,7 @@ def admin_positions_update(position_id):
     position.active = active_flag
 
     db.session.commit()
+    backup_org_structure()
     flash(f"Position '{position.display_label}' updated.", "success")
     return redirect(url_for("admin_users") + f"#position-{position.id}")
 
@@ -9863,8 +10157,95 @@ def admin_positions_delete(position_id):
 
     db.session.delete(position)
     db.session.commit()
+    backup_org_structure()
 
     flash(f"Position '{position.title}' deleted.", "success")
+    return redirect(url_for("admin_users") + "#positions")
+
+
+@app.route("/admin/positions/upload", methods=["POST"])
+@login_required
+def admin_positions_upload():
+    _require_admin()
+
+    upload = request.files.get("upload")
+    if not upload or not upload.filename:
+        flash("Please choose an Excel or CSV file to upload.", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    try:
+        header, rows = _extract_tabular_upload(upload)
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_users") + "#positions")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        flash(f"Could not read the uploaded file: {exc}", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    title_idx = _column_index(header, "title", "position", "position title")
+    if title_idx is None:
+        flash("The upload must include a 'Title' column for positions.", "error")
+        return redirect(url_for("admin_users") + "#positions")
+
+    department_idx = _column_index(header, "department")
+    manager_idx = _column_index(header, "reports to", "reports_to", "manager")
+    active_idx = _column_index(header, "active", "active (yes/no)")
+
+    existing_positions = {
+        (pos.title or "").strip().lower(): pos for pos in Position.query.all()
+    }
+    manager_refs = {}
+    created, skipped = 0, []
+
+    for row in rows:
+        cells = list(row or [])
+        title_value = cells[title_idx] if len(cells) > title_idx else None
+        title = str(title_value).strip() if title_value is not None else ""
+        if not title:
+            continue
+
+        key = title.lower()
+        if key in existing_positions:
+            skipped.append(title)
+            continue
+
+        department_value = cells[department_idx] if department_idx is not None and len(cells) > department_idx else None
+        department_name = str(department_value).strip() if department_value else None
+        department = None
+        if department_name:
+            department = Department.query.filter(func.lower(Department.name) == department_name.lower()).first()
+
+        manager_value = cells[manager_idx] if manager_idx is not None and len(cells) > manager_idx else None
+        manager_name = str(manager_value).strip() if manager_value else None
+
+        active_flag = (
+            _parse_boolean_cell(cells[active_idx])
+            if active_idx is not None and len(cells) > active_idx
+            else True
+        )
+
+        position = Position(title=title, department=department, active=active_flag)
+        db.session.add(position)
+        db.session.flush()
+
+        existing_positions[key] = position
+        if manager_name:
+            manager_refs[key] = manager_name.lower()
+
+        created += 1
+
+    for key, manager_key in manager_refs.items():
+        position = existing_positions.get(key)
+        manager = existing_positions.get(manager_key)
+        if position and manager and not _position_cycle(position, manager):
+            position.reports_to = manager
+
+    db.session.commit()
+    backup_org_structure()
+    flash(
+        f"Imported {created} positions. {len(skipped)} existing titles were skipped.",
+        "success",
+    )
     return redirect(url_for("admin_users") + "#positions")
 
 
