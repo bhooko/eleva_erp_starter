@@ -3309,8 +3309,9 @@ def _handle_customer_support_ticket_creation():
         linked_entities.append(entity)
 
     created_opportunity = None
-    if create_sales_lead and category_id.lower() == "sales-ni":
-        pipeline_key = "lift"
+    sales_lead_pipeline_map = {"sales-ni": "lift", "sales-amc": "amc"}
+    if create_sales_lead and category_id.lower() in sales_lead_pipeline_map:
+        pipeline_key = sales_lead_pipeline_map[category_id.lower()]
         pipeline_config = get_pipeline_config(pipeline_key)
         stages = pipeline_config.get("stages", []) if isinstance(pipeline_config, dict) else []
         lead_stage = stages[0] if stages else "New Enquiry"

@@ -156,7 +156,7 @@
         <div class="hidden rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4" data-sales-lead-section>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p class="text-xs uppercase tracking-wide text-emerald-300">Sales – New installation</p>
+              <p class="text-xs uppercase tracking-wide text-emerald-300" data-sales-lead-label>Sales – New installation</p>
               <p class="text-sm text-slate-200">Convert this ticket into a sales enquiry and route it to the right owner.</p>
             </div>
             <label class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">
@@ -1044,9 +1044,10 @@
       const salesLeadSection = document.querySelector('[data-sales-lead-section]');
       const salesLeadToggle = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-toggle]') : null;
       const salesLeadFields = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-fields]') : null;
+      const salesLeadLabel = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-label]') : null;
 
       const optionalCategoryValues = ['other-dept', 'other-query'];
-      const salesLeadCategoryValue = 'sales-ni';
+      const salesLeadCategoryValues = ['sales-ni', 'sales-amc'];
       const updateCustomerRequirement = () => {
         if (!customerNameInput) {
           return;
@@ -1076,9 +1077,16 @@
 
       const refreshSalesLeadVisibility = () => {
         const categoryValue = (categorySelect && categorySelect.value ? categorySelect.value : '').toLowerCase();
-        const matchesSalesLead = categoryValue === salesLeadCategoryValue;
+        const matchesSalesLead = salesLeadCategoryValues.includes(categoryValue);
         if (salesLeadSection) {
           salesLeadSection.classList.toggle('hidden', !matchesSalesLead);
+        }
+        if (salesLeadLabel) {
+          const selectedOption = categorySelect ? categorySelect.options[categorySelect.selectedIndex] : null;
+          const selectedLabel = selectedOption
+            ? selectedOption.getAttribute('data-category-label') || selectedOption.textContent
+            : '';
+          salesLeadLabel.textContent = selectedLabel || 'Sales enquiry';
         }
         const enableFields = matchesSalesLead && salesLeadToggle && salesLeadToggle.checked;
         setSalesLeadFieldsEnabled(enableFields);
