@@ -7735,7 +7735,7 @@ def admin_reset_workspace():
     if not current_user.is_admin:
         abort(403)
 
-    redirect_target = url_for("settings", tab="admin")
+    redirect_target = url_for("settings", tab="account")
     password = (request.form.get("confirm_password") or "").strip()
 
     if not password:
@@ -9587,9 +9587,38 @@ def _org_upload_template(kind: str):
     if kind == "departments":
         sheet.title = "Departments"
         sheet.append(["Name", "Branch", "Description", "Parent", "Active (Yes/No)"])
+        existing = (
+            Department.query.options(joinedload(Department.parent))
+            .order_by(Department.name.asc())
+            .all()
+        )
+        for dept in existing:
+            sheet.append(
+                [
+                    dept.name,
+                    dept.branch,
+                    dept.description or "",
+                    dept.parent.name if dept.parent else "",
+                    "Yes" if dept.active else "No",
+                ]
+            )
     else:
         sheet.title = "Positions"
         sheet.append(["Title", "Department", "Reports To", "Active (Yes/No)"])
+        existing = (
+            Position.query.options(joinedload(Position.department), joinedload(Position.reports_to))
+            .order_by(Position.title.asc())
+            .all()
+        )
+        for pos in existing:
+            sheet.append(
+                [
+                    pos.title,
+                    pos.department.name if pos.department else "",
+                    pos.reports_to.title if pos.reports_to else "",
+                    "Yes" if pos.active else "No",
+                ]
+            )
 
     # Improve readability
     header_font = Font(bold=True)
@@ -9997,6 +10026,7 @@ def admin_departments_upload():
     active_idx = _column_index(header, "active", "active (yes/no)")
 
     created, skipped = 0, []
+    seen_names = set()
     for row_number, row in enumerate(rows, start=2):
         cells = list(row or [])
         name_value = cells[name_idx] if len(cells) > name_idx else None
@@ -10004,10 +10034,17 @@ def admin_departments_upload():
         if not name:
             continue
 
-        existing = Department.query.filter(func.lower(Department.name) == name.lower()).first()
+        key = name.lower()
+        if key in seen_names:
+            skipped.append(name)
+            continue
+
+        existing = Department.query.filter(func.lower(Department.name) == key).first()
         if existing:
             skipped.append(name)
             continue
+
+        seen_names.add(key)
 
         branch_value = cells[branch_idx] if branch_idx is not None and len(cells) > branch_idx else None
         branch = str(branch_value).strip() if branch_value else DEPARTMENT_BRANCHES[0]
@@ -10191,9 +10228,13 @@ def admin_positions_upload():
     manager_idx = _column_index(header, "reports to", "reports_to", "manager")
     active_idx = _column_index(header, "active", "active (yes/no)")
 
-    existing_positions = {
-        (pos.title or "").strip().lower(): pos for pos in Position.query.all()
-    }
+    existing_positions = {}
+    title_lookup = {}
+    for pos in Position.query.options(joinedload(Position.department)).all():
+        title_key = (pos.title or "").strip().lower()
+        dept_key = (pos.department.name.strip().lower() if pos.department and pos.department.name else None)
+        existing_positions[(title_key, dept_key)] = pos
+        title_lookup.setdefault(title_key, pos)
     manager_refs = {}
     created, skipped = 0, []
 
@@ -10204,16 +10245,18 @@ def admin_positions_upload():
         if not title:
             continue
 
-        key = title.lower()
-        if key in existing_positions:
-            skipped.append(title)
-            continue
-
         department_value = cells[department_idx] if department_idx is not None and len(cells) > department_idx else None
         department_name = str(department_value).strip() if department_value else None
         department = None
+        dept_key = None
         if department_name:
             department = Department.query.filter(func.lower(Department.name) == department_name.lower()).first()
+            dept_key = (department.name.strip().lower() if department and department.name else department_name.lower())
+
+        key = (title.lower(), dept_key)
+        if key in existing_positions:
+            skipped.append(title)
+            continue
 
         manager_value = cells[manager_idx] if manager_idx is not None and len(cells) > manager_idx else None
         manager_name = str(manager_value).strip() if manager_value else None
@@ -10229,14 +10272,17 @@ def admin_positions_upload():
         db.session.flush()
 
         existing_positions[key] = position
+        title_lookup.setdefault(title.lower(), position)
         if manager_name:
-            manager_refs[key] = manager_name.lower()
+            manager_refs[key] = {"manager": manager_name.lower(), "dept_key": dept_key}
 
         created += 1
 
-    for key, manager_key in manager_refs.items():
+    for key, manager_info in manager_refs.items():
         position = existing_positions.get(key)
-        manager = existing_positions.get(manager_key)
+        manager_key = manager_info.get("manager") if isinstance(manager_info, dict) else manager_info
+        dept_key = manager_info.get("dept_key") if isinstance(manager_info, dict) else None
+        manager = existing_positions.get((manager_key, dept_key)) or title_lookup.get(manager_key)
         if position and manager and not _position_cycle(position, manager):
             position.reports_to = manager
 
