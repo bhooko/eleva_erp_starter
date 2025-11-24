@@ -2245,6 +2245,45 @@ def ensure_dropdown_options_seed():
     db.session.commit()
 
 
+def ensure_default_org_structure_seed():
+    """Seed a minimal department/position structure for fresh databases."""
+
+    if Department.query.count() == 0:
+        hq = Department(
+            name="Management",
+            branch=DEPARTMENT_BRANCHES[0],
+            description="Leadership and administration",
+            active=True,
+        )
+        service = Department(
+            name="Service",
+            branch=DEPARTMENT_BRANCHES[0],
+            description="Field service and maintenance",
+            active=True,
+        )
+        sales = Department(
+            name="Sales",
+            branch=DEPARTMENT_BRANCHES[0],
+            description="Business development and client relations",
+            active=True,
+        )
+
+        db.session.add_all([hq, service, sales])
+        db.session.flush()
+
+    if Position.query.count() == 0:
+        management = Department.query.filter_by(name="Management").first()
+        service = Department.query.filter_by(name="Service").first()
+        sales = Department.query.filter_by(name="Sales").first()
+
+        defaults = [
+            Position(title="Administrator", department=management, active=True),
+            Position(title="Service Technician", department=service, active=True),
+            Position(title="Sales Executive", department=sales, active=True),
+        ]
+        db.session.add_all([p for p in defaults if p.department is not None])
+
+
 def get_dropdown_choices(field_key):
     definition = DROPDOWN_FIELD_DEFINITIONS.get(field_key)
     if not definition:
@@ -7245,6 +7284,7 @@ def bootstrap_db():
     ensure_sales_task_columns()
     ensure_customer_columns()
     ensure_dropdown_options_seed()
+    ensure_default_org_structure_seed()
     purge_legacy_demo_records()
 
     default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
