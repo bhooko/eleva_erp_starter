@@ -18,26 +18,6 @@
     </div>
 
     <form method="post" class="mt-8 space-y-6">
-      <section class="grid gap-4 md:grid-cols-2">
-        <label class="flex items-start gap-4 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5">
-          <input type="checkbox" name="auto_triage_enabled" value="1" class="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-amber-400 focus:ring-amber-400" {{ 'checked' if settings.auto_triage_enabled else '' }}>
-          <div class="space-y-1">
-            <p class="text-base font-semibold text-slate-100">Auto triage & routing</p>
-            <p class="text-sm text-slate-400">Keep the inbox lean with automatic triage that labels, prioritises and routes fresh tickets.</p>
-            <p class="text-[11px] uppercase tracking-wide text-slate-500">Applies to new tickets captured from any channel.</p>
-          </div>
-        </label>
-
-        <label class="flex items-start gap-4 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5">
-          <input type="checkbox" name="escalation_notifications" value="1" class="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-amber-400 focus:ring-amber-400" {{ 'checked' if settings.escalation_notifications else '' }}>
-          <div class="space-y-1">
-            <p class="text-base font-semibold text-slate-100">Escalation notifications</p>
-            <p class="text-sm text-slate-400">Send proactive nudges when SLA timers are at risk or when callbacks breach thresholds.</p>
-            <p class="text-[11px] uppercase tracking-wide text-slate-500">Notifications respect module permissions and user availability.</p>
-          </div>
-        </label>
-      </section>
-
       <section class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-5">
         <div class="flex flex-col gap-1">
           <h2 class="text-lg font-semibold text-slate-100">Category wise assignment by position</h2>

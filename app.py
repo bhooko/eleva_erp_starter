@@ -2574,8 +2574,6 @@ CUSTOMER_SUPPORT_SETTINGS_PATH = os.path.join(
 
 def _default_customer_support_settings():
     return {
-        "auto_triage_enabled": True,
-        "escalation_notifications": True,
         "category_position_assignments": {},
     }
 
@@ -2614,10 +2612,6 @@ def _load_customer_support_settings():
         if isinstance(payload, dict):
             settings.update(
                 {
-                    "auto_triage_enabled": bool(payload.get("auto_triage_enabled", True)),
-                    "escalation_notifications": bool(
-                        payload.get("escalation_notifications", True)
-                    ),
                     "category_position_assignments": _normalise_category_position_assignments(
                         payload.get("category_position_assignments", {})
                     ),
@@ -12364,6 +12358,17 @@ def customer_support_tasks():
     ]
 
     support_settings = _load_customer_support_settings()
+    category_assignments = support_settings.get("category_position_assignments") or {}
+    assignee_whitelist = {}
+    for category in CUSTOMER_SUPPORT_CATEGORIES:
+        category_id = category.get("id")
+        allowed_users = []
+        for user in active_support_users:
+            if _category_allows_user_assignment(
+                category_id, user, settings=support_settings
+            ):
+                allowed_users.append(user.id)
+        assignee_whitelist[category_id] = allowed_users
 
     sales_clients = (
         SalesClient.query.order_by(func.lower(func.coalesce(SalesClient.display_name, ""))).all()
@@ -12392,6 +12397,8 @@ def customer_support_tasks():
         ticket_open_task_map=ticket_open_task_map,
         active_support_users=active_support_users,
         support_settings=support_settings,
+        category_assignments=category_assignments,
+        assignee_whitelist=assignee_whitelist,
         amc_lifts=_customer_support_amc_site_options(),
         sales_clients=sales_clients,
         installation_projects=installation_projects,
@@ -12766,10 +12773,6 @@ def customer_support_settings():
     settings = _load_customer_support_settings()
     if request.method == "POST":
         updated = {
-            "auto_triage_enabled": _form_truthy(request.form.get("auto_triage_enabled")),
-            "escalation_notifications": _form_truthy(
-                request.form.get("escalation_notifications")
-            ),
             "category_position_assignments": {},
         }
 
