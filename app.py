@@ -82,6 +82,9 @@ OPENPYXL_MISSING_MESSAGE = (
 
 
 ORG_BACKUP_PATH = os.path.join(BASE_DIR, "instance", "org_structure_backup.json")
+CUSTOMER_SUPPORT_DATA_PATH = os.path.join(
+    BASE_DIR, "instance", "customer_support_data.json"
+)
 
 
 def _ensure_openpyxl():
@@ -212,6 +215,37 @@ def _stage_start() -> float:
 def _check_stage_timeout(start_time: float, stage: str, *, timeout: int = UPLOAD_STAGE_TIMEOUT_SECONDS):
     if time.monotonic() - start_time > timeout:
         raise UploadStageTimeoutError(stage, timeout=timeout)
+
+
+def _encode_special_types(value):
+    if isinstance(value, datetime.datetime):
+        return {"__type__": "datetime", "value": value.isoformat()}
+    if isinstance(value, datetime.date):
+        return {"__type__": "date", "value": value.isoformat()}
+    if isinstance(value, list):
+        return [_encode_special_types(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _encode_special_types(item) for key, item in value.items()}
+    return value
+
+
+def _decode_special_types(value):
+    if isinstance(value, dict):
+        marker = value.get("__type__")
+        if marker == "datetime":
+            try:
+                return datetime.datetime.fromisoformat(value.get("value", ""))
+            except (TypeError, ValueError):
+                return value.get("value")
+        if marker == "date":
+            try:
+                return datetime.date.fromisoformat(value.get("value", ""))
+            except (TypeError, ValueError):
+                return value.get("value")
+        return {key: _decode_special_types(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decode_special_types(item) for item in value]
+    return value
 
 
 def _normalize_extension(extension):
@@ -2687,6 +2721,46 @@ CUSTOMER_SUPPORT_TICKETS = []
 CUSTOMER_SUPPORT_CALL_LOGS = []
 
 
+def _load_customer_support_state():
+    if not os.path.exists(CUSTOMER_SUPPORT_DATA_PATH):
+        return
+
+    try:
+        with open(CUSTOMER_SUPPORT_DATA_PATH, "r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        app.logger.warning("Could not load customer support state; starting fresh.")
+        return
+
+    tickets = payload.get("tickets")
+    if isinstance(tickets, list):
+        CUSTOMER_SUPPORT_TICKETS[:] = [
+            _decode_special_types(ticket) for ticket in tickets if isinstance(ticket, dict)
+        ]
+
+    call_logs = payload.get("call_logs")
+    if isinstance(call_logs, list):
+        CUSTOMER_SUPPORT_CALL_LOGS[:] = [
+            _decode_special_types(call) for call in call_logs if isinstance(call, dict)
+        ]
+
+
+def _save_customer_support_state():
+    os.makedirs(os.path.dirname(CUSTOMER_SUPPORT_DATA_PATH), exist_ok=True)
+    payload = {
+        "tickets": [_encode_special_types(ticket) for ticket in CUSTOMER_SUPPORT_TICKETS],
+        "call_logs": [_encode_special_types(call) for call in CUSTOMER_SUPPORT_CALL_LOGS],
+    }
+    try:
+        with open(CUSTOMER_SUPPORT_DATA_PATH, "w", encoding="utf-8") as fp:
+            json.dump(payload, fp, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        app.logger.error("Failed to save customer support state: %s", exc)
+
+
+_load_customer_support_state()
+
+
 def _get_srt_task(task_id):
     return next((task for task in SRT_SAMPLE_TASKS if task["id"] == task_id), None)
 
@@ -3549,6 +3623,7 @@ def _handle_customer_support_ticket_creation():
         db.session.commit()
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
+    _save_customer_support_state()
     if created_opportunity:
         flash("Sales enquiry created in the sales pipeline.", "success")
     flash(f"Ticket {ticket_id} created successfully.", "success")
@@ -12572,6 +12647,7 @@ def customer_support_create_linked_task():
     }
 
     ticket.setdefault("linked_tasks", []).append(new_task)
+    _save_customer_support_state()
     flash("Linked task created successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
@@ -12698,6 +12774,7 @@ def customer_support_update_ticket(ticket_id):
             }
         )
 
+    _save_customer_support_state()
     flash("Ticket details updated successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
@@ -12748,10 +12825,11 @@ def customer_support_mark_ticket_resolved(ticket_id):
             "label": "Closing remarks",
             "visibility": "internal",
             "comment": closing_comment,
-            **actor_info,
-        }
-    )
+                **actor_info,
+            }
+        )
 
+    _save_customer_support_state()
     flash(f"Ticket {ticket_id} marked as resolved.", "success")
     return redirect(url_for("customer_support_tasks"))
 
@@ -12770,6 +12848,7 @@ def customer_support_delete_ticket(ticket_id):
         return redirect(url_for("customer_support_tasks"))
 
     CUSTOMER_SUPPORT_TICKETS[:] = [item for item in CUSTOMER_SUPPORT_TICKETS if item.get("id") != ticket_id]
+    _save_customer_support_state()
     flash(f"Ticket {ticket_id} deleted successfully.", "success")
     return redirect(url_for("customer_support_tasks"))
 
@@ -12821,6 +12900,7 @@ def customer_support_post_update(ticket_id):
     ticket.setdefault("timeline", []).append(timeline_entry)
     ticket["updated_at"] = datetime.datetime.utcnow()
 
+    _save_customer_support_state()
     flash("Ticket update posted successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
 
