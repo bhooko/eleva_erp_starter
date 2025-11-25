@@ -694,15 +694,26 @@
       const body = document.body;
 
       const assigneeWhitelist = {{ (assignee_whitelist or {}) | tojson }};
+      const categoryAssignments = {{ (category_assignments or {}) | tojson }};
+
+      function getAllowedPositions(categoryId) {
+        const positions = categoryAssignments?.[categoryId] || [];
+        return Array.isArray(positions)
+          ? positions.map((value) => parseInt(value, 10)).filter((value) => !Number.isNaN(value))
+          : [];
+      }
 
       function getAllowedUsers(categoryId) {
         const allowed = assigneeWhitelist?.[categoryId] || [];
-        return Array.isArray(allowed) ? allowed.map((value) => parseInt(value, 10)).filter((value) => !Number.isNaN(value)) : [];
+        return Array.isArray(allowed)
+          ? allowed.map((value) => parseInt(value, 10)).filter((value) => !Number.isNaN(value))
+          : [];
       }
 
       function applyAssigneeFilter(select, categoryId) {
         if (!select) return;
         const allowedUsers = getAllowedUsers(categoryId);
+        const allowedPositions = getAllowedPositions(categoryId);
         Array.from(select.options).forEach((option) => {
           if (!option.value) {
             option.disabled = false;
@@ -711,13 +722,10 @@
           }
 
           const userId = parseInt(option.value, 10);
-          if (Number.isNaN(userId)) {
-            option.disabled = false;
-            option.hidden = false;
-            return;
-          }
-
-          const isAllowed = !allowedUsers.length || allowedUsers.includes(userId);
+          const positionId = parseInt(option.dataset.positionId || '', 10);
+          const userAllowed = Number.isNaN(userId) ? true : !allowedUsers.length || allowedUsers.includes(userId);
+          const positionAllowed = Number.isNaN(positionId) ? true : !allowedPositions.length || allowedPositions.includes(positionId);
+          const isAllowed = userAllowed && positionAllowed;
           option.disabled = !isAllowed;
           option.hidden = !isAllowed;
         });
