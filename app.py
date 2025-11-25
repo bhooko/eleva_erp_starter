@@ -10462,12 +10462,32 @@ def _build_task_overview(viewing_user: "User"):
             return "scheduled"
         return "open"
 
+    def _pending_support_tickets_for_users(user_ids):
+        if not user_ids:
+            return []
+
+        allowed_ids = {uid for uid in user_ids if uid}
+        pending_tickets = []
+        for ticket in CUSTOMER_SUPPORT_TICKETS:
+            status_value = (ticket.get("status") or "").strip().lower()
+            if status_value in {"resolved", "closed"}:
+                continue
+
+            assignee_user = _resolve_ticket_assignee_user(
+                ticket, module_key="customer_support"
+            )
+            if assignee_user and assignee_user.id in allowed_ids and assignee_user.is_active:
+                pending_tickets.append(ticket)
+
+        return pending_tickets
+
     def _build_pending_modules(
         viewing_user,
         open_tasks,
         now,
         assignee_lookup=None,
         sales_user_ids=None,
+        support_tickets=None,
     ):
         modules_map = OrderedDict()
         module_order = []
@@ -10475,6 +10495,9 @@ def _build_task_overview(viewing_user: "User"):
         show_projects = viewing_user.can_view_module("operations") if viewing_user else True
         show_qc = viewing_user.can_view_module("qc") if viewing_user else True
         show_sales = viewing_user.can_view_module("sales") if viewing_user else True
+        show_customer_support = (
+            viewing_user.can_view_module("customer_support") if viewing_user else True
+        )
 
         if show_projects:
             _ensure_module(
@@ -10491,6 +10514,14 @@ def _build_task_overview(viewing_user: "User"):
                 "Sales",
                 "No pending sales activities.",
                 "Upcoming and overdue sales engagements on your opportunities.",
+            )
+        if show_customer_support:
+            _ensure_module(
+                modules_map,
+                module_order,
+                "Customer Support",
+                "No open support tickets.",
+                "Support tickets assigned to you.",
             )
 
         for task in open_tasks:
@@ -10646,6 +10677,53 @@ def _build_task_overview(viewing_user: "User"):
                     }
                 )
 
+        if show_customer_support:
+            for ticket in support_tickets or []:
+                assignee_user = _resolve_ticket_assignee_user(
+                    ticket, module_key="customer_support"
+                )
+                if assignee_lookup and assignee_user:
+                    assignee_user = assignee_lookup.get(assignee_user.id, assignee_user)
+
+                due_at = ticket.get("due_at") or _calculate_ticket_sla_due(ticket)
+                if isinstance(due_at, datetime.datetime):
+                    due_label, due_display, due_variant = _describe_due_date(due_at, now)
+                else:
+                    due_label, due_display, due_variant = None, None, "none"
+
+                metadata = []
+                if ticket.get("category"):
+                    metadata.append(ticket.get("category"))
+                if ticket.get("channel"):
+                    metadata.append(ticket.get("channel"))
+                if ticket.get("priority"):
+                    metadata.append(f"Priority: {ticket.get('priority')}")
+
+                if assignee_user and viewing_user and assignee_user.id != viewing_user.id:
+                    owner_label = assignee_user.display_name or assignee_user.username
+                    metadata.append(f"Owner: {owner_label}")
+
+                support_module = modules_map.get("Customer Support")
+                support_module["items"].append(
+                    {
+                        "title": ticket.get("subject") or "Support ticket",
+                        "subtitle": ticket.get("customer")
+                        or ticket.get("location")
+                        or ticket.get("contact_name"),
+                        "description": ticket.get("remarks"),
+                        "identifier": ticket.get("id"),
+                        "status": ticket.get("status") or "Open",
+                        "status_class": _status_badge_class(_status_key(ticket.get("status"))),
+                        "due_description": due_label,
+                        "due_display": due_display,
+                        "due_class": _due_badge_class(due_variant),
+                        "url": url_for("customer_support_tasks", ticket=ticket.get("id")),
+                        "secondary_url": None,
+                        "secondary_label": None,
+                        "metadata": metadata,
+                    }
+                )
+
         pending_modules = [modules_map[label] for label in module_order]
         pending_total = sum(len(module["items"]) for module in pending_modules)
         return pending_modules, pending_total
@@ -10751,7 +10829,13 @@ def _build_task_overview(viewing_user: "User"):
                 )
             })
 
-    pending_modules, pending_total = _build_pending_modules(viewing_user, open_tasks, now)
+    support_tickets = _pending_support_tickets_for_users({getattr(viewing_user, "id", None)})
+    pending_modules, pending_total = _build_pending_modules(
+        viewing_user,
+        open_tasks,
+        now,
+        support_tickets=support_tickets,
+    )
 
     team_members = _team_members_for(viewing_user)
     team_user_ids = sorted(
@@ -10769,12 +10853,14 @@ def _build_task_overview(viewing_user: "User"):
         team_actionable_tasks = [task for task in team_tasks if task.dependency_satisfied]
         team_open_tasks = [task for task in team_actionable_tasks if task.status != "Closed"]
         assignment_lookup = {member.id: member for member in team_members}
+        team_support_tickets = _pending_support_tickets_for_users(team_user_ids)
         team_pending_modules, team_pending_total = _build_pending_modules(
             viewing_user,
             team_open_tasks,
             now,
             assignee_lookup=assignment_lookup,
             sales_user_ids=team_user_ids,
+            support_tickets=team_support_tickets,
         )
 
     return {
