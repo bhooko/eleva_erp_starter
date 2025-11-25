@@ -10548,9 +10548,10 @@ def _build_task_overview(viewing_user: "User"):
             if status_value in {"resolved", "closed"}:
                 continue
 
-            assignee_user = _resolve_ticket_assignee_user(
-                ticket, module_key="customer_support"
-            )
+            # Always resolve the assignee without enforcing module assignment
+            # permissions so that tickets remain visible to the person they were
+            # assigned to, even if their permissions have been restricted.
+            assignee_user = _resolve_ticket_assignee_user(ticket, module_key=None)
             if assignee_user and assignee_user.id in allowed_ids and assignee_user.is_active:
                 pending_tickets.append(ticket)
 
