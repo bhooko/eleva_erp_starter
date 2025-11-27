@@ -5749,9 +5749,14 @@ class User(UserMixin, db.Model):
         return self.session_token
 
 
-def _module_visibility_required(module_key):
-    if not current_user.can_view_module(module_key):
-        abort(403)
+def _module_visibility_required(module_key, owner_user_id=None):
+    if current_user.can_view_module(module_key):
+        return
+
+    if owner_user_id is not None and owner_user_id == current_user.id:
+        return
+
+    abort(403)
 
 
 def get_assignable_users_for_module(module_key, order_by="name"):
@@ -8381,11 +8386,12 @@ def sales_tasks():
 @app.route("/sales/tasks/<int:task_id>/toggle", methods=["POST"])
 @login_required
 def sales_task_toggle(task_id):
-    _module_visibility_required("sales")
     task = db.session.get(SalesTask, task_id)
     if not task:
         flash("Task not found.", "error")
         return redirect(url_for("sales_tasks"))
+
+    _module_visibility_required("sales", owner_user_id=task.owner_id)
 
     if task.is_completed:
         task.status = "Pending"
@@ -8774,11 +8780,12 @@ def sales_companies_create():
 @app.route("/sales/clients/<int:client_id>", methods=["GET", "POST"])
 @login_required
 def sales_client_detail(client_id):
-    _module_visibility_required("sales")
     client = db.session.get(SalesClient, client_id)
     if not client:
         flash("Client not found.", "error")
         return redirect(url_for("sales_clients"))
+
+    _module_visibility_required("sales", owner_user_id=client.owner_id)
 
     if request.method == "POST":
         action = request.form.get("form_action") or "update"
@@ -9330,11 +9337,12 @@ def sales_opportunities_create():
 @app.route("/sales/opportunities/<int:opportunity_id>", methods=["GET", "POST"])
 @login_required
 def sales_opportunity_detail(opportunity_id):
-    _module_visibility_required("sales")
     opportunity = db.session.get(SalesOpportunity, opportunity_id)
     if not opportunity:
         flash("Opportunity not found.", "error")
         return redirect(url_for("sales_opportunities_pipeline", pipeline_key="lift"))
+
+    _module_visibility_required("sales", owner_user_id=opportunity.owner_id)
 
     pipeline_key = opportunity.pipeline
     stages = get_pipeline_stages(pipeline_key)
