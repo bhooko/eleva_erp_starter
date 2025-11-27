@@ -10542,6 +10542,22 @@ def _build_task_overview(viewing_user: "User"):
             return []
 
         allowed_ids = {uid for uid in user_ids if uid}
+        allowed_users = {
+            user.id: user
+            for user in User.query.filter(User.id.in_(allowed_ids)).all()
+            if user and user.is_active
+        }
+        allowed_display_names = {
+            (user.display_name or "").strip().lower(): user
+            for user in allowed_users.values()
+            if (user.display_name or "").strip()
+        }
+        allowed_usernames = {
+            (user.username or "").strip().lower(): user
+            for user in allowed_users.values()
+            if (user.username or "").strip()
+        }
+
         pending_tickets = []
         for ticket in CUSTOMER_SUPPORT_TICKETS:
             status_value = (ticket.get("status") or "").strip().lower()
@@ -10554,6 +10570,19 @@ def _build_task_overview(viewing_user: "User"):
             assignee_user = _resolve_ticket_assignee_user(ticket, module_key=None)
             if assignee_user and assignee_user.id in allowed_ids and assignee_user.is_active:
                 pending_tickets.append(ticket)
+                continue
+
+            assignee_name = (ticket.get("assignee") or "").strip().lower()
+            if not assignee_user and assignee_name:
+                matched_user = (
+                    allowed_display_names.get(assignee_name)
+                    or allowed_usernames.get(assignee_name)
+                )
+                if matched_user:
+                    ticket.setdefault("assignee_user_id", matched_user.id)
+                    if not ticket.get("assignee"):
+                        ticket["assignee"] = matched_user.display_name
+                    pending_tickets.append(ticket)
 
         return pending_tickets
 
