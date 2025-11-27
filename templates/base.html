@@ -940,6 +940,28 @@
               </span>
               <span class="label text-[15px] flex-1">QC</span>
             </div>
+            {% if qc_nav_stats %}
+              <div class="pl-12 pr-3 pb-1">
+                <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <div class="text-slate-500">Total</div>
+                    <div class="font-semibold text-emerald-200">{{ qc_nav_stats.total }}</div>
+                  </div>
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <div class="text-slate-500">Open</div>
+                    <div class="font-semibold text-amber-200">{{ qc_nav_stats.open }}</div>
+                  </div>
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <div class="text-slate-500">In Progress</div>
+                    <div class="font-semibold text-sky-200">{{ qc_nav_stats.in_progress }}</div>
+                  </div>
+                  <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <div class="text-slate-500">Blocked</div>
+                    <div class="font-semibold text-rose-200">{{ qc_nav_stats.blocked }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
             <div class="pl-12 space-y-1">
               <a href="{{ url_for('qc_home') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_tasks_active else '' }}">
@@ -948,10 +970,6 @@
               <a href="{{ url_for('forms_list') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_forms_active else '' }}">
                 <span class="label">QC Form Templates</span>
-              </a>
-              <a href="{{ url_for('qc_recent_submissions') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['submission_view','qc_recent_submissions'] else '' }}">
-                <span class="label">Recent Submissions</span>
               </a>
               <a href="{{ url_for('qc_settings') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'qc_settings' else '' }}">

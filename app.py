@@ -5811,6 +5811,31 @@ def inject_switchable_users():
     return {"switchable_users": users}
 
 
+@app.context_processor
+def inject_qc_nav_stats():
+    stats = {}
+    if current_user.is_authenticated and current_user.can_view_module("qc"):
+        try:
+            totals = (
+                db.session.query(
+                    func.count(QCWork.id),
+                    func.count(case((QCWork.status != "Closed", 1))),
+                    func.count(case((QCWork.status == "In Progress", 1))),
+                    func.count(case((QCWork.status == "Blocked", 1))),
+                )
+                .one()
+            )
+            stats = {
+                "total": totals[0],
+                "open": totals[1],
+                "in_progress": totals[2],
+                "blocked": totals[3],
+            }
+        except Exception:
+            stats = {}
+    return {"qc_nav_stats": stats}
+
+
 class Project(db.Model):
     __tablename__ = "project"
     id = db.Column(db.Integer, primary_key=True)
@@ -11516,15 +11541,26 @@ def forms_fill(form_id):
             work_id=linked_work_id
         )
         db.session.add(sub)
-        db.session.commit()
         if linked_work_id:
-            log_work_event(
-                linked_work_id,
-                "submission_created",
-                actor_id=current_user.id,
-                details={"submission_id": sub.id}
-            )
-            db.session.commit()
+            work = db.session.get(QCWork, linked_work_id)
+            if work:
+                previous_status = work.status or "Open"
+                if previous_status == "Open":
+                    work.status = "In Progress"
+                    log_work_event(
+                        work.id,
+                        "status_changed",
+                        actor_id=current_user.id,
+                        from_status=previous_status,
+                        to_status="In Progress",
+                    )
+                log_work_event(
+                    work.id,
+                    "submission_created",
+                    actor_id=current_user.id,
+                    details={"submission_id": sub.id}
+                )
+        db.session.commit()
         flash("Submitted successfully!", "success")
         return redirect(url_for("dashboard"))
 
@@ -16467,6 +16503,59 @@ def qc_home():
     ).all()
     users = get_assignable_users_for_module("qc", order_by="username")
     projects = Project.query.order_by(Project.name.asc()).all()
+    work_ids = [item.id for item in work_items if item.id]
+
+    def calculate_completion_percentage(submission):
+        if not submission:
+            return 0
+        try:
+            data = json.loads(submission.data_json or "{}")
+        except Exception:
+            return 0
+
+        total = 0
+        filled = 0
+
+        def visit(value):
+            nonlocal total, filled
+            if isinstance(value, dict):
+                for v in value.values():
+                    visit(v)
+            elif isinstance(value, list):
+                for item in value:
+                    visit(item)
+            else:
+                total += 1
+                if value is None:
+                    return
+                if isinstance(value, str):
+                    if value.strip():
+                        filled += 1
+                elif value:
+                    filled += 1
+
+        visit(data)
+        if total == 0:
+            return 0
+        return round((filled / total) * 100)
+
+    submission_map = {}
+    if work_ids:
+        submissions = (
+            Submission.query
+            .filter(Submission.work_id.in_(work_ids))
+            .order_by(Submission.created_at.desc())
+            .all()
+        )
+        for sub in submissions:
+            if sub.work_id not in submission_map:
+                submission_map[sub.work_id] = sub
+
+    for item in work_items:
+        item.completion_percent = calculate_completion_percentage(
+            submission_map.get(item.id)
+        )
+
     summary_cards = {
         "total": len(work_items),
         "open": sum(1 for item in work_items if item.status != "Closed"),
