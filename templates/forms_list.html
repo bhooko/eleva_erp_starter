@@ -2,6 +2,21 @@
 {% block title %}Eleva ERP – Forms{% endblock %}
 
 {% block content %}
+{% macro sort_link(label, field) -%}
+  {%- set current_sort = request.args.get('sort', 'name') -%}
+  {%- set current_direction = request.args.get('direction', 'asc') -%}
+  {%- set is_active = current_sort == field -%}
+  {%- set next_direction = 'desc' if is_active and current_direction == 'asc' else 'asc' -%}
+  <a href="{{ url_for('forms_list', sort=field, direction=next_direction) }}" class="inline-flex items-center gap-1 text-left">
+    <span>{{ label }}</span>
+    {% if is_active %}
+      <span class="text-xs">{{ '↑' if current_direction == 'asc' else '↓' }}</span>
+    {% else %}
+      <span class="text-xs text-slate-500">↕</span>
+    {% endif %}
+  </a>
+{%- endmacro %}
+
 <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20">
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-xl font-semibold">All Form Templates</h2>
@@ -14,12 +29,14 @@
     <p class="text-slate-400 text-sm">No forms created yet. Click “New Form” to add one.</p>
   {% else %}
     <div class="overflow-auto">
-      <table class="min-w-[700px] w-full text-sm">
+      <table class="min-w-[840px] w-full text-sm">
         <thead class="text-slate-300 border-b border-slate-800">
           <tr class="text-left">
-            <th class="py-2 pr-3">Name</th>
-            <th class="py-2 pr-3">Stage</th>
-            <th class="py-2 pr-3">Lift Type</th>
+            <th class="py-2 pr-3">{{ sort_link('Name', 'name') }}</th>
+            <th class="py-2 pr-3">{{ sort_link('QC Type', 'stage') }}</th>
+            <th class="py-2 pr-3">{{ sort_link('Lift Type', 'lift_type') }}</th>
+            <th class="py-2 pr-3">{{ sort_link('Primary', 'is_primary') }}</th>
+            <th class="py-2 pr-3">{{ sort_link('Last Updated', 'updated_at') }}</th>
             <th class="py-2">Actions</th>
           </tr>
         </thead>
@@ -42,6 +59,29 @@
             <td class="py-3 pr-3">
               {% if f.lift_type %}
                 <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">{{ f.lift_type }}</span>
+              {% else %}
+                <span class="text-slate-500 text-xs">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Primary -->
+            <td class="py-3 pr-3">
+              {% if f.is_primary %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/60 text-emerald-100 text-xs">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  Primary
+                </span>
+              {% else %}
+                <span class="text-slate-500 text-xs">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Last updated -->
+            <td class="py-3 pr-3 text-slate-200">
+              {% if f.updated_at %}
+                {{ f.updated_at.strftime('%d %b %Y, %H:%M') }}
               {% else %}
                 <span class="text-slate-500 text-xs">—</span>
               {% endif %}

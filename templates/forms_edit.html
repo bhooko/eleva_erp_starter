@@ -49,6 +49,19 @@
       </select>
     </div>
 
+    <!-- Primary selection -->
+    <div class="md:col-span-2 flex items-start gap-3">
+      <input type="checkbox"
+             id="is_primary"
+             name="is_primary"
+             class="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+             {% if (request.form.get('is_primary') == 'on') or (request.method != 'POST' and item and item.is_primary) %}checked{% endif %}>
+      <div class="space-y-1">
+        <label for="is_primary" class="text-sm font-semibold text-slate-100">Mark as primary template</label>
+        <p class="text-xs text-slate-400">Only one form per QC type and lift type can be marked as primary. Selecting this will replace any existing primary in the same combination.</p>
+      </div>
+    </div>
+
     <!-- Builder -->
     <div class="md:col-span-2">
       <label class="block text-sm text-slate-300 mb-2">Checklist Builder</label>

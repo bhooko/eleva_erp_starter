@@ -183,7 +183,7 @@
             <select name="template_id" id="templateSelect" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
               <option value="" disabled selected>Select template</option>
               {% for t in templates %}
-                <option value="{{ t.id }}" data-stage="{{ t.stage or '' }}" data-lift="{{ t.lift_type or '' }}">{{ t.name }}</option>
+                <option value="{{ t.id }}" data-stage="{{ t.stage or '' }}" data-lift="{{ t.lift_type or '' }}" data-primary="{{ 'true' if t.is_primary else 'false' }}">{{ t.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -311,11 +311,20 @@
 
           option.hidden = !visible;
           hasVisible = hasVisible || visible;
-
-          if (!visible && option.selected) {
-            templateSelect.value = "";
-          }
         });
+
+        const visibleOptions = templateOptions.filter((option) => !option.hidden);
+        const hasSelection = templateSelect.value && visibleOptions.some((opt) => opt.value === templateSelect.value);
+
+        if (!hasSelection) {
+          templateSelect.value = "";
+          const primaryVisible = visibleOptions.find((opt) => (opt.dataset.primary || '').toLowerCase() === 'true');
+          if (primaryVisible) {
+            templateSelect.value = primaryVisible.value;
+          } else if (visibleOptions.length === 1) {
+            templateSelect.value = visibleOptions[0].value;
+          }
+        }
 
         if (templateSelect.value === "" && placeholderOption) {
           placeholderOption.selected = true;
