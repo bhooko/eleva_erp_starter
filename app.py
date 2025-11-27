@@ -10597,12 +10597,49 @@ def _build_task_overview(viewing_user: "User"):
         modules_map = OrderedDict()
         module_order = []
 
-        show_projects = viewing_user.can_view_module("operations") if viewing_user else True
-        show_qc = viewing_user.can_view_module("qc") if viewing_user else True
-        show_sales = viewing_user.can_view_module("sales") if viewing_user else True
+        has_project_tasks = any(task.project for task in open_tasks)
+        has_qc_tasks = any(not task.project for task in open_tasks)
+
+        sales_filters = []
+        if sales_user_ids is None:
+            if viewing_user:
+                sales_filters = [
+                    SalesOpportunity.owner_id == viewing_user.id,
+                    SalesOpportunityEngagement.created_by_id == viewing_user.id,
+                ]
+        else:
+            allowed_ids = [uid for uid in set(sales_user_ids) if uid]
+            if allowed_ids:
+                sales_filters = [
+                    SalesOpportunity.owner_id.in_(allowed_ids),
+                    SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
+                ]
+        sales_items = []
+        if sales_filters:
+            sales_items = (
+                SalesOpportunityEngagement.query
+                .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
+                .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
+                .filter(or_(*sales_filters))
+                .filter(func.lower(SalesOpportunity.status) != "closed")
+                .order_by(
+                    SalesOpportunityEngagement.scheduled_for.asc(),
+                    SalesOpportunityEngagement.id.asc(),
+                )
+                .limit(50)
+                .all()
+            )
+
+        show_projects = (
+            viewing_user.can_view_module("operations") if viewing_user else True
+        ) or has_project_tasks
+        show_qc = (viewing_user.can_view_module("qc") if viewing_user else True) or has_qc_tasks
+        show_sales = (
+            viewing_user.can_view_module("sales") if viewing_user else True
+        ) or bool(sales_items)
         show_customer_support = (
             viewing_user.can_view_module("customer_support") if viewing_user else True
-        )
+        ) or bool(support_tickets)
 
         if show_projects:
             _ensure_module(
@@ -10703,36 +10740,6 @@ def _build_task_overview(viewing_user: "User"):
                     "No pending sales activities.",
                     "Upcoming and overdue sales engagements on your opportunities.",
                 )
-            sales_filters = []
-            if sales_user_ids is None:
-                if viewing_user:
-                    sales_filters = [
-                        SalesOpportunity.owner_id == viewing_user.id,
-                        SalesOpportunityEngagement.created_by_id == viewing_user.id,
-                    ]
-            else:
-                allowed_ids = [uid for uid in set(sales_user_ids) if uid]
-                if allowed_ids:
-                    sales_filters = [
-                        SalesOpportunity.owner_id.in_(allowed_ids),
-                        SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
-                    ]
-            sales_items = []
-            if sales_filters:
-                sales_items = (
-                    SalesOpportunityEngagement.query
-                    .join(SalesOpportunity, SalesOpportunity.id == SalesOpportunityEngagement.opportunity_id)
-                    .filter(SalesOpportunityEngagement.scheduled_for.isnot(None))
-                    .filter(or_(*sales_filters))
-                    .filter(func.lower(SalesOpportunity.status) != "closed")
-                    .order_by(
-                        SalesOpportunityEngagement.scheduled_for.asc(),
-                        SalesOpportunityEngagement.id.asc(),
-                    )
-                    .limit(50)
-                    .all()
-                )
-
             for activity in sales_items:
                 opportunity = activity.opportunity
                 due_label, due_display, due_variant = _describe_due_date(activity.scheduled_for, now)
