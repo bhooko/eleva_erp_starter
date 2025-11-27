@@ -5811,31 +5811,6 @@ def inject_switchable_users():
     return {"switchable_users": users}
 
 
-@app.context_processor
-def inject_qc_nav_stats():
-    stats = {}
-    if current_user.is_authenticated and current_user.can_view_module("qc"):
-        try:
-            totals = (
-                db.session.query(
-                    func.count(QCWork.id),
-                    func.count(case((QCWork.status != "Closed", 1))),
-                    func.count(case((QCWork.status == "In Progress", 1))),
-                    func.count(case((QCWork.status == "Blocked", 1))),
-                )
-                .one()
-            )
-            stats = {
-                "total": totals[0],
-                "open": totals[1],
-                "in_progress": totals[2],
-                "blocked": totals[3],
-            }
-        except Exception:
-            stats = {}
-    return {"qc_nav_stats": stats}
-
-
 class Project(db.Model):
     __tablename__ = "project"
     id = db.Column(db.Integer, primary_key=True)
