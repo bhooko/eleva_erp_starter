@@ -131,6 +131,26 @@
       </div>
       <div class="px-6 py-5">
         <form method="post" action="{{ url_for('qc_work_new') }}" class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">QC type</label>
+              <select name="stage" id="qcTypeSelect" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>General</option>
+                {% for s in STAGES %}
+                  <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
+              <select name="lift_type" id="liftTypeSelect" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="" selected>Auto</option>
+                {% for lt in LIFT_TYPES %}
+                  <option value="{{ lt }}">{{ lt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
           <div class="grid gap-3">
             <div>
               <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project</label>
@@ -160,10 +180,10 @@
           </div>
           <div>
             <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Form Template</label>
-            <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+            <select name="template_id" id="templateSelect" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
               <option value="" disabled selected>Select template</option>
               {% for t in templates %}
-                <option value="{{ t.id }}">{{ t.name }}</option>
+                <option value="{{ t.id }}" data-stage="{{ t.stage or '' }}" data-lift="{{ t.lift_type or '' }}">{{ t.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -190,26 +210,6 @@
             <div>
               <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Planned duration (days)</label>
               <input type="number" name="planned_duration_days" min="0" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. 5" />
-            </div>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Stage</label>
-              <select name="stage" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-                <option value="" selected>Auto</option>
-                {% for s in STAGES %}
-                  <option value="{{ s }}">{{ s }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Lift type</label>
-              <select name="lift_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
-                <option value="" selected>Auto</option>
-                {% for lt in LIFT_TYPES %}
-                  <option value="{{ lt }}">{{ lt }}</option>
-                {% endfor %}
-              </select>
             </div>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
@@ -288,6 +288,51 @@
     })();
   </script>
   <script>
+    (function () {
+      const templateSelect = document.getElementById('templateSelect');
+      const qcTypeSelect = document.getElementById('qcTypeSelect');
+      const liftTypeSelect = document.getElementById('liftTypeSelect');
+      if (!templateSelect || !qcTypeSelect || !liftTypeSelect) return;
+
+      const placeholderOption = templateSelect.querySelector('option[value=""]');
+      const templateOptions = Array.from(templateSelect.options).filter((opt) => opt.value);
+
+      const applyTemplateFilters = () => {
+        const stageValue = qcTypeSelect.value.trim();
+        const liftValue = liftTypeSelect.value.trim();
+        let hasVisible = false;
+
+        templateOptions.forEach((option) => {
+          const optionStage = (option.dataset.stage || '').trim();
+          const optionLift = (option.dataset.lift || '').trim();
+          const matchesStage = !stageValue || optionStage === stageValue || !optionStage;
+          const matchesLift = !liftValue || optionLift === liftValue || !optionLift;
+          const visible = matchesStage && matchesLift;
+
+          option.hidden = !visible;
+          hasVisible = hasVisible || visible;
+
+          if (!visible && option.selected) {
+            templateSelect.value = "";
+          }
+        });
+
+        if (templateSelect.value === "" && placeholderOption) {
+          placeholderOption.selected = true;
+        }
+
+        if (!hasVisible && placeholderOption) {
+          placeholderOption.selected = true;
+        }
+      };
+
+      qcTypeSelect.addEventListener('change', applyTemplateFilters);
+      liftTypeSelect.addEventListener('change', applyTemplateFilters);
+
+      applyTemplateFilters();
+    })();
+  </script>
+  <script>
     (function() {
       const projectSelect = document.getElementById('projectSelect');
       if (!projectSelect) return;
@@ -302,6 +347,7 @@
         if (siteInput && !siteInput.value) siteInput.value = option.dataset.site || '';
         if (liftSelect && !liftSelect.value && option.dataset.lift) {
           liftSelect.value = option.dataset.lift;
+          liftSelect.dispatchEvent(new Event('change'));
         }
       });
     })();
