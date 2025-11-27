@@ -5862,6 +5862,10 @@ class FormSchema(db.Model):
     # NEW
     stage = db.Column(db.String(40), nullable=True)      # e.g., "Stage 1", "Completion", etc.
     lift_type = db.Column(db.String(40), nullable=True)  # e.g., "MRL", "Hydraulic", etc.
+    is_primary = db.Column(db.Boolean, default=False)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
 
 
 class Submission(db.Model):
@@ -7135,6 +7139,13 @@ def ensure_qc_columns():
     if "lift_type" not in fs_cols:
         cur.execute("ALTER TABLE form_schema ADD COLUMN lift_type TEXT;")
         added_fs.append("lift_type")
+    if "is_primary" not in fs_cols:
+        cur.execute("ALTER TABLE form_schema ADD COLUMN is_primary INTEGER DEFAULT 0;")
+        added_fs.append("is_primary")
+    if "updated_at" not in fs_cols:
+        cur.execute("ALTER TABLE form_schema ADD COLUMN updated_at DATETIME;")
+        cur.execute("UPDATE form_schema SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL;")
+        added_fs.append("updated_at")
 
     # submission
     cur.execute("PRAGMA table_info(submission)")
@@ -11066,8 +11077,24 @@ def projects_pending():
 @login_required
 def forms_list():
     _module_visibility_required("qc")
-    forms = FormSchema.query.order_by(FormSchema.name.asc()).all()
-    return render_template("forms_list.html", forms=forms, category_label="Forms", category_url=url_for('forms_list'))
+    sort = (request.args.get("sort") or "name").lower()
+    direction = (request.args.get("direction") or "asc").lower()
+    sort_map = {
+        "name": FormSchema.name,
+        "stage": FormSchema.stage,
+        "lift_type": FormSchema.lift_type,
+        "updated_at": FormSchema.updated_at,
+        "is_primary": FormSchema.is_primary,
+    }
+    sort_column = sort_map.get(sort, FormSchema.name)
+    ordered_column = sort_column.desc() if direction == "desc" else sort_column.asc()
+    forms = FormSchema.query.order_by(ordered_column, FormSchema.id.asc()).all()
+    return render_template(
+        "forms_list.html",
+        forms=forms,
+        category_label="Forms",
+        category_url=url_for('forms_list')
+    )
 
 
 @app.route("/forms/new", methods=["GET", "POST"])
@@ -11078,6 +11105,7 @@ def forms_new():
         name = (request.form.get("name") or "").strip()
         stage = (request.form.get("stage") or "").strip()
         lift_type = (request.form.get("lift_type") or "").strip()
+        is_primary = request.form.get("is_primary") == "on"
         try:
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
@@ -11127,14 +11155,37 @@ def forms_new():
                 category_url=url_for('forms_list')
             )
 
+        if is_primary and (not stage or not lift_type):
+            flash("Choose both a QC type and lift type to mark a primary template.", "error")
+            return render_template(
+                "forms_edit.html",
+                item=None,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
+
         item = FormSchema(
             name=name,
             schema_json=json.dumps(schema, ensure_ascii=False),
             min_photos_if_all_good=0,
             stage=stage or None,
-            lift_type=lift_type or None
+            lift_type=lift_type or None,
+            is_primary=is_primary,
+            updated_at=datetime.datetime.utcnow()
         )
         db.session.add(item)
+        db.session.flush()
+        if is_primary:
+            (
+                FormSchema.query.filter(
+                    FormSchema.stage == item.stage,
+                    FormSchema.lift_type == item.lift_type,
+                    FormSchema.id != item.id,
+                ).update({"is_primary": False})
+            )
         db.session.commit()
         flash("Form created", "success")
         return redirect(url_for("forms_list"))
@@ -11163,6 +11214,7 @@ def forms_edit(form_id):
         name = (request.form.get("name") or "").strip()
         stage = (request.form.get("stage") or "").strip()
         lift_type = (request.form.get("lift_type") or "").strip()
+        is_primary = request.form.get("is_primary") == "on"
         try:
             schema = json.loads(request.form.get("schema_json", "[]"))
         except Exception:
@@ -11206,7 +11258,29 @@ def forms_edit(form_id):
 
         item.stage = stage or None
         item.lift_type = lift_type or None
+        item.updated_at = datetime.datetime.utcnow()
 
+        if is_primary and (not item.stage or not item.lift_type):
+            flash("Choose both a QC type and lift type to mark a primary template.", "error")
+            return render_template(
+                "forms_edit.html",
+                item=item,
+                STAGES=STAGES,
+                LIFT_TYPES=LIFT_TYPES,
+                initial_schema=schema,
+                category_label="Forms",
+                category_url=url_for('forms_list')
+            )
+
+        item.is_primary = is_primary
+        if is_primary:
+            (
+                FormSchema.query.filter(
+                    FormSchema.stage == item.stage,
+                    FormSchema.lift_type == item.lift_type,
+                    FormSchema.id != item.id,
+                ).update({"is_primary": False})
+            )
         db.session.commit()
         flash("Form updated", "success")
         return redirect(url_for("forms_list"))
@@ -16376,7 +16450,9 @@ def qc_home():
         query = query.filter(QCWork.status == "Closed")
 
     work_items = query.all()
-    templates = FormSchema.query.order_by(FormSchema.name.asc()).all()
+    templates = FormSchema.query.order_by(
+        FormSchema.is_primary.desc(), FormSchema.name.asc()
+    ).all()
     users = get_assignable_users_for_module("qc", order_by="username")
     projects = Project.query.order_by(Project.name.asc()).all()
     return render_template(
