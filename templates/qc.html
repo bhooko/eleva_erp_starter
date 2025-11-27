@@ -11,9 +11,9 @@
       </div>
       <div class="ml-auto flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2 text-xs uppercase tracking-wide">
-          <a href="{{ url_for('qc_home', status='all') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='all' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">All</a>
           <a href="{{ url_for('qc_home', status='open') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='open' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Open</a>
           <a href="{{ url_for('qc_home', status='closed') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='closed' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">Closed</a>
+          <a href="{{ url_for('qc_home', status='all') }}" class="px-3 py-1.5 rounded-xl border {{ 'border-emerald-400 text-emerald-300 bg-emerald-500/10' if status_filter=='all' else 'border-slate-700 text-slate-300 hover:bg-slate-800/60' }}">All</a>
         </div>
         <button type="button"
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-600/90 text-xs font-medium text-white shadow-sm hover:bg-emerald-500 transition"
@@ -24,29 +24,6 @@
           <span>Create task</span>
         </button>
       </div>
-    </div>
-  </div>
-
-  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <p class="text-xs uppercase tracking-wide text-slate-500">Total Tasks</p>
-      <p class="mt-2 text-3xl font-semibold text-emerald-200">{{ summary_cards.total }}</p>
-      <p class="text-xs text-slate-500 mt-1">All QC tasks in the system</p>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <p class="text-xs uppercase tracking-wide text-slate-500">Open</p>
-      <p class="mt-2 text-3xl font-semibold text-amber-200">{{ summary_cards.open }}</p>
-      <p class="text-xs text-slate-500 mt-1">Including in-progress work</p>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <p class="text-xs uppercase tracking-wide text-slate-500">In Progress</p>
-      <p class="mt-2 text-3xl font-semibold text-sky-200">{{ summary_cards.in_progress }}</p>
-      <p class="text-xs text-slate-500 mt-1">Actively being worked on</p>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <p class="text-xs uppercase tracking-wide text-slate-500">Blocked</p>
-      <p class="mt-2 text-3xl font-semibold text-rose-200">{{ summary_cards.blocked }}</p>
-      <p class="text-xs text-slate-500 mt-1">Waiting on dependencies</p>
     </div>
   </div>
 
@@ -62,6 +39,7 @@
               <th class="text-left py-2 pr-3">Assignment</th>
               <th class="text-left py-2 pr-3">Project</th>
               <th class="text-left py-2 pr-3">Status</th>
+              <th class="text-left py-2 pr-3">Completion</th>
               <th class="text-left py-2">Actions</th>
             </tr>
           </thead>
@@ -118,12 +96,20 @@
                     —
                   {% endif %}
                 </td>
-                <td class="py-2 pr-3 align-top">
-                  <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.status }}</span>
-                </td>
-                <td class="py-2 align-top">
-                  <div class="flex flex-col gap-2">
-                    <a href="{{ url_for('qc_work_detail', work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-center">Open</a>
+              <td class="py-2 pr-3 align-top">
+                <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ w.status }}</span>
+              </td>
+              <td class="py-2 pr-3 align-top">
+                <div class="flex items-center gap-2">
+                  <div class="h-2 w-24 rounded-full bg-slate-800">
+                    <div class="h-2 rounded-full bg-emerald-500" style="width: {{ w.completion_percent }}%"></div>
+                  </div>
+                  <span class="text-slate-200 font-medium">{{ w.completion_percent }}%</span>
+                </div>
+              </td>
+              <td class="py-2 align-top">
+                <div class="flex flex-col gap-2">
+                  <a href="{{ url_for('qc_work_detail', work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-center">Open</a>
                     {% if w.template_id %}
                       <a href="{{ url_for('forms_fill', form_id=w.template_id, work_id=w.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 text-center">Submit</a>
                     {% endif %}
