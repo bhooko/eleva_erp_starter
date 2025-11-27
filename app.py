@@ -11308,6 +11308,32 @@ def forms_delete(form_id):
     return redirect(url_for("forms_list"))
 
 
+@app.route("/forms/<int:form_id>/duplicate", methods=["POST"])
+@login_required
+def forms_duplicate(form_id):
+    _module_visibility_required("qc")
+    source = db.session.get(FormSchema, form_id)
+    if not source:
+        flash("Form not found", "error")
+        return redirect(url_for("forms_list"))
+
+    copy_name = f"{source.name} (Copy)"
+    duplicate_form = FormSchema(
+        name=copy_name,
+        schema_json=source.schema_json,
+        min_photos_if_all_good=source.min_photos_if_all_good,
+        stage=source.stage,
+        lift_type=source.lift_type,
+        is_primary=False,
+        updated_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(duplicate_form)
+    db.session.commit()
+
+    flash("Form duplicated. You can now edit the copy.", "success")
+    return redirect(url_for("forms_edit", form_id=duplicate_form.id))
+
+
 @app.route("/forms/<int:form_id>/fill", methods=["GET", "POST"])
 @login_required
 def forms_fill(form_id):
@@ -11540,7 +11566,31 @@ def forms_fill(form_id):
         is_sectioned=is_sectioned,
         category_label="Forms",
         category_url=url_for('forms_list'),
-        subcategory_label=fs.name
+        subcategory_label=fs.name,
+        preview_only=False
+    )
+
+
+@app.route("/forms/<int:form_id>/preview")
+@login_required
+def forms_preview(form_id):
+    _module_visibility_required("qc")
+    fs = db.session.get(FormSchema, form_id)
+    if not fs:
+        flash("Form not found", "error")
+        return redirect(url_for("forms_list"))
+
+    schema_raw = json.loads(fs.schema_json or "[]")
+    sections, is_sectioned = _normalize_form_schema(schema_raw)
+    return render_template(
+        "form_render.html",
+        fs=fs,
+        sections=sections,
+        is_sectioned=is_sectioned,
+        category_label="Forms",
+        category_url=url_for('forms_list'),
+        subcategory_label=f"Preview – {fs.name}",
+        preview_only=True
     )
 
 

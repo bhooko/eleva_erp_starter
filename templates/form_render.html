@@ -1,14 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="p-6 rounded-2xl bg-slate-900 border border-slate-800">
+{% set preview_mode = preview_only|default(False) %}
+<div class="p-6 rounded-2xl bg-slate-900 border border-slate-800" data-form-preview="{{ 'true' if preview_mode else 'false' }}">
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
     <div>
       <h2 class="text-xl font-semibold">{{ fs.name }}</h2>
       <p class="text-xs text-slate-400">Tap the camera icon for photo evidence and the note icon for quick remarks.</p>
     </div>
+    {% if preview_mode %}
+      <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 text-emerald-200 text-xs font-semibold">Preview only</span>
+    {% endif %}
   </div>
 
-  <form method="post" enctype="multipart/form-data" class="space-y-6">
+  {% if preview_mode %}
+    <div class="space-y-2 text-sm text-slate-400 mb-4">
+      <p>All inputs are disabled in preview mode. Use <span class="font-semibold text-emerald-200">New Submission</span> to fill this form.</p>
+    </div>
+  {% endif %}
+
+  {% if preview_mode %}
+    <div class="space-y-6">
+  {% else %}
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+  {% endif %}
     {% if sections %}
       <div class="space-y-6">
         {% for block in sections %}
@@ -62,7 +76,7 @@
                                   {% for col in columns %}
                                     {% set c_index = loop.index0 %}
                                     <td class="px-3 py-2 border-r border-slate-800 last:border-r-0">
-                                      <input type="text" name="table__{{ outer_index }}__{{ field_index }}__{{ r_index }}__{{ c_index }}" class="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-slate-100" {% if field.required %}required{% endif %}>
+                                      <input type="text" name="table__{{ outer_index }}__{{ field_index }}__{{ r_index }}__{{ c_index }}" class="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-slate-100" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                                     </td>
                                   {% endfor %}
                                 </tr>
@@ -85,11 +99,11 @@
                       </div>
                       <div class="flex-1 w-full">
                         {% if field.type == 'text' %}
-                          <input name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}>
+                          <input name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                         {% elif field.type == 'textarea' %}
-                          <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}></textarea>
+                          <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}></textarea>
                         {% else %}
-                          <select name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required %}required{% endif %}>
+                          <select name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                             <option value="">-- Select --</option>
                             {% for opt in field.options %}
                               <option value="{{ opt }}">{{ opt }}</option>
@@ -99,15 +113,15 @@
                       </div>
                       <div class="flex items-center gap-2 mt-3 md:mt-0">
                         {% if field.allow_photo %}
-                          <button type="button" class="photo-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition" data-target="{{ photo_name }}" title="Attach photos">
+                          <button type="button" class="photo-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition {% if preview_mode %}opacity-60 cursor-not-allowed{% endif %}" data-target="{{ photo_name }}" title="Attach photos" {% if preview_mode %}disabled aria-disabled="true"{% endif %}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
                               <path d="M5 4h3l1-1h6l1 1h3a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zm7 13a4 4 0 100-8 4 4 0 000 8z" />
                             </svg>
                           </button>
-                          <input type="file" name="{{ photo_name }}" id="{{ photo_name }}" class="sr-only" accept="image/*" multiple>
+                          <input type="file" name="{{ photo_name }}" id="{{ photo_name }}" class="sr-only" accept="image/*" multiple {% if preview_mode %}disabled{% endif %}>
                         {% endif %}
                         {% if field.allow_remark %}
-                          <button type="button" class="remark-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition" data-target="{{ remark_block_id }}" title="Add remark">
+                          <button type="button" class="remark-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition {% if preview_mode %}opacity-60 cursor-not-allowed{% endif %}" data-target="{{ remark_block_id }}" title="Add remark" {% if preview_mode %}disabled aria-disabled="true"{% endif %}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
                               <path d="M4 4h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-4 4v-4H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
                             </svg>
@@ -118,7 +132,7 @@
                     {% if field.allow_remark %}
                       <div id="{{ remark_block_id }}" class="hidden mt-3">
                         <label class="block text-xs text-slate-400 mb-1">Remark</label>
-                        <textarea name="{{ remark_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"></textarea>
+                        <textarea name="{{ remark_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if preview_mode %}disabled{% endif %}></textarea>
                       </div>
                     {% endif %}
                   {% endif %}
@@ -132,21 +146,28 @@
       <p class="text-sm text-slate-400">This form does not have any configured items yet.</p>
     {% endif %}
 
-    <div class="grid md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm mb-1">Supporting Photos (optional)</label>
-        <input type="file" name="photos" multiple accept="image/*" class="w-full text-sm">
+    {% if not preview_mode %}
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm mb-1">Supporting Photos (optional)</label>
+          <input type="file" name="photos" multiple accept="image/*" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Videos (optional, multiple)</label>
+          <input type="file" name="videos" multiple accept="video/*" class="w-full text-sm">
+        </div>
       </div>
-      <div>
-        <label class="block text-sm mb-1">Videos (optional, multiple)</label>
-        <input type="file" name="videos" multiple accept="video/*" class="w-full text-sm">
-      </div>
-    </div>
 
-    <div class="flex justify-end">
-      <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">Submit</button>
+      <div class="flex justify-end">
+        <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">Submit</button>
+      </div>
+    {% endif %}
+
+  {% if preview_mode %}
     </div>
-  </form>
+  {% else %}
+    </form>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -154,16 +175,21 @@
 {{ super() }}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.photo-trigger').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = document.getElementById(btn.dataset.target);
-        if (target) {
-          target.click();
-        }
+    const previewMode = document.querySelector('[data-form-preview="true"]') !== null;
+
+    if (!previewMode) {
+      document.querySelectorAll('.photo-trigger').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = document.getElementById(btn.dataset.target);
+          if (target) {
+            target.click();
+          }
+        });
       });
-    });
+    }
 
     document.querySelectorAll('.remark-trigger').forEach(btn => {
+      if (previewMode) return;
       btn.addEventListener('click', () => {
         const target = document.getElementById(btn.dataset.target);
         if (!target) return;
@@ -173,15 +199,17 @@
       });
     });
 
-    document.querySelectorAll('input[type="file"]').forEach(input => {
-      const trigger = document.querySelector(`.photo-trigger[data-target="${input.id}"]`);
-      if (!trigger) return;
-      input.addEventListener('change', () => {
-        const hasFiles = input.files && input.files.length > 0;
-        trigger.classList.toggle('bg-emerald-500/20', hasFiles);
-        trigger.classList.toggle('border-emerald-400/70', hasFiles);
+    if (!previewMode) {
+      document.querySelectorAll('input[type="file"]').forEach(input => {
+        const trigger = document.querySelector(`.photo-trigger[data-target="${input.id}"]`);
+        if (!trigger) return;
+        input.addEventListener('change', () => {
+          const hasFiles = input.files && input.files.length > 0;
+          trigger.classList.toggle('bg-emerald-500/20', hasFiles);
+          trigger.classList.toggle('border-emerald-400/70', hasFiles);
+        });
       });
-    });
+    }
   });
 </script>
 {% endblock %}
