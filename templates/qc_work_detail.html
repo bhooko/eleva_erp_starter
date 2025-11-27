@@ -15,7 +15,7 @@
       <div class="ml-auto flex gap-2">
         {% if work.status == 'Open' %}
           <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='start') }}">
-            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Start Task</button>
+            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Mark In Progress</button>
           </form>
         {% elif work.status == 'In Progress' %}
           <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='close') }}">
@@ -205,7 +205,11 @@
             {% for log in logs %}
               <li class="border border-slate-800 rounded-2xl p-4 bg-slate-950/40">
                 <div class="flex items-center justify-between">
-                  <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
+                  {% if log.action == 'status_changed' %}
+                    <span class="font-semibold text-slate-100">Status changed to {{ log.to_status or log.details.to_status or 'Updated' }}</span>
+                  {% else %}
+                    <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
+                  {% endif %}
                   <span class="text-xs text-slate-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
                 </div>
                 <div class="text-xs text-slate-400 mt-1">
@@ -217,7 +221,9 @@
                     System
                   {% endif %}
                 </div>
-                {% if log.action == 'comment_added' %}
+                {% if log.action == 'status_changed' %}
+                  <p class="mt-2 text-sm text-slate-200">From {{ log.from_status or 'Unknown' }} to {{ log.to_status or 'Unknown' }}.</p>
+                {% elif log.action == 'comment_added' %}
                   {% if log.details.body %}
                     <p class="mt-2 text-sm text-slate-200 whitespace-pre-line">{{ log.details.body }}</p>
                   {% endif %}
