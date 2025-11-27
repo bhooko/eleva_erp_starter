@@ -16387,9 +16387,15 @@ def qc_home():
         projects=projects,
         STAGES=STAGES,
         LIFT_TYPES=LIFT_TYPES,
-        status_filter=status,
-        TASK_MILESTONES=TASK_MILESTONES
+        status_filter=status
     )
+
+
+@app.route("/qc/settings")
+@login_required
+def qc_settings():
+    _module_visibility_required("qc")
+    return render_template("qc_settings.html")
 
 
 @app.route("/qc/work/new", methods=["POST"])
@@ -16397,8 +16403,6 @@ def qc_home():
 def qc_work_new():
     _module_visibility_required("qc")
     site_name = (request.form.get("site_name") or "").strip()
-    client_name = (request.form.get("client_name") or "").strip()
-    address = (request.form.get("address") or "").strip()
     template_id = request.form.get("template_id", type=int)
     stage = (request.form.get("stage") or "").strip()
     lift_type = (request.form.get("lift_type") or "").strip()
@@ -16407,7 +16411,8 @@ def qc_work_new():
     project_id = request.form.get("project_id", type=int)
     planned_start = (request.form.get("planned_start_date") or "").strip()
     duration_raw = (request.form.get("planned_duration_days") or "").strip()
-    milestone_value = (request.form.get("milestone") or "").strip()
+    client_name = None
+    address = None
 
     project = db.session.get(Project, project_id) if project_id else None
     if project:
@@ -16476,7 +16481,7 @@ def qc_work_new():
         name=site_name,
         planned_start_date=planned_start_date,
         planned_duration_days=duration_days,
-        milestone=milestone_value or None
+        milestone=None
     )
     db.session.add(work)
     db.session.flush()
@@ -16490,8 +16495,7 @@ def qc_work_new():
             "due_date": work.due_date.strftime("%Y-%m-%d") if work.due_date else None,
             "project_id": work.project_id,
             "planned_start_date": planned_start_date.strftime("%Y-%m-%d") if planned_start_date else None,
-            "planned_duration_days": duration_days,
-            "milestone": work.milestone
+            "planned_duration_days": duration_days
         }
     )
     if assignee_user:
