@@ -7,9 +7,25 @@
       <h2 class="text-xl font-semibold">{{ fs.name }}</h2>
       <p class="text-xs text-slate-400">Tap the camera icon for photo evidence and the note icon for quick remarks.</p>
     </div>
-    {% if preview_mode %}
-      <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 text-emerald-200 text-xs font-semibold">Preview only</span>
-    {% endif %}
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{{ back_url or url_for('forms_list') }}" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700 bg-slate-800/70 text-sm text-slate-200 hover:bg-slate-700/70" data-back-button>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+        </svg>
+        <span>Back</span>
+      </a>
+      {% if not preview_mode %}
+        <button type="button" id="save-progress-btn" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-400/50 bg-emerald-500/10 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7" />
+          </svg>
+          <span>Save progress</span>
+        </button>
+      {% endif %}
+      {% if preview_mode %}
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 text-emerald-200 text-xs font-semibold">Preview only</span>
+      {% endif %}
+    </div>
   </div>
 
   {% if preview_mode %}
@@ -21,7 +37,7 @@
   {% if preview_mode %}
     <div class="space-y-6">
   {% else %}
-    <form method="post" enctype="multipart/form-data" class="space-y-6">
+    <form method="post" enctype="multipart/form-data" class="space-y-6" data-track-unsaved>
   {% endif %}
     {% if sections %}
       <div class="space-y-6">
@@ -158,7 +174,8 @@
         </div>
       </div>
 
-      <div class="flex justify-end">
+      <div class="flex flex-wrap justify-end gap-2">
+        <button type="button" id="save-progress-footer" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800/80 text-sm text-slate-200 hover:bg-slate-700/70">Save progress</button>
         <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">Submit</button>
       </div>
     {% endif %}
@@ -176,6 +193,9 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const previewMode = document.querySelector('[data-form-preview="true"]') !== null;
+    const draftKey = '{{ draft_key|default("") }}';
+    const formEl = document.querySelector('[data-track-unsaved]');
+    let isDirty = false;
 
     if (!previewMode) {
       document.querySelectorAll('.photo-trigger').forEach(btn => {
@@ -209,6 +229,89 @@
           trigger.classList.toggle('border-emerald-400/70', hasFiles);
         });
       });
+
+      const persistableFields = () => {
+        if (!formEl) return [];
+        return Array.from(formEl.querySelectorAll('input, textarea, select')).filter(el => el.name && el.type !== 'file');
+      };
+
+      const saveDraft = () => {
+        if (!draftKey || !formEl) return;
+        const payload = {};
+        persistableFields().forEach(el => {
+          payload[el.name] = el.value;
+        });
+        try {
+          localStorage.setItem(draftKey, JSON.stringify(payload));
+          isDirty = false;
+          alert('Progress saved to this browser.');
+        } catch (error) {
+          console.warn('Unable to save draft', error);
+        }
+      };
+
+      const loadDraft = () => {
+        if (!draftKey || !formEl) return;
+        const raw = localStorage.getItem(draftKey);
+        if (!raw) return;
+        try {
+          const saved = JSON.parse(raw);
+          persistableFields().forEach(el => {
+            if (!(el.name in saved)) return;
+            el.value = saved[el.name];
+            if (el.name.startsWith('remark__') && saved[el.name]) {
+              const remarkBlock = el.closest('div[id^="remark-block__"]');
+              if (remarkBlock) {
+                remarkBlock.classList.remove('hidden');
+                const toggleBtn = document.querySelector(`[data-target="${remarkBlock.id}"]`);
+                if (toggleBtn) {
+                  toggleBtn.classList.add('bg-emerald-500/20', 'border-emerald-400/70');
+                }
+              }
+            }
+          });
+          isDirty = false;
+        } catch (error) {
+          console.warn('Unable to restore draft', error);
+        }
+      };
+
+      loadDraft();
+
+      persistableFields().forEach(el => {
+        el.addEventListener('input', () => { isDirty = true; });
+        el.addEventListener('change', () => { isDirty = true; });
+      });
+
+      const saveButtons = [
+        document.getElementById('save-progress-btn'),
+        document.getElementById('save-progress-footer')
+      ].filter(Boolean);
+      saveButtons.forEach(btn => btn.addEventListener('click', saveDraft));
+
+      if (formEl) {
+        formEl.addEventListener('submit', () => {
+          isDirty = false;
+          if (draftKey) {
+            localStorage.removeItem(draftKey);
+          }
+        });
+
+        window.addEventListener('beforeunload', (event) => {
+          if (!isDirty) return;
+          event.preventDefault();
+          event.returnValue = '';
+        });
+      }
+
+      const backButton = document.querySelector('[data-back-button]');
+      if (backButton) {
+        backButton.addEventListener('click', (event) => {
+          if (isDirty && !confirm('You have unsaved changes. Leave this form without saving?')) {
+            event.preventDefault();
+          }
+        });
+      }
     }
   });
 </script>
