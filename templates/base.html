@@ -757,19 +757,16 @@
           {% set cs_endpoints = ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home','customer_support_settings'] %}
           {% set cs_parent_active = request.endpoint in cs_endpoints %}
           <div class="space-y-1">
-            <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if cs_parent_active else '' }}">
+            <a href="{{ url_for('customer_support_home') }}"
+               class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if cs_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M5 4a3 3 0 013-3h8a3 3 0 013 3v3h1a1 1 0 011 1v5.382a1 1 0 01-.276.69l-6.724 7.39a1 1 0 01-1.448 0l-6.724-7.39A1 1 0 013 13.382V8a1 1 0 011-1h1V4zM9 4v3h6V4H9z"/>
                 </svg>
               </span>
               <span class="label text-[15px] flex-1">Customer Support</span>
-            </div>
+            </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('customer_support_overview') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_overview' else '' }}">
-                <span class="label">CS Overview</span>
-              </a>
               <a href="{{ url_for('customer_support_tasks') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_tasks' else '' }}">
                 <span class="label">Tasks &amp; Tickets</span>
@@ -794,19 +791,16 @@
           ] %}
           {% set service_parent_active = request.endpoint in service_endpoints %}
           <div class="space-y-1">
-            <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if service_parent_active else '' }}">
+            <a href="{{ url_for('service_home') }}"
+               class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if service_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2a5 5 0 00-5 5v1H6a2 2 0 00-2 2v3h16V10a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 5a3 3 0 016 0v1H9V7zm-5 9v2a2 2 0 002 2h12a2 2 0 002-2v-2H4z" />
                 </svg>
               </span>
               <span class="label text-[15px] flex-1">Service</span>
-            </div>
+            </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('service_overview') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_overview' else '' }}">
-                <span class="label">Overview</span>
-              </a>
               <a href="{{ url_for('service_tasks') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_tasks' else '' }}">
                 <span class="label">Service Tasks</span>
@@ -851,19 +845,16 @@
           ] %}
           {% set sales_parent_active = request.endpoint in sales_endpoints %}
           <div class="space-y-1">
-            <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if sales_parent_active else '' }}">
+            <a href="{{ url_for('sales_home') }}"
+               class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if sales_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M4 4h16v2H4zm1 4h14v2H5zm-1 4h16v6H4zm2 2v2h12v-2z"/>
                 </svg>
               </span>
               <span class="label text-[15px] flex-1">Sales</span>
-            </div>
+            </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('sales_home') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_home' else '' }}">
-                <span class="label">Sales Overview</span>
-              </a>
               <a href="{{ url_for('sales_tasks') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'sales_tasks' else '' }}">
                 <span class="label">Sales Tasks</span>
@@ -893,10 +884,6 @@
               <span class="label text-[15px] flex-1">New Installation</span>
             </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('projects_pending') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'projects_pending' else '' }}">
-                <span class="label">NI Overview</span>
-              </a>
               <a href="{{ url_for('projects_list') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['projects_list','project_detail'] else '' }}">
                 <span class="label">All Projects</span>
@@ -913,19 +900,16 @@
           {% set srt_endpoints = ['srt_overview','srt_form_templates','srt_sites'] %}
           {% set srt_parent_active = request.endpoint in srt_endpoints %}
           <div class="space-y-1">
-            <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if srt_parent_active else '' }}">
+            <a href="{{ url_for('srt_overview') }}"
+               class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if srt_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M4 4h16v2H4zm1 4h14v2H5zm-1 4h16v6H4zm2 2v2h12v-2z" />
                 </svg>
               </span>
               <span class="label text-[15px] flex-1">SRT</span>
-            </div>
+            </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('srt_overview') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'srt_overview' else '' }}">
-                <span class="label">SRT Overview</span>
-              </a>
               <a href="{{ url_for('srt_form_templates') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'srt_form_templates' else '' }}">
                 <span class="label">SRT Form Templates</span>
@@ -945,6 +929,8 @@
             'qc_settings'
           ] %}
           {% set qc_parent_active = request.endpoint in qc_endpoints %}
+          {% set qc_tasks_active = request.endpoint in ['qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign'] or (request.endpoint == 'forms_fill' and request.args.get('work_id')) %}
+          {% set qc_forms_active = request.endpoint in ['forms_list','forms_edit','forms_new','forms_fill'] and not (request.endpoint == 'forms_fill' and request.args.get('work_id')) %}
           <div class="space-y-1">
             <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if qc_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
@@ -956,11 +942,11 @@
             </div>
             <div class="pl-12 space-y-1">
               <a href="{{ url_for('qc_home') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign'] else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_tasks_active else '' }}">
                 <span class="label">Tasks</span>
               </a>
               <a href="{{ url_for('forms_list') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['forms_list','forms_edit','forms_new','forms_fill'] else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_forms_active else '' }}">
                 <span class="label">QC Form Templates</span>
               </a>
               <a href="{{ url_for('qc_recent_submissions') }}"

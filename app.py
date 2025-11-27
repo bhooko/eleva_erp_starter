@@ -11345,6 +11345,23 @@ def forms_fill(form_id):
 
     schema_raw = json.loads(fs.schema_json)
     sections, is_sectioned = _normalize_form_schema(schema_raw)
+    back_url = request.args.get("return") or request.referrer or url_for("qc_home")
+    draft_key = f"qc_form_{form_id}_{request.args.get('work_id') or 'general'}"
+
+    def render_form(subcategory_label=None):
+        return render_template(
+            "form_render.html",
+            fs=fs,
+            sections=sections,
+            is_sectioned=is_sectioned,
+            category_label="Forms",
+            category_url=url_for('forms_list'),
+            subcategory_label=subcategory_label or fs.name,
+            back_url=back_url,
+            draft_key=draft_key,
+            preview_only=False
+        )
+
     if request.method == "POST":
         values = {} if is_sectioned else {}
         any_ng = False
@@ -11382,21 +11399,13 @@ def forms_fill(form_id):
                         table_values.append(row_entries)
                     if required and missing_required:
                         flash(f"'{label}' requires a value in every cell.", "error")
-                        return render_template(
-                            "form_render.html",
-                            fs=fs,
-                            sections=sections,
-                            is_sectioned=is_sectioned,
-                            category_label="Forms",
-                            category_url=url_for('forms_list'),
-                            subcategory_label=fs.name
-                        )
+                        return render_form()
                     table_payload = {
                         "type": "table",
                         "rows": rows,
                         "columns": columns,
                         "values": table_values,
-                        "reference_image": field.get("reference_image") or ""
+                        "reference_image": field.get("reference_image") or "",
                     }
                     if is_sectioned:
                         section_entries.append({
@@ -11412,40 +11421,16 @@ def forms_fill(form_id):
                     val = request.form.get(field_name, "").strip()
                     if required and not val:
                         flash(f"'{label}' is required", "error")
-                        return render_template(
-                            "form_render.html",
-                            fs=fs,
-                            sections=sections,
-                            is_sectioned=is_sectioned,
-                            category_label="Forms",
-                            category_url=url_for('forms_list'),
-                            subcategory_label=fs.name
-                        )
+                        return render_form()
                 elif ftype == "select":
                     val = request.form.get(field_name, "")
                     normalized_val = val.strip().lower() if isinstance(val, str) else ""
                     if required and not val:
                         flash(f"'{label}' is required", "error")
-                        return render_template(
-                            "form_render.html",
-                            fs=fs,
-                            sections=sections,
-                            is_sectioned=is_sectioned,
-                            category_label="Forms",
-                            category_url=url_for('forms_list'),
-                            subcategory_label=fs.name
-                        )
+                        return render_form()
                     if options and val and val not in options:
                         flash(f"'{label}' has an invalid selection", "error")
-                        return render_template(
-                            "form_render.html",
-                            fs=fs,
-                            sections=sections,
-                            is_sectioned=is_sectioned,
-                            category_label="Forms",
-                            category_url=url_for('forms_list'),
-                            subcategory_label=fs.name
-                        )
+                        return render_form()
                     if normalized_val in {"ng", "not ok"}:
                         any_ng = True
                 else:
@@ -11470,15 +11455,7 @@ def forms_fill(form_id):
                         and not valid_item_files
                     ):
                         flash(f"Photo evidence is required for '{label}' when marked Not OK.", "error")
-                        return render_template(
-                            "form_render.html",
-                            fs=fs,
-                            sections=sections,
-                            is_sectioned=is_sectioned,
-                            category_label="Forms",
-                            category_url=url_for('forms_list'),
-                            subcategory_label=fs.name
-                        )
+                        return render_form()
                     for f in valid_item_files:
                         fname = secure_filename(f.filename)
                         dest = os.path.join(app.config["UPLOAD_FOLDER"], f"{datetime.datetime.utcnow().timestamp()}_{fname}")
@@ -11512,15 +11489,7 @@ def forms_fill(form_id):
 
         if any_ng and per_item_photo_count + len(valid_photo_files) == 0:
             flash("At least one photo is required when any item is marked Not OK.", "error")
-            return render_template(
-                "form_render.html",
-                fs=fs,
-                sections=sections,
-                is_sectioned=is_sectioned,
-                category_label="Forms",
-                category_url=url_for('forms_list'),
-                subcategory_label=fs.name
-            )
+            return render_form()
 
         for f in valid_photo_files:
             fname = secure_filename(f.filename)
@@ -11559,18 +11528,7 @@ def forms_fill(form_id):
         flash("Submitted successfully!", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template(
-        "form_render.html",
-        fs=fs,
-        sections=sections,
-        is_sectioned=is_sectioned,
-        category_label="Forms",
-        category_url=url_for('forms_list'),
-        subcategory_label=fs.name,
-        preview_only=False
-    )
-
-
+    return render_form()
 @app.route("/forms/<int:form_id>/preview")
 @login_required
 def forms_preview(form_id):
@@ -11582,6 +11540,8 @@ def forms_preview(form_id):
 
     schema_raw = json.loads(fs.schema_json or "[]")
     sections, is_sectioned = _normalize_form_schema(schema_raw)
+    draft_key = f"qc_form_{form_id}_preview"
+    back_url = request.referrer or url_for("forms_list")
     return render_template(
         "form_render.html",
         fs=fs,
@@ -11590,7 +11550,9 @@ def forms_preview(form_id):
         category_label="Forms",
         category_url=url_for('forms_list'),
         subcategory_label=f"Preview – {fs.name}",
-        preview_only=True
+        preview_only=True,
+        draft_key=draft_key,
+        back_url=back_url
     )
 
 
@@ -12584,13 +12546,6 @@ def project_template_task_reorder(template_id):
 @login_required
 def customer_support_home():
     _module_visibility_required("customer_support")
-    return redirect(url_for("customer_support_overview"))
-
-
-@app.route("/customer-support/overview")
-@login_required
-def customer_support_overview():
-    _module_visibility_required("customer_support")
     summary = _customer_support_summary()
     counts = summary["counts"]
     recent_tickets = []
@@ -12618,6 +12573,13 @@ def customer_support_overview():
         categories=CUSTOMER_SUPPORT_CATEGORIES,
         channels=CUSTOMER_SUPPORT_CHANNELS,
     )
+
+
+@app.route("/customer-support/overview")
+@login_required
+def customer_support_overview():
+    _module_visibility_required("customer_support")
+    return redirect(url_for("customer_support_home"))
 
 
 @app.route("/customer-support/tasks", methods=["GET", "POST"])
@@ -13743,15 +13705,15 @@ def build_service_overview_payload():
 @login_required
 def service_home():
     _module_visibility_required("service")
-    return redirect(url_for("service_overview"))
+    payload = build_service_overview_payload()
+    return render_template("service/overview.html", **payload)
 
 
 @app.route("/service/overview")
 @login_required
 def service_overview():
     _module_visibility_required("service")
-    payload = build_service_overview_payload()
-    return render_template("service/overview.html", **payload)
+    return redirect(url_for("service_home"))
 
 
 @app.route("/service/tasks")
@@ -16505,6 +16467,12 @@ def qc_home():
     ).all()
     users = get_assignable_users_for_module("qc", order_by="username")
     projects = Project.query.order_by(Project.name.asc()).all()
+    summary_cards = {
+        "total": len(work_items),
+        "open": sum(1 for item in work_items if item.status != "Closed"),
+        "in_progress": sum(1 for item in work_items if item.status == "In Progress"),
+        "blocked": sum(1 for item in work_items if item.status == "Blocked"),
+    }
     return render_template(
         "qc.html",
         work_items=work_items,
@@ -16513,7 +16481,8 @@ def qc_home():
         projects=projects,
         STAGES=STAGES,
         LIFT_TYPES=LIFT_TYPES,
-        status_filter=status
+        status_filter=status,
+        summary_cards=summary_cards
     )
 
 

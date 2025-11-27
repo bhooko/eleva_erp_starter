@@ -27,6 +27,29 @@
     </div>
   </div>
 
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Total Tasks</p>
+      <p class="mt-2 text-3xl font-semibold text-emerald-200">{{ summary_cards.total }}</p>
+      <p class="text-xs text-slate-500 mt-1">All QC tasks in the system</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Open</p>
+      <p class="mt-2 text-3xl font-semibold text-amber-200">{{ summary_cards.open }}</p>
+      <p class="text-xs text-slate-500 mt-1">Including in-progress work</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">In Progress</p>
+      <p class="mt-2 text-3xl font-semibold text-sky-200">{{ summary_cards.in_progress }}</p>
+      <p class="text-xs text-slate-500 mt-1">Actively being worked on</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Blocked</p>
+      <p class="mt-2 text-3xl font-semibold text-rose-200">{{ summary_cards.blocked }}</p>
+      <p class="text-xs text-slate-500 mt-1">Waiting on dependencies</p>
+    </div>
+  </div>
+
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
       {% if work_items|length == 0 %}
         <p class="text-slate-400 text-sm">No tasks yet. Use the create task button above to add your first one.</p>
