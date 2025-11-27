@@ -139,8 +139,6 @@
                 {% for project in projects %}
                   <option value="{{ project.id }}"
                           data-site="{{ (project.site_name or project.name)|e }}"
-                          data-client="{{ (project.customer_name or '')|e }}"
-                          data-address="{{ (project.site_address or '')|e }}"
                           data-lift="{{ (project.lift_type or '')|e }}">
                     {{ project.name }}
                   </option>
@@ -158,14 +156,6 @@
                   <option value="{{ project.name }}"></option>
                 {% endfor %}
               </datalist>
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Client</label>
-              <input name="client_name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Client / Builder" />
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Address</label>
-              <textarea name="address" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Site address"></textarea>
             </div>
           </div>
           <div>
@@ -221,15 +211,6 @@
                 {% endfor %}
               </select>
             </div>
-          </div>
-          <div>
-            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Milestone</label>
-            <input name="milestone" list="qc-milestone-options" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="e.g. Production Milestone" />
-            <datalist id="qc-milestone-options">
-              {% for option in TASK_MILESTONES %}
-                <option value="{{ option }}"></option>
-              {% endfor %}
-            </datalist>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
             <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -311,8 +292,6 @@
       const projectSelect = document.getElementById('projectSelect');
       if (!projectSelect) return;
       const siteInput = document.querySelector('input[name="site_name"]');
-      const clientInput = document.querySelector('input[name="client_name"]');
-      const addressInput = document.querySelector('textarea[name="address"]');
       const liftSelect = document.querySelector('select[name="lift_type"]');
 
       projectSelect.addEventListener('change', function () {
@@ -321,8 +300,6 @@
           return;
         }
         if (siteInput && !siteInput.value) siteInput.value = option.dataset.site || '';
-        if (clientInput && !clientInput.value) clientInput.value = option.dataset.client || '';
-        if (addressInput && !addressInput.value) addressInput.value = option.dataset.address || '';
         if (liftSelect && !liftSelect.value && option.dataset.lift) {
           liftSelect.value = option.dataset.lift;
         }

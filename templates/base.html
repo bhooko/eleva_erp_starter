@@ -941,7 +941,8 @@
         {% if current_user.is_authenticated and current_user.can_view_module('qc') %}
           {% set qc_endpoints = [
             'qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign',
-            'qc_recent_submissions','forms_list','forms_edit','form_render','submission_view','forms_new','forms_fill'
+            'qc_recent_submissions','forms_list','forms_edit','form_render','submission_view','forms_new','forms_fill',
+            'qc_settings'
           ] %}
           {% set qc_parent_active = request.endpoint in qc_endpoints %}
           <div class="space-y-1">
@@ -965,6 +966,10 @@
               <a href="{{ url_for('qc_recent_submissions') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['submission_view','qc_recent_submissions'] else '' }}">
                 <span class="label">Recent Submissions</span>
+              </a>
+              <a href="{{ url_for('qc_settings') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'qc_settings' else '' }}">
+                <span class="label">QC Settings</span>
               </a>
             </div>
           </div>
@@ -1018,6 +1023,8 @@
           {% set section_title = 'QC' %}
         {% elif endpoint in ['forms_new','form_new','forms_create','form_render'] %}
           {% set section_title = 'QC - New form' %}
+        {% elif endpoint in ['qc_settings'] %}
+          {% set section_title = 'QC Settings' %}
         {% elif endpoint in ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home'] %}
           {% set section_title = 'Customer Support' %}
         {% elif endpoint in ['service_home','service_overview','service_tasks','service_customers','service_lifts','service_complaints','service_contracts','service_parts_materials','service_preventive_maintenance','service_automations'] %}
