@@ -12499,7 +12499,20 @@ def customer_support_overview():
 @app.route("/customer-support/tasks", methods=["GET", "POST"])
 @login_required
 def customer_support_tasks():
-    _module_visibility_required("customer_support")
+    ticket_id = request.args.get("ticket")
+    selected_ticket = _get_customer_support_ticket(ticket_id)
+
+    # Allow the ticket owner to view the ticket modal even if their module
+    # visibility has since been restricted.
+    selected_ticket_assignee_id = None
+    if selected_ticket:
+        assignee_user = _resolve_ticket_assignee_user(selected_ticket, module_key=None)
+        if assignee_user:
+            selected_ticket_assignee_id = assignee_user.id
+
+    _module_visibility_required(
+        "customer_support", owner_user_id=selected_ticket_assignee_id
+    )
     if request.method == "POST":
         response = _handle_customer_support_ticket_creation()
         if response is not None:
@@ -12519,8 +12532,7 @@ def customer_support_tasks():
     ticket_open_task_map = {
         ticket.get("id"): _ticket_has_open_linked_tasks(ticket) for ticket in tickets
     }
-    ticket_id = request.args.get("ticket")
-    selected_ticket = _get_customer_support_ticket(ticket_id)
+    selected_ticket = selected_ticket or _get_customer_support_ticket(ticket_id)
 
     timeline = []
     attachments = []
