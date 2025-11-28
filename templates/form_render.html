@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% set preview_mode = preview_only|default(False) %}
+{% set form_data = preserved_data or {} %}
 <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800" data-form-preview="{{ 'true' if preview_mode else 'false' }}">
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
     <div>
@@ -64,6 +65,7 @@
                 {% set remark_name = 'remark__%d__%d' % (outer_index, field_index) %}
                 {% set photo_name = 'photo__%d__%d' % (outer_index, field_index) %}
                 {% set remark_block_id = 'remark-block__%d__%d' % (outer_index, field_index) %}
+                {% set remark_value = form_data.get(remark_name, '') %}
                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-inner shadow-black/10">
                   {% if field.type == 'table' %}
                     <div class="space-y-4">
@@ -98,7 +100,7 @@
                                   {% for col in columns %}
                                     {% set c_index = loop.index0 %}
                                     <td class="px-3 py-2 border-r border-slate-800 last:border-r-0">
-                                      <input type="text" name="table__{{ outer_index }}__{{ field_index }}__{{ r_index }}__{{ c_index }}" class="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-slate-100" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
+                                      <input type="text" name="table__{{ outer_index }}__{{ field_index }}__{{ r_index }}__{{ c_index }}" value="{{ form_data.get('table__%d__%d__%d__%d' % (outer_index, field_index, r_index, c_index), '') }}" class="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-slate-100" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                                     </td>
                                   {% endfor %}
                                 </tr>
@@ -121,14 +123,14 @@
                       </div>
                       <div class="flex-1 w-full">
                         {% if field.type == 'text' %}
-                          <input name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
+                          <input name="{{ field_name }}" value="{{ form_data.get(field_name, '') }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                         {% elif field.type == 'textarea' %}
-                          <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}></textarea>
+                          <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>{{ form_data.get(field_name, '') }}</textarea>
                         {% else %}
                           <select name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
-                            <option value="">-- Select --</option>
+                            <option value="" {% if not form_data.get(field_name) %}selected{% endif %}>-- Select --</option>
                             {% for opt in field.options %}
-                              <option value="{{ opt }}">{{ opt }}</option>
+                              <option value="{{ opt }}" {% if form_data.get(field_name) == opt %}selected{% endif %}>{{ opt }}</option>
                             {% endfor %}
                           </select>
                         {% endif %}
@@ -143,7 +145,7 @@
                           <input type="file" name="{{ photo_name }}" id="{{ photo_name }}" class="sr-only" accept="image/*" multiple {% if preview_mode %}disabled{% endif %}>
                         {% endif %}
                         {% if field.allow_remark %}
-                          <button type="button" class="remark-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition {% if preview_mode %}opacity-60 cursor-not-allowed{% endif %}" data-target="{{ remark_block_id }}" title="Add remark" {% if preview_mode %}disabled aria-disabled="true"{% endif %}>
+                          <button type="button" class="remark-trigger inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition{{ ' bg-emerald-500/20 border-emerald-400/70' if remark_value else '' }} {% if preview_mode %}opacity-60 cursor-not-allowed{% endif %}" data-target="{{ remark_block_id }}" title="Add remark" {% if preview_mode %}disabled aria-disabled="true"{% endif %}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
                               <path d="M4 4h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-4 4v-4H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
                             </svg>
@@ -152,9 +154,9 @@
                       </div>
                     </div>
                     {% if field.allow_remark %}
-                      <div id="{{ remark_block_id }}" class="hidden mt-3">
+                      <div id="{{ remark_block_id }}" class="{% if not remark_value %}hidden {% endif %}mt-3">
                         <label class="block text-xs text-slate-400 mb-1">Remark</label>
-                        <textarea name="{{ remark_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if preview_mode %}disabled{% endif %}></textarea>
+                        <textarea name="{{ remark_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if preview_mode %}disabled{% endif %}>{{ remark_value }}</textarea>
                       </div>
                     {% endif %}
                   {% endif %}

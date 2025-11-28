@@ -11422,7 +11422,7 @@ def forms_fill(form_id):
                 return redirect(back_url)
             resubmission_notice = filter_supported
 
-    def render_form(subcategory_label=None):
+    def render_form(subcategory_label=None, preserved_data=None):
         return render_template(
             "form_render.html",
             fs=fs,
@@ -11436,6 +11436,7 @@ def forms_fill(form_id):
             preview_only=False,
             resubmission_mode=resubmission_mode,
             resubmission_notice=resubmission_notice,
+            preserved_data=preserved_data,
         )
 
     if request.method == "POST":
@@ -11475,7 +11476,7 @@ def forms_fill(form_id):
                         table_values.append(row_entries)
                     if required and missing_required:
                         flash(f"'{label}' requires a value in every cell.", "error")
-                        return render_form()
+                        return render_form(preserved_data=request.form)
                     table_payload = {
                         "type": "table",
                         "rows": rows,
@@ -11497,16 +11498,16 @@ def forms_fill(form_id):
                     val = request.form.get(field_name, "").strip()
                     if required and not val:
                         flash(f"'{label}' is required", "error")
-                        return render_form()
+                        return render_form(preserved_data=request.form)
                 elif ftype == "select":
                     val = request.form.get(field_name, "")
                     normalized_val = val.strip().lower() if isinstance(val, str) else ""
                     if required and not val:
                         flash(f"'{label}' is required", "error")
-                        return render_form()
+                        return render_form(preserved_data=request.form)
                     if options and val and val not in options:
                         flash(f"'{label}' has an invalid selection", "error")
-                        return render_form()
+                        return render_form(preserved_data=request.form)
                     if normalized_val in {"ng", "not ok"}:
                         any_ng = True
                 else:
@@ -11531,7 +11532,7 @@ def forms_fill(form_id):
                         and not valid_item_files
                     ):
                         flash(f"Photo evidence is required for '{label}' when marked Not OK.", "error")
-                        return render_form()
+                        return render_form(preserved_data=request.form)
                     for f in valid_item_files:
                         fname = secure_filename(f.filename)
                         dest = os.path.join(app.config["UPLOAD_FOLDER"], f"{datetime.datetime.utcnow().timestamp()}_{fname}")
@@ -11565,7 +11566,7 @@ def forms_fill(form_id):
 
         if any_ng and per_item_photo_count + len(valid_photo_files) == 0:
             flash("At least one photo is required when any item is marked Not OK.", "error")
-            return render_form()
+            return render_form(preserved_data=request.form)
 
         for f in valid_photo_files:
             fname = secure_filename(f.filename)
@@ -16557,7 +16558,7 @@ def qc_overview():
 @login_required
 def qc_home():
     _module_visibility_required("qc")
-    status = request.args.get("status", "all")
+    status = request.args.get("status", "open")
     status_order = case(
         (QCWork.status == "In Progress", 0),
         (QCWork.status == "Open", 1),
