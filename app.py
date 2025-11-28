@@ -3598,6 +3598,7 @@ def _handle_customer_support_ticket_creation():
 
     created_opportunity = None
     created_call_activity = None
+    created_sales_task = None
     sales_lead_pipeline_map = {"sales-ni": "lift", "sales-amc": "amc"}
     if create_sales_lead and category_id.lower() in sales_lead_pipeline_map:
         pipeline_key = sales_lead_pipeline_map[category_id.lower()]
@@ -3632,6 +3633,19 @@ def _handle_customer_support_ticket_creation():
             created_by=current_user if current_user.is_authenticated else None,
         )
         db.session.add(created_call_activity)
+        created_sales_task = SalesTask(
+            title=created_call_activity.subject,
+            category="call",
+            due_date=created_call_activity.scheduled_for.date()
+            if created_call_activity.scheduled_for
+            else today,
+            description=f"Follow up call created from support ticket {ticket_id}.",
+            related_type="opportunity",
+            opportunity=created_opportunity,
+            owner=sales_lead_owner
+            or (current_user if current_user.is_authenticated else None),
+        )
+        db.session.add(created_sales_task)
         db.session.flush()
         log_sales_activity(
             "opportunity",
@@ -3715,6 +3729,23 @@ def _handle_customer_support_ticket_creation():
                 "sales_opportunity_detail", opportunity_id=created_opportunity.id
             ),
         }
+    if created_sales_task:
+        ticket_record["linked_tasks"].append(
+            {
+                "id": created_sales_task.id,
+                "title": created_sales_task.title,
+                "assignee": created_sales_task.owner.display_name
+                if created_sales_task.owner
+                else "Unassigned",
+                "assignee_id": created_sales_task.owner_id,
+                "status": created_sales_task.status or "Pending",
+                "due_date": created_sales_task.due_date,
+                "details": created_sales_task.description,
+                "category": "Sales follow-up",
+                "priority": "Medium",
+                "created_at": created_sales_task.created_at,
+            }
+        )
 
     comments_added = False
     if linked_sales_client:
