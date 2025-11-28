@@ -473,8 +473,9 @@
               <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Due by</p>
                 <p class="mt-0.5 text-slate-100">
-                  {% if selected_ticket.get('due_at') %}
-                    {{ selected_ticket.get('due_at').strftime('%d %b %Y %H:%M') }}
+                  {% set due_date = selected_ticket.get('due_at') or selected_ticket.get('_sla_due_at') %}
+                  {% if due_date %}
+                    {{ due_date.strftime('%d %b %Y %H:%M') }}
                   {% else %}
                     Not scheduled
                   {% endif %}
