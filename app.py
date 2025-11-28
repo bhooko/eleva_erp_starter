@@ -3597,7 +3597,7 @@ def _handle_customer_support_ticket_creation():
         linked_entities.append(entity)
 
     created_opportunity = None
-    created_sales_task = None
+    created_call_activity = None
     sales_lead_pipeline_map = {"sales-ni": "lift", "sales-amc": "amc"}
     if create_sales_lead and category_id.lower() in sales_lead_pipeline_map:
         pipeline_key = sales_lead_pipeline_map[category_id.lower()]
@@ -3623,17 +3623,22 @@ def _handle_customer_support_ticket_creation():
             created_opportunity.id,
             f"Sales enquiry created from support ticket {ticket_id}",
         )
-        created_sales_task = SalesTask(
-            title=f"Follow up: {lead_title}",
-            category="activity",
-            due_date=_sales_task_due_date_for_priority(sla_preset, created_at=created_at),
-            description=f"Ticket {ticket_id} captured a new sales enquiry.", 
-            related_type="opportunity",
+        today = datetime.datetime.utcnow().date()
+        created_call_activity = SalesOpportunityEngagement(
             opportunity=created_opportunity,
-            owner=sales_lead_owner or (current_user if current_user.is_authenticated else None),
+            activity_type="call",
+            subject=f"Follow up call: {lead_title}",
+            scheduled_for=datetime.datetime.combine(today, datetime.time()),
+            created_by=current_user if current_user.is_authenticated else None,
         )
-        db.session.add(created_sales_task)
+        db.session.add(created_call_activity)
         db.session.flush()
+        log_sales_activity(
+            "opportunity",
+            created_opportunity.id,
+            "Call scheduled for today",
+            notes=f"Follow up call created from support ticket {ticket_id}.",
+        )
         linked_entities.append(
             {
                 "type": "sales_opportunity",
@@ -3710,22 +3715,6 @@ def _handle_customer_support_ticket_creation():
                 "sales_opportunity_detail", opportunity_id=created_opportunity.id
             ),
         }
-    if created_sales_task:
-        sales_task_assignee = created_sales_task.owner.display_name if created_sales_task.owner else "Unassigned"
-        ticket_record.setdefault("linked_tasks", []).append(
-            {
-                "id": f"SALES-{created_sales_task.id}",
-                "title": created_sales_task.title,
-                "assignee": sales_task_assignee,
-                "assignee_id": created_sales_task.owner_id,
-                "status": created_sales_task.status or "Pending",
-                "due_date": created_sales_task.due_date,
-                "details": created_sales_task.description,
-                "category": "Sales follow-up",
-                "priority": sla_preset.get("label") if sla_preset else "Medium",
-                "created_at": created_sales_task.created_at,
-            }
-        )
 
     comments_added = False
     if linked_sales_client:
