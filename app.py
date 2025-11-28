@@ -3217,6 +3217,7 @@ def _handle_customer_support_ticket_creation():
     sales_lead_owner_id_raw = (request.form.get("sales_lead_owner_id") or "").strip()
 
     errors = []
+    form_values = request.form.to_dict(flat=True)
     assignee_user = None
     assignee_user_id = None
     sales_lead_owner = None
@@ -3390,9 +3391,33 @@ def _handle_customer_support_ticket_creation():
             errors.append("Select a valid sales owner for the new enquiry.")
 
     if errors:
-        for message in errors:
-            flash(message, "error")
-        return redirect(url_for("customer_support_tasks"))
+        form_values.update(
+            {
+                "customer": customer,
+                "subject": subject,
+                "category": category_id,
+                "amc_site": amc_site_id,
+                "channel": channel_value,
+                "sla_priority": sla_priority_id,
+                "assignee": assignee_value,
+                "remarks": remarks,
+                "due_datetime": due_raw,
+                "contact_name": contact_name,
+                "contact_phone": contact_phone,
+                "contact_email": contact_email,
+                "location": location,
+                "linked_project_id": linked_project_id_raw,
+                "linked_customer_id": linked_customer_id_raw,
+                "linked_sales_client_id": linked_sales_client_id_raw,
+                "linked_lift_id": linked_lift_id_raw,
+                "create_sales_lead": "1" if create_sales_lead else "",
+                "sales_lead_owner_id": sales_lead_owner_id_raw,
+            }
+        )
+        return {
+            "errors": errors,
+            "form_values": form_values,
+        }
 
     ticket_id = _generate_customer_support_ticket_id()
     created_at = datetime.datetime.utcnow()
@@ -12713,9 +12738,17 @@ def customer_support_tasks():
     _module_visibility_required(
         "customer_support", owner_user_id=selected_ticket_assignee_id
     )
+    add_ticket_form_data = {}
+    add_ticket_errors = []
+    open_add_ticket_modal = False
+
     if request.method == "POST":
         response = _handle_customer_support_ticket_creation()
-        if response is not None:
+        if isinstance(response, dict):
+            add_ticket_errors = response.get("errors") or []
+            add_ticket_form_data = response.get("form_values") or {}
+            open_add_ticket_modal = True
+        elif response is not None:
             return response
     now = datetime.datetime.utcnow()
     tickets = []
@@ -12818,6 +12851,9 @@ def customer_support_tasks():
         category_assignments=category_assignments,
         assignee_whitelist=assignee_whitelist,
         amc_lifts=_customer_support_amc_site_options(),
+        add_ticket_form_data=add_ticket_form_data,
+        add_ticket_errors=add_ticket_errors,
+        open_add_ticket_modal=open_add_ticket_modal,
         sales_clients=sales_clients,
         installation_projects=installation_projects,
         amc_customers=amc_customers,
