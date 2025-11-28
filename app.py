@@ -8279,6 +8279,12 @@ def sales_tasks():
     active_tab = (request.form.get("active_tab") or request.args.get("tab") or "taskboard").lower()
     active_tab = active_tab if active_tab in {"taskboard", "calendar"} else "taskboard"
 
+    month_param = request.args.get("month")
+    try:
+        calendar_month = datetime.datetime.strptime(month_param, "%Y-%m").date().replace(day=1) if month_param else today.replace(day=1)
+    except ValueError:
+        calendar_month = today.replace(day=1)
+
     if request.method == "POST":
         form_action = request.form.get("form_action") or "create"
         if form_action == "create":
@@ -8344,8 +8350,8 @@ def sales_tasks():
         if task.due_date:
             tasks_by_date[task.due_date.isoformat()].append(task)
 
-    month_start = today.replace(day=1)
-    _, month_days = calendar.monthrange(today.year, today.month)
+    month_start = calendar_month
+    _, month_days = calendar.monthrange(month_start.year, month_start.month)
     grid_start = month_start - datetime.timedelta(days=month_start.weekday())
     calendar_days = []
     for offset in range(42):
@@ -8377,6 +8383,10 @@ def sales_tasks():
     )
     clients = SalesClient.query.order_by(func.lower(SalesClient.display_name)).all()
 
+    previous_month = (month_start - datetime.timedelta(days=1)).replace(day=1)
+    next_month = (month_start + datetime.timedelta(days=month_days)).replace(day=1)
+    calendar_weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sunday"]
+
     return render_template(
         "sales/tasks.html",
         tasks=tasks,
@@ -8391,6 +8401,9 @@ def sales_tasks():
         calendar_month_label=month_start.strftime("%B %Y"),
         opportunities=opportunities,
         clients=clients,
+        calendar_prev_month=previous_month.strftime("%Y-%m"),
+        calendar_next_month=next_month.strftime("%Y-%m"),
+        calendar_weekdays=calendar_weekdays,
     )
 
 

@@ -92,7 +92,26 @@
         <h4 class="text-lg font-semibold text-slate-100">Calendar</h4>
         <p class="text-xs text-slate-400">{{ calendar_month_label }}</p>
       </div>
-      <span class="text-xs text-slate-400">Click a day to view or add tasks</span>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <a
+          href="{{ url_for('sales_tasks', tab='calendar', month=calendar_prev_month) }}"
+          class="inline-flex items-center gap-1 rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100"
+        >
+          ← Previous
+        </a>
+        <a
+          href="{{ url_for('sales_tasks', tab='calendar', month=calendar_next_month) }}"
+          class="inline-flex items-center gap-1 rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100"
+        >
+          Next →
+        </a>
+        <span class="hidden sm:inline">Click a day to view or add tasks</span>
+      </div>
+    </div>
+    <div class="grid grid-cols-7 gap-1 px-4 pt-4 text-[11px] uppercase tracking-wide text-slate-500">
+      {% for day_name in calendar_weekdays %}
+      <div class="text-center">{{ day_name }}</div>
+      {% endfor %}
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-7 gap-1 p-4 text-sm">
       {% for day in calendar_days %}
@@ -105,6 +124,9 @@
           <span class="rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 text-[10px]">Today</span>
           {% endif %}
         </div>
+        {% if day.date.weekday() == 6 %}
+        <p class="mt-1 text-[11px] font-semibold text-rose-200">Sunday</p>
+        {% endif %}
         <ul class="mt-3 space-y-1 text-xs text-slate-300">
           {% for task in day_tasks[:4] %}
           <li class="truncate">• {{ task.title }}</li>
