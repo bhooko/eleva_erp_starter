@@ -3325,12 +3325,26 @@ def _handle_customer_support_ticket_creation():
     if channel_value and not channel_label:
         errors.append("Choose a valid ticket channel.")
 
-    sla_preset = None
-    if sla_priority_id:
+    critical_sla_categories = {"sales-ni", "sales-amc", "support-amc"}
+    default_sla_priority_id = (
+        "critical" if category_id.lower() in critical_sla_categories else "standard"
+    )
+
+    if not sla_priority_id:
+        sla_priority_id = default_sla_priority_id
+
+    sla_preset = next(
+        (preset for preset in CUSTOMER_SUPPORT_SLA_PRESETS if preset.get("id") == sla_priority_id),
+        None,
+    )
+
+    if not sla_preset:
+        sla_priority_id = default_sla_priority_id
         sla_preset = next(
             (preset for preset in CUSTOMER_SUPPORT_SLA_PRESETS if preset.get("id") == sla_priority_id),
             None,
         )
+
     if not sla_preset and CUSTOMER_SUPPORT_SLA_PRESETS:
         sla_preset = CUSTOMER_SUPPORT_SLA_PRESETS[0]
 
