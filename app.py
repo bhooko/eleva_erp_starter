@@ -3628,7 +3628,7 @@ def _handle_customer_support_ticket_creation():
         created_call_activity = SalesOpportunityEngagement(
             opportunity=created_opportunity,
             activity_type="call",
-            subject=f"Follow up call: {lead_title}",
+            subject=f"New Enquiry Call: {lead_title}",
             scheduled_for=datetime.datetime.combine(today, datetime.time()),
             created_by=current_user if current_user.is_authenticated else None,
         )
@@ -3639,7 +3639,7 @@ def _handle_customer_support_ticket_creation():
             due_date=created_call_activity.scheduled_for.date()
             if created_call_activity.scheduled_for
             else today,
-            description=f"Follow up call created from support ticket {ticket_id}.",
+            description=f"New enquiry call created from support ticket {ticket_id}.",
             related_type="opportunity",
             opportunity=created_opportunity,
             owner=sales_lead_owner
@@ -3651,7 +3651,7 @@ def _handle_customer_support_ticket_creation():
             "opportunity",
             created_opportunity.id,
             "Call scheduled for today",
-            notes=f"Follow up call created from support ticket {ticket_id}.",
+            notes=f"New enquiry call created from support ticket {ticket_id}.",
         )
         linked_entities.append(
             {
@@ -3744,6 +3744,9 @@ def _handle_customer_support_ticket_creation():
                 "category": "Sales follow-up",
                 "priority": "Medium",
                 "created_at": created_sales_task.created_at,
+                "url": url_for(
+                    "sales_opportunity_detail", opportunity_id=created_opportunity.id
+                ),
             }
         )
 
