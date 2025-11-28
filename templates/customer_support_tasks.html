@@ -1067,6 +1067,7 @@
       const amcSiteSelect = amcSiteField ? amcSiteField.querySelector('[data-amc-site-select]') : null;
       const customerNameInput = addTicketForm ? addTicketForm.querySelector('input[name="customer"]') : null;
       const linkedLiftInput = addTicketForm ? addTicketForm.querySelector('[data-linked-lift-input]') : null;
+      const slaPrioritySelect = addTicketForm ? addTicketForm.querySelector('select[name="sla_priority"]') : null;
       const salesLeadSection = document.querySelector('[data-sales-lead-section]');
       const salesLeadToggle = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-toggle]') : null;
       const salesLeadFields = salesLeadSection ? salesLeadSection.querySelector('[data-sales-lead-fields]') : null;
@@ -1111,6 +1112,27 @@
         const enableFields = matchesSalesLead && salesLeadToggle && salesLeadToggle.checked;
         setSalesLeadFieldsEnabled(enableFields);
       };
+
+      const criticalSlaCategories = ['sales-ni', 'sales-amc', 'support-amc'];
+      let slaPriorityManuallySelected = false;
+
+      const setDefaultSlaPriority = () => {
+        if (!slaPrioritySelect) {
+          return;
+        }
+        const categoryValue = (categorySelect && categorySelect.value ? categorySelect.value : '').toLowerCase();
+        const defaultValue = criticalSlaCategories.includes(categoryValue) ? 'critical' : 'standard';
+        const hasOption = Array.from(slaPrioritySelect.options).some((option) => option.value === defaultValue);
+        if (!slaPriorityManuallySelected && hasOption) {
+          slaPrioritySelect.value = defaultValue;
+        }
+      };
+
+      if (slaPrioritySelect) {
+        slaPrioritySelect.addEventListener('change', () => {
+          slaPriorityManuallySelected = true;
+        });
+      }
 
       const syncCustomerNameForAmcSelection = () => {
         if (!amcSiteSelect || !customerNameInput) {
@@ -1166,12 +1188,15 @@
           refreshAmcSiteVisibility();
           updateCustomerRequirement();
           refreshSalesLeadVisibility();
+          slaPriorityManuallySelected = false;
+          setDefaultSlaPriority();
         });
       }
       refreshAmcSiteVisibility();
       updateCustomerRequirement();
       syncCustomerNameForAmcSelection();
       refreshSalesLeadVisibility();
+      setDefaultSlaPriority();
 
       if (salesLeadToggle) {
         salesLeadToggle.addEventListener('change', refreshSalesLeadVisibility);
@@ -1202,6 +1227,8 @@
               }
             }
             refreshSalesLeadVisibility();
+            slaPriorityManuallySelected = false;
+            setDefaultSlaPriority();
           }, 0);
         });
       }
