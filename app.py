@@ -11345,8 +11345,82 @@ def forms_fill(form_id):
 
     schema_raw = json.loads(fs.schema_json)
     sections, is_sectioned = _normalize_form_schema(schema_raw)
+    linked_work_id = request.args.get("work_id", type=int)
     back_url = request.args.get("return") or request.referrer or url_for("qc_home")
-    draft_key = f"qc_form_{form_id}_{request.args.get('work_id') or 'general'}"
+    draft_key = f"qc_form_{form_id}_{linked_work_id or 'general'}"
+
+    def _is_not_ok_value(value):
+        return isinstance(value, str) and value.strip().lower() in {"not ok", "ng"}
+
+    def _filter_sections_for_resubmission(blocks, previous_payload):
+        if not isinstance(previous_payload, dict):
+            return blocks, False, False
+
+        filtered_blocks = []
+        found_not_ok = False
+
+        for block in blocks:
+            section_label = block.get("section") or ""
+            previous_entries = {}
+            if is_sectioned:
+                section_values = previous_payload.get(section_label)
+                if isinstance(section_values, list):
+                    previous_entries = {
+                        entry.get("label"): entry
+                        for entry in section_values
+                        if isinstance(entry, dict) and entry.get("label") is not None
+                    }
+            else:
+                previous_entries = previous_payload
+
+            filtered_items = []
+            for field in block.get("items", []):
+                if field.get("type") != "select":
+                    continue
+
+                prev_val = None
+                if is_sectioned:
+                    prev_entry = previous_entries.get(field.get("label")) if isinstance(previous_entries, dict) else None
+                    if isinstance(prev_entry, dict):
+                        prev_val = prev_entry.get("value")
+                else:
+                    prev_val = previous_entries.get(field.get("label")) if isinstance(previous_entries, dict) else None
+                    if isinstance(prev_val, dict):
+                        prev_val = prev_val.get("value")
+
+                if _is_not_ok_value(prev_val):
+                    filtered_items.append(field)
+
+            if filtered_items:
+                found_not_ok = True
+                filtered_blocks.append({"section": section_label, "items": filtered_items})
+
+        return filtered_blocks, found_not_ok, True
+
+    resubmission_mode = False
+    resubmission_notice = False
+    if linked_work_id:
+        previous_submission = (
+            Submission.query
+            .filter(Submission.form_id == form_id, Submission.work_id == linked_work_id)
+            .order_by(Submission.created_at.desc())
+            .first()
+        )
+        if previous_submission:
+            resubmission_mode = True
+            try:
+                previous_data = json.loads(previous_submission.data_json or "{}")
+            except Exception:
+                previous_data = {}
+
+            sections, has_not_ok, filter_supported = _filter_sections_for_resubmission(sections, previous_data)
+            if filter_supported and not has_not_ok:
+                flash(
+                    "All items were marked OK in the latest submission. Nothing to resubmit for this task.",
+                    "info",
+                )
+                return redirect(back_url)
+            resubmission_notice = filter_supported
 
     def render_form(subcategory_label=None):
         return render_template(
@@ -11359,7 +11433,9 @@ def forms_fill(form_id):
             subcategory_label=subcategory_label or fs.name,
             back_url=back_url,
             draft_key=draft_key,
-            preview_only=False
+            preview_only=False,
+            resubmission_mode=resubmission_mode,
+            resubmission_notice=resubmission_notice,
         )
 
     if request.method == "POST":
@@ -11506,7 +11582,6 @@ def forms_fill(form_id):
                     f.save(dest)
                     saved_videos.append(dest)
 
-        linked_work_id = request.args.get("work_id", type=int)
         sub = Submission(
             form_id=fs.id,
             submitted_by=current_user.id,
@@ -16450,7 +16525,35 @@ def srt_task_update(task_id):
 
 
 # ---------------------- QC TABS ----------------------
+
+
+def _get_qc_summary_cards():
+    status_counts = dict(
+        db.session.query(QCWork.status, func.count(QCWork.id))
+        .group_by(QCWork.status)
+        .all()
+    )
+    total = sum(status_counts.values())
+    return {
+        "total": total,
+        "open": total - status_counts.get("Closed", 0),
+        "in_progress": status_counts.get("In Progress", 0),
+        "blocked": status_counts.get("Blocked", 0),
+    }
+
+
 @app.route("/qc")
+@login_required
+def qc_overview():
+    _module_visibility_required("qc")
+    summary_cards = _get_qc_summary_cards()
+    return render_template(
+        "qc_overview.html",
+        summary_cards=summary_cards,
+    )
+
+
+@app.route("/qc/tasks")
 @login_required
 def qc_home():
     _module_visibility_required("qc")
@@ -16531,12 +16634,6 @@ def qc_home():
             submission_map.get(item.id)
         )
 
-    summary_cards = {
-        "total": len(work_items),
-        "open": sum(1 for item in work_items if item.status != "Closed"),
-        "in_progress": sum(1 for item in work_items if item.status == "In Progress"),
-        "blocked": sum(1 for item in work_items if item.status == "Blocked"),
-    }
     return render_template(
         "qc.html",
         work_items=work_items,
@@ -16546,7 +16643,6 @@ def qc_home():
         STAGES=STAGES,
         LIFT_TYPES=LIFT_TYPES,
         status_filter=status,
-        summary_cards=summary_cards
     )
 
 

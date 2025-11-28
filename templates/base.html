@@ -924,7 +924,7 @@
 
         {% if current_user.is_authenticated and current_user.can_view_module('qc') %}
           {% set qc_endpoints = [
-            'qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign',
+            'qc_overview','qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign',
             'qc_recent_submissions','forms_list','forms_edit','form_render','submission_view','forms_new','forms_fill',
             'qc_settings'
           ] %}
@@ -932,21 +932,22 @@
           {% set qc_tasks_active = request.endpoint in ['qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign'] or (request.endpoint == 'forms_fill' and request.args.get('work_id')) %}
           {% set qc_forms_active = request.endpoint in ['forms_list','forms_edit','forms_new','forms_fill'] and not (request.endpoint == 'forms_fill' and request.args.get('work_id')) %}
           <div class="space-y-1">
-            <div class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if qc_parent_active else '' }}">
+            <a href="{{ url_for('qc_overview') }}"
+               class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if qc_parent_active else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V6l-6-4z"/>
                 </svg>
               </span>
               <span class="label text-[15px] flex-1">QC</span>
-            </div>
+            </a>
             <div class="pl-12 space-y-1">
               <a href="{{ url_for('qc_home') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_tasks_active else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_tasks_active else ''}}">
                 <span class="label">Tasks</span>
               </a>
               <a href="{{ url_for('forms_list') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_forms_active else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if qc_forms_active else ''}}">
                 <span class="label">QC Form Templates</span>
               </a>
               <a href="{{ url_for('qc_settings') }}"
@@ -1001,7 +1002,7 @@
           {% set section_title = 'Dashboard' %}
         {% elif endpoint in ['projects_pending','projects_list','project_detail','project_templates','project_template_detail'] %}
           {% set section_title = 'Projects' %}
-        {% elif endpoint in ['forms_list','forms_edit','submission_view'] %}
+        {% elif endpoint in ['qc_overview','qc_home','qc_work_detail','qc_work_status','qc_work_comment','qc_work_assign','qc_recent_submissions','forms_list','forms_edit','submission_view'] %}
           {% set section_title = 'QC' %}
         {% elif endpoint in ['forms_new','form_new','forms_create','form_render'] %}
           {% set section_title = 'QC - New form' %}
