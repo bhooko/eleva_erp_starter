@@ -28,6 +28,12 @@
     </div>
   </div>
 
+  {% if resubmission_notice|default(False) %}
+    <div class="mb-6 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+      Only the checklist items marked <span class="font-semibold">Not OK</span> in the last submission are available to resubmit for this task.
+    </div>
+  {% endif %}
+
   {% if preview_mode %}
     <div class="space-y-2 text-sm text-slate-400 mb-4">
       <p>All inputs are disabled in preview mode. Use <span class="font-semibold text-emerald-200">New Submission</span> to fill this form.</p>

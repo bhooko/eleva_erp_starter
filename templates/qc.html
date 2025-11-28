@@ -27,25 +27,6 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-      <div class="text-slate-500 text-xs uppercase tracking-wide">Total</div>
-      <div class="text-2xl font-semibold text-emerald-200">{{ summary_cards.total }}</div>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-      <div class="text-slate-500 text-xs uppercase tracking-wide">Open</div>
-      <div class="text-2xl font-semibold text-amber-200">{{ summary_cards.open }}</div>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-      <div class="text-slate-500 text-xs uppercase tracking-wide">In Progress</div>
-      <div class="text-2xl font-semibold text-sky-200">{{ summary_cards.in_progress }}</div>
-    </div>
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-      <div class="text-slate-500 text-xs uppercase tracking-wide">Blocked</div>
-      <div class="text-2xl font-semibold text-rose-200">{{ summary_cards.blocked }}</div>
-    </div>
-  </div>
-
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 overflow-auto">
       {% if work_items|length == 0 %}
         <p class="text-slate-400 text-sm">No tasks yet. Use the create task button above to add your first one.</p>
