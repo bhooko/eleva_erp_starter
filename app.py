@@ -3157,8 +3157,67 @@ def _save_customer_support_attachments(files):
     return saved
 
 
+def _derive_customer_support_call_from_ticket(ticket):
+    if not isinstance(ticket, dict):
+        return None
+
+    ticket_id = ticket.get("id")
+    if not ticket_id:
+        return None
+
+    logged_at = (
+        ticket.get("created_at")
+        or ticket.get("updated_at")
+        or datetime.datetime.utcnow()
+    )
+
+    return {
+        "call_id": f"{ticket_id}-call",
+        "ticket_id": ticket_id,
+        "subject": ticket.get("subject") or "Support ticket",
+        "category": ticket.get("category") or "Uncategorised",
+        "status": ticket.get("status") or "Open",
+        "channel": ticket.get("channel") or "Phone",
+        "caller": ticket.get("contact_name")
+        or ticket.get("customer")
+        or "Unknown caller",
+        "handled_by": ticket.get("assignee") or "Unassigned",
+        "duration_minutes": ticket.get("call_duration_minutes") or 8,
+        "logged_at": logged_at,
+    }
+
+
+def _customer_support_call_records():
+    combined = []
+    seen_ids = set()
+
+    for call in CUSTOMER_SUPPORT_CALL_LOGS:
+        if not isinstance(call, dict):
+            continue
+
+        call_id = call.get("call_id") or call.get("ticket_id")
+        if not call_id:
+            continue
+
+        if call_id in seen_ids:
+            continue
+
+        seen_ids.add(call_id)
+        combined.append(call)
+
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        call_entry = _derive_customer_support_call_from_ticket(ticket)
+        if not call_entry or call_entry.get("call_id") in seen_ids:
+            continue
+
+        seen_ids.add(call_entry.get("call_id"))
+        combined.append(call_entry)
+
+    return combined
+
+
 def _customer_support_filter_calls(category=None, status=None, search=None):
-    records = CUSTOMER_SUPPORT_CALL_LOGS
+    records = _customer_support_call_records()
 
     if category:
         category = category.lower()
@@ -3186,7 +3245,11 @@ def _customer_support_filter_calls(category=None, status=None, search=None):
             or term in (record.get("ticket_id") or "").lower()
         ]
 
-    return sorted(records, key=lambda item: item.get("logged_at"), reverse=True)
+    return sorted(
+        records,
+        key=lambda item: item.get("logged_at") or datetime.datetime.min,
+        reverse=True,
+    )
 
 
 def _handle_customer_support_ticket_creation():
