@@ -13014,6 +13014,7 @@ def customer_support_create_linked_task():
     details = (request.form.get("details") or "").strip()
     assignee_id_raw = (request.form.get("assignee") or "").strip()
     due_date_raw = (request.form.get("due_date") or "").strip()
+    task_url = (request.form.get("task_url") or "").strip()
     category = (request.form.get("category") or "").strip()
     priority = (request.form.get("priority") or "").strip()
 
@@ -13070,6 +13071,7 @@ def customer_support_create_linked_task():
         "category": category_label or category or None,
         "priority": priority or "Medium",
         "created_at": datetime.datetime.utcnow(),
+        "url": task_url or None,
     }
 
     ticket.setdefault("linked_tasks", []).append(new_task)
