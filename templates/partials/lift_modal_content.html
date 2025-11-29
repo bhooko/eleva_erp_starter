@@ -155,7 +155,13 @@
       </div>
       <div>
         <dt class="text-xs uppercase tracking-wide text-slate-400">Contract Value</dt>
-        <dd class="text-sm text-slate-100">{{ payload.amc.contract_value_display }}</dd>
+        <dd class="text-sm text-slate-100">
+          {% if can_see_commercial %}
+            {{ payload.amc.contract_value_display }}
+          {% else %}
+            <span class="text-xs text-slate-500 italic">Restricted</span>
+          {% endif %}
+        </dd>
       </div>
       <div>
         <dt class="text-xs uppercase tracking-wide text-slate-400">Payment Terms</dt>
@@ -185,7 +191,13 @@
           {% for history in payload.amc.renewal_history %}
             <li>
               <div class="font-semibold text-slate-200">{{ history.period }}</div>
-              <div>{{ history.value_display }} · Renewed {{ history.renewed_on_display }}</div>
+              <div>
+                {% if can_see_commercial %}
+                  {{ history.value_display }} · Renewed {{ history.renewed_on_display }}
+                {% else %}
+                  <span class="italic text-slate-500">Value restricted</span> · Renewed {{ history.renewed_on_display }}
+                {% endif %}
+              </div>
             </li>
           {% else %}
             <li>No renewal history captured.</li>

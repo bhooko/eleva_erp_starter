@@ -51,16 +51,24 @@
               <p class="text-sm font-semibold text-slate-100">{{ stage }}</p>
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 <span data-stage-count data-stage="{{ stage }}" data-count="{{ deal_count }}">{{ '1 deal' if deal_count == 1 else deal_count ~ ' deals' }}</span>
-                <span data-stage-total data-stage="{{ stage }}" data-total="{{ stage_totals_raw.get(stage, 0) or 0 }}" data-currency="{{ stage_currencies.get(stage, '₹') }}">Value {{ stage_totals.get(stage, '₹0.00') }}</span>
+                {% if can_see_commercial %}
+                  <span data-stage-total data-stage="{{ stage }}" data-total="{{ stage_totals_raw.get(stage, 0) or 0 }}" data-currency="{{ stage_currencies.get(stage, '₹') }}">Value {{ stage_totals.get(stage, '₹0.00') }}</span>
+                {% else %}
+                  <span class="text-slate-600">Value restricted</span>
+                {% endif %}
               </div>
             </div>
           </div>
           <div class="p-3 space-y-3 min-h-[120px]" data-stage-cards>
             {% for opp in grouped.get(stage, []) %}
-            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 flex flex-col gap-1 cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}" data-amount="{{ '%.2f' % opp.amount if opp.amount is not none else '0' }}" data-currency="{{ opp.currency or '₹' }}" data-has-project="{{ 'true' if opp.project_id else 'false' }}" data-convert-url="{{ url_for('sales_opportunity_convert_to_project', opportunity_id=opp.id) if current_user.can_view_module('operations') else '' }}">
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl shadow-inner p-3 flex flex-col gap-1 cursor-grab" data-opportunity-card data-opportunity-id="{{ opp.id }}" data-stage="{{ opp.stage }}" data-stage-url="{{ url_for('sales_opportunity_stage', opportunity_id=opp.id) }}" data-amount="{{ '%.2f' % opp.amount if can_see_commercial and opp.amount is not none else '0' }}" data-currency="{{ opp.currency or '₹' if can_see_commercial else '' }}" data-has-project="{{ 'true' if opp.project_id else 'false' }}" data-convert-url="{{ url_for('sales_opportunity_convert_to_project', opportunity_id=opp.id) if current_user.can_view_module('operations') else '' }}">
               <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opp.id) }}" class="block text-sm font-semibold text-emerald-200 hover:underline truncate" title="{{ opp.title }}">{{ opp.title }}</a>
               <span class="text-xs text-slate-400 truncate" title="{{ opp.client.display_name if opp.client else 'No client' }}">{{ opp.client.display_name if opp.client else 'No client' }}</span>
-              <span class="text-xs text-slate-300">{{ opp.display_amount }}</span>
+              {% if can_see_commercial %}
+                <span class="text-xs text-slate-300">{{ opp.display_amount }}</span>
+              {% else %}
+                <span class="text-[11px] text-slate-500 italic">Amount restricted</span>
+              {% endif %}
               {% if opp.temperature %}
               {% set label, badge = opp.badge_variant %}
               <span class="inline-flex items-center px-2 py-1 rounded-lg text-[11px] {{ badge }} w-fit">{{ label or opp.temperature|capitalize }}</span>
