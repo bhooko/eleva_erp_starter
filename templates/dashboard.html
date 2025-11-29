@@ -3,84 +3,161 @@
 
 {% macro render_dashboard_cards(modules, empty_text) %}
   {% set cards = namespace(count=0) %}
-  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    {% for module in modules %}
-      {% set items = module['items'] or [] %}
-      {% if items %}
-        {% for item in items %}
-          {% set cards.count = cards.count + 1 %}
-          {% set card_index = cards.count - 1 %}
-          <article
-            class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 flex flex-col gap-3 card-hover-lift fade-in-up"
-            style="--fade-delay: {{ card_index * 60 }}ms;"
+  <div x-data="{ filter: 'all' }" class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2 mb-1">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        :class="filter === 'all' ? 'bg-slate-200 text-slate-900 border-slate-200 font-semibold' : ''"
+        @click="filter = 'all'"
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        :class="filter === 'overdue' ? 'bg-rose-200/80 text-rose-900 border-rose-200 font-semibold' : ''"
+        @click="filter = 'overdue'"
+      >
+        Overdue
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        :class="filter === 'today' ? 'bg-amber-200/80 text-amber-900 border-amber-200 font-semibold' : ''"
+        @click="filter = 'today'"
+      >
+        Today
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        :class="filter === 'upcoming' ? 'bg-emerald-200/80 text-emerald-900 border-emerald-200 font-semibold' : ''"
+        @click="filter = 'upcoming'"
+      >
+        Next 7 days
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      {% for module in modules %}
+        {% set items = module['items'] or [] %}
+        {% if items %}
+          {% set cards.count = cards.count + items|length %}
+          {% set variants = namespace(values=[]) %}
+          {% for item in items %}
+            {% set _ = variants.values.append(item.due_variant or 'none') %}
+          {% endfor %}
+          <section
+            class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 space-y-3 shadow-sm"
+            data-variants="{{ variants.values | unique | join(',') }}"
+            x-show="filter === 'all' || ($el.dataset.variants || '').split(',').includes(filter)"
+            x-transition
           >
             <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 space-y-1">
+              <div class="space-y-1">
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 text-[11px] uppercase tracking-wide text-slate-300">{{ module['module'] }}</span>
-                  {% if item.identifier %}
-                    <span class="text-[11px] text-slate-500 font-mono shrink-0">{{ item.identifier }}</span>
+                  <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
+                  {% if module.summary %}
+                    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                      {% if module.summary.overdue %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-200 px-2 py-0.5 border border-rose-500/30">
+                          {{ module.summary.overdue }} overdue
+                        </span>
+                      {% endif %}
+                      {% if module.summary.today %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-200 px-2 py-0.5 border border-amber-500/30">
+                          {{ module.summary.today }} today
+                        </span>
+                      {% endif %}
+                      {% if module.summary.upcoming %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-200 px-2 py-0.5 border border-emerald-500/30">
+                          {{ module.summary.upcoming }} upcoming
+                        </span>
+                      {% endif %}
+                    </div>
                   {% endif %}
                 </div>
-                <div class="text-sm font-semibold text-slate-100 leading-tight truncate" title="{{ item.title }}">{{ item.title }}</div>
-                {% if item.subtitle %}
-                  <div class="text-xs text-slate-400 truncate" title="{{ item.subtitle }}">{{ item.subtitle }}</div>
+                {% if module.description %}
+                  <p class="text-xs text-slate-400">{{ module.description }}</p>
                 {% endif %}
               </div>
-              <div class="flex flex-col items-end gap-2 shrink-0">
-                {% if item.status %}
-                  <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ item.status_class }}">{{ item.status }}</span>
-                {% endif %}
-                {% if item.due_description or item.due_display %}
-                  <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ item.due_class }}">
-                    {% if item.due_description %}{{ item.due_description }}{% endif %}
-                    {% if item.due_description and item.due_display %}
-                      <span class="text-slate-400 normal-case ml-1">({{ item.due_display }})</span>
-                    {% elif item.due_display %}
-                      Due {{ item.due_display }}
+              <div class="text-[11px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                {{ items|length }} item{{ 's' if items|length != 1 else '' }}
+              </div>
+            </div>
+
+            <div class="grid gap-2">
+              {% for item in items %}
+                <div
+                  x-show="filter === 'all' || filter === '{{ item.due_variant or 'none' }}'"
+                  class="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-700 hover:shadow-lg hover:shadow-black/20 transition"
+                >
+                  <div class="space-y-1 min-w-0">
+                    <div class="flex items-center gap-2 text-[11px] text-slate-400 uppercase tracking-wide">
+                      <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700/70 text-slate-200">{{ module['module'] }}</span>
+                      {% if item.identifier %}
+                        <span class="font-mono text-slate-500">{{ item.identifier }}</span>
+                      {% endif %}
+                    </div>
+                    <div class="text-sm font-semibold text-slate-100 leading-tight">
+                      {% if item.url %}
+                        <a href="{{ item.url }}" class="hover:underline">{{ item.title }}</a>
+                      {% else %}
+                        {{ item.title }}
+                      {% endif %}
+                    </div>
+                    {% if item.subtitle %}
+                      <div class="text-xs text-slate-400">{{ item.subtitle }}</div>
                     {% endif %}
-                  </span>
-                {% endif %}
-              </div>
+                    {% if item.description %}
+                      <p class="text-xs text-slate-500">{{ item.description }}</p>
+                    {% endif %}
+                    {% if item.metadata %}
+                      <div class="flex flex-wrap gap-2 text-[11px] uppercase tracking-wide">
+                        {% for badge in item.metadata %}
+                          {% if badge is mapping %}
+                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
+                              {{ badge.label }}: {{ badge.value }}
+                            </span>
+                          {% else %}
+                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">{{ badge }}</span>
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="flex flex-col items-end gap-1 shrink-0 text-right">
+                    {% if item.due_display %}
+                      <span class="text-[11px] px-2 py-0.5 rounded-full {{ item.due_class }}">
+                        {{ item.due_display }}
+                      </span>
+                    {% endif %}
+                    {% if item.status %}
+                      <span class="text-[11px] px-2 py-0.5 rounded-full {{ item.status_class }}">{{ item.status }}</span>
+                    {% endif %}
+                    {% if item.secondary_url %}
+                      <a
+                        href="{{ item.secondary_url }}"
+                        class="mt-1 inline-flex items-center justify-center px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition"
+                      >{{ item.secondary_label }}</a>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
             </div>
-
-            {% if item.description %}
-              <p class="text-xs text-slate-400">{{ item.description }}</p>
-            {% endif %}
-
-            {% if item.metadata %}
-              <div class="flex flex-wrap gap-2 text-[11px] uppercase tracking-wide">
-                {% for badge in item.metadata %}
-                  <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">{{ badge }}</span>
-                {% endfor %}
-              </div>
-            {% endif %}
-
-            <div class="mt-auto flex flex-wrap gap-2">
-              {% if item.url %}
-                <a
-                  href="{{ item.url }}"
-                  class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 transition btn-shimmer"
-                >View Details</a>
-              {% endif %}
-              {% if item.secondary_url %}
-                <a
-                  href="{{ item.secondary_url }}"
-                  class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition btn-shimmer"
-                >{{ item.secondary_label }}</a>
-              {% endif %}
-            </div>
-          </article>
-        {% endfor %}
-      {% endif %}
-    {% endfor %}
-  </div>
-
-  {% if cards.count == 0 %}
-    <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
-      {{ empty_text }}
+          </section>
+        {% endif %}
+      {% endfor %}
     </div>
-  {% endif %}
+
+    {% if cards.count == 0 %}
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
+        {{ empty_text }}
+      </div>
+    {% endif %}
+  </div>
 {% endmacro %}
 
 {% block title %}Eleva ERP – {{ 'Project Tasks' if view_mode == 'projects' else 'Dashboard' }}{% endblock %}
