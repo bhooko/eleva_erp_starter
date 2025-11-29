@@ -22,6 +22,7 @@ from flask_login import (
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import importlib.util
 import csv
@@ -7180,6 +7181,73 @@ class Lift(db.Model):
         self.service_schedule_json = (
             json.dumps(cleaned, ensure_ascii=False) if cleaned else None
         )
+
+    @property
+    def next_amc_date(self):
+        """
+        Returns the next preventive/AMC visit date for this lift.
+
+        Priority:
+        1) The earliest future 'service_schedule' entry that is not completed/cancelled.
+        2) Fallback to `next_service_due` if set.
+        3) Otherwise, None.
+        """
+        today = date.today()
+
+        # Try from service_schedule entries
+        try:
+            schedule = self.service_schedule or []
+        except Exception:
+            schedule = []
+
+        upcoming_dates = []
+        for item in schedule:
+            visit_date = item.get("date")
+            if not isinstance(visit_date, date):
+                continue
+            status_key = (item.get("status") or "").strip().lower()
+            # Treat anything not completed/cancelled as an open visit
+            if status_key in {"completed", "cancelled"}:
+                continue
+            if visit_date >= today:
+                upcoming_dates.append(visit_date)
+
+        if upcoming_dates:
+            return min(upcoming_dates)
+
+        # Fallback to next_service_due column if available
+        if isinstance(getattr(self, "next_service_due", None), date):
+            return self.next_service_due
+
+        return None
+
+    @property
+    def amc_due_status(self) -> str:
+        """
+        Returns a human-friendly AMC status key based on `next_amc_date`.
+
+        Possible values:
+        - "no_date"
+        - "overdue"
+        - "due_today"
+        - "due_this_week"
+        - "upcoming"
+        """
+        today = date.today()
+        next_date = self.next_amc_date
+
+        if not next_date:
+            return "no_date"
+
+        if next_date < today:
+            return "overdue"
+        if next_date == today:
+            return "due_today"
+
+        delta_days = (next_date - today).days
+        if 0 < delta_days <= 7:
+            return "due_this_week"
+        return "upcoming"
 
     @property
     def timeline_entries(self):
@@ -17021,11 +17089,47 @@ def service_preventive_maintenance():
         for name, count in sorted(checklist_counts.items())
     ]
 
+    overdue_count = 0
+    today_count = 0
+    week_count = 0
+    upcoming_count = 0
+
+    for entry in snapshot["entries"]:
+        visit_date = entry.get("date")
+        if not isinstance(visit_date, datetime.date):
+            continue
+        status_key = (entry.get("status") or "scheduled").strip().lower()
+        if status_key in {"completed", "cancelled"}:
+            continue
+
+        if visit_date < today:
+            overdue_count += 1
+        elif visit_date == today:
+            today_count += 1
+            upcoming_count += 1
+        else:
+            upcoming_count += 1
+            delta_days = (visit_date - today).days
+            if delta_days <= 7:
+                week_count += 1
+
+    unscheduled_count = sum(1 for lift in Lift.query.all() if lift.next_amc_date is None)
+
+    summary = {
+        "overdue": overdue_count,
+        "today": today_count,
+        "week": week_count,
+        "upcoming": upcoming_count,
+        "unscheduled": unscheduled_count,
+    }
+
     return render_template(
         "service/preventive_maintenance.html",
         upcoming=upcoming,
         overdue=overdue,
         checklists=checklists,
+        summary=summary,
+        today=today,
     )
 
 
