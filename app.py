@@ -11304,6 +11304,7 @@ def _build_task_overview(viewing_user: "User"):
                     "due_description": due_label,
                     "due_display": due_display,
                     "due_class": _due_badge_class(due_variant),
+                    "due_variant": due_variant,
                     "url": url_for("qc_work_detail", work_id=task.id),
                     "secondary_url": url_for("forms_fill", form_id=task.template_id, work_id=task.id)
                     if task.template_id
@@ -11365,6 +11366,7 @@ def _build_task_overview(viewing_user: "User"):
                         "due_description": due_label,
                         "due_display": due_display,
                         "due_class": _due_badge_class(due_variant),
+                        "due_variant": due_variant,
                         "url": url_for("sales_opportunity_detail", opportunity_id=opportunity.id)
                         if opportunity
                         else None,
@@ -11456,6 +11458,7 @@ def _build_task_overview(viewing_user: "User"):
                         "due_description": due_label,
                         "due_display": due_display,
                         "due_class": _due_badge_class(due_variant),
+                        "due_variant": due_variant,
                         "url": url_for("customer_support_tasks", ticket=ticket.get("id")),
                         "secondary_url": None,
                         "secondary_label": None,
