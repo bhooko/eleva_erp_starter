@@ -11172,6 +11172,12 @@ def _build_task_overview(viewing_user: "User"):
                     SalesOpportunity.owner_id.in_(allowed_ids),
                     SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
                 ]
+
+        task_owner_ids = set()
+        if assignee_lookup:
+            task_owner_ids = {uid for uid in assignee_lookup.keys() if uid}
+        elif viewing_user and getattr(viewing_user, "id", None):
+            task_owner_ids = {viewing_user.id}
         sales_items = []
         if sales_filters:
             sales_items = (
@@ -11189,14 +11195,15 @@ def _build_task_overview(viewing_user: "User"):
             )
 
         sales_tasks = []
-        if sales_user_id_set:
+        if task_owner_ids:
             sales_tasks = (
                 SalesTask.query
                 .options(
                     joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
                     joinedload(SalesTask.client),
                 )
-                .filter(SalesTask.owner_id.in_(sales_user_id_set))
+                .filter(SalesTask.owner_id.in_(task_owner_ids))
+                .filter(SalesTask.due_date.isnot(None))
                 .filter(or_(SalesTask.status.is_(None), func.lower(SalesTask.status) != "completed"))
                 .order_by(SalesTask.due_date.asc(), SalesTask.id.asc())
                 .all()
@@ -11227,7 +11234,7 @@ def _build_task_overview(viewing_user: "User"):
                 module_order,
                 "Sales",
                 "No pending sales activities.",
-                "Upcoming and overdue sales engagements on your opportunities.",
+                "Upcoming and overdue sales engagements and tasks on your opportunities.",
             )
         if show_customer_support:
             _ensure_module(
@@ -11300,18 +11307,10 @@ def _build_task_overview(viewing_user: "User"):
                         ]
                     ),
                 }
-            )
+                )
 
         if show_sales:
             sales_module = modules_map.get("Sales")
-            if sales_module is None:
-                sales_module = _ensure_module(
-                    modules_map,
-                    module_order,
-                    "Sales",
-                    "No pending sales activities.",
-                    "Upcoming and overdue sales engagements and tasks on your opportunities.",
-                )
             for activity in sales_items:
                 opportunity = activity.opportunity
                 due_label, due_display, due_variant = _describe_due_date(activity.scheduled_for, now)
@@ -11363,21 +11362,43 @@ def _build_task_overview(viewing_user: "User"):
 
             for task in sales_tasks:
                 due_label, due_display, due_variant = _describe_due_date(task.due_date, now)
+                status_key = (task.status or "Pending").strip().lower()
+                status_class = _status_badge_class(status_key)
+                due_class = _due_badge_class(due_variant)
+
+                related_bits = []
+                if task.client:
+                    related_bits.append(
+                        task.client.display_name
+                        or task.client.company_name
+                        or task.client.code
+                    )
+                if task.opportunity:
+                    related_bits.append(task.opportunity.title)
+                subtitle = " · ".join(related_bits) or "Sales Task"
+
+                metadata = []
+                if task.category:
+                    metadata.append({"label": "Category", "value": task.category})
+                if task.related_type:
+                    metadata.append({"label": "Type", "value": task.related_type})
+
                 sales_module["items"].append(
                     {
                         "title": task.title,
-                        "subtitle": task.related_display,
-                        "description": task.description,
-                        "identifier": f"sales_task_{task.id}",
+                        "subtitle": subtitle,
+                        "description": task.description or "",
                         "status": task.status or "Pending",
-                        "status_class": _status_badge_class(_status_key(task.status)),
+                        "status_class": status_class,
                         "due_description": due_label,
                         "due_display": due_display,
-                        "due_class": _due_badge_class(due_variant),
+                        "due_class": due_class,
+                        "due_variant": due_variant,
+                        "identifier": f"Sales Task · {task.id}",
                         "url": url_for("sales_task_detail", task_id=task.id),
                         "secondary_url": None,
                         "secondary_label": None,
-                        "metadata": [f"Category: {task.category_label}"],
+                        "metadata": metadata,
                     }
                 )
 
