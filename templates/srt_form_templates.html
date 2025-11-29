@@ -25,7 +25,7 @@
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-800/70 text-sm">
-        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+        <thead class="bg-slate-900/90 text-[11px] uppercase tracking-wide text-slate-200">
           <tr>
             <th class="px-6 py-3 text-left">Template</th>
             <th class="px-6 py-3 text-left">Category</th>
@@ -178,7 +178,7 @@
           <div class="space-y-4" data-designer-builder></div>
           <details class="bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
             <summary class="text-xs text-slate-400 cursor-pointer">Preview JSON</summary>
-            <pre class="mt-2 text-[11px] leading-5 text-emerald-100/80 whitespace-pre-wrap" data-designer-preview></pre>
+            <pre class="mt-2 text-xs leading-5 text-emerald-100/80 whitespace-pre-wrap" data-designer-preview></pre>
           </details>
         </div>
       </div>
@@ -422,7 +422,7 @@
             <button type="button" class="px-3 py-1.5 text-xs rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 transition" data-action="upload-image" ${baseAttrs}>Upload</button>
             ${clearButton}
           </div>
-          <p class="text-[11px] text-slate-500">Shown beside the ${scope === 'section' ? 'section heading' : 'check item'} during checklist entry.</p>
+          <p class="text-xs text-slate-300">Shown beside the ${scope === 'section' ? 'section heading' : 'check item'} during checklist entry.</p>
         </div>
       `;
     };
@@ -536,7 +536,7 @@
                 <div>
                   <label class="block text-xs text-slate-400 mb-1">Section name</label>
                   <input type="text" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" value="${escapeHtml(sectionInputValue)}" placeholder="Eg. Machine Room" data-scope="section" data-section="${sectionIndex}" data-field="section" maxlength="160"${sectionIsPlaceholder ? ` data-suggestion="${sectionSuggestion}"` : ''}>
-                  <p class="text-[11px] text-slate-500 mt-1">Leave blank to hide this heading when the checklist is rendered.</p>
+                  <p class="text-xs text-slate-300 mt-1">Leave blank to hide this heading when the checklist is rendered.</p>
                 </div>
                 ${sectionImageControls}
               </div>
@@ -1081,7 +1081,7 @@
                     ${escapeHtml(item.label || 'Table grid')}
                     ${item.required ? '<span class="text-rose-400">*</span>' : ''}
                   </p>
-                  ${badgesMarkup ? `<div class="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">${badgesMarkup}</div>` : ''}
+                  ${badgesMarkup ? `<div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">${badgesMarkup}</div>` : ''}
                 </div>
                 <div class="overflow-x-auto rounded-xl border border-slate-800">
                   <table class="min-w-[320px] w-full text-left text-xs text-slate-200">
@@ -1151,7 +1151,7 @@
                   ${escapeHtml(item.label || 'Checklist item')}
                   ${item.required ? '<span class="text-rose-400">*</span>' : ''}
                 </p>
-                <div class="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
                   <span class="rounded-full bg-slate-800/80 px-2 py-1">${escapeHtml(typeLabel)}</span>
                   ${badgesMarkup}
                 </div>

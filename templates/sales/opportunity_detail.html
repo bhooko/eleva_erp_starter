@@ -9,7 +9,7 @@
       {% if can_see_commercial %}
         <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> {{ opportunity.display_amount }}</span>
       {% else %}
-        <span class="inline-flex items-center gap-2 text-[11px] italic text-slate-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> Amount restricted</span>
+        <span class="inline-flex items-center gap-2 text-xs italic text-slate-300"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> Amount restricted</span>
       {% endif %}
       <span>Stage: {{ opportunity.stage }}</span>
       {% if opportunity.temperature %}
@@ -113,7 +113,7 @@
       <div class="flex items-center gap-3">
         <div class="flex flex-col items-center text-center">
           <div title="{{ stage_option }}" class="stage-node w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold {{ 'is-active' if is_current else '' }} {{ 'is-complete' if is_complete else '' }}">{{ loop.index }}</div>
-          <span class="mt-2 text-[11px] stage-label {{ 'is-active' if is_current else '' }}">{{ stage_option }}</span>
+          <span class="mt-2 text-xs stage-label {{ 'is-active' if is_current else '' }}">{{ stage_option }}</span>
         </div>
         {% if not loop.last %}
           <div class="stage-connector {{ connector_state }}"></div>
@@ -293,11 +293,11 @@
               {% endif %}
               <div class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-2">
                 <div>
-                  <p class="uppercase tracking-wide text-[11px] text-slate-500">Scheduled</p>
+                  <p class="uppercase tracking-wide text-xs text-slate-300">Scheduled</p>
                   <p class="text-sm text-slate-200">{{ engagement.display_schedule }}</p>
                 </div>
                 <div>
-                  <p class="uppercase tracking-wide text-[11px] text-slate-500">Reminder</p>
+                  <p class="uppercase tracking-wide text-xs text-slate-300">Reminder</p>
                   <p class="text-sm text-slate-200">{{ engagement.display_reminder }}</p>
                 </div>
               </div>
@@ -377,27 +377,27 @@
                 {% endif %}
                 <dl class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-3">
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Lift Type</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Lift Type</dt>
                     <dd class="text-sm text-slate-200">{{ item.lift_type or '—' }}</dd>
                   </div>
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Quantity</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Quantity</dt>
                     <dd class="text-sm text-slate-200">{{ item.quantity if item.quantity is not none else '—' }}</dd>
                   </div>
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Floors</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Floors</dt>
                     <dd class="text-sm text-slate-200">{{ item.floors or '—' }}</dd>
                   </div>
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Structure</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Structure</dt>
                     <dd class="text-sm text-slate-200">{{ item.structure_label }}</dd>
                   </div>
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Cabin Finish</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Cabin Finish</dt>
                     <dd class="text-sm text-slate-200">{{ item.cabin_finish or '—' }}</dd>
                   </div>
                   <div>
-                    <dt class="uppercase tracking-wide text-[11px] text-slate-500">Door Type</dt>
+                    <dt class="uppercase tracking-wide text-xs text-slate-300">Door Type</dt>
                     <dd class="text-sm text-slate-200">{{ item.door_type or '—' }}</dd>
                   </div>
                 </dl>

@@ -20,7 +20,7 @@
             {% if s.work_id %}
               <a href="{{ url_for('qc_work_detail', work_id=s.work_id) }}" class="text-xs text-emerald-400 hover:underline">View linked task #{{ s.work_id }}</a>
             {% endif %}
-            <div class="flex flex-wrap gap-2 text-[11px] text-slate-400">
+            <div class="flex flex-wrap gap-2 text-xs text-slate-300">
               {% if s.form.stage %}
                 <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">{{ s.form.stage }}</span>
               {% endif %}
