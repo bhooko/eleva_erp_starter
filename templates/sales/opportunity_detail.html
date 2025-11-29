@@ -75,6 +75,15 @@
       </dl>
     </div>
     <div class="flex items-start gap-2 md:flex-col">
+      {% if opportunity.project_id %}
+        <a href="{{ url_for('project_detail', project_id=opportunity.project_id) }}" class="inline-flex items-center gap-2 rounded-xl border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/30 btn-shimmer">View Project</a>
+      {% else %}
+        {% if opportunity.stage and opportunity.stage.lower() == 'closed won' and current_user.can_view_module('operations') %}
+          <form action="{{ url_for('sales_opportunity_convert_to_project', opportunity_id=opportunity.id) }}" method="post" style="display: inline-block;">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Convert to Project</button>
+          </form>
+        {% endif %}
+      {% endif %}
       <button type="button" data-modal-open="editOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Edit Opportunity</button>
     </div>
   </div>
