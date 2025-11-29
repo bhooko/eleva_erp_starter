@@ -20,6 +20,7 @@ from flask_login import (
     current_user,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import importlib.util
@@ -29,9 +30,10 @@ from collections import OrderedDict, Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import case, inspect, func, or_, and_
+from sqlalchemy import Integer, case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload
+from sqlalchemy.engine.url import make_url
 
 def _get_timeout_env(name: str, default: int) -> int:
     raw_value = os.environ.get(name)
@@ -57,8 +59,11 @@ else:
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__, instance_relative_config=True)
-app.config["SECRET_KEY"] = "dev-eleva-secret"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(BASE_DIR, "instance", "eleva.db")
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "SQLALCHEMY_DATABASE_URI",
+    "sqlite:///" + os.path.join(BASE_DIR, "instance", "eleva.db"),
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200MB uploads
@@ -162,6 +167,35 @@ def _extract_tabular_upload(upload, *, sheet_name=None):
 
 
 PENDING_UPLOAD_SUBDIR = "pending"
+
+
+def _get_sqlite_db_path() -> Optional[str]:
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    try:
+        url = make_url(uri)
+    except Exception:
+        return None
+
+    if not url.drivername.startswith("sqlite"):
+        return None
+
+    database = url.database
+    if not database or database == ":memory:":
+        return None
+
+    if os.path.isabs(database):
+        return database
+
+    return os.path.abspath(os.path.join(BASE_DIR, database))
+
+
+def _connect_sqlite_db():
+    db_path = _get_sqlite_db_path()
+    if not db_path:
+        return None, None
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    return sqlite3.connect(db_path), db_path
 
 
 @dataclass
@@ -1979,13 +2013,19 @@ def validate_branch(value, *, label="Branch", required=False):
 
 def _next_sequential_code(model, column_attr, *, prefix, width):
     column = getattr(model, column_attr)
-    max_value = 0
-    for (code,) in db.session.query(column).filter(column.isnot(None)).all():
-        match = re.search(r"(\d+)$", code or "")
-        if not match:
-            continue
-        max_value = max(max_value, int(match.group(1)))
-    next_value = max_value + 1
+    numeric_part = func.substr(column, len(prefix) + 1)
+    try:
+        max_value = (
+            db.session.query(
+                func.coalesce(func.max(func.cast(numeric_part, Integer)), 0)
+            )
+            .filter(column.isnot(None))
+            .filter(column.like(f"{prefix}%"))
+            .scalar()
+        ) or 0
+    except Exception:
+        max_value = 0
+    next_value = int(max_value) + 1
     return f"{prefix}{next_value:0{width}d}"
 
 
@@ -5814,6 +5854,12 @@ def restore_org_structure_from_backup():
     return True
 
 
+def _is_password_hashed(value: Optional[str]) -> bool:
+    if not value or not isinstance(value, str):
+        return False
+    return value.startswith(("pbkdf2:", "scrypt:", "argon2:", "bcrypt$"))
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -5897,6 +5943,21 @@ class User(UserMixin, db.Model):
             }
         self.module_permissions_json = json.dumps(cleaned)
         self._module_permissions_data = cleaned
+
+    def set_password(self, raw_password: str):
+        if raw_password is None:
+            return
+        self.password = generate_password_hash(raw_password)
+
+    def verify_password(self, raw_password: str) -> bool:
+        if not raw_password:
+            return False
+        if _is_password_hashed(self.password):
+            try:
+                return check_password_hash(self.password, raw_password)
+            except ValueError:
+                return False
+        return self.password == raw_password
 
     def can_view_module(self, module_key):
         if self.is_admin:
@@ -7296,9 +7357,10 @@ def block_child_tasks(work, actor_id=None):
 # ---------------------- SAFE DB REPAIR / MIGRATIONS ----------------------
 def ensure_qc_columns():
     """Check and auto-add 'stage' and 'lift_type' in form_schema, and 'work_id' in submission."""
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_qc_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     # form_schema
@@ -7496,9 +7558,10 @@ def ensure_qc_columns():
 
 
 def ensure_lift_columns():
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_lift_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(lift)")
@@ -7571,9 +7634,10 @@ def ensure_lift_columns():
 
 
 def ensure_service_route_columns():
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_service_route_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(service_route)")
@@ -7611,9 +7675,10 @@ def ensure_service_route_columns():
 
 
 def ensure_customer_columns():
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_customer_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(customer)")
@@ -7645,9 +7710,10 @@ def ensure_customer_columns():
 
 
 def ensure_sales_client_columns():
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_sales_client_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(sales_client)")
@@ -7674,9 +7740,10 @@ def ensure_sales_client_columns():
 
 
 def ensure_sales_task_columns():
-    db_path = os.path.join("instance", "eleva.db")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_sales_task_columns: database is not a SQLite file.")
+        return
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(sales_task)")
@@ -7774,6 +7841,18 @@ def ensure_project_comment_table():
     print("✅ Backfilled missing table: project_comment")
 
 
+def migrate_plaintext_passwords():
+    migrated = 0
+    for user in User.query.all():
+        if user.password and not _is_password_hashed(user.password):
+            user.set_password(user.password)
+            migrated += 1
+
+    if migrated:
+        db.session.commit()
+        print(f"🔒 Migrated {migrated} plaintext password(s) to hashed storage.")
+
+
 def bootstrap_db():
     ensure_tables()
     ensure_project_comment_table()
@@ -7787,14 +7866,32 @@ def bootstrap_db():
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
 
-    default_users = [("user1", "pass"), ("user2", "pass"), ("admin", "admin")]
-    for u, p in default_users:
-        if not User.query.filter_by(username=u).first():
-            new_user = User(username=u, password=p)
-            new_user.issue_session_token()
-            db.session.add(new_user)
+    migrate_plaintext_passwords()
 
-    admin_user = User.query.filter_by(username="admin").first()
+    admin_user = User.query.filter(func.lower(User.username) == "admin").first()
+    if User.query.count() == 0:
+        admin_password = os.environ.get("DEFAULT_ADMIN_PASSWORD")
+        generated_password = False
+        if not admin_password:
+            admin_password = "".join(
+                random.choices(string.ascii_letters + string.digits, k=16)
+            )
+            generated_password = True
+        admin_user = User(username="admin", role="Admin", active=True)
+        admin_user.set_password(admin_password)
+        admin_user.issue_session_token()
+        db.session.add(admin_user)
+        db.session.flush()
+        if generated_password:
+            print(
+                "🔑 Created default admin user with a generated password. "
+                f"Username: admin, Password: {admin_password}"
+            )
+        else:
+            print(
+                "🔑 Created default admin user with password from DEFAULT_ADMIN_PASSWORD."
+            )
+
     if admin_user and not admin_user.role:
         admin_user.role = "Admin"
 
@@ -7871,7 +7968,7 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         user = User.query.filter_by(username=username).first()
-        if user and user.password == password:
+        if user and user.verify_password(password):
             if not user.is_active:
                 flash("Your account is deactivated. Please contact an administrator.", "error")
             else:
@@ -7898,6 +7995,9 @@ def logout():
 @app.route("/switch-user", methods=["POST"])
 @login_required
 def switch_user():
+    if not current_user.is_admin:
+        abort(403)
+
     target_id = request.form.get("user_id")
     redirect_to = request.form.get("next") or request.referrer or url_for("dashboard")
 
@@ -7942,10 +8042,12 @@ def profile():
                 flash("Please upload a PNG, JPG, JPEG or WEBP image for the display picture.", "error")
                 return redirect(url_for("profile"))
             fname = secure_filename(file.filename)
+            dest_dir = os.path.join(app.config["UPLOAD_FOLDER"], "avatars")
+            os.makedirs(dest_dir, exist_ok=True)
             dest_name = f"avatar_{current_user.id}_{int(datetime.datetime.utcnow().timestamp())}_{fname}"
-            dest_path = os.path.join(app.config["UPLOAD_FOLDER"], dest_name)
+            dest_path = os.path.join(dest_dir, dest_name)
             file.save(dest_path)
-            rel_path = os.path.relpath(dest_path, "static") if dest_path.startswith("static") else os.path.join("uploads", dest_name)
+            rel_path = os.path.relpath(dest_path, "static")
             current_user.display_picture = rel_path.replace("\\", "/")
 
         db.session.commit()
@@ -8099,7 +8201,7 @@ def admin_reset_workspace():
         flash("Enter your password to confirm the workspace reset.", "error")
         return redirect(redirect_target)
 
-    if password != current_user.password:
+    if not current_user.verify_password(password):
         flash("Password verification failed. Reset cancelled.", "error")
         return redirect(redirect_target)
 
@@ -10051,14 +10153,22 @@ def admin_users():
 @login_required
 def admin_departments_template():
     _require_admin()
-    return _org_upload_template("departments")
+    try:
+        return _org_upload_template("departments")
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_users") + "#departments")
 
 
 @app.route("/admin/positions/template")
 @login_required
 def admin_positions_template():
     _require_admin()
-    return _org_upload_template("positions")
+    try:
+        return _org_upload_template("positions")
+    except MissingDependencyError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_users") + "#positions")
 
 
 @app.route("/admin/users/create", methods=["POST"])
@@ -10123,7 +10233,6 @@ def admin_users_create():
 
     user = User(
         username=username,
-        password=password,
         first_name=first_name or None,
         last_name=last_name or None,
         email=email or None,
@@ -10131,6 +10240,7 @@ def admin_users_create():
         department=department.name if department else None,
         active=active_flag,
     )
+    user.set_password(password)
     user.set_module_permissions(
         {
             module["key"]: {
@@ -10227,7 +10337,7 @@ def admin_users_update(user_id):
         user.department = position.department.name
 
     if password:
-        user.password = password
+        user.set_password(password)
 
     permissions_payload = {}
     for module in WORKSPACE_MODULES:
