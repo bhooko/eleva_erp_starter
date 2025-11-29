@@ -22,7 +22,7 @@ from flask_login import (
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
-from datetime import date
+from datetime import datetime as datetime_cls, date
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import importlib.util
 import csv
@@ -825,6 +825,7 @@ def _normalize_lookup_key(value):
 
 
 def process_lift_upload_file(file_path, *, apply_changes):
+    row_errors: List[str] = []
     upload_timer = _stage_start()
     header_cells, data_rows = _extract_tabular_upload_from_path(
         file_path, sheet_name=AMC_LIFT_TEMPLATE_SHEET_NAME
@@ -907,7 +908,7 @@ def process_lift_upload_file(file_path, *, apply_changes):
             for header, position in header_map.items():
                 value = row_values[position] if position < len(row_values) else None
                 row_data[header] = value
-    
+
             key_fields = [
                 row_data.get("Customer External ID"),
                 row_data.get("Customer Code"),
@@ -916,22 +917,20 @@ def process_lift_upload_file(file_path, *, apply_changes):
                 row_data.get("Lift Code"),
                 row_data.get("AMC Status"),
             ]
-            if not any(clean_str(stringify_cell(value)) for value in key_fields):
+            if not any(clean_str(value) for value in key_fields):
                 continue
-    
+
             outcome.processed_rows += 1
-    
-            customer_external_id_value = clean_str(
-                stringify_cell(row_data.get("Customer External ID"))
-            )
-            customer_code_value = clean_str(stringify_cell(row_data.get("Customer Code")))
-            customer_name_value = clean_str(stringify_cell(row_data.get("Customer Name")))
+
+            customer_external_id_value = clean_str(row_data.get("Customer External ID"))
+            customer_code_value = clean_str(row_data.get("Customer Code"))
+            customer_name_value = clean_str(row_data.get("Customer Name"))
             customer_external_id_key = (
                 customer_external_id_value.lower() if customer_external_id_value else None
             )
             customer_code_key = customer_code_value.lower() if customer_code_value else None
             customer_name_key = customer_name_value.lower() if customer_name_value else None
-    
+
             customer = None
             if customer_external_id_key and customer_external_id_key in customer_by_external:
                 customer = customer_by_external[customer_external_id_key]
@@ -945,10 +944,9 @@ def process_lift_upload_file(file_path, *, apply_changes):
                 and customer_by_external[customer_external_id_key].id
                 != customer_by_code[customer_code_key].id
             ):
-                outcome.row_errors.append(
-                    f"Row {row_index}: Customer code '{customer_code_value}' does not match external ID '{customer_external_id_value}'."
+                raise ValueError(
+                    f"Customer code '{customer_code_value}' does not match external ID '{customer_external_id_value}'."
                 )
-                continue
             if not customer and customer_name_key and customer_name_key in customer_by_name:
                 customer = customer_by_name[customer_name_key]
             if not customer:
@@ -958,27 +956,25 @@ def process_lift_upload_file(file_path, *, apply_changes):
                     or customer_name_value
                     or "—"
                 )
-                outcome.row_errors.append(
-                    f"Row {row_index}: Customer '{missing_reference}' was not found. Upload customers first or use customer external ID."
+                raise ValueError(
+                    f"Customer '{missing_reference}' was not found. Upload customers first or use customer external ID."
                 )
-                continue
-    
-            route_value_raw = clean_str(stringify_cell(row_data.get("Route")))
+
+            route_value_raw = clean_str(row_data.get("Route"))
             route_value = None
             if route_value_raw:
                 lookup_key = route_value_raw.lower()
                 route = route_lookup.get(lookup_key)
                 if not route:
-                    outcome.row_errors.append(
-                        f"Row {row_index}: Route '{route_value_raw}' does not match an active service route."
+                    raise ValueError(
+                        f"Route '{route_value_raw}' does not match an active service route."
                     )
-                    continue
                 route_value = route.state
-    
+
             existing_lift = None
-            provided_code = clean_str(stringify_cell(row_data.get("Lift Code")))
-            provided_external = clean_str(stringify_cell(row_data.get("External Lift ID")))
-    
+            provided_code = clean_str(row_data.get("Lift Code"))
+            provided_external = clean_str(row_data.get("External Lift ID"))
+
             if provided_code:
                 lookup_code = provided_code.lower()
                 if lookup_code in existing_by_code:
@@ -997,21 +993,20 @@ def process_lift_upload_file(file_path, *, apply_changes):
                         Lift.query.filter(func.lower(Lift.external_lift_id) == lookup_external).first()
                     )
                     existing_by_external[lookup_external] = existing_lift
-    
+
             if existing_lift and existing_lift.lift_code:
                 existing_by_code[existing_lift.lift_code.lower()] = existing_lift
                 if existing_lift.external_lift_id:
                     existing_by_external[existing_lift.external_lift_id.lower()] = existing_lift
-    
+
             if provided_external:
                 normalized_external = provided_external.lower()
                 if normalized_external in processed_external_ids:
-                    outcome.row_errors.append(
-                        f"Row {row_index}: External lift ID '{provided_external}' is duplicated in the upload."
+                    raise ValueError(
+                        f"External lift ID '{provided_external}' is duplicated in the upload."
                     )
-                    continue
                 processed_external_ids.add(normalized_external)
-    
+
             code_key = None
             if existing_lift and existing_lift.lift_code:
                 code_key = existing_lift.lift_code.lower()
@@ -1019,67 +1014,45 @@ def process_lift_upload_file(file_path, *, apply_changes):
                 code_key = provided_code.lower()
             if code_key and code_key in processed_codes:
                 display_code = provided_code or (existing_lift.lift_code if existing_lift else None)
-                outcome.row_errors.append(
-                    f"Row {row_index}: Lift code '{display_code}' is duplicated in the upload."
-                )
-                continue
-    
-            amc_status_value, status_error = normalize_amc_status(row_data.get("AMC Status"))
+                raise ValueError(f"Lift code '{display_code}' is duplicated in the upload.")
+
+            amc_status_value, status_error = normalize_amc_status(
+                clean_str(row_data.get("AMC Status"))
+            )
             if status_error:
-                outcome.row_errors.append(f"Row {row_index}: {status_error}")
-                continue
+                raise ValueError(status_error)
             if not amc_status_value:
-                outcome.row_errors.append(f"Row {row_index}: AMC status is required.")
-                continue
-    
-            duration_key, duration_error = normalize_amc_duration(row_data.get("AMC Duration"))
+                raise ValueError("AMC status is required.")
+
+            duration_key, duration_error = normalize_amc_duration(
+                clean_str(row_data.get("AMC Duration"))
+            )
             if duration_error:
-                outcome.row_errors.append(f"Row {row_index}: {duration_error}")
-                continue
+                raise ValueError(duration_error)
             if not duration_key:
-                outcome.row_errors.append(f"Row {row_index}: AMC duration is required.")
-                continue
-    
-            amc_start, error = parse_date_field(
-                row_data.get("AMC Start (YYYY-MM-DD)"),
-                "AMC start date",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
+                raise ValueError("AMC duration is required.")
+
+            amc_start = parse_excel_date(row_data.get("AMC Start (YYYY-MM-DD)"))
             if not amc_start:
-                outcome.row_errors.append(f"Row {row_index}: AMC start date is required.")
-                continue
-    
-            amc_end, error = parse_date_field(
-                row_data.get("AMC End (YYYY-MM-DD)"),
-                "AMC end date",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
+                raise ValueError("AMC start date is required.")
+
+            amc_end = parse_excel_date(row_data.get("AMC End (YYYY-MM-DD)"))
             if not amc_end:
                 amc_end = calculate_amc_end_date(amc_start, duration_key)
-    
+
             preferred_days_source = row_data.get("Preferred Service Days")
             preferred_days_display = (
-                clean_str(stringify_cell(preferred_days_source))
-                if preferred_days_source is not None
-                else None
+                clean_str(preferred_days_source) if preferred_days_source is not None else None
             )
             preferred_days = preferred_days_display
-    
+
             preferred_date_source = row_data.get("Preferred Service Date")
             preferred_date = None
             if preferred_date_source not in (None, ""):
-                preferred_date, error = parse_date_field(
-                    preferred_date_source,
-                    "Preferred service date",
-                )
-                if error:
-                    outcome.row_errors.append(f"Row {row_index}: {error}")
-                    continue
-    
+                preferred_date = parse_excel_date(preferred_date_source)
+                if not preferred_date:
+                    raise ValueError("Preferred service date must be in a valid date format.")
+
             preferred_time_source = row_data.get("Preferred Service Time")
             preferred_time = None
             if preferred_time_source not in (None, ""):
@@ -1088,61 +1061,46 @@ def process_lift_upload_file(file_path, *, apply_changes):
                     "Preferred service time",
                 )
                 if error:
-                    outcome.row_errors.append(f"Row {row_index}: {error}")
-                    continue
-    
+                    raise ValueError(error)
+
             next_service_due_source = row_data.get("Next Service Due")
             next_service_due = None
             if next_service_due_source not in (None, ""):
-                next_service_due, error = parse_date_field(
-                    next_service_due_source,
-                    "Next service due",
-                )
-                if error:
-                    outcome.row_errors.append(f"Row {row_index}: {error}")
-                    continue
-    
-            capacity_persons, error = parse_int_field(
-                row_data.get("Capacity (persons)"),
-                "Capacity (persons)",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-    
-            capacity_kg, error = parse_int_field(
-                row_data.get("Capacity (kg)"),
-                "Capacity (kg)",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-    
-            speed_mps, error = parse_float_field(
-                row_data.get("Speed (m/s)"),
-                "Speed (m/s)",
-            )
-            if error:
-                outcome.row_errors.append(f"Row {row_index}: {error}")
-                continue
-    
-            lift_type_value = clean_str(stringify_cell(row_data.get("Lift Type")))
-            lift_brand_value = clean_str(stringify_cell(row_data.get("Lift Brand")))
-            site_address_line1 = clean_str(stringify_cell(row_data.get("Site Address Line 1")))
-            site_address_line2 = clean_str(stringify_cell(row_data.get("Site Address Line 2")))
-            building_villa_number = clean_str(stringify_cell(row_data.get("Building / Villa No.")))
-            city_value = clean_str(stringify_cell(row_data.get("City")))
-            state_value = clean_str(stringify_cell(row_data.get("State")))
-            pincode_value = clean_str(stringify_cell(row_data.get("Pincode")))
-            notes_value = clean_str(stringify_cell(row_data.get("Notes")))
-    
+                next_service_due = parse_excel_date(next_service_due_source)
+                if next_service_due is None:
+                    raise ValueError("Next service due must be in a valid date format.")
+
+            try:
+                capacity_persons = int(row_data.get("Capacity (persons)") or 0) or None
+            except (TypeError, ValueError):
+                capacity_persons = None
+
+            try:
+                capacity_kg = int(row_data.get("Capacity (kg)") or 0) or None
+            except (TypeError, ValueError):
+                capacity_kg = None
+
+            try:
+                speed_mps = float(row_data.get("Speed (m/s)") or 0) or None
+            except (TypeError, ValueError):
+                speed_mps = None
+
+            lift_type_value = clean_str(row_data.get("Lift Type"))
+            lift_brand_value = clean_str(row_data.get("Lift Brand"))
+            site_address_line1 = clean_str(row_data.get("Site Address Line 1"))
+            site_address_line2 = clean_str(row_data.get("Site Address Line 2"))
+            building_villa_number = clean_str(row_data.get("Building / Villa No."))
+            city_value = clean_str(row_data.get("City"))
+            state_value = clean_str(row_data.get("State"))
+            pincode_value = clean_str(row_data.get("Pincode"))
+            notes_value = clean_str(row_data.get("Notes"))
+
             if existing_lift:
                 lift = existing_lift
                 if not lift.lift_code:
-                    outcome.row_errors.append(
-                        f"Row {row_index}: Lift record is missing a lift code and cannot be updated."
+                    raise ValueError(
+                        "Lift record is missing a lift code and cannot be updated."
                     )
-                    continue
                 outcome.updated_count += 1
             else:
                 if provided_code:
@@ -1158,7 +1116,10 @@ def process_lift_upload_file(file_path, *, apply_changes):
                     lift = Lift(lift_code=lift_code)
                     db.session.add(lift)
                 else:
-                    lift = Lift(lift_code=lift_code)
+                    lift = Lift(
+                        lift_code=lift_code,
+                        lift_brand=(lift_brand_value or None if lift_brand_present else None),
+                    )
                 generated_codes.add(lift.lift_code.lower())
                 outcome.created_count += 1
                 if len(outcome.created_items) < 20:
@@ -1171,9 +1132,9 @@ def process_lift_upload_file(file_path, *, apply_changes):
                             "amc_end": amc_end.isoformat() if amc_end else None,
                         }
                     )
-    
+
             processed_codes.add((lift.lift_code or "").lower())
-    
+
             if len(outcome.updated_items) < 20 and existing_lift:
                 outcome.updated_items.append(
                     {
@@ -1184,7 +1145,7 @@ def process_lift_upload_file(file_path, *, apply_changes):
                         "amc_end": amc_end.isoformat() if amc_end else None,
                     }
                 )
-    
+
             if apply_changes:
                 if provided_external:
                     lift.external_lift_id = provided_external
@@ -1247,14 +1208,17 @@ def process_lift_upload_file(file_path, *, apply_changes):
             elif lift.external_lift_id:
                 existing_by_external[lift.external_lift_id.lower()] = lift
 
+        except UploadStageTimeoutError:
+            raise
+        except ValueError as exc:
+            row_errors.append(f"Row {row_index}: {exc}")
+            continue
         except Exception as exc:
             app.logger.exception(
                 "Unexpected error while processing AMC lift upload row",
                 extra={"row_index": row_index},
             )
-            outcome.row_errors.append(
-                f"Row {row_index}: Could not process this row due to an unexpected error: {exc}."
-            )
+            row_errors.append(f"Row {row_index}: {exc}")
             continue
         finally:
             _check_stage_timeout(row_stage, row_stage_label)
@@ -1263,6 +1227,12 @@ def process_lift_upload_file(file_path, *, apply_changes):
                 "processing the AMC lift upload",
                 timeout=UPLOAD_TOTAL_TIMEOUT_SECONDS,
             )
+    if row_errors:
+        if isinstance(outcome.row_errors, list):
+            outcome.row_errors.extend(row_errors)
+        else:
+            outcome.row_errors = list(row_errors)
+
     if apply_changes and (outcome.created_count or outcome.updated_count):
         _check_stage_timeout(
             upload_timer,
@@ -1329,17 +1299,34 @@ def parse_optional_date(value):
 
 
 def clean_str(value):
+    """
+    Convert any Excel cell value to a clean string.
+
+    - None -> ""
+    - Numbers -> their string representation
+    - Datetime/date -> ISO-ish string "YYYY-MM-DD" if appropriate, else default str(value)
+    - Str -> stripped
+    """
     if value is None:
-        return None
-    if isinstance(value, str):
-        value = value.strip()
-        return value or None
-    return value
+        return ""
+    # If it's a date/datetime, prefer ISO string
+    try:
+        from datetime import date as _dt_date, datetime as _dt_datetime  # avoid circular issues
+    except Exception:
+        _dt_date, _dt_datetime = None, None  # fallback
+
+    if _dt_date is not None and isinstance(value, (_dt_date, _dt_datetime)):
+        try:
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            return str(value).strip()
+
+    return str(value).strip()
 
 
 def parse_int_field(value, label):
     value = clean_str(value)
-    if value is None:
+    if value is None or value == "":
         return None, None
     try:
         return int(value), None
@@ -1349,12 +1336,47 @@ def parse_int_field(value, label):
 
 def parse_float_field(value, label):
     value = clean_str(value)
-    if value is None:
+    if value is None or value == "":
         return None, None
     try:
         return float(value), None
     except (TypeError, ValueError):
         return None, f"{label} must be a number."
+
+
+def parse_excel_date(cell_value):
+    """
+    Parse Excel date-like cell values into a Python date.
+
+    Accepts:
+    - datetime.date
+    - datetime.datetime
+    - Strings in "YYYY-MM-DD" or "DD/MM/YYYY" or "DD-MM-YYYY" formats.
+
+    Returns:
+    - date object, or
+    - None if cannot parse.
+    """
+    if isinstance(cell_value, date) and not isinstance(cell_value, datetime_cls):
+        return cell_value
+
+    if isinstance(cell_value, datetime_cls):
+        return cell_value.date()
+
+    if cell_value is None:
+        return None
+
+    text = str(cell_value).strip()
+    if not text:
+        return None
+
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime_cls.strptime(text, fmt).date()
+        except ValueError:
+            continue
+
+    return None
 
 
 def parse_date_field(value, label):
