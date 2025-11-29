@@ -6103,6 +6103,8 @@ class Project(db.Model):
     handover_date = db.Column(db.Date, nullable=True)
     priority = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    sales_won_at = db.Column(db.DateTime, nullable=True)
+    sales_executive_name = db.Column(db.String(200), nullable=True)
 
     comments = db.relationship(
         "ProjectComment",
@@ -7916,6 +7918,36 @@ def ensure_project_comment_table():
     print("✅ Backfilled missing table: project_comment")
 
 
+def ensure_project_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_project_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(project)")
+    project_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    column_defs = [
+        ("sales_won_at", "DATETIME"),
+        ("sales_executive_name", "TEXT"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in project_cols:
+            cur.execute(f"ALTER TABLE project ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in project: {', '.join(added_cols)}")
+    else:
+        print("✔️ project OK")
+
+
 def migrate_plaintext_passwords():
     migrated = 0
     for user in User.query.all():
@@ -7931,6 +7963,7 @@ def migrate_plaintext_passwords():
 def bootstrap_db():
     ensure_tables()
     ensure_project_comment_table()
+    ensure_project_columns()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
@@ -10091,51 +10124,56 @@ def convert_opportunity_to_project(opportunity: "SalesOpportunity") -> "Project"
       - Links project_id on the opportunity
     """
     if opportunity.project is not None:
-        return opportunity.project
+        project = opportunity.project
+    else:
+        client_name = None
+        if opportunity.client:
+            client_name = opportunity.client.display_name or opportunity.client.company_name
+        if not client_name:
+            client_name = getattr(opportunity, "client_name", None) or opportunity.title
 
-    client_name = None
-    if opportunity.client:
-        client_name = opportunity.client.display_name or opportunity.client.company_name
-    if not client_name:
-        client_name = getattr(opportunity, "client_name", None) or opportunity.title
+        base_name = (opportunity.related_project or "").strip()
+        if not base_name:
+            if client_name:
+                base_name = f"{opportunity.title} – {client_name}"
+            else:
+                base_name = opportunity.title
 
-    base_name = (opportunity.related_project or "").strip()
-    if not base_name:
-        if client_name:
-            base_name = f"{opportunity.title} – {client_name}"
-        else:
-            base_name = opportunity.title
+        project = Project(
+            name=base_name,
+            customer_name=client_name,
+        )
 
-    project = Project(
-        name=base_name,
-        customer_name=client_name,
-    )
-
-    first_item = None
-    try:
-        if opportunity.items:
-            first_item = opportunity.items[0]
-    except Exception:
         first_item = None
+        try:
+            if opportunity.items:
+                first_item = opportunity.items[0]
+        except Exception:
+            first_item = None
 
-    if first_item is not None:
-        project.lift_type = getattr(first_item, "lift_type", None)
-        project.floors = getattr(first_item, "floors", None)
-        project.stops = getattr(first_item, "stops", None)
-        project.opening_type = getattr(first_item, "opening_type", None)
-        project.location = getattr(first_item, "location", None)
-        project.structure_type = getattr(first_item, "structure_type", None)
-        project.cladding_type = getattr(first_item, "cladding_type", None)
-        project.cabin_finish = getattr(first_item, "cabin_finish", None)
-        project.door_operation_type = getattr(first_item, "door_operation_type", None)
-        project.door_finish = getattr(first_item, "door_finish", None)
+        if first_item is not None:
+            project.lift_type = getattr(first_item, "lift_type", None)
+            project.floors = getattr(first_item, "floors", None)
+            project.stops = getattr(first_item, "stops", None)
+            project.opening_type = getattr(first_item, "opening_type", None)
+            project.location = getattr(first_item, "location", None)
+            project.structure_type = getattr(first_item, "structure_type", None)
+            project.cladding_type = getattr(first_item, "cladding_type", None)
+            project.cabin_finish = getattr(first_item, "cabin_finish", None)
+            project.door_operation_type = getattr(first_item, "door_operation_type", None)
+            project.door_finish = getattr(first_item, "door_finish", None)
 
-    db.session.add(project)
-    db.session.flush()
+        db.session.add(project)
+        db.session.flush()
 
-    opportunity.project_id = project.id
-    if not opportunity.related_project:
-        opportunity.related_project = project.name
+        opportunity.project_id = project.id
+        if not opportunity.related_project:
+            opportunity.related_project = project.name
+
+    if not project.sales_won_at:
+        project.sales_won_at = datetime.datetime.utcnow()
+    if current_user and getattr(current_user, "is_authenticated", False):
+        project.sales_executive_name = current_user.display_name or current_user.email
 
     db.session.commit()
     return project
@@ -10188,8 +10226,27 @@ def sales_opportunity_stage(opportunity_id):
     log_sales_activity("opportunity", opportunity.id, f"Stage moved to {stage}", actor=current_user)
     db.session.commit()
 
+    closed_won = (stage or "").strip().lower() == "closed won"
+    conversion_url = None
+    if closed_won and not opportunity.project_id and current_user.can_view_module("operations"):
+        conversion_url = url_for("sales_opportunity_convert_to_project", opportunity_id=opportunity.id)
+        if not wants_json:
+            flash(
+                "Stage moved to Closed Won. Convert this opportunity into a project.",
+                "info",
+            )
+
+    response_payload = {
+        "success": True,
+        "stage": stage,
+        "pipeline": pipeline_key,
+        "has_project": bool(opportunity.project_id),
+    }
+    if conversion_url:
+        response_payload["convert_url"] = conversion_url
+
     if wants_json:
-        return jsonify({"success": True, "stage": stage, "pipeline": pipeline_key})
+        return jsonify(response_payload)
 
     flash("Opportunity stage updated.", "success")
     return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))

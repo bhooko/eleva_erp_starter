@@ -118,12 +118,21 @@ if (board) {
         targetContainer.appendChild(card);
         card.dataset.stage = toStage;
 
+        if (typeof data.has_project === 'boolean') {
+          card.dataset.hasProject = data.has_project ? 'true' : 'false';
+        }
+        if (data.convert_url) {
+          card.dataset.convertUrl = data.convert_url;
+        }
+
         adjustCount(fromStage, -1);
         adjustCount(toStage, 1);
         adjustTotals(fromStage, -amountValue, cardCurrency);
         adjustTotals(toStage, amountValue, cardCurrency);
         ensureEmptyState(fromStage);
         ensureEmptyState(toStage);
+
+        maybePromptProjectConversion(card, toStage);
       })
       .catch((error) => {
         console.error(error);
@@ -211,5 +220,35 @@ if (board) {
 
     const hasCard = container.querySelector('[data-opportunity-card]');
     emptyMessage.classList.toggle('hidden', Boolean(hasCard));
+  }
+
+  function maybePromptProjectConversion(card, toStage) {
+    const normalizedStage = (toStage || '').trim().toLowerCase();
+    if (!normalizedStage.includes('closed won')) {
+      return;
+    }
+
+    if (card.dataset.hasProject === 'true') {
+      return;
+    }
+
+    const convertUrl = card.dataset.convertUrl;
+    if (!convertUrl) {
+      return;
+    }
+
+    const shouldConvert = window.confirm(
+      'This opportunity is Closed Won. Do you want to convert it into a project now?',
+    );
+    if (!shouldConvert) {
+      return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = convertUrl;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
   }
 }

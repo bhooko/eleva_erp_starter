@@ -29,6 +29,24 @@
             </svg>
             <span>Handover {{ project.handover_date.strftime('%Y-%m-%d') if project.handover_date else 'Not scheduled' }}</span>
           </div>
+          <div class="inline-flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m6-.75a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="leading-tight">
+              <div class="text-[10px] uppercase tracking-wide text-emerald-300/80">Sales won</div>
+              <div class="text-sm">{{ project.sales_won_at.strftime('%Y-%m-%d %H:%M') if project.sales_won_at else 'Not recorded' }}</div>
+            </div>
+          </div>
+          <div class="inline-flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/50 px-3 py-2 text-slate-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6.75a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a8.25 8.25 0 1115 0v.75a.75.75 0 01-.75.75h-13.5a.75.75 0 01-.75-.75v-.75z" />
+            </svg>
+            <div class="leading-tight">
+              <div class="text-[10px] uppercase tracking-wide text-slate-400">Sales executive</div>
+              <div class="text-sm">{{ project.sales_executive_name or 'Not captured' }}</div>
+            </div>
+          </div>
           <span class="text-xs text-slate-500">Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
         </div>
         <p class="text-sm text-slate-400">Lift type: {{ project.lift_type or 'Not specified' }}</p>
