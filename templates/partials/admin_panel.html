@@ -115,6 +115,7 @@
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Username</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Department</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Position</th>
+                <th scope="col" class="px-4 py-3 text-center font-semibold">Service I/C</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Status</th>
                 <th scope="col" class="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
@@ -144,6 +145,20 @@
                     {% else %}
                       <span class="text-slate-500">No position</span>
                     {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <form method="post"
+                          action="{{ url_for('admin_user_toggle_service_manager', user_id=user.id) }}">
+                      <label class="inline-flex items-center gap-1 text-xs text-slate-200">
+                        <input type="checkbox"
+                               name="is_service_manager"
+                               value="1"
+                               class="rounded border-slate-700 bg-slate-900"
+                               onchange="this.form.submit()"
+                               {% if user.is_service_manager %}checked{% endif %}>
+                        <span>Service I/C</span>
+                      </label>
+                    </form>
                   </td>
                   <td class="px-4 py-3">
                     <span class="inline-flex items-center rounded-lg border px-2 py-1 text-xs {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' if user.is_active else 'border-rose-400/40 bg-rose-500/20 text-rose-100' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>
