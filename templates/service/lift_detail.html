@@ -406,7 +406,27 @@
                           <span class="text-slate-500">—</span>
                         {% endif %}
                       </td>
-                      <td class="px-4 py-2">{{ visit.technician_display }}</td>
+                      <td class="px-4 py-2 text-sm">
+                        {% if current_user_is_service_manager and visit.date %}
+                          {% set current_value = visit.technician_value or visit.technician_display %}
+                          <form
+                            method="post"
+                            action="{{ url_for('service_visit_assign', lift_id=lift.id, visit_date_str=visit.date.strftime('%Y-%m-%d')) }}"
+                            class="inline-flex items-center gap-2"
+                          >
+                            <select name="technician" class="input input-sm">
+                              <option value="">-- Select technician --</option>
+                              {% for tech in service_team_users %}
+                                {% set tech_name = tech.display_name or tech.username %}
+                                <option value="{{ tech_name }}" {% if current_value and current_value|lower == tech_name|lower %}selected{% endif %}>{{ tech_name }}</option>
+                              {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-xs">Assign</button>
+                          </form>
+                        {% else %}
+                          <span class="text-xs text-slate-400">{{ visit.technician_display }}</span>
+                        {% endif %}
+                      </td>
                       <td class="px-4 py-2">
                         {% set badge_class = 'border border-slate-700/70 bg-slate-800/60 text-slate-200' %}
                         {% if visit.status_key == 'completed' %}

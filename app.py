@@ -3090,6 +3090,36 @@ def _user_is_service_team_member(user, service_user_ids):
     return department == "service"
 
 
+def _user_is_service_manager(user: "User") -> bool:
+    """
+    Simple rule for identifying the Service Incharge (Service I/C).
+
+    For now:
+    - User must be active.
+    - User must be able to view the Service module.
+    - User's Position title must be 'Service I/C' (case-insensitive), or close variants.
+    Later we can extend this to use settings/config without changing call sites.
+    """
+    if not user or not getattr(user, "is_active", False):
+        return False
+
+    # Must at least have access to the Service module
+    if not user.can_view_module("service"):
+        return False
+
+    # Check Position title (org structure table)
+    position = getattr(user, "position", None)
+    title = ""
+    if position and position.title:
+        title = position.title.strip().lower()
+
+    if title in {"service i/c", "service incharge", "service in-charge"}:
+        return True
+
+    # (Future extension: check a config flag or dedicated setting here.)
+    return False
+
+
 def _service_complaint_tasks_from_support():
     service_users = get_assignable_users_for_module("service")
     service_user_ids = {user.id for user in service_users if user.is_active}
@@ -10936,6 +10966,7 @@ def _build_task_overview(viewing_user: "User"):
     ):
         modules_map = OrderedDict()
         module_order = []
+        pending_total = 0
 
         has_project_tasks = any(task.project for task in open_tasks)
         has_qc_tasks = any(not task.project for task in open_tasks)
@@ -11212,6 +11243,128 @@ def _build_task_overview(viewing_user: "User"):
                         "metadata": metadata,
                     }
                 )
+
+        # --- Service module: AMC + breakdown visits assigned to user(s) ---
+        # Only if the viewing user is allowed to see the Service module
+        show_service = viewing_user.can_view_module("service") if viewing_user else False
+
+        if show_service:
+            # Build set of allowed technician names depending on personal vs team view
+            allowed_technician_names = set()
+
+            if assignee_lookup:
+                # Team Dash: visits assigned to any user in the team
+                for user in assignee_lookup.values():
+                    if not user or not user.is_active:
+                        continue
+                    for value in (user.display_name, user.username):
+                        if value:
+                            allowed_technician_names.add(value.strip().lower())
+            else:
+                # My Dash: visits assigned to the viewing user
+                if viewing_user and viewing_user.is_active:
+                    for value in (viewing_user.display_name, viewing_user.username):
+                        if value:
+                            allowed_technician_names.add(value.strip().lower())
+
+            if allowed_technician_names:
+                snapshot = get_service_schedule_snapshot()
+
+                service_module = None
+                overdue_count = 0
+                today_count = 0
+                upcoming_count = 0
+
+                for entry in snapshot["entries"]:
+                    visit_date = entry.get("date")
+                    if not visit_date:
+                        continue
+
+                    status_key = (entry.get("status") or "scheduled").strip().lower()
+                    if status_key in {"completed", "cancelled"}:
+                        continue
+
+                    technician = (entry.get("technician") or "").strip().lower()
+                    if technician and allowed_technician_names and technician not in allowed_technician_names:
+                        continue
+
+                    # Only consider dates that are not in the far past with no status
+                    due_label, due_display, due_variant = _describe_due_date(visit_date, now)
+                    if due_variant == "none":
+                        continue
+
+                    if due_variant == "overdue":
+                        overdue_count += 1
+                    elif due_variant == "today":
+                        today_count += 1
+                    else:
+                        upcoming_count += 1
+
+                    # Lazily create the Service module once we know at least one item qualifies
+                    if service_module is None:
+                        service_module = _ensure_module(
+                            modules_map,
+                            module_order,
+                            "Service",
+                            "No upcoming service visits assigned.",
+                            "Overdue and upcoming AMC / breakdown visits assigned to you or your team.",
+                        )
+
+                    lift = entry["lift"]
+                    lift_name = lift.lift_code or "Lift"
+
+                    # Build a site description using customer, city, route
+                    site_bits = []
+                    customer = getattr(lift, "customer", None)
+                    company_name = getattr(customer, "company_name", None) if customer else None
+                    if company_name:
+                        site_bits.append(company_name)
+                    elif getattr(lift, "customer_code", None):
+                        site_bits.append(lift.customer_code)
+                    if getattr(lift, "city", None):
+                        site_bits.append(lift.city)
+                    if getattr(lift, "route", None):
+                        site_bits.append(lift.route)
+
+                    description = " · ".join(site_bits) if site_bits else "Service site not specified"
+                    checklist = entry.get("checklist") or ""
+                    subtitle = checklist or "Scheduled service visit"
+
+                    status_label = "Overdue" if due_variant == "overdue" else "Scheduled"
+                    status_class = _status_badge_class("overdue" if due_variant == "overdue" else "scheduled")
+                    due_class = _due_badge_class(due_variant)
+
+                    service_module["items"].append(
+                        {
+                            "title": lift_name,
+                            "subtitle": subtitle,
+                            "description": description,
+                            "status": status_label,
+                            "status_class": status_class,
+                            "due_description": due_label,
+                            "due_display": due_display,
+                            "due_class": due_class,
+                            "due_variant": due_variant,
+                            "identifier": f"Service visit · {visit_date:%d %b %Y} · {lift_name}",
+                            "url": url_for("service_lift_detail", lift_id=lift.id),
+                            "secondary_url": None,
+                            "secondary_label": None,
+                            "metadata": [
+                                {
+                                    "label": "Technician",
+                                    "value": entry.get("technician") or "Unassigned",
+                                }
+                            ],
+                        }
+                    )
+
+                if service_module is not None:
+                    service_module["summary"] = {
+                        "overdue": overdue_count,
+                        "today": today_count,
+                        "upcoming": upcoming_count,
+                    }
+                    pending_total += len(service_module["items"])
 
         pending_modules = [modules_map[label] for label in module_order]
         pending_total = sum(len(module["items"]) for module in pending_modules)
@@ -15546,6 +15699,7 @@ def service_lift_detail(lift_id):
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
     dropdown_options = get_dropdown_options_map()
+    service_team_users = get_assignable_users_for_module("service")
 
     return render_template(
         "service/lift_detail.html",
@@ -15562,7 +15716,66 @@ def service_lift_detail(lift_id):
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
+        current_user_is_service_manager=_user_is_service_manager(current_user),
+        service_team_users=service_team_users,
     )
+
+
+@app.post("/service/visits/<int:lift_id>/<visit_date_str>/assign")
+@login_required
+def service_visit_assign(lift_id: int, visit_date_str: str):
+    """
+    Assign or reassign a service visit (including breakdown calls) to a technician.
+
+    The visit is identified by lift_id + visit_date.
+    This updates the 'technician' field in lift.service_schedule
+    so that the dashboard picks it up automatically.
+    """
+    if not _user_is_service_manager(current_user):
+        abort(403)
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    try:
+        visit_date = datetime.datetime.strptime(visit_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid visit date.", "error")
+        return redirect(url_for("service_lift_detail", lift_id=lift.id))
+
+    technician_name = (request.form.get("technician") or "").strip()
+    if not technician_name:
+        flash("Please select a technician.", "error")
+        return redirect(url_for("service_lift_detail", lift_id=lift.id))
+
+    schedule = lift.service_schedule or []
+    updated = False
+
+    for entry in schedule:
+        entry_date = _coerce_date(entry.get("date"))
+        if entry_date != visit_date:
+            continue
+
+        status_value = clean_str(entry.get("status")) or "scheduled"
+        status_key = status_value.lower()
+        if status_key in {"completed", "cancelled"}:
+            # Do not assign completed/cancelled visits
+            continue
+
+        entry["technician"] = technician_name
+        updated = True
+
+    if not updated:
+        flash("No matching open service visit found to assign.", "warning")
+        return redirect(url_for("service_lift_detail", lift_id=lift.id))
+
+    lift.service_schedule = schedule
+    db.session.commit()
+
+    flash("Service visit assigned to technician.", "success")
+    return redirect(url_for("service_lift_detail", lift_id=lift.id))
 
 
 @app.route("/service/lifts/<int:lift_id>/edit")
