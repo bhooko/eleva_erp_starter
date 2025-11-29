@@ -6357,6 +6357,7 @@ class SalesOpportunity(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
     related_project = db.Column(db.String(200), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
     description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -6367,6 +6368,7 @@ class SalesOpportunity(db.Model):
 
     owner = db.relationship("User")
     client = db.relationship("SalesClient", back_populates="opportunities")
+    project = db.relationship("Project", backref="opportunities", lazy="joined")
     comments = db.relationship(
         "SalesOpportunityComment",
         back_populates="opportunity",
@@ -7809,6 +7811,40 @@ def ensure_sales_task_columns():
         print("✔️ sales_task OK")
 
 
+def ensure_sales_opportunity_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print(
+            "⚠️ Skipping ensure_sales_opportunity_columns: database is not a SQLite file."
+        )
+        return
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_opportunity'"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(sales_opportunity)")
+    cols = [row[1] for row in cur.fetchall()]
+    added = []
+
+    if "project_id" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN project_id INTEGER;")
+        added.append("project_id")
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in sales_opportunity: {', '.join(added)}")
+    else:
+        print("✔️ sales_opportunity OK")
+
+
 def ensure_tables():
     """Ensure all known tables exist. Creates them if missing."""
     created_tables = []
@@ -7900,6 +7936,7 @@ def bootstrap_db():
     ensure_service_route_columns()
     ensure_sales_client_columns()
     ensure_sales_task_columns()
+    ensure_sales_opportunity_columns()
     ensure_customer_columns()
     ensure_dropdown_options_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
@@ -10042,6 +10079,87 @@ def sales_opportunity_detail(opportunity_id):
         temperature_choices=SALES_TEMPERATURES,
         pipeline_map=SALES_PIPELINES,
     )
+
+
+def convert_opportunity_to_project(opportunity: "SalesOpportunity") -> "Project":
+    """
+    Create or return a linked Project from a SalesOpportunity.
+
+    - If opportunity.project already exists, returns it.
+    - Otherwise:
+      - Builds a Project using opportunity + items + client details
+      - Links project_id on the opportunity
+    """
+    if opportunity.project is not None:
+        return opportunity.project
+
+    client_name = None
+    if opportunity.client:
+        client_name = opportunity.client.display_name or opportunity.client.company_name
+    if not client_name:
+        client_name = getattr(opportunity, "client_name", None) or opportunity.title
+
+    base_name = (opportunity.related_project or "").strip()
+    if not base_name:
+        if client_name:
+            base_name = f"{opportunity.title} – {client_name}"
+        else:
+            base_name = opportunity.title
+
+    project = Project(
+        name=base_name,
+        customer_name=client_name,
+    )
+
+    first_item = None
+    try:
+        if opportunity.items:
+            first_item = opportunity.items[0]
+    except Exception:
+        first_item = None
+
+    if first_item is not None:
+        project.lift_type = getattr(first_item, "lift_type", None)
+        project.floors = getattr(first_item, "floors", None)
+        project.stops = getattr(first_item, "stops", None)
+        project.opening_type = getattr(first_item, "opening_type", None)
+        project.location = getattr(first_item, "location", None)
+        project.structure_type = getattr(first_item, "structure_type", None)
+        project.cladding_type = getattr(first_item, "cladding_type", None)
+        project.cabin_finish = getattr(first_item, "cabin_finish", None)
+        project.door_operation_type = getattr(first_item, "door_operation_type", None)
+        project.door_finish = getattr(first_item, "door_finish", None)
+
+    db.session.add(project)
+    db.session.flush()
+
+    opportunity.project_id = project.id
+    if not opportunity.related_project:
+        opportunity.related_project = project.name
+
+    db.session.commit()
+    return project
+
+
+@app.route("/sales/opportunities/<int:opportunity_id>/convert-to-project", methods=["POST"])
+@login_required
+def sales_opportunity_convert_to_project(opportunity_id):
+    _module_visibility_required("sales")
+
+    opportunity = SalesOpportunity.query.get_or_404(opportunity_id)
+
+    if (opportunity.stage or "").lower() != "closed won":
+        flash("Only Closed Won opportunities can be converted to projects.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    if not current_user.can_view_module("operations"):
+        flash("You do not have Operations access to create projects.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    project = convert_opportunity_to_project(opportunity)
+
+    flash(f"Project '{project.name}' created/linked successfully.", "success")
+    return redirect(url_for("project_detail", project_id=project.id))
 
 
 @app.route("/sales/opportunities/<int:opportunity_id>/stage", methods=["POST"])
