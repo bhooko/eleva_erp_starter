@@ -129,15 +129,40 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
         <input name="external_lift_id" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
-      <label class="space-y-1 md:col-span-2">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer name</span>
-        <input name="customer_name" list="customerNameOptions" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Select customer" />
-        <datalist id="customerNameOptions">
-          {% for customer in customers %}
-            <option value="{{ customer.company_name }}" label="{{ customer.customer_code }}"></option>
+      <label for="customer_display" class="space-y-1 md:col-span-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer</span>
+        <input
+          type="text"
+          id="customer_display"
+          list="customerList"
+          placeholder="Select customer"
+          autocomplete="off"
+          class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2"
+        />
+
+        <datalist id="customerList">
+          {% for c in customers %}
+            <option value="{{ c.customer_code }} — {{ c.company_name }}"></option>
           {% endfor %}
         </datalist>
-        <p class="text-xs text-slate-500">Start typing a customer name to filter the list or use the "New customer" button to create one.</p>
+
+        <input type="hidden" name="customer_code" id="customer_code" />
+
+        <script>
+          const display = document.getElementById("customer_display");
+          const hidden = document.getElementById("customer_code");
+
+          display.addEventListener("change", () => {
+            const value = display.value.trim();
+            // Expected format: CODE — NAME
+            const parts = value.split("—");
+            if (parts.length >= 1) {
+              hidden.value = parts[0].trim();
+            }
+          });
+        </script>
+
+        <p class="text-xs text-slate-500">Start typing to filter by customer code or company name, or use the "New customer" button to create one.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building / Villa No.</span>

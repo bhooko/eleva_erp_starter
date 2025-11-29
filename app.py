@@ -15907,18 +15907,15 @@ def service_lifts_create():
 
     lift_code = generate_next_lift_code()
 
-    customer_name_input = clean_str(request.form.get("customer_name"))
-    customer_code = None
-    customer = None
-    if customer_name_input:
-        lowered = customer_name_input.lower()
-        customer = Customer.query.filter(func.lower(Customer.company_name) == lowered).first()
-        if not customer:
-            customer = Customer.query.filter(func.lower(Customer.customer_code) == lowered).first()
-        if not customer:
-            flash("Select a valid customer from the list or create a new customer.", "error")
-            return redirect(redirect_url)
-        customer_code = customer.customer_code
+    customer_code = request.form.get("customer_code", "").strip()
+    if not customer_code:
+        flash("Select a valid customer from the list.", "error")
+        return redirect(redirect_url)
+
+    customer = Customer.query.filter_by(customer_code=customer_code).first()
+    if not customer:
+        flash("Select a valid customer from the list.", "error")
+        return redirect(redirect_url)
 
     route_value = clean_str(request.form.get("route"))
     if route_value:
