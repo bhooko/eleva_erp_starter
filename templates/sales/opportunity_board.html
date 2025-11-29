@@ -67,15 +67,15 @@
               {% if can_see_commercial %}
                 <span class="text-xs text-slate-300">{{ opp.display_amount }}</span>
               {% else %}
-                <span class="text-[11px] text-slate-500 italic">Amount restricted</span>
+                <span class="text-xs text-slate-300 italic">Amount restricted</span>
               {% endif %}
               {% if opp.temperature %}
               {% set label, badge = opp.badge_variant %}
-              <span class="inline-flex items-center px-2 py-1 rounded-lg text-[11px] {{ badge }} w-fit">{{ label or opp.temperature|capitalize }}</span>
+              <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ badge }} w-fit">{{ label or opp.temperature|capitalize }}</span>
               {% elif opp.expected_close_date %}
-              <span class="text-[11px] text-slate-500">Close {{ opp.expected_close_date.strftime('%d %b') }}</span>
+              <span class="text-xs text-slate-300">Close {{ opp.expected_close_date.strftime('%d %b') }}</span>
               {% else %}
-              <span class="text-[11px] text-slate-500">Status unavailable</span>
+              <span class="text-xs text-slate-300">Status unavailable</span>
               {% endif %}
             </div>
             {% endfor %}

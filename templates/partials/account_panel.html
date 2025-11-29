@@ -96,7 +96,7 @@
               <p class="mt-1 text-xs font-normal text-rose-100/80">Reset workspace data (admin only)</p>
             </div>
           </div>
-          <span class="rounded-full border border-rose-400/40 bg-rose-500/25 px-3 py-1 text-[11px] uppercase tracking-wide text-rose-50">Expand to confirm</span>
+          <span class="rounded-full border border-rose-400/40 bg-rose-500/25 px-3 py-1 text-xs uppercase tracking-wide text-rose-50">Expand to confirm</span>
         </summary>
 
         <div class="space-y-3 rounded-xl border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-50">
@@ -105,7 +105,7 @@
               <h3 class="text-base font-semibold text-rose-50">Reset workspace data</h3>
               <p class="text-xs text-rose-100/80">Delete customers, lifts, complaints, contracts, parts, SRT sites, QC tasks and all sales clients &amp; opportunities.</p>
             </div>
-            <span class="rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-50">Irreversible</span>
+            <span class="rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-50">Irreversible</span>
           </div>
           <p class="text-xs text-rose-100/90">Enter your password to confirm the reset. All linked files will be removed from storage.</p>
           <form method="post" action="{{ url_for('admin_reset_workspace') }}" class="flex flex-col gap-4 sm:flex-row sm:items-end" onsubmit="return confirm('This will permanently delete the listed records. Continue?');">

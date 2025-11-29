@@ -76,19 +76,19 @@
             <p class="mt-1 text-xs text-slate-400">
               Status:
               {% if lift.amc_due_status == "overdue" %}
-                <span class="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-300">
+                <span class="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-300">
                   Overdue
                 </span>
               {% elif lift.amc_due_status == "due_today" %}
-                <span class="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                <span class="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
                   Due today
                 </span>
               {% elif lift.amc_due_status == "due_this_week" %}
-                <span class="inline-flex items-center rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                <span class="inline-flex items-center rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-300">
                   Due this week
                 </span>
               {% else %}
-                <span class="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                <span class="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
                   Upcoming
                 </span>
               {% endif %}
@@ -698,7 +698,7 @@
             <option value="{{ customer.customer_code }}" label="{{ customer.company_name }}"></option>
           {% endfor %}
         </datalist>
-        <p class="text-[11px] text-slate-500">Type to select a linked customer by code.</p>
+        <p class="text-xs text-slate-300">Type to select a linked customer by code.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building / Villa no.</span>
@@ -913,7 +913,7 @@
           {% endfor %}
         </select>
         {% if not service_routes %}
-          <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+          <p class="text-xs text-slate-300">Add routes from Settings → Module Settings to see them here.</p>
         {% endif %}
       </label>
       <label class="space-y-1">
@@ -935,7 +935,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC end date</span>
         <input type="date" name="amc_end" id="liftAmcEndDetail" value="{{ lift.amc_end.isoformat() if lift.amc_end else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
-        <p class="text-[11px] text-slate-500">Auto-calculated using start date and duration.</p>
+        <p class="text-xs text-slate-300">Auto-calculated using start date and duration.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">AMC contract</span>

@@ -36,7 +36,7 @@
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-800 text-sm">
-        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+        <thead class="bg-slate-900/90 text-[11px] uppercase tracking-wide text-slate-200">
           <tr>
             <th class="px-4 py-3 text-left">Customer Code</th>
             <th class="px-4 py-3 text-left">Customer Name</th>
@@ -168,7 +168,7 @@
     <div class="space-y-2">
       <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400" for="customerUploadFile">Upload filled workbook</label>
       <input id="customerUploadFile" name="customer_upload_file" type="file" accept=".xlsx,.csv" required class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-      <p class="text-[11px] text-slate-500">Download the template and re-upload it as .xlsx or .csv.</p>
+      <p class="text-xs text-slate-300">Download the template and re-upload it as .xlsx or .csv.</p>
     </div>
 
     <div class="flex items-center justify-end gap-2">
@@ -192,12 +192,12 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
         <input value="{{ next_customer_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
-        <p class="text-[11px] text-slate-500">Assigned automatically on save.</p>
+        <p class="text-xs text-slate-300">Assigned automatically on save.</p>
       </label>
       <label class="space-y-1 md:col-span-1">
                 <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer name</span>
         <input name="company_name" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Acme Pvt. Ltd." />
-        <p class="text-[11px] text-slate-500">Suggestion: Company Name</p>
+        <p class="text-xs text-slate-300">Suggestion: Company Name</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact person</span>

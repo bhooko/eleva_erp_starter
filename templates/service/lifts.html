@@ -36,7 +36,7 @@
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-800 text-sm">
-        <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
+        <thead class="bg-slate-900/90 text-[11px] uppercase tracking-wide text-slate-200">
           <tr>
             <th class="px-4 py-3 text-left">Lift code</th>
             <th class="px-4 py-3 text-left">Customer</th>
@@ -123,7 +123,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
         <input value="{{ next_lift_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
-        <p class="text-[11px] text-slate-500">Automatically generated when you save.</p>
+        <p class="text-xs text-slate-300">Automatically generated when you save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
@@ -197,7 +197,7 @@
           {% endfor %}
         </select>
         {% if not service_routes %}
-          <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+          <p class="text-xs text-slate-300">Add routes from Settings → Module Settings to see them here.</p>
         {% endif %}
       </label>
       <label class="space-y-1">
@@ -377,7 +377,7 @@
             <option value="{{ day_value }}">{{ day_value }}</option>
           {% endfor %}
         </select>
-        <p class="text-[11px] text-slate-500">Pick a day of the month (01-30).</p>
+        <p class="text-xs text-slate-300">Pick a day of the month (01-30).</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service days</span>
@@ -389,7 +389,7 @@
             {% endif %}
           {% endfor %}
         </select>
-        <p class="text-[11px] text-slate-500">Hold Ctrl (Windows) or Command (Mac) to select multiple days. "Any day" clears other selections.</p>
+        <p class="text-xs text-slate-300">Hold Ctrl (Windows) or Command (Mac) to select multiple days. "Any day" clears other selections.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
@@ -453,7 +453,7 @@
               {% endif %}
             {% endfor %}
           </ul>
-          <p class="mt-2 text-[11px] text-slate-500">Enter either the duration label (for example <span class="italic">1 year</span>) or the key shown in parentheses.</p>
+          <p class="mt-2 text-xs text-slate-300">Enter either the duration label (for example <span class="italic">1 year</span>) or the key shown in parentheses.</p>
         </div>
       </div>
     </div>
@@ -461,7 +461,7 @@
     <div class="space-y-2">
       <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400" for="amcLiftFile">Upload filled workbook</label>
       <input id="amcLiftFile" name="amc_lift_file" type="file" accept=".xlsx,.csv" required class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-      <p class="text-[11px] text-slate-500">Download the template and re-upload it as .xlsx or .csv.</p>
+      <p class="text-xs text-slate-300">Download the template and re-upload it as .xlsx or .csv.</p>
     </div>
 
     <div class="flex items-center justify-end gap-2">
@@ -485,7 +485,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
         <input value="{{ next_customer_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
-        <p class="text-[11px] text-slate-500">Automatically generated on save.</p>
+        <p class="text-xs text-slate-300">Automatically generated on save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>

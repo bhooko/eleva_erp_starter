@@ -78,7 +78,7 @@
                           {% if field.reference_image %}
                             <img src="{{ field.reference_image }}" alt="Reference for {{ field.label }}" class="w-full max-w-[180px] rounded-lg border border-slate-800 object-cover">
                           {% endif %}
-                          <p class="text-[11px] text-slate-500">Enter values for each measurement cell.</p>
+                          <p class="text-xs text-slate-300">Enter values for each measurement cell.</p>
                         </div>
                         <div class="flex-1 overflow-auto">
                           {% set rows = field.rows or [] %}
@@ -118,7 +118,7 @@
                           {% if field.required %}<span class="text-rose-400">*</span>{% endif %}
                         </p>
                         {% if field.type == 'select' and field.photo_required_if_ng %}
-                          <p class="text-[11px] text-amber-400 mt-1">Photo needed when Not OK is selected.</p>
+                          <p class="text-xs text-amber-400 mt-1">Photo needed when Not OK is selected.</p>
                         {% endif %}
                       </div>
                       <div class="flex-1 w-full">
