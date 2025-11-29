@@ -8681,6 +8681,32 @@ def sales_tasks():
     )
 
 
+@app.route("/sales/tasks/<int:task_id>", methods=["GET", "POST"])
+@login_required
+def sales_task_detail(task_id):
+    task = db.session.get(SalesTask, task_id)
+    if not task:
+        flash("Task not found.", "error")
+        return redirect(url_for("sales_tasks"))
+
+    _module_visibility_required("sales", owner_user_id=task.owner_id)
+
+    if request.method == "POST":
+        if not task.is_completed:
+            task.status = "Completed"
+            task.completed_at = datetime.datetime.utcnow()
+            db.session.commit()
+            flash("Task marked complete.", "success")
+        return redirect(url_for("sales_task_detail", task_id=task.id))
+
+    return render_template(
+        "sales/task_detail.html",
+        task=task,
+        category_label="Sales",
+        category_url=url_for("sales_tasks"),
+    )
+
+
 @app.route("/sales/tasks/<int:task_id>/toggle", methods=["POST"])
 @login_required
 def sales_task_toggle(task_id):
@@ -10915,15 +10941,18 @@ def _build_task_overview(viewing_user: "User"):
         has_qc_tasks = any(not task.project for task in open_tasks)
 
         sales_filters = []
+        sales_user_id_set = set()
         if sales_user_ids is None:
             if viewing_user:
+                sales_user_id_set = {viewing_user.id}
                 sales_filters = [
                     SalesOpportunity.owner_id == viewing_user.id,
                     SalesOpportunityEngagement.created_by_id == viewing_user.id,
                 ]
         else:
-            allowed_ids = [uid for uid in set(sales_user_ids) if uid]
+            allowed_ids = {uid for uid in set(sales_user_ids) if uid}
             if allowed_ids:
+                sales_user_id_set = allowed_ids
                 sales_filters = [
                     SalesOpportunity.owner_id.in_(allowed_ids),
                     SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
@@ -10944,13 +10973,27 @@ def _build_task_overview(viewing_user: "User"):
                 .all()
             )
 
+        sales_tasks = []
+        if sales_user_id_set:
+            sales_tasks = (
+                SalesTask.query
+                .options(
+                    joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
+                    joinedload(SalesTask.client),
+                )
+                .filter(SalesTask.owner_id.in_(sales_user_id_set))
+                .filter(or_(SalesTask.status.is_(None), func.lower(SalesTask.status) != "completed"))
+                .order_by(SalesTask.due_date.asc(), SalesTask.id.asc())
+                .all()
+            )
+
         show_projects = (
             viewing_user.can_view_module("operations") if viewing_user else True
         ) or has_project_tasks
         show_qc = (viewing_user.can_view_module("qc") if viewing_user else True) or has_qc_tasks
         show_sales = (
             viewing_user.can_view_module("sales") if viewing_user else True
-        ) or bool(sales_items)
+        ) or bool(sales_items) or bool(sales_tasks)
         show_customer_support = (
             viewing_user.can_view_module("customer_support") if viewing_user else True
         ) or bool(support_tickets)
@@ -11052,7 +11095,7 @@ def _build_task_overview(viewing_user: "User"):
                     module_order,
                     "Sales",
                     "No pending sales activities.",
-                    "Upcoming and overdue sales engagements on your opportunities.",
+                    "Upcoming and overdue sales engagements and tasks on your opportunities.",
                 )
             for activity in sales_items:
                 opportunity = activity.opportunity
@@ -11100,6 +11143,26 @@ def _build_task_overview(viewing_user: "User"):
                         "secondary_url": None,
                         "secondary_label": None,
                         "metadata": metadata,
+                    }
+                )
+
+            for task in sales_tasks:
+                due_label, due_display, due_variant = _describe_due_date(task.due_date, now)
+                sales_module["items"].append(
+                    {
+                        "title": task.title,
+                        "subtitle": task.related_display,
+                        "description": task.description,
+                        "identifier": f"sales_task_{task.id}",
+                        "status": task.status or "Pending",
+                        "status_class": _status_badge_class(_status_key(task.status)),
+                        "due_description": due_label,
+                        "due_display": due_display,
+                        "due_class": _due_badge_class(due_variant),
+                        "url": url_for("sales_task_detail", task_id=task.id),
+                        "secondary_url": None,
+                        "secondary_label": None,
+                        "metadata": [f"Category: {task.category_label}"],
                     }
                 )
 
