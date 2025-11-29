@@ -54,23 +54,29 @@
           <h2 class="text-lg font-semibold text-theme-primary">Lift lifetime value</h2>
           <p class="text-xs text-slate-400">Revenue, cost and breakdown highlights.</p>
         </div>
-        <button type="button" data-modal-open="lift-lifetime" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-          <span class="sr-only">Edit lifetime value</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
-          </svg>
-        </button>
+        {% if can_see_commercial %}
+          <button type="button" data-modal-open="lift-lifetime" class="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
+            <span class="sr-only">Edit lifetime value</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25a2 2 0 0 1-.878.506l-3.464.866a.75.75 0 0 1-.91-.91l.866-3.464a2 2 0 0 1 .506-.878l8.25-8.25Zm1.414 1.414L6.75 13.25a.5.5 0 0 0-.127.223l-.43 1.722 1.722-.43a.5.5 0 0 0 .223-.127l8.25-8.25a1 1 0 0 0-1.414-1.414ZM4 17a.75.75 0 0 1 0-1.5h12a.75.75 0 0 1 0 1.5H4Z" />
+            </svg>
+          </button>
+        {% endif %}
       </div>
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {% for metric in payload.lifetime_metrics %}
-          <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
-            <p class="text-xs uppercase tracking-wide text-slate-400">{{ metric.label }}</p>
-            <p class="mt-2 text-lg font-semibold text-emerald-200">{{ metric.display }}</p>
-          </div>
-        {% else %}
-          <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No lifetime metrics captured yet.</p>
-        {% endfor %}
-      </div>
+      {% if can_see_commercial %}
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {% for metric in payload.lifetime_metrics %}
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+              <p class="text-xs uppercase tracking-wide text-slate-400">{{ metric.label }}</p>
+              <p class="mt-2 text-lg font-semibold text-emerald-200">{{ metric.display }}</p>
+            </div>
+          {% else %}
+            <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No lifetime metrics captured yet.</p>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">Commercial details are restricted.</p>
+      {% endif %}
     </section>
 
     
@@ -693,6 +699,7 @@
     </div>
   </form>
 </dialog>
+{% if can_see_commercial %}
 <dialog id="liftLifetimeModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-3xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
     <div class="flex items-start justify-between gap-4">
@@ -726,6 +733,7 @@
     </div>
   </form>
 </dialog>
+{% endif %}
 <dialog id="liftSpecsModal" class="modal-dialog">
   <form method="post" action="{{ url_for('service_lift_update', lift_id=lift.id) }}" class="w-full max-w-4xl space-y-5 rounded-2xl border border-slate-800 bg-slate-900/95 p-6 text-sm text-slate-100">
     <div class="flex items-start justify-between gap-4">

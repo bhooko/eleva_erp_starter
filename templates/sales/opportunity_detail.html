@@ -6,7 +6,11 @@
     <p class="text-sm text-slate-400">Opportunity · {{ pipeline_config.label if pipeline_config else pipeline_key|capitalize }}</p>
     <h2 class="text-3xl font-semibold tracking-tight">{{ opportunity.title }}</h2>
     <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-400">
-      <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> {{ opportunity.display_amount }}</span>
+      {% if can_see_commercial %}
+        <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> {{ opportunity.display_amount }}</span>
+      {% else %}
+        <span class="inline-flex items-center gap-2 text-[11px] italic text-slate-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 10l-9 4-9-4"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 13l9 4 9-4"/></svg> Amount restricted</span>
+      {% endif %}
       <span>Stage: {{ opportunity.stage }}</span>
       {% if opportunity.temperature %}
         {% set label, badge = opportunity.badge_variant %}
@@ -33,7 +37,13 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Amount</dt>
-          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.display_amount }}</dd>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if can_see_commercial %}
+              {{ opportunity.display_amount }}
+            {% else %}
+              <span class="text-xs text-slate-500 italic">Restricted</span>
+            {% endif %}
+          </dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Probability</dt>
@@ -474,10 +484,17 @@
         </div>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Amount</label>
-          <input type="text" name="amount" value="{{ opportunity.amount if opportunity.amount is not none else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-        </div>
+        {% if can_see_commercial %}
+          <div>
+            <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Amount</label>
+            <input type="text" name="amount" value="{{ opportunity.amount if opportunity.amount is not none else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+          </div>
+        {% else %}
+          <div>
+            <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Amount</label>
+            <p class="text-sm text-slate-500 italic">Restricted</p>
+          </div>
+        {% endif %}
         <div>
           <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Probability (%)</label>
           <input type="number" name="probability" value="{{ opportunity.probability if opportunity.probability is not none else '' }}" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" min="0" max="100">

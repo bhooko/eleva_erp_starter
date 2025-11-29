@@ -6051,6 +6051,20 @@ def inject_workspace_modules():
 
 
 @app.context_processor
+def eleva_permissions_context():
+    if not current_user or not getattr(current_user, "is_authenticated", False):
+        return {}
+    can_see_commercial = (
+        current_user.can_view_module("sales")
+        or current_user.can_view_module("finance")
+        or current_user.can_view_module("accounts")
+    )
+    return {
+        "can_see_commercial": can_see_commercial,
+    }
+
+
+@app.context_processor
 def inject_service_form_options():
     return {
         "SERVICE_BRANCH_OPTIONS": SERVICE_BRANCH_OPTIONS,
