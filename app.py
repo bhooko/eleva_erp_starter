@@ -347,6 +347,39 @@ def _clear_pending_upload(pending_token, *, remove_file=False):
     return pending
 
 
+def cleanup_old_pending_uploads(max_age_hours: int = 24) -> int:
+    """
+    Delete pending upload files older than `max_age_hours` and
+    return the count of files deleted.
+    """
+
+    upload_root = app.config["UPLOAD_FOLDER"]
+    pending_root = os.path.join(upload_root, PENDING_UPLOAD_SUBDIR)
+
+    if not os.path.isdir(pending_root):
+        return 0
+
+    cutoff = time.time() - (max_age_hours * 3600)
+    deleted_count = 0
+
+    for name in os.listdir(pending_root):
+        file_path = os.path.join(pending_root, name)
+        try:
+            modified_time = os.path.getmtime(file_path)
+        except OSError:
+            continue
+
+        if modified_time < cutoff:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except OSError:
+                continue
+
+    app.logger.info("Cleaned up %s old pending upload(s)", deleted_count)
+    return deleted_count
+
+
 def _extract_tabular_upload_from_path(file_path, *, sheet_name=None):
     filename = file_path.lower()
     if filename.endswith(".xlsx"):
