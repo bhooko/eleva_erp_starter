@@ -378,6 +378,7 @@
               <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
                 <tr>
                   <th class="px-4 py-2 text-left">Service date</th>
+                  <th class="px-4 py-2 text-left">Complaint</th>
                   <th class="px-4 py-2 text-left">Service slip</th>
                   <th class="px-4 py-2 text-left">Technician</th>
                   <th class="px-4 py-2 text-left">Status</th>
@@ -388,6 +389,13 @@
                   {% for visit in payload.service_schedule %}
                     <tr>
                       <td class="px-4 py-2 font-semibold text-slate-100">{{ visit.date_display }}</td>
+                      <td class="px-4 py-2 text-sm">
+                        {% if visit.complaint_summary %}
+                          <div class="text-xs text-slate-300">{{ visit.complaint_summary }}</div>
+                        {% else %}
+                          <div class="text-xs text-slate-500 italic">No complaint summary</div>
+                        {% endif %}
+                      </td>
                       <td class="px-4 py-2">
                         {% if visit.has_slip %}
                           <a
@@ -440,7 +448,7 @@
                   {% endfor %}
                 {% else %}
                   <tr>
-                    <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">No service visits planned for this AMC period yet.</td>
+                    <td colspan="5" class="px-4 py-6 text-center text-sm text-slate-400">No service visits planned for this AMC period yet.</td>
                   </tr>
                 {% endif %}
               </tbody>

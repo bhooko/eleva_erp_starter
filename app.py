@@ -3865,6 +3865,13 @@ def _handle_customer_support_ticket_creation():
         db.session.commit()
 
     CUSTOMER_SUPPORT_TICKETS.append(ticket_record)
+    try:
+        _create_service_visit_from_support_ticket(ticket_record)
+    except Exception as exc:
+        app.logger.exception("Error creating service visit from support ticket: %s", exc)
+
+    if any(isinstance(obj, Lift) for obj in db.session.dirty):
+        db.session.commit()
     _save_customer_support_state()
     if created_opportunity:
         flash("Sales enquiry created in the sales pipeline.", "success")
@@ -5071,6 +5078,8 @@ def build_lift_payload(lift):
                 "slip_stored": slip_raw,
                 "has_slip": bool(slip_href),
                 "allow_overdue": True,
+                "complaint_summary": clean_str(item.get("complaint_summary")),
+                "support_ticket_ref": item.get("support_ticket_ref"),
             }
         )
 
@@ -13812,6 +13821,103 @@ def _coerce_minutes(value):
     return None
 
 
+def _create_service_visit_from_support_ticket(ticket: dict) -> None:
+    """
+    Create a service visit entry on the relevant Lift based on a newly created
+    Customer Support ticket (typically breakdown / AMC complaints).
+
+    Assumptions:
+    - ticket is a dict from CUSTOMER_SUPPORT_TICKETS.
+    - ticket["lift_id"] (or similar) links to a Lift row.
+    - We do NOT commit outside this function; the caller will commit.
+    """
+    lift_id = ticket.get("lift_id") or ticket.get("linked_lift_id")
+    if not lift_id:
+        return
+
+    try:
+        lift_id = int(lift_id)
+    except (TypeError, ValueError):
+        return
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        return
+
+    category_key = (ticket.get("category_key") or "").strip().lower()
+    category_label = (ticket.get("category") or "").strip()
+
+    creates_service_visit = False
+
+    SERVICE_RELATED_CATEGORY_KEYS = {
+        "support_amc",
+        "support_non_amc",
+        "breakdown",
+        "complaint",
+        "amc_complaint",
+        "service_complaint",
+    }
+
+    if category_key and category_key in SERVICE_RELATED_CATEGORY_KEYS:
+        creates_service_visit = True
+    else:
+        label_lower = category_label.lower()
+        if any(word in label_lower for word in ("amc", "service", "breakdown", "complaint")):
+            creates_service_visit = True
+
+    if not creates_service_visit:
+        return
+
+    subject = (ticket.get("subject") or ticket.get("title") or "").strip()
+    remarks = (ticket.get("remarks") or ticket.get("description") or "").strip()
+
+    complaint_summary = subject
+    if remarks:
+        first_line = remarks.splitlines()[0]
+        if first_line and first_line not in complaint_summary:
+            if complaint_summary:
+                complaint_summary = f"{complaint_summary} – {first_line}"
+            else:
+                complaint_summary = first_line
+
+    ticket_ref = ticket.get("reference") or ticket.get("ticket_no") or ticket.get("id")
+    ticket_ref_str = str(ticket_ref) if ticket_ref is not None else None
+
+    today = datetime.date.today()
+
+    schedule = lift.service_schedule or []
+
+    for entry in schedule:
+        entry_date = _coerce_date(entry.get("date"))
+        source = (entry.get("source") or "").strip().lower()
+        existing_ref = (
+            str(entry.get("support_ticket_ref") or "")
+            if entry.get("support_ticket_ref") is not None
+            else ""
+        )
+        if (
+            entry_date == today
+            and source == "support_ticket"
+            and ticket_ref_str
+            and existing_ref == ticket_ref_str
+        ):
+            return
+
+    visit_entry = {
+        "date": today.isoformat(),
+        "status": "scheduled",
+        "source": "support_ticket",
+        "support_ticket_ref": ticket_ref_str,
+        "complaint_summary": complaint_summary,
+        "checklist": category_label or "Breakdown visit",
+        "technician": "",
+        "created_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+    schedule.append(visit_entry)
+    lift.service_schedule = schedule
+
+
 def _format_minutes_display(value):
     numeric = _coerce_float(value)
     if numeric is None:
@@ -13877,6 +13983,8 @@ def get_service_schedule_snapshot():
             if status_key not in SERVICE_VISIT_STATUS_LABELS:
                 status_key = "scheduled"
             technician = clean_str(raw_entry.get("technician"))
+            complaint_summary = clean_str(raw_entry.get("complaint_summary")) or ""
+            ticket_ref = raw_entry.get("support_ticket_ref")
             entries.append(
                 {
                     "lift": lift,
@@ -13898,6 +14006,8 @@ def get_service_schedule_snapshot():
                     ),
                     "rating": _coerce_float(raw_entry.get("rating")),
                     "checklist": clean_str(raw_entry.get("checklist")),
+                    "complaint_summary": complaint_summary,
+                    "support_ticket_ref": ticket_ref,
                 }
             )
 
