@@ -3092,13 +3092,14 @@ def _user_is_service_team_member(user, service_user_ids):
 
 def _user_is_service_manager(user: "User") -> bool:
     """
-    Simple rule for identifying the Service Incharge (Service I/C).
+    Identify Service I/C (service incharge).
 
-    For now:
-    - User must be active.
-    - User must be able to view the Service module.
-    - User's Position title must be 'Service I/C' (case-insensitive), or close variants.
-    Later we can extend this to use settings/config without changing call sites.
+    Rules:
+    - Must be active.
+    - Must be able to view Service module.
+    - Either:
+      - Has Position title 'Service I/C' / variants (legacy mode), OR
+      - Has the is_service_manager flag set.
     """
     if not user or not getattr(user, "is_active", False):
         return False
@@ -3107,7 +3108,11 @@ def _user_is_service_manager(user: "User") -> bool:
     if not user.can_view_module("service"):
         return False
 
-    # Check Position title (org structure table)
+    # Flag-based configuration (preferred)
+    if getattr(user, "is_service_manager", False):
+        return True
+
+    # Backward-compatible: Position title (org structure table)
     position = getattr(user, "position", None)
     title = ""
     if position and position.title:
@@ -3116,7 +3121,6 @@ def _user_is_service_manager(user: "User") -> bool:
     if title in {"service i/c", "service incharge", "service in-charge"}:
         return True
 
-    # (Future extension: check a config flag or dedicated setting here.)
     return False
 
 
@@ -5911,6 +5915,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), nullable=True)
     display_picture = db.Column(db.String(255), nullable=True)
     active = db.Column(db.Boolean, default=True)
+    is_service_manager = db.Column(db.Boolean, default=False)
     session_token = db.Column(
         db.String(36),
         nullable=True,
@@ -7861,6 +7866,36 @@ def ensure_sales_opportunity_columns():
         print("✔️ sales_opportunity OK")
 
 
+def ensure_user_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_user_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user'")
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(user)")
+    cols = [row[1] for row in cur.fetchall()]
+    added = []
+
+    if "is_service_manager" not in cols:
+        cur.execute("ALTER TABLE user ADD COLUMN is_service_manager INTEGER DEFAULT 0;")
+        added.append("is_service_manager")
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in user: {', '.join(added)}")
+    else:
+        print("✔️ user table OK")
+
+
 def ensure_tables():
     """Ensure all known tables exist. Creates them if missing."""
     created_tables = []
@@ -7976,6 +8011,7 @@ def migrate_plaintext_passwords():
 
 def bootstrap_db():
     ensure_tables()
+    ensure_user_columns()
     ensure_project_comment_table()
     ensure_project_columns()
     ensure_qc_columns()    # adds missing columns safely
@@ -10607,6 +10643,19 @@ def admin_users_update(user_id):
     db.session.commit()
     flash(f"User '{user.username}' updated.", "success")
     return redirect(url_for("admin_users") + "#users")
+
+
+@app.post("/admin/users/<int:user_id>/toggle-service-manager")
+@login_required
+def admin_user_toggle_service_manager(user_id: int):
+    _require_admin()
+
+    user = User.query.get_or_404(user_id)
+    is_checked = request.form.get("is_service_manager") == "1"
+    user.is_service_manager = is_checked
+    db.session.commit()
+    flash("Service I/C flag updated.", "success")
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/admin/departments/create", methods=["POST"])
