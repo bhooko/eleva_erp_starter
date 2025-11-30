@@ -114,6 +114,7 @@
       </button>
     </div>
     <form method="post" class="space-y-4 px-6 py-5 overflow-y-auto max-h-[75vh]">
+      {{ csrf_field() }}
       <div class="grid gap-3">
         <div>
           <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Project name</label>

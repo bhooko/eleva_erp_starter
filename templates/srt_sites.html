@@ -281,6 +281,7 @@
       </button>
     </div>
     <form method="post" action="{{ url_for('srt_task_create') }}" class="px-6 py-5 space-y-4" data-srt-task-form>
+      {{ csrf_field() }}
       <input type="hidden" name="site_name" data-task-site-input />
       <div class="grid gap-4 md:grid-cols-2">
         <div>

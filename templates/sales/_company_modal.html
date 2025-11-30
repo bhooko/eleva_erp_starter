@@ -10,6 +10,7 @@
         <button type="button" class="text-slate-400 hover:text-slate-200" data-close-company-modal>&times;</button>
       </div>
       <form method="post" action="{{ url_for('sales_companies_create') }}" class="px-6 py-5 space-y-4" id="{{ modal_id or 'companyModal' }}Form" data-company-form>
+        {{ csrf_field() }}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Company Name <span class="text-rose-400">*</span></label>

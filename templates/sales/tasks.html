@@ -38,6 +38,7 @@
             <p class="text-xs text-emerald-200 mt-1">{{ task.related_display }}</p>
           </div>
           <form method="post" action="{{ url_for('sales_task_toggle', task_id=task.id) }}" class="shrink-0">
+            {{ csrf_field() }}
             <input type="hidden" name="active_tab" value="taskboard" />
             <button type="submit" class="text-xs rounded-lg border border-emerald-400/40 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20">Mark Done</button>
           </form>
@@ -72,6 +73,7 @@
             {% endif %}
           </div>
           <form method="post" action="{{ url_for('sales_task_toggle', task_id=task.id) }}" class="shrink-0">
+            {{ csrf_field() }}
             <input type="hidden" name="active_tab" value="taskboard" />
             <button type="submit" class="text-xs rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:bg-slate-800/70">{{ 'Reopen' if task.is_completed else 'Mark Done' }}</button>
           </form>
@@ -155,6 +157,7 @@
         <button type="button" class="text-slate-400 hover:text-slate-200" data-close-create-modal>&times;</button>
       </div>
       <form method="post" action="{{ url_for('sales_tasks') }}" class="px-6 py-5 space-y-4">
+        {{ csrf_field() }}
         <input type="hidden" name="form_action" value="create" />
         <input type="hidden" name="active_tab" value="{{ active_tab }}" class="js-active-tab" />
         <div>
@@ -233,6 +236,7 @@
           </ul>
         </div>
         <form method="post" action="{{ url_for('sales_tasks') }}" class="space-y-3">
+          {{ csrf_field() }}
           <input type="hidden" name="form_action" value="create" />
           <input type="hidden" name="active_tab" value="calendar" class="js-active-tab" />
           <input type="hidden" name="due_date" data-modal-due />
