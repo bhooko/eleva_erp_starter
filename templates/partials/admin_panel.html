@@ -1,4 +1,31 @@
 <div class="space-y-10">
+  <section class="elev-card fade-in p-6 space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Upload controls</h2>
+        <p class="text-sm text-slate-400">Set the maximum upload size for all users (up to 45 MB).</p>
+      </div>
+    </header>
+    <form method="post" action="{{ url_for('settings_admin_upload_limit') }}" class="space-y-3">
+      {{ csrf_field() }}
+      <label class="block space-y-2 text-sm text-slate-300" for="max-upload-size">
+        <span>Maximum upload size (MB)</span>
+        <input id="max-upload-size"
+               name="max_upload_size_mb"
+               type="number"
+               min="1"
+               max="45"
+               step="1"
+               value="{{ (admin_settings.max_upload_size_mb or 45) | int }}"
+               class="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2" />
+      </label>
+      <div class="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
+        <span>Current limit: {{ (admin_settings.max_upload_size_mb or 45) | int }} MB</span>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Save</button>
+      </div>
+    </form>
+  </section>
+
   <div class="flex justify-end">
     <button type="button"
             class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold"
