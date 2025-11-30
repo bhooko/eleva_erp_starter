@@ -72,27 +72,6 @@ DEFAULT_MAX_UPLOAD_SIZE_MB = 45
 DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
 
-app = Flask(__name__, instance_relative_config=True)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "SQLALCHEMY_DATABASE_URI",
-    "sqlite:///" + os.path.join(BASE_DIR, "instance", "eleva.db"),
-)
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-app.config["ADMIN_SETTINGS"] = _load_admin_settings()
-app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
-    app.config["ADMIN_SETTINGS"]
-)
-
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
-
-csrf = CSRFProtect(app)
-db = SQLAlchemy(app)
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
-
 
 def _default_admin_settings():
     return {"max_upload_size_mb": DEFAULT_MAX_UPLOAD_SIZE_MB}
@@ -128,6 +107,28 @@ def _get_max_upload_size_bytes(settings=None):
         configured = DEFAULT_MAX_UPLOAD_SIZE_MB
     clamped_mb = max(1, min(DEFAULT_MAX_UPLOAD_SIZE_MB, configured))
     return int(clamped_mb * 1024 * 1024)
+
+
+app = Flask(__name__, instance_relative_config=True)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "SQLALCHEMY_DATABASE_URI",
+    "sqlite:///" + os.path.join(BASE_DIR, "instance", "eleva.db"),
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+app.config["ADMIN_SETTINGS"] = _load_admin_settings()
+app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
+    app.config["ADMIN_SETTINGS"]
+)
+
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
+
+csrf = CSRFProtect(app)
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
 
 
 @app.errorhandler(RequestEntityTooLarge)
