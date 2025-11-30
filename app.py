@@ -8254,11 +8254,55 @@ def index():
     return render_template("index.html", category_label=None)
 
 
+LOGIN_ATTEMPT_WINDOW = datetime.timedelta(minutes=15)
+LOGIN_BLOCK_DURATION = datetime.timedelta(minutes=10)
+MAX_FAILED_ATTEMPTS = 5
+
+
+@dataclass
+class LoginThrottle:
+    failures: List[datetime_cls] = field(default_factory=list)
+    blocked_until: Optional[datetime_cls] = None
+
+
+_login_attempts: Dict[tuple, LoginThrottle] = {}
+
+
+def _get_login_key(username: str) -> tuple:
+    return (username.lower(), request.remote_addr or "unknown")
+
+
+def _prune_attempts(attempt: LoginThrottle, *, now: datetime_cls) -> None:
+    attempt.failures = [ts for ts in attempt.failures if now - ts <= LOGIN_ATTEMPT_WINDOW]
+    if not attempt.failures and (not attempt.blocked_until or attempt.blocked_until <= now):
+        attempt.blocked_until = None
+
+
+def _is_blocked(attempt: LoginThrottle, *, now: datetime_cls) -> bool:
+    if attempt.blocked_until and attempt.blocked_until > now:
+        return True
+    attempt.blocked_until = None
+    return False
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
+        now = datetime_cls.utcnow()
+        key = _get_login_key(username)
+        attempt = _login_attempts.setdefault(key, LoginThrottle())
+        _prune_attempts(attempt, now=now)
+
+        if _is_blocked(attempt, now=now):
+            remaining = int((attempt.blocked_until - now).total_seconds() // 60) + 1
+            flash(
+                f"Too many failed attempts. Please try again in about {remaining} minutes.",
+                "error",
+            )
+            return render_template("login.html", category_label=None)
+
         user = User.query.filter_by(username=username).first()
         if user and user.verify_password(password):
             if not user.is_active:
@@ -8268,10 +8312,23 @@ def login():
                 db.session.commit()
                 login_user(user)
                 session["session_token"] = user.session_token
+                attempt.failures.clear()
+                attempt.blocked_until = None
+                if key in _login_attempts and not attempt.failures:
+                    _login_attempts.pop(key, None)
                 flash("Welcome back!", "success")
                 return redirect(url_for("dashboard"))
         else:
-            flash("Invalid credentials", "error")
+            attempt.failures.append(now)
+            _prune_attempts(attempt, now=now)
+            if len(attempt.failures) >= MAX_FAILED_ATTEMPTS:
+                attempt.blocked_until = now + LOGIN_BLOCK_DURATION
+                flash(
+                    "Too many failed attempts. Please try again in a few minutes.",
+                    "error",
+                )
+            else:
+                flash("Invalid credentials", "error")
     return render_template("login.html", category_label=None)
 
 
