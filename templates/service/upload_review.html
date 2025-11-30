@@ -141,11 +141,13 @@
     <p class="text-xs text-slate-400">Confirming will merge the data immediately. Discarding removes the staged file.</p>
     <div class="flex gap-3">
       <form method="post" action="{{ confirm_url }}">
+        {{ csrf_field() }}
         <input type="hidden" name="pending_token" value="{{ pending_token }}" />
         <input type="hidden" name="action" value="discard" />
         <button type="submit" class="rounded-xl border border-rose-500/50 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10">Discard upload</button>
       </form>
       <form method="post" action="{{ confirm_url }}">
+        {{ csrf_field() }}
         <input type="hidden" name="pending_token" value="{{ pending_token }}" />
         <input type="hidden" name="action" value="merge" />
         <button type="submit" class="rounded-xl border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/30">Merge data</button>

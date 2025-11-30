@@ -103,6 +103,7 @@
                   </svg>
                 </a>
                 <form action="{{ url_for('forms_duplicate', form_id=f.id) }}" method="post" class="inline" onsubmit="return confirm('Duplicate this form?');">
+                  {{ csrf_field() }}
                   <button type="submit" class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-indigo-400/60 transition" title="Duplicate form" aria-label="Duplicate {{ f.name }}">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M9 5.25h9A1.75 1.75 0 0119.75 7v9A1.75 1.75 0 0118 17.75H9A1.75 1.75 0 017.25 16V7A1.75 1.75 0 019 5.25z" />
@@ -111,6 +112,7 @@
                   </button>
                 </form>
                 <form action="{{ url_for('forms_delete', form_id=f.id) }}" method="post" class="inline" onsubmit="return confirm('Delete form?');">
+                  {{ csrf_field() }}
                   <button class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-rose-400/60 transition" type="submit" title="Delete form" aria-label="Delete {{ f.name }}">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l.802 12.03A1.5 1.5 0 009.047 21h5.906a1.5 1.5 0 001.495-1.47L17.25 7.5M4.5 7.5h15M10.5 10.5v7.5M13.5 10.5v7.5M9 7.5V5.25A1.5 1.5 0 0110.5 3.75h3A1.5 1.5 0 0115 5.25V7.5" />

@@ -79,6 +79,7 @@
       </button>
       <h3 class="text-base font-semibold text-slate-100 mb-4">Save as Task Template</h3>
       <form method="post" action="{{ url_for('project_template_save_as_task_template', template_id=template.id) }}" class="space-y-4">
+        {{ csrf_field() }}
         <div>
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task template name</label>
           <input name="task_template_name" value="{{ template.name }}" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" />

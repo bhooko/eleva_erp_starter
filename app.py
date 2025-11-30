@@ -11,6 +11,7 @@ from flask import (
     send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 from flask_login import (
     LoginManager,
     login_user,
@@ -72,6 +73,7 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200MB uploads
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
 
+csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"

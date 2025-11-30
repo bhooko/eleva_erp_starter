@@ -147,6 +147,7 @@
       </button>
     </div>
     <form method="post" action="{{ url_for('srt_task_create') }}" class="px-6 py-5 space-y-4">
+      {{ csrf_field() }}
       <input type="hidden" name="redirect_to" value="{{ overview_redirect }}" />
       <div class="grid gap-4 md:grid-cols-2">
         <div>
@@ -261,6 +262,7 @@
                 class="mt-4 space-y-4"
                 data-srt-task-form
                 data-update-url-template="{{ url_for('srt_task_update', task_id='__TASK_ID__') }}">
+            {{ csrf_field() }}
             <input type="hidden" name="redirect_to" value="{{ overview_redirect }}" />
             <div class="grid gap-4 md:grid-cols-2">
               <div>

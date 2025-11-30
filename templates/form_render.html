@@ -45,6 +45,7 @@
     <div class="space-y-6">
   {% else %}
     <form method="post" enctype="multipart/form-data" class="space-y-6" data-track-unsaved>
+      {{ csrf_field() }}
   {% endif %}
     {% if sections %}
       <div class="space-y-6">

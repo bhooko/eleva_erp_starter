@@ -84,6 +84,7 @@
     </div>
     <div id="projectEditForm" class="mt-6 w-full hidden">
       <form method="post" action="{{ url_for('project_edit', project_id=project.id) }}" class="space-y-4">
+        {{ csrf_field() }}
         <div class="grid md:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1" for="projectName">Project name</label>
@@ -337,6 +338,7 @@
           <button type="button" class="text-xs text-slate-400 hover:text-emerald-300" data-close-panel>Close</button>
         </div>
         <form method="post" action="{{ url_for('project_apply_template', project_id=project.id) }}" class="space-y-4">
+          {{ csrf_field() }}
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Project template</label>
             <select name="template_id" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
@@ -357,6 +359,7 @@
           <button type="button" class="text-xs text-slate-400 hover:text-emerald-300" data-close-panel>Close</button>
         </div>
         <form method="post" action="{{ url_for('project_task_create', project_id=project.id) }}" class="space-y-4">
+          {{ csrf_field() }}
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
             <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. Commissioning QC" />
@@ -453,6 +456,7 @@
           <p class="text-sm text-slate-400">No comments recorded yet.</p>
         {% endif %}
         <form method="post" action="{{ url_for('project_add_comment', project_id=project.id) }}" class="mt-4 space-y-3">
+          {{ csrf_field() }}
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Add comment</label>
             <textarea name="body" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Share an update or paste a ticket link" required></textarea>

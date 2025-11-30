@@ -1,3 +1,7 @@
+{% macro csrf_field() -%}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{%- endmacro %}
+
 <!DOCTYPE html>
 <html lang="en" data-theme="warm-modern">
 <head>
@@ -694,6 +698,7 @@
           <form method="post"
                 action="{{ url_for('switch_user') }}"
                 class="relative">
+            {{ csrf_field() }}
             <label for="user-switcher" class="sr-only">Switch user</label>
             <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
             <select id="user-switcher"

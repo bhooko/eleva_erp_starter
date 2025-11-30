@@ -28,6 +28,7 @@
       </div>
       <div class="px-6 py-6">
         <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="mb-6 space-y-3">
+          {{ csrf_field() }}
           <input type="hidden" name="form_action" value="add_note">
           <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
             <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
@@ -105,6 +106,7 @@
           <p class="text-xs text-slate-400">Update core contact details.</p>
         </div>
         <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="px-6 py-5 space-y-4">
+          {{ csrf_field() }}
           <input type="hidden" name="form_action" value="update">
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Client Name</label>
@@ -215,6 +217,7 @@
             Company Blacklisted
           </div>
           <form method="post" action="{{ url_for('sales_client_detail', client_id=client.id) }}" class="space-y-4" id="companyForm">
+            {{ csrf_field() }}
             <input type="hidden" name="form_action" value="update_company">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

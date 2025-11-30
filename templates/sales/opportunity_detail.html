@@ -90,6 +90,7 @@
       {% else %}
         {% if opportunity.stage and opportunity.stage.lower() == 'closed won' and current_user.can_view_module('operations') %}
           <form action="{{ url_for('sales_opportunity_convert_to_project', opportunity_id=opportunity.id) }}" method="post" style="display: inline-block;">
+            {{ csrf_field() }}
             <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Convert to Project</button>
           </form>
         {% endif %}
@@ -138,6 +139,7 @@
       <div class="px-6 py-6">
         <div data-tab-panel="timeline" class="motion-panel is-active">
           <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
+            {{ csrf_field() }}
             <input type="hidden" name="form_action" value="add_note">
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
               <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
@@ -176,6 +178,7 @@
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Capture internal comments about this deal to keep the team aligned.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-3">
+              {{ csrf_field() }}
               <input type="hidden" name="form_action" value="add_comment">
               <textarea name="comment_body" rows="4" placeholder="Share an update with your team." class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required></textarea>
               <div class="flex justify-end">
@@ -204,6 +207,7 @@
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Attach proposals, contracts or supporting documents for quick access.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" enctype="multipart/form-data" class="space-y-3">
+              {{ csrf_field() }}
               <input type="hidden" name="form_action" value="upload_file">
               <div class="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-6 py-8 text-center">
                 <input type="file" name="attachment" id="opportunityFileInput" class="hidden" required>
@@ -239,6 +243,7 @@
 
         <div data-tab-panel="activities" class="motion-panel hidden">
           <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4">
+            {{ csrf_field() }}
             <input type="hidden" name="form_action" value="schedule_activity">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -319,6 +324,7 @@
           <div class="space-y-5">
             <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
+              {{ csrf_field() }}
               <input type="hidden" name="form_action" value="add_item">
               <div>
                 <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details</label>
@@ -459,6 +465,7 @@
       </button>
     </div>
     <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5">
+      {{ csrf_field() }}
       <input type="hidden" name="form_action" value="update">
       <div>
         <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Title</label>

@@ -11,6 +11,7 @@
     <a href="{{ category_url }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">← Back to Tasks</a>
     {% if not task.is_completed %}
     <form method="post" class="shrink-0">
+      {{ csrf_field() }}
       <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Mark complete</button>
     </form>
     {% else %}
