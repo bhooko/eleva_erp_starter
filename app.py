@@ -30,6 +30,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import RequestEntityTooLarge
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
 from datetime import datetime as datetime_cls, date
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -67,6 +68,9 @@ else:
     Workbook = load_workbook = Alignment = Font = None  # type: ignore[assignment]
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DEFAULT_MAX_UPLOAD_SIZE_MB = 45
+DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
+ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
 
 app = Flask(__name__, instance_relative_config=True)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
@@ -76,7 +80,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200MB uploads
+app.config["ADMIN_SETTINGS"] = _load_admin_settings()
+app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
+    app.config["ADMIN_SETTINGS"]
+)
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
@@ -85,6 +92,52 @@ csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+
+
+def _default_admin_settings():
+    return {"max_upload_size_mb": DEFAULT_MAX_UPLOAD_SIZE_MB}
+
+
+def _load_admin_settings():
+    settings = _default_admin_settings()
+    try:
+        with open(ADMIN_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            file_data = json.load(f)
+        if isinstance(file_data, dict):
+            settings.update(file_data)
+    except FileNotFoundError:
+        pass
+    except (OSError, json.JSONDecodeError):
+        pass
+    return settings
+
+
+def _save_admin_settings(settings):
+    merged = {**_default_admin_settings(), **(settings or {})}
+    os.makedirs(os.path.dirname(ADMIN_SETTINGS_PATH), exist_ok=True)
+    with open(ADMIN_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2)
+    return merged
+
+
+def _get_max_upload_size_bytes(settings=None):
+    settings = settings or _load_admin_settings()
+    try:
+        configured = float(settings.get("max_upload_size_mb", DEFAULT_MAX_UPLOAD_SIZE_MB))
+    except (TypeError, ValueError):
+        configured = DEFAULT_MAX_UPLOAD_SIZE_MB
+    clamped_mb = max(1, min(DEFAULT_MAX_UPLOAD_SIZE_MB, configured))
+    return int(clamped_mb * 1024 * 1024)
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_upload(exc):
+    limit_mb = round(app.config.get("MAX_CONTENT_LENGTH", DEFAULT_MAX_UPLOAD_SIZE) / (1024 * 1024))
+    flash(
+        f"Uploads are limited to {int(limit_mb)} MB. Please compress or split the file and retry.",
+        "error",
+    )
+    return redirect(request.referrer or url_for("index")), 413
 
 
 class MissingDependencyError(RuntimeError):
@@ -119,6 +172,11 @@ def _parse_boolean_cell(value, *, default=True):
 
 
 def _extract_tabular_upload(upload, *, sheet_name=None):
+    _validate_upload_stream(
+        upload,
+        allowed_extensions={".xlsx", ".csv"},
+        allow_office_processing=True,
+    )
     filename = (upload.filename or "").lower()
     if filename.endswith(".xlsx"):
         _ensure_openpyxl()
@@ -302,7 +360,61 @@ def _normalize_extension(extension):
     return ext
 
 
-def save_pending_upload_file(upload):
+class UploadValidationError(ValueError):
+    """Raised when an uploaded file fails validation checks."""
+
+
+def _validate_upload_stream(
+    upload,
+    *,
+    allowed_extensions=None,
+    allow_office_processing: bool = False,
+):
+    if not upload or not upload.filename:
+        raise UploadValidationError("Select a file to upload.")
+
+    extension = _normalize_extension(os.path.splitext(upload.filename)[1])
+
+    if not allow_office_processing and extension in {".doc", ".docx", ".xls", ".xlsx", ".xlsm", ".xltm"}:
+        raise UploadValidationError(
+            "Office documents are only stored for download and are not processed on the server."
+        )
+
+    if allowed_extensions and extension not in allowed_extensions:
+        allowed_display = ", ".join(sorted(allowed_extensions))
+        raise UploadValidationError(
+            f"Upload a file with one of the allowed extensions: {allowed_display}."
+        )
+
+    content_length = upload.content_length or request.content_length
+    max_upload_size = _get_max_upload_size_bytes()
+    if content_length and content_length > max_upload_size:
+        raise UploadValidationError(
+            f"Uploads are limited to {int(max_upload_size / (1024 * 1024))} MB."
+        )
+
+    try:
+        current_position = upload.stream.tell()
+        upload.stream.seek(0, os.SEEK_END)
+        stream_size = upload.stream.tell()
+        upload.stream.seek(current_position)
+        if stream_size and stream_size > max_upload_size:
+            raise UploadValidationError(
+                f"Uploads are limited to {int(max_upload_size / (1024 * 1024))} MB."
+            )
+    except Exception:
+        # Fall back silently if the stream is not seekable; MAX_CONTENT_LENGTH still applies.
+        pass
+
+    return extension
+
+
+def save_pending_upload_file(upload, *, allowed_extensions=None, allow_office_processing=False):
+    _validate_upload_stream(
+        upload,
+        allowed_extensions=allowed_extensions,
+        allow_office_processing=allow_office_processing,
+    )
     upload_root = app.config["UPLOAD_FOLDER"]
     pending_root = os.path.join(upload_root, PENDING_UPLOAD_SUBDIR)
     os.makedirs(pending_root, exist_ok=True)
@@ -8423,6 +8535,9 @@ def settings():
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
     dropdown_options = get_dropdown_options_map()
+    admin_settings = _load_admin_settings()
+    app.config["ADMIN_SETTINGS"] = admin_settings
+    app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(admin_settings)
 
     if current_user.is_admin:
         departments = sorted(
@@ -8453,7 +8568,37 @@ def settings():
         service_routes=service_routes,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        admin_settings=admin_settings,
     )
+
+
+@app.route("/settings/admin/upload-limit", methods=["POST"])
+@login_required
+def settings_admin_upload_limit():
+    if not current_user.is_admin:
+        abort(403)
+
+    raw_value = (request.form.get("max_upload_size_mb") or "").strip()
+    try:
+        parsed_value = float(raw_value)
+    except ValueError:
+        flash("Enter a valid number for the maximum upload size (in MB).", "error")
+        return redirect(url_for("settings", tab="admin"))
+
+    if parsed_value <= 0:
+        flash("Upload size must be greater than 0 MB.", "error")
+        return redirect(url_for("settings", tab="admin"))
+
+    clamped_value = min(DEFAULT_MAX_UPLOAD_SIZE_MB, parsed_value)
+    admin_settings = _save_admin_settings({"max_upload_size_mb": clamped_value})
+    app.config["ADMIN_SETTINGS"] = admin_settings
+    app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(admin_settings)
+
+    note = " (capped at 45 MB maximum)" if parsed_value > DEFAULT_MAX_UPLOAD_SIZE_MB else ""
+    flash(
+        f"Maximum upload size updated to {int(clamped_value)} MB{note}.", "success"
+    )
+    return redirect(url_for("settings", tab="admin"))
 
 
 @app.route("/settings/service/routes/create", methods=["POST"])
@@ -9168,13 +9313,14 @@ def sales_clients_upload():
     _module_visibility_required("sales")
 
     upload = request.files.get("client_upload_file")
-    if not upload or not upload.filename:
-        flash("Select an Excel or CSV file to upload.", "error")
-        return redirect(url_for("sales_clients"))
-
-    filename = (upload.filename or "").lower()
-    if not filename.endswith((".xlsx", ".csv")):
-        flash("Upload a .xlsx or .csv file exported from the clients template.", "error")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("sales_clients"))
 
     try:
@@ -9709,13 +9855,14 @@ def sales_opportunities_upload():
     redirect_url = url_for("sales_opportunities_pipeline", pipeline_key=default_pipeline)
 
     upload = request.files.get("opportunity_upload_file")
-    if not upload or not upload.filename:
-        flash("Select an Excel or CSV file to upload.", "error")
-        return redirect(redirect_url)
-
-    filename = (upload.filename or "").lower()
-    if not filename.endswith((".xlsx", ".csv")):
-        flash("Upload a .xlsx or .csv file exported from the opportunity template.", "error")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(redirect_url)
 
     try:
@@ -10978,8 +11125,14 @@ def admin_departments_upload():
     _require_admin()
 
     upload = request.files.get("upload")
-    if not upload or not upload.filename:
-        flash("Please choose an Excel or CSV file to upload.", "error")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("admin_users") + "#departments")
 
     try:
@@ -11182,8 +11335,14 @@ def admin_positions_upload():
     _require_admin()
 
     upload = request.files.get("upload")
-    if not upload or not upload.filename:
-        flash("Please choose an Excel or CSV file to upload.", "error")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("admin_users") + "#positions")
 
     try:
@@ -15665,23 +15824,25 @@ def service_customers_upload():
         return redirect(url_for("service_customers"))
 
     upload = request.files.get("customer_upload_file")
-    if not upload or not upload.filename:
-        flash("Select an Excel workbook to upload.", "error")
-        return redirect(url_for("service_customers"))
-
-    filename = (upload.filename or "").lower()
-    if not filename.endswith((".xlsx", ".csv")):
-        flash(
-            "Upload the .xlsx or .csv template exported from the customer upload modal.",
-            "error",
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
         )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("service_customers"))
 
     saved_token = None
     saved_extension = None
     saved_path = None
     try:
-        saved_token, saved_extension = save_pending_upload_file(upload)
+        saved_token, saved_extension = save_pending_upload_file(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
         saved_path = _build_pending_upload_path(saved_token, saved_extension)
         outcome = process_customer_upload_file(
             saved_path,
@@ -15860,23 +16021,25 @@ def service_lifts_upload():
         return redirect(url_for("service_lifts"))
 
     upload = request.files.get("amc_lift_file")
-    if not upload or not upload.filename:
-        flash("Select an Excel workbook to upload.", "error")
-        return redirect(url_for("service_lifts"))
-
-    filename = (upload.filename or "").lower()
-    if not filename.endswith((".xlsx", ".csv")):
-        flash(
-            "Upload the .xlsx or .csv template exported from the AMC lifts modal.",
-            "error",
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
         )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("service_lifts"))
 
     saved_token = None
     saved_extension = None
     saved_path = None
     try:
-        saved_token, saved_extension = save_pending_upload_file(upload)
+        saved_token, saved_extension = save_pending_upload_file(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
         saved_path = _build_pending_upload_path(saved_token, saved_extension)
         outcome = process_lift_upload_file(
             saved_path,
