@@ -19,6 +19,12 @@ flask run --debug
 ```
 3) Open http://127.0.0.1:5000
 
+**Troubleshooting**
+- If you see `ModuleNotFoundError: No module named 'flask_wtf'`, double-check that your
+  virtual environment is activated and run `pip install -r requirements.txt` (or install
+  the package directly with `pip install Flask-WTF`). This error simply means the
+  dependencies were not installed in the environment you're using to launch Flask.
+
 If you're starting from a fresh clone, the database file will be created automatically on first run (or via `flask initdb`).
 
 **Auto-reload**: Any change in `.py` or `templates/` will reload the server/browser.
