@@ -123,7 +123,7 @@
         <div class="flex items-center justify-between text-xs font-semibold">
           <span>{{ day.date.day }}</span>
           {% if date_key == today.isoformat() %}
-          <span class="rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 text-[10px]">Today</span>
+          <span class="rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 text-xs">Today</span>
           {% endif %}
         </div>
         {% if day.date.weekday() == 6 %}

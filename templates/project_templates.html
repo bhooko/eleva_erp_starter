@@ -108,7 +108,7 @@
               </div>
               <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 uppercase tracking-wide">{{ tt.task_count }} task{{ '' if tt.task_count == 1 else 's' }}</span>
             </div>
-            <div class="mt-3 text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+            <div class="mt-3 text-sm text-slate-500 flex flex-wrap items-center gap-2">
               <span>Saved {{ tt.created_at.strftime('%Y-%m-%d') }}</span>
               {% if tt.creator %}
                 <span>&middot;</span>

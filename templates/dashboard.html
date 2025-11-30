@@ -8,7 +8,7 @@
       <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
       <button
         type="button"
-        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
         :class="filter === 'all' ? 'bg-slate-200 text-slate-900 border-slate-200 font-semibold' : ''"
         @click="filter = 'all'"
       >
@@ -16,7 +16,7 @@
       </button>
       <button
         type="button"
-        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
         :class="filter === 'overdue' ? 'bg-rose-200/80 text-rose-900 border-rose-200 font-semibold' : ''"
         @click="filter = 'overdue'"
       >
@@ -24,7 +24,7 @@
       </button>
       <button
         type="button"
-        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
         :class="filter === 'today' ? 'bg-amber-200/80 text-amber-900 border-amber-200 font-semibold' : ''"
         @click="filter = 'today'"
       >
@@ -32,7 +32,7 @@
       </button>
       <button
         type="button"
-        class="px-3 py-1 rounded-full text-[11px] border border-slate-700 bg-slate-900/60 text-slate-200"
+        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
         :class="filter === 'upcoming' ? 'bg-emerald-200/80 text-emerald-900 border-emerald-200 font-semibold' : ''"
         @click="filter = 'upcoming'"
       >
@@ -60,7 +60,7 @@
                 <div class="flex items-center gap-2">
                   <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
                   {% if module.summary %}
-                    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                    <div class="flex items-center gap-2 text-sm text-slate-400">
                       {% if module.summary.overdue %}
                         <span class="inline-flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-200 px-2 py-0.5 border border-rose-500/30">
                           {{ module.summary.overdue }} overdue
@@ -83,7 +83,7 @@
                   <p class="text-xs text-slate-400">{{ module.description }}</p>
                 {% endif %}
               </div>
-              <div class="text-[11px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+              <div class="text-xs uppercase tracking-wide text-slate-400 flex items-center gap-1">
                 {{ items|length }} item{{ 's' if items|length != 1 else '' }}
               </div>
             </div>
@@ -95,7 +95,7 @@
                   class="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-700 hover:shadow-lg hover:shadow-black/20 transition"
                 >
                   <div class="space-y-1 min-w-0">
-                    <div class="flex items-center gap-2 text-[11px] text-slate-400 uppercase tracking-wide">
+                    <div class="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
                       <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700/70 text-slate-200">{{ module['module'] }}</span>
                       {% if item.identifier %}
                         <span class="font-mono text-slate-500">{{ item.identifier }}</span>
@@ -115,7 +115,7 @@
                       <p class="text-xs text-slate-500">{{ item.description }}</p>
                     {% endif %}
                     {% if item.metadata %}
-                      <div class="flex flex-wrap gap-2 text-[11px] uppercase tracking-wide">
+                      <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wide">
                         {% for badge in item.metadata %}
                           {% if badge is mapping %}
                             <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
@@ -130,17 +130,17 @@
                   </div>
                   <div class="flex flex-col items-end gap-1 shrink-0 text-right">
                     {% if item.due_display %}
-                      <span class="text-[11px] px-2 py-0.5 rounded-full {{ item.due_class }}">
+                      <span class="text-xs px-2 py-0.5 rounded-full {{ item.due_class }}">
                         {{ item.due_display }}
                       </span>
                     {% endif %}
                     {% if item.status %}
-                      <span class="text-[11px] px-2 py-0.5 rounded-full {{ item.status_class }}">{{ item.status }}</span>
+                      <span class="text-xs px-2 py-0.5 rounded-full {{ item.status_class }}">{{ item.status }}</span>
                     {% endif %}
                     {% if item.secondary_url %}
                       <a
                         href="{{ item.secondary_url }}"
-                        class="mt-1 inline-flex items-center justify-center px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition"
+                        class="mt-1 inline-flex items-center justify-center px-2.5 py-1 text-sm font-semibold rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition"
                       >{{ item.secondary_label }}</a>
                     {% endif %}
                   </div>

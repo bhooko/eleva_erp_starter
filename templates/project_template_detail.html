@@ -60,7 +60,7 @@
         <button type="button"
                 data-save-task-template
                 data-skip-warning="true"
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-800/60 text-[11px] uppercase tracking-wide text-slate-200 hover:bg-slate-700/60">
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-800/60 text-xs uppercase tracking-wide text-slate-200 hover:bg-slate-700/60">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm0 2.5L19.5 8H17V5.5zM5 19V5h10v5h4v9H5z" />
           </svg>
@@ -137,7 +137,7 @@
                     {% if task.description %}
                       <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
                     {% endif %}
-                    <div class="mt-2 grid gap-1 text-[11px] text-slate-400">
+                    <div class="mt-2 grid gap-1 text-sm text-slate-400">
                       <div class="flex flex-wrap items-center gap-2">
                         <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60">{{ task.form_template.name if task.form_template else DEFAULT_TASK_FORM_NAME }}</span>
                         {% if task.default_assignee %}
@@ -178,7 +178,7 @@
                 <div class="flex flex-col items-end gap-2">
                   <span data-order-label class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 uppercase tracking-wide">Order {{ task.order_index }}</span>
                   <button type="button"
-                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-[11px] uppercase tracking-wide text-slate-200 hover:bg-slate-700/60"
+                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-xs uppercase tracking-wide text-slate-200 hover:bg-slate-700/60"
                           data-edit-task='{{ task_payload|tojson }}'>
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M4 17.17V21h3.83L18.74 10.09l-3.83-3.83L4 17.17zm15.71-8.29c.39-.39.39-1.02 0-1.41l-2.59-2.59a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.83 3.83 2-2z" />
@@ -224,7 +224,7 @@
                 <option value="{{ task.id }}">{{ task.name }}</option>
               {% endfor %}
             </select>
-            <p class="mt-1 text-[11px] text-slate-500">Leave unselected if the task is independent. Hold Ctrl/Cmd to pick multiple dependencies.</p>
+            <p class="mt-1 text-sm text-slate-500">Leave unselected if the task is independent. Hold Ctrl/Cmd to pick multiple dependencies.</p>
           </div>
         </div>
         <div>

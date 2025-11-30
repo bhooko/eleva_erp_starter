@@ -23,7 +23,7 @@
         <div class="flex flex-col gap-1">
           <h2 class="text-lg font-semibold text-slate-100">Category wise assignment by position</h2>
           <p class="text-sm text-slate-400">Control which positions can own tickets inside each CS category. Assignments in the Tasks board will follow this matrix.</p>
-          <p class="text-[11px] uppercase tracking-wide text-slate-500">Positions missing from a category will be hidden from the assignee dropdown.</p>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Positions missing from a category will be hidden from the assignee dropdown.</p>
         </div>
 
         {% set assignments = settings.category_position_assignments or {} %}

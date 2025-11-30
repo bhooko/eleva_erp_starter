@@ -6004,7 +6004,7 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self):
         role = (self.role or "").strip().lower()
-        return role == "admin" or self.username.lower() == "admin"
+        return role == "admin"
 
     def _module_permissions_cache(self):
         cache = getattr(self, "_module_permissions_data", None)
@@ -8184,7 +8184,7 @@ def bootstrap_db():
                 "🔑 Created default admin user with password from DEFAULT_ADMIN_PASSWORD."
             )
 
-    if admin_user and not admin_user.role:
+    if admin_user and (admin_user.role or "").strip().lower() != "admin":
         admin_user.role = "Admin"
 
     # Ensure legacy accounts have activation flag and session tokens

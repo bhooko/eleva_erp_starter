@@ -30,7 +30,7 @@
   <!-- Summary cards -->
   <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
     <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
-      <p class="text-[11px] uppercase tracking-wide text-slate-400">Overdue visits</p>
+      <p class="text-xs uppercase tracking-wide text-slate-400">Overdue visits</p>
       <p class="mt-1 text-2xl font-semibold text-rose-300">{{ summary.overdue }}</p>
       <p class="mt-1 text-xs text-slate-500">
         Visits that should have been done before {{ today.strftime("%d %b %Y") }}.
@@ -38,7 +38,7 @@
     </article>
 
     <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
-      <p class="text-[11px] uppercase tracking-wide text-slate-400">Due today</p>
+      <p class="text-xs uppercase tracking-wide text-slate-400">Due today</p>
       <p class="mt-1 text-2xl font-semibold text-amber-300">{{ summary.today }}</p>
       <p class="mt-1 text-xs text-slate-500">
         Visits planned for today that are still open.
@@ -46,7 +46,7 @@
     </article>
 
     <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
-      <p class="text-[11px] uppercase tracking-wide text-slate-400">This week</p>
+      <p class="text-xs uppercase tracking-wide text-slate-400">This week</p>
       <p class="mt-1 text-2xl font-semibold text-sky-300">{{ summary.week }}</p>
       <p class="mt-1 text-xs text-slate-500">
         Visits coming up in the next 7 days.
@@ -54,7 +54,7 @@
     </article>
 
     <article class="rounded-2xl border border-slate-800/80 bg-slate-900/70 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
-      <p class="text-[11px] uppercase tracking-wide text-slate-400">Unscheduled lifts</p>
+      <p class="text-xs uppercase tracking-wide text-slate-400">Unscheduled lifts</p>
       <p class="mt-1 text-2xl font-semibold text-emerald-300">{{ summary.unscheduled }}</p>
       <p class="mt-1 text-xs text-slate-500">
         Lifts without any upcoming AMC date yet.
@@ -86,8 +86,8 @@
                   Checklist: {{ visit.checklist or '—' }}
                 </p>
                 {% if visit.preference_warning %}
-                  <p class="mt-1 flex items-center gap-2 text-[11px] text-amber-300">
-                    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-400/60 bg-amber-400/10 text-[10px]">!</span>
+                  <p class="mt-1 flex items-center gap-2 text-sm text-amber-300">
+                    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-400/60 bg-amber-400/10 text-xs">!</span>
                     {{ visit.preference_warning }}
                   </p>
                 {% endif %}
