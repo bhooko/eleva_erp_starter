@@ -22,7 +22,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift code</span>
         <input value="{{ lift.lift_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
-        <p class="text-[11px] text-slate-500">Lift codes are auto-generated and cannot be edited.</p>
+        <p class="text-sm text-slate-500">Lift codes are auto-generated and cannot be edited.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">External lift ID</span>
@@ -77,7 +77,7 @@
           {% endfor %}
         </select>
         {% if not service_routes %}
-          <p class="text-[11px] text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
+          <p class="text-sm text-slate-500">Add routes from Settings → Module Settings to see them here.</p>
         {% endif %}
       </label>
       <label class="space-y-1">
@@ -253,7 +253,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Last service date</span>
         <input type="date" name="last_service_date" value="{{ lift.last_service_date.isoformat() if lift.last_service_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" readonly />
-        <p class="text-[11px] text-slate-500">Auto-updated from completed service visits.</p>
+        <p class="text-sm text-slate-500">Auto-updated from completed service visits.</p>
       </label>
       {% if lift.preferred_service_date and lift.preferred_service_date.year == 2000 and lift.preferred_service_date.month == 1 %}
         {% set preferred_service_date_day = "%02d" % lift.preferred_service_date.day %}
@@ -280,7 +280,7 @@
             {% endif %}
           {% endfor %}
         </select>
-        <p class="text-[11px] text-slate-500">Hold Ctrl (Windows) or Command (Mac) to select multiple days. "Any day" clears other selections.</p>
+        <p class="text-sm text-slate-500">Hold Ctrl (Windows) or Command (Mac) to select multiple days. "Any day" clears other selections.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
@@ -398,7 +398,7 @@
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer code</span>
         <input value="{{ next_customer_code }}" readonly class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-300" />
-        <p class="text-[11px] text-slate-500">Automatically generated on save.</p>
+        <p class="text-sm text-slate-500">Automatically generated on save.</p>
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Company name</span>
