@@ -45,22 +45,6 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload, load_only
 from sqlalchemy.engine.url import make_url
 
-from eleva_app.uploads import (
-    UploadOutcome,
-    _build_pending_upload_path,
-    _check_stage_timeout,
-    _clear_pending_upload,
-    _extract_tabular_upload,
-    _extract_tabular_upload_from_path,
-    _execute_with_timeout,
-    cleanup_old_pending_uploads,
-    process_customer_upload_file,
-    process_lift_upload_file,
-    save_pending_upload_file,
-    UploadStageTimeoutError,
-)
-
-
 def _is_password_hashed(value: Optional[str]) -> bool:
     if not value or not isinstance(value, str):
         return False
@@ -4869,6 +4853,22 @@ from eleva_app.models import (
     TaskTemplate,
     User,
 )
+
+from eleva_app.uploads import (
+    UploadOutcome,
+    _build_pending_upload_path,
+    _check_stage_timeout,
+    _clear_pending_upload,
+    _extract_tabular_upload,
+    _extract_tabular_upload_from_path,
+    _execute_with_timeout,
+    cleanup_old_pending_uploads,
+    process_customer_upload_file,
+    process_lift_upload_file,
+    save_pending_upload_file,
+    UploadStageTimeoutError,
+)
+
 
 def backup_org_structure():
     """Persist a lightweight backup of departments and positions to disk."""
