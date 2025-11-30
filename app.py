@@ -46,6 +46,13 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload, load_only
 from sqlalchemy.engine.url import make_url
 
+
+def _is_password_hashed(value: Optional[str]) -> bool:
+    if not value or not isinstance(value, str):
+        return False
+    return value.startswith(("pbkdf2:", "scrypt:", "argon2:", "bcrypt$"))
+
+
 def _get_timeout_env(name: str, default: int) -> int:
     raw_value = os.environ.get(name)
     if not raw_value:
@@ -6044,14 +6051,6 @@ def restore_org_structure_from_backup():
     backup_org_structure()
     print("✅ Restored departments and positions from backup")
     return True
-
-
-def _is_password_hashed(value: Optional[str]) -> bool:
-    if not value or not isinstance(value, str):
-        return False
-    return value.startswith(("pbkdf2:", "scrypt:", "argon2:", "bcrypt$"))
-
-
 def _module_visibility_required(module_key, owner_user_id=None):
     if current_user.can_view_module(module_key):
         return
