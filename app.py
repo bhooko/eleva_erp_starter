@@ -42,7 +42,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Integer, case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import joinedload, subqueryload
+from sqlalchemy.orm import joinedload, subqueryload, load_only
 from sqlalchemy.engine.url import make_url
 
 def _get_timeout_env(name: str, default: int) -> int:
@@ -14413,13 +14413,39 @@ def _format_delta_label(delta_days):
 def get_service_schedule_snapshot():
     today = datetime.date.today()
     lifts = (
-        Lift.query.options(joinedload(Lift.customer))
+        Lift.query.options(
+            load_only(
+                Lift.id,
+                Lift.lift_code,
+                Lift.customer_code,
+                Lift.route,
+                Lift.city,
+                Lift.service_schedule_json,
+                Lift.next_service_due,
+            ),
+            joinedload(Lift.customer),
+        )
+        .filter(
+            or_(
+                Lift.service_schedule_json.isnot(None),
+                Lift.next_service_due.isnot(None),
+            )
+        )
         .order_by(func.lower(Lift.lift_code))
         .all()
     )
     entries = []
     lifts_with_schedule = 0
     branches = set()
+    for (raw_branch,) in (
+        db.session.query(Lift.route)
+        .filter(Lift.route.isnot(None), func.trim(Lift.route) != "")
+        .distinct()
+        .all()
+    ):
+        cleaned_branch = clean_str(raw_branch)
+        if cleaned_branch:
+            branches.add(cleaned_branch)
 
     for lift in lifts:
         branch_value = clean_str(lift.route)
@@ -14469,6 +14495,7 @@ def get_service_schedule_snapshot():
         "entries": entries,
         "branches": branches,
         "lifts_with_schedule": lifts_with_schedule,
+        "total_lifts": db.session.query(func.count(Lift.id)).scalar() or 0,
     }
 
 
@@ -14477,6 +14504,7 @@ def build_service_overview_payload():
     entries = snapshot["entries"]
     lifts = snapshot["lifts"]
     today = snapshot["today"]
+    total_lifts = snapshot.get("total_lifts") or len(lifts)
 
     status_counts = Counter()
     technicians_assigned = set()
@@ -14567,16 +14595,26 @@ def build_service_overview_payload():
     unassigned_stats = technician_stats.get("__unassigned__")
     unassigned_open = unassigned_stats["open"] if unassigned_stats else 0
 
-    lifts_without_schedule = len(lifts) - snapshot.get("lifts_with_schedule", 0)
+    lifts_without_schedule = max(
+        total_lifts - snapshot.get("lifts_with_schedule", 0), 0
+    )
 
-    amc_due_within_30 = 0
-    amc_dates_recorded = 0
-    for lift in lifts:
-        if isinstance(lift.amc_end, datetime.date):
-            amc_dates_recorded += 1
-            delta = (lift.amc_end - today).days
-            if 0 <= delta <= 30:
-                amc_due_within_30 += 1
+    amc_dates_recorded = (
+        db.session.query(func.count(Lift.id))
+        .filter(Lift.amc_end.isnot(None))
+        .scalar()
+        or 0
+    )
+    amc_due_within_30 = (
+        db.session.query(func.count(Lift.id))
+        .filter(
+            Lift.amc_end.isnot(None),
+            Lift.amc_end >= today,
+            Lift.amc_end <= today + datetime.timedelta(days=30),
+        )
+        .scalar()
+        or 0
+    )
 
     first_time_fix_display = _format_percentage(
         overall_first_time_fix_success,
@@ -17079,6 +17117,22 @@ def service_parts_materials():
     )
 
 
+def _count_unscheduled_amc_lifts():
+    base_query = Lift.query.filter(Lift.next_service_due.is_(None))
+    total_without_due = base_query.count()
+    lifts_with_schedule = (
+        base_query.filter(Lift.service_schedule_json.isnot(None))
+        .options(load_only(Lift.id, Lift.service_schedule_json))
+        .all()
+    )
+    scheduled_via_json = sum(
+        1
+        for lift in lifts_with_schedule
+        if isinstance(lift.next_amc_date, datetime.date)
+    )
+    return total_without_due - scheduled_via_json
+
+
 @app.route("/service/preventive-maintenance")
 @login_required
 def service_preventive_maintenance():
@@ -17202,7 +17256,7 @@ def service_preventive_maintenance():
             if delta_days <= 7:
                 week_count += 1
 
-    unscheduled_count = sum(1 for lift in Lift.query.all() if lift.next_amc_date is None)
+    unscheduled_count = _count_unscheduled_amc_lifts()
 
     summary = {
         "overdue": overdue_count,
