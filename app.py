@@ -15,8 +15,10 @@ try:
     from flask_wtf.csrf import CSRFProtect
 except ImportError as exc:  # pragma: no cover - startup dependency guard
     raise ImportError(
-        "Flask-WTF is required to run this application. Install dependencies with "
-        "`pip install -r requirements.txt` before launching the server."
+        "Flask-WTF is required to run this application. Activate your virtual "
+        "environment and install dependencies with `pip install -r requirements.txt` "
+        "(or install Flask-WTF directly with `pip install Flask-WTF`) before "
+        "launching the server."
     ) from exc
 from flask_login import (
     LoginManager,
