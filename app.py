@@ -15010,11 +15010,16 @@ def srt_overview():
     )
 
 
-@app.route("/srt/form-templates", methods=["GET", "POST"])
+@app.route("/srt/settings", methods=["GET", "POST"])
+@app.route("/srt/form-templates", methods=["GET", "POST"], endpoint="srt_form_templates")
 @login_required
-def srt_form_templates():
+def srt_settings():
     _module_visibility_required("srt")
     global SRT_FORM_TEMPLATES
+
+    active_tab = request.args.get("tab", "form-templates").lower() or "form-templates"
+    if active_tab not in {"form-templates", "notifications"}:
+        active_tab = "form-templates"
 
     if request.method == "POST":
         action = request.form.get("action", "").lower()
@@ -15100,7 +15105,7 @@ def srt_form_templates():
                 _persist_srt_form_templates()
                 flash("Template updated.", "success")
 
-        return redirect(url_for("srt_form_templates"))
+        return redirect(url_for("srt_settings", tab="form-templates"))
 
     templates_normalised = []
     for template in SRT_FORM_TEMPLATES:
@@ -15116,7 +15121,11 @@ def srt_form_templates():
 
     templates_normalised.sort(key=lambda item: item["name"].lower())
 
-    return render_template("srt_form_templates.html", templates=templates_normalised)
+    return render_template(
+        "srt_settings.html",
+        templates=templates_normalised,
+        active_tab=active_tab,
+    )
 
 
 @app.route("/srt/sites")

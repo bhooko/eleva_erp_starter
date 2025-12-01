@@ -905,7 +905,7 @@
         {% endif %}
 
         {% if current_user.is_authenticated and current_user.can_view_module('srt') %}
-          {% set srt_endpoints = ['srt_overview','srt_form_templates','srt_sites'] %}
+          {% set srt_endpoints = ['srt_overview','srt_settings','srt_form_templates','srt_sites'] %}
           {% set srt_parent_active = request.endpoint in srt_endpoints %}
           <div class="space-y-1">
             <a href="{{ url_for('srt_overview') }}"
@@ -918,9 +918,9 @@
               <span class="label text-[15px] flex-1">SRT</span>
             </a>
             <div class="pl-12 space-y-1">
-              <a href="{{ url_for('srt_form_templates') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'srt_form_templates' else '' }}">
-                <span class="label">SRT Form Templates</span>
+              <a href="{{ url_for('srt_settings') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['srt_settings','srt_form_templates'] else '' }}">
+                <span class="label">SRT Settings</span>
               </a>
               <a href="{{ url_for('srt_sites') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'srt_sites' else '' }}">
@@ -1020,9 +1020,9 @@
           {% set section_title = 'Customer Support' %}
         {% elif endpoint in ['service_home','service_overview','service_tasks','service_customers','service_lifts','service_complaints','service_contracts','service_parts_materials','service_preventive_maintenance','service_automations'] %}
           {% set section_title = 'Service' %}
-        {% elif endpoint in ['srt_overview','srt_form_templates','srt_sites'] %}
-          {% if endpoint == 'srt_form_templates' %}
-            {% set section_title = 'SRT – Form Templates' %}
+        {% elif endpoint in ['srt_overview','srt_form_templates','srt_settings','srt_sites'] %}
+          {% if endpoint in ['srt_form_templates','srt_settings'] %}
+            {% set section_title = 'SRT – Settings' %}
           {% elif endpoint == 'srt_sites' %}
             {% set section_title = 'SRT – Sites' %}
           {% else %}
