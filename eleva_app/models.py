@@ -6,6 +6,8 @@ from datetime import date
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from eleva_app import db
+
 from app import (
     DEPARTMENT_BRANCHES,
     OPPORTUNITY_ACTIVITY_LABELS,
@@ -15,7 +17,6 @@ from app import (
     _is_password_hashed,
     apply_actor_context,
     clean_str,
-    db,
     format_file_size,
 )
 

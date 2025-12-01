@@ -11,6 +11,7 @@ from flask import current_app, session
 from flask_login import current_user
 from sqlalchemy import func
 
+from eleva_app import db
 from eleva_app.models import Customer, Lift, ServiceRoute
 
 
@@ -318,7 +319,6 @@ def _customer_identifier(customer, *, fallback):
 def process_customer_upload_file(file_path, *, apply_changes):
     from app import (
         clean_str,
-        db,
         format_file_size,
         generate_next_customer_code,
         parse_excel_date,
@@ -705,7 +705,6 @@ def process_lift_upload_file(file_path, *, apply_changes):
     from app import (
         calculate_amc_end_date,
         clean_str,
-        db,
         normalize_amc_duration,
         normalize_amc_status,
         parse_excel_date,
