@@ -1,5 +1,4 @@
 from flask import (
-    Flask,
     render_template,
     request,
     redirect,
@@ -10,18 +9,7 @@ from flask import (
     session,
     send_file,
 )
-from flask_sqlalchemy import SQLAlchemy
-try:
-    from flask_wtf.csrf import CSRFProtect
-except ImportError as exc:  # pragma: no cover - startup dependency guard
-    raise ImportError(
-        "Flask-WTF is required to run this application. Activate your virtual "
-        "environment and install dependencies with `pip install -r requirements.txt` "
-        "(or install Flask-WTF directly with `pip install Flask-WTF`) before "
-        "launching the server."
-    ) from exc
 from flask_login import (
-    LoginManager,
     login_user,
     login_required,
     logout_user,
@@ -42,6 +30,8 @@ from sqlalchemy import Integer, case, inspect, func, or_, and_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, subqueryload, load_only
 from sqlalchemy.engine.url import make_url
+
+from eleva_app import create_app, csrf, db, login_manager
 
 def _is_password_hashed(value: Optional[str]) -> bool:
     if not value or not isinstance(value, str):
@@ -110,38 +100,6 @@ def _get_max_upload_size_bytes(settings=None):
         configured = DEFAULT_MAX_UPLOAD_SIZE_MB
     clamped_mb = max(1, min(DEFAULT_MAX_UPLOAD_SIZE_MB, configured))
     return int(clamped_mb * 1024 * 1024)
-
-
-app = Flask(__name__, instance_relative_config=True)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "SQLALCHEMY_DATABASE_URI",
-    "sqlite:///" + os.path.join(BASE_DIR, "instance", "eleva.db"),
-)
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
-app.config["ADMIN_SETTINGS"] = _load_admin_settings()
-app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
-    app.config["ADMIN_SETTINGS"]
-)
-
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
-
-csrf = CSRFProtect(app)
-db = SQLAlchemy(app)
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
-
-
-@app.errorhandler(RequestEntityTooLarge)
-def handle_large_upload(exc):
-    limit_mb = round(app.config.get("MAX_CONTENT_LENGTH", DEFAULT_MAX_UPLOAD_SIZE) / (1024 * 1024))
-    flash(
-        f"Uploads are limited to {int(limit_mb)} MB. Please compress or split the file and retry.",
-        "error",
-    )
-    return redirect(request.referrer or url_for("index")), 413
 
 
 class MissingDependencyError(RuntimeError):
@@ -3873,6 +3831,20 @@ def apply_actor_context(entry, actor_name=None, actor_role=None):
     )
     payload.update(actor_fields)
     return payload
+
+
+app = create_app()
+login_manager.login_view = "login"
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_upload(exc):
+    limit_mb = round(app.config.get("MAX_CONTENT_LENGTH", DEFAULT_MAX_UPLOAD_SIZE) / (1024 * 1024))
+    flash(
+        f"Uploads are limited to {int(limit_mb)} MB. Please compress or split the file and retry.",
+        "error",
+    )
+    return redirect(request.referrer or url_for("index")), 413
 
 
 def is_lift_open(lift):
