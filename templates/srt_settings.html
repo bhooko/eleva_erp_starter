@@ -1,41 +1,76 @@
 {% extends "base.html" %}
-{% block title %}Eleva ERP – SRT Form Templates{% endblock %}
+{% block title %}Eleva ERP – SRT Settings{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
-    <div class="flex flex-wrap items-center gap-3">
-      <div>
-        <h2 class="text-xl font-semibold text-theme-primary">SRT Form Templates</h2>
-        <p class="text-sm text-slate-400 mt-1">Design reusable SRT checklists, mirroring QC layouts with guided images and flexible item types.</p>
+    <div class="flex flex-wrap items-start gap-4">
+      <div class="space-y-2">
+        <p class="text-xs uppercase tracking-wide text-amber-300">Service Recovery Toolkit</p>
+        <h1 class="text-2xl font-semibold text-slate-100">SRT Settings</h1>
+        <p class="text-sm text-slate-400">Manage SRT configuration, including the template library technicians use on site.</p>
       </div>
-      <div class="ml-auto flex items-center gap-3">
-        <button type="button"
-                class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/30 transition"
-                data-designer-open="create">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
-          </svg>
-          <span>Add template</span>
-        </button>
+      <div class="ml-auto flex items-center gap-3 text-sm text-slate-300">
+        <div class="rounded-xl border border-slate-700/60 bg-slate-800/70 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Templates</p>
+          <p class="text-lg font-semibold text-theme-primary">{{ templates|length }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-700/60 bg-slate-800/70 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Status</p>
+          <p class="text-sm font-medium text-emerald-200">Active</p>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-800/70 text-sm">
-        <thead class="bg-slate-900/90 text-xs uppercase tracking-wide text-slate-200">
-          <tr>
-            <th class="px-6 py-3 text-left">Template</th>
-            <th class="px-6 py-3 text-left">Category</th>
-            <th class="px-6 py-3 text-left">Last updated</th>
-            <th class="px-6 py-3 text-left">Usage</th>
-            <th class="px-6 py-3 text-left">Description</th>
-            <th class="px-6 py-3 text-left">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-800/60 text-slate-200">
+    <div class="border-b border-slate-800/60 flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+      <button type="button"
+              data-srt-tab="form-templates"
+              class="px-4 py-2 rounded-xl border transition {{ 'bg-slate-800 text-white border-slate-700' if active_tab == 'form-templates' else 'text-slate-300 border-transparent hover:bg-slate-800/70' }}">
+        Form templates
+      </button>
+      <button type="button"
+              data-srt-tab="notifications"
+              class="px-4 py-2 rounded-xl border transition {{ 'bg-slate-800 text-white border-slate-700' if active_tab == 'notifications' else 'text-slate-300 border-transparent hover:bg-slate-800/70' }}">
+        Notifications
+      </button>
+    </div>
+
+    <div class="p-6 space-y-4" data-srt-tab-panel="form-templates" {{ '' if active_tab == 'form-templates' else 'hidden' }}>
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-6 py-5 shadow-inner shadow-black/20">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <h2 class="text-xl font-semibold text-theme-primary">Form templates</h2>
+            <p class="text-sm text-slate-400 mt-1">Design reusable SRT checklists, mirroring QC layouts with guided images and flexible item types.</p>
+          </div>
+          <div class="ml-auto flex items-center gap-3">
+            <button type="button"
+                    class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/30 transition"
+                    data-designer-open="create">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+              </svg>
+              <span>Add template</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-800/70 text-sm">
+            <thead class="bg-slate-900/90 text-xs uppercase tracking-wide text-slate-200">
+              <tr>
+                <th class="px-6 py-3 text-left">Template</th>
+                <th class="px-6 py-3 text-left">Category</th>
+                <th class="px-6 py-3 text-left">Last updated</th>
+                <th class="px-6 py-3 text-left">Usage</th>
+                <th class="px-6 py-3 text-left">Description</th>
+                <th class="px-6 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 text-slate-200">
           {% for template in templates %}
             <tr class="hover:bg-slate-800/40">
               <td class="px-6 py-4">
@@ -115,10 +150,28 @@
             </tr>
           {% endfor %}
         </tbody>
-      </table>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-6 space-y-4" data-srt-tab-panel="notifications" {{ '' if active_tab == 'notifications' else 'hidden' }}>
+      <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-6">
+        <h2 class="text-lg font-semibold text-slate-100">Notifications</h2>
+        <p class="text-sm text-slate-400 mt-2">Set up reminders and alerts for SRT follow-ups. We&apos;ll add configuration options here soon.</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Email routing</p>
+            <p class="text-sm text-slate-300 mt-1">Define escalation contacts to receive task digests.</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Mobile push</p>
+            <p class="text-sm text-slate-300 mt-1">Connect your field app to push high-priority alerts.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
 <input type="file" accept="image/*" class="hidden" data-designer-file-picker>
 
@@ -230,6 +283,32 @@
 {{ super() }}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    const tabButtons = document.querySelectorAll('[data-srt-tab]');
+    const tabPanels = document.querySelectorAll('[data-srt-tab-panel]');
+    const initialTab = {{ active_tab|tojson|default('"form-templates"', true) }};
+
+    const activateTab = (key) => {
+      tabButtons.forEach((button) => {
+        const isActive = button.dataset.srtTab === key;
+        button.classList.toggle('bg-slate-800', isActive);
+        button.classList.toggle('text-white', isActive);
+        button.classList.toggle('border-slate-700', isActive);
+        button.classList.toggle('text-slate-300', !isActive);
+        button.classList.toggle('border-transparent', !isActive);
+      });
+
+      tabPanels.forEach((panel) => {
+        panel.toggleAttribute('hidden', panel.dataset.srtTabPanel !== key);
+      });
+    };
+
+    if (tabButtons.length && tabPanels.length) {
+      activateTab(initialTab);
+      tabButtons.forEach((button) => {
+        button.addEventListener('click', () => activateTab(button.dataset.srtTab));
+      });
+    }
+
     const designerOverlay = document.querySelector('[data-srt-designer]');
     const previewOverlay = document.querySelector('[data-srt-preview]');
     const previewBody = previewOverlay ? previewOverlay.querySelector('[data-preview-body]') : null;
