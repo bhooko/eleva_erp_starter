@@ -20,7 +20,15 @@ csrf = CSRFProtect()
 
 
 def create_app():
-    app = Flask(__name__, instance_relative_config=True)
+    template_dir = os.path.join(BASE_DIR, "templates")
+    static_dir = os.path.join(BASE_DIR, "static")
+
+    app = Flask(
+        __name__,
+        instance_relative_config=True,
+        template_folder=template_dir,
+        static_folder=static_dir,
+    )
 
     from app import (
         BASE_DIR,
