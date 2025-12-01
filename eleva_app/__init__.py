@@ -20,6 +20,12 @@ csrf = CSRFProtect()
 
 
 def create_app():
+    from app import (
+        BASE_DIR,
+        _get_max_upload_size_bytes,
+        _load_admin_settings,
+    )
+
     template_dir = os.path.join(BASE_DIR, "templates")
     static_dir = os.path.join(BASE_DIR, "static")
 
@@ -28,12 +34,6 @@ def create_app():
         instance_relative_config=True,
         template_folder=template_dir,
         static_folder=static_dir,
-    )
-
-    from app import (
-        BASE_DIR,
-        _get_max_upload_size_bytes,
-        _load_admin_settings,
     )
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-eleva-secret")
