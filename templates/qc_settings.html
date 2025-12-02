@@ -1,17 +1,155 @@
 {% extends "base.html" %}
 {% block title %}QC Settings · Eleva ERP{% endblock %}
 {% block content %}
-<div class="min-h-screen bg-slate-950/70 text-slate-100">
-  <div class="mx-auto max-w-5xl px-6 py-10 space-y-6">
-    <div class="flex flex-col gap-2">
-      <p class="text-xs uppercase tracking-wide text-emerald-300">Quality Control</p>
-      <h1 class="text-2xl font-bold text-slate-100">QC Settings</h1>
-      <p class="text-sm text-slate-400">Configure QC module behaviour. We will add options here soon.</p>
+{% macro sort_link(label, field) -%}
+  {%- set current_sort = sort or 'name' -%}
+  {%- set current_direction = direction or 'asc' -%}
+  {%- set is_active = current_sort == field -%}
+  {%- set next_direction = 'desc' if is_active and current_direction == 'asc' else 'asc' -%}
+  <a href="{{ url_for('qc_settings', tab='templates', sort=field, direction=next_direction) }}" class="inline-flex items-center gap-1 text-left">
+    <span>{{ label }}</span>
+    {% if is_active %}
+      <span class="text-xs">{{ '↑' if current_direction == 'asc' else '↓' }}</span>
+    {% else %}
+      <span class="text-xs text-slate-500">↕</span>
+    {% endif %}
+  </a>
+{%- endmacro %}
+{% set active_tab = active_tab or 'settings' %}
+
+<div class="space-y-6">
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 px-6 py-5 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-start gap-4">
+      <div class="space-y-2">
+        <p class="text-xs uppercase tracking-wide text-emerald-300">Quality Control</p>
+        <h1 class="text-2xl font-bold text-slate-100">QC Settings</h1>
+        <p class="text-sm text-slate-400">Configure QC behaviour and manage the form templates your teams use in the field.</p>
+      </div>
+      <div class="ml-auto flex items-center gap-3 text-sm text-slate-300">
+        <div class="rounded-xl border border-slate-700/60 bg-slate-800/70 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Templates</p>
+          <p class="text-lg font-semibold text-theme-primary">{{ forms|length }}</p>
+        </div>
+      </div>
     </div>
 
-    <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 text-slate-300">
-      <p class="text-sm">No settings available yet. Check back later to manage QC preferences.</p>
+    <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+      <a href="{{ url_for('qc_settings', tab='settings') }}" class="px-3 py-1.5 rounded-xl border transition {{ 'bg-slate-800 text-white border-slate-700' if active_tab == 'settings' else 'text-slate-300 border-transparent hover:bg-slate-800/70' }}">
+        Settings
+      </a>
+      <a href="{{ url_for('qc_settings', tab='templates', sort=sort, direction=direction) }}" class="px-3 py-1.5 rounded-xl border transition {{ 'bg-slate-800 text-white border-slate-700' if active_tab == 'templates' else 'text-slate-300 border-transparent hover:bg-slate-800/70' }}">
+        Form Templates
+      </a>
     </div>
   </div>
+
+  {% if active_tab == 'settings' %}
+    <div class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 text-slate-300 space-y-3">
+      <h2 class="text-lg font-semibold text-slate-100">Module preferences</h2>
+      <p class="text-sm text-slate-400">We will add configuration options soon for assignments, notifications, and escalation rules.</p>
+      <p class="text-sm text-slate-400">Use the Form Templates tab to design the checklists used across QC stages.</p>
+    </div>
+  {% else %}
+    <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">All Form Templates</h2>
+        <a href="{{ url_for('forms_new') }}" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 text-white text-sm transition">
+          + New Form
+        </a>
+      </div>
+
+      {% if forms|length == 0 %}
+        <p class="text-slate-400 text-sm">No forms created yet. Click “New Form” to add one.</p>
+      {% else %}
+        <div class="overflow-auto">
+          <table class="min-w-[840px] w-full text-sm">
+            <thead class="text-slate-300 border-b border-slate-800">
+              <tr class="text-left">
+                <th class="py-2 pr-3">{{ sort_link('Name', 'name') }}</th>
+                <th class="py-2 pr-3">{{ sort_link('QC Type', 'stage') }}</th>
+                <th class="py-2 pr-3">{{ sort_link('Lift Type', 'lift_type') }}</th>
+                <th class="py-2 pr-3">{{ sort_link('Primary', 'is_primary') }}</th>
+                <th class="py-2 pr-3">{{ sort_link('Last Updated', 'updated_at') }}</th>
+                <th class="py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              {% for f in forms %}
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3 pr-3 font-medium text-slate-100">{{ f.name }}</td>
+                <td class="py-3 pr-3">
+                  {% if f.stage %}
+                    <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">{{ f.stage }}</span>
+                  {% else %}
+                    <span class="text-slate-500 text-xs">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 pr-3">
+                  {% if f.lift_type %}
+                    <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">{{ f.lift_type }}</span>
+                  {% else %}
+                    <span class="text-slate-500 text-xs">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 pr-3">
+                  {% if f.is_primary %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/60 text-emerald-100 text-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                      <span>Primary</span>
+                    </span>
+                  {% else %}
+                    <span class="text-slate-500 text-xs">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 pr-3 text-slate-200">
+                  {% if f.updated_at %}
+                    {{ f.updated_at.strftime('%d %b %Y, %H:%M') }}
+                  {% else %}
+                    <span class="text-slate-500 text-xs">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-3">
+                  <div class="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                    <a href="{{ url_for('forms_preview', form_id=f.id) }}" class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-emerald-400/60 transition" title="Preview form" aria-label="Preview {{ f.name }}">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12s-3.75 6.75-9.75 6.75S2.25 12 2.25 12Z" />
+                        <circle cx="12" cy="12" r="3.25" />
+                      </svg>
+                    </a>
+                    <a href="{{ url_for('forms_edit', form_id=f.id) }}" class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-sky-400/60 transition" title="Edit form" aria-label="Edit {{ f.name }}">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.688-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.93z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 7.125L16.875 4.5" />
+                      </svg>
+                    </a>
+                    <form action="{{ url_for('forms_duplicate', form_id=f.id) }}" method="post" class="inline" onsubmit="return confirm('Duplicate this form?');">
+                      {{ csrf_field() }}
+                      <button type="submit" class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-indigo-400/60 transition" title="Duplicate form" aria-label="Duplicate {{ f.name }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5.25h9A1.75 1.75 0 0119.75 7v9A1.75 1.75 0 0118 17.75H9A1.75 1.75 0 017.25 16V7A1.75 1.75 0 019 5.25z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 8.25v8a1.5 1.5 0 001.5 1.5h8" />
+                        </svg>
+                      </button>
+                    </form>
+                    <form action="{{ url_for('forms_delete', form_id=f.id) }}" method="post" class="inline" onsubmit="return confirm('Delete form?');">
+                      {{ csrf_field() }}
+                      <button class="p-2 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-800/80 hover:border-rose-400/60 transition" type="submit" title="Delete form" aria-label="Delete {{ f.name }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l.802 12.03A1.5 1.5 0 009.047 21h5.906a1.5 1.5 0 001.495-1.47L17.25 7.5M4.5 7.5h15M10.5 10.5v7.5M13.5 10.5v7.5M9 7.5V5.25A1.5 1.5 0 0110.5 3.75h3A1.5 1.5 0 0115 5.25V7.5" />
+                        </svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

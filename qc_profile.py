@@ -65,7 +65,7 @@ def forms_new():
         flash("QC form profile saved.", "success")
         # Redirect to a list page if you have one; otherwise go back to dashboard
         try:
-            return redirect(url_for("forms_list"))
+            return redirect(url_for("qc_settings", tab="templates"))
         except Exception:
             return redirect(url_for("dashboard"))
 
