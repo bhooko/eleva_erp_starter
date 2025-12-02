@@ -201,7 +201,7 @@
               <p class="text-xs text-slate-300">Themes adjust interface colours, accents, stage gradients and button treatments without affecting your data.</p>
             </section>
 
-      <section id="settings-panel-modules"
+            <section id="settings-panel-modules"
                class="motion-panel space-y-5 {{ 'is-active' if active == 'modules' else 'hidden' }}"
                role="tabpanel"
                aria-labelledby="settings-tab-modules"
@@ -211,375 +211,54 @@
           <p class="mt-1 text-sm text-slate-400">Fine-tune module level controls. Updates here apply instantly for everyone.</p>
         </header>
 
-        <div class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h4 class="text-base font-semibold text-slate-100">Customer Support configuration</h4>
-              <p class="text-sm text-slate-400">Keep categories, channels and SLA timers aligned with your NI/AMC/Support structure. No deployment needed.</p>
+        <div class="grid gap-6 lg:grid-cols-2">
+          <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-6 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-emerald-300">Service</p>
+                <h4 class="text-base font-semibold text-slate-100">Service Settings</h4>
+                <p class="text-sm text-slate-400">Manage lift dropdown options and service routes directly from the Service workspace.</p>
+              </div>
+              <span class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">Moved</span>
             </div>
-          </div>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Lift dropdown values and reorder controls</li>
+              <li>Service route creation and branch mapping</li>
+            </ul>
+            <div class="flex justify-end">
+              <a href="{{ url_for('service_settings') }}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
+                <span>Open Service Settings</span>
+              </a>
+            </div>
+          </section>
 
-          <div class="grid gap-6 lg:grid-cols-2">
-            <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5">
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <h5 class="text-sm font-semibold text-slate-100">Categories</h5>
-                  <p class="text-xs text-slate-400">Map tickets to Sales-NI, Sales-AMC, Support-AMC or any custom department.</p>
-                  <p class="mt-2 text-xs uppercase tracking-wide text-slate-300">Updates appear instantly in the Add Ticket form dropdown.</p>
-                </div>
-                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30" data-add-category-trigger>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-                  </svg>
-                  <span>Add category</span>
-                </button>
+          <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-6 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-amber-300">Customer Support</p>
+                <h4 class="text-base font-semibold text-slate-100">CS configuration</h4>
+                <p class="text-sm text-slate-400">Categories, channels and SLA presets now live alongside other CS controls.</p>
               </div>
-              <form class="mt-4 hidden flex-col gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4 text-sm" data-add-category-form>
-                <p class="text-xs uppercase tracking-wide text-emerald-300">Create a new support category</p>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <label class="flex flex-col gap-1 text-xs text-slate-300">
-                    <span class="uppercase tracking-wide text-slate-500">Label</span>
-                    <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="E.g. Installations" data-new-category-label>
-                  </label>
-                  <label class="flex flex-col gap-1 text-xs text-slate-300 sm:col-span-2">
-                    <span class="uppercase tracking-wide text-slate-500">Description</span>
-                    <textarea rows="2" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="What kind of requests belong here?" data-new-category-description></textarea>
-                  </label>
-                  <label class="flex flex-col gap-1 text-xs text-slate-300">
-                    <span class="uppercase tracking-wide text-slate-500">First response (hours)</span>
-                    <input type="number" min="0" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="4" data-new-category-first-response>
-                  </label>
-                  <label class="flex flex-col gap-1 text-xs text-slate-300">
-                    <span class="uppercase tracking-wide text-slate-500">Resolution (hours)</span>
-                    <input type="number" min="0" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="24" data-new-category-resolution>
-                  </label>
-                </div>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                  <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    <span>Add to list</span>
-                  </button>
-                  <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70" data-cancel-add-category>Cancel</button>
-                </div>
-              </form>
-              <div class="mt-4 space-y-3" data-category-list>
-                {% for category in support_categories %}
-                  <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3" data-category-item>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div class="text-sm font-semibold text-slate-100" data-category-label>{{ category.label }}</div>
-                        <p class="text-xs text-slate-400" data-category-description>{{ category.description }}</p>
-                      </div>
-                      <div class="flex flex-wrap justify-end gap-2">
-                        <div class="flex items-center gap-1" role="group" aria-label="Reorder {{ category.label }}">
-                          <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="up" aria-label="Move up">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
-                            </svg>
-                          </button>
-                          <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="down" aria-label="Move down">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                            </svg>
-                          </button>
-                        </div>
-                        <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-emerald-400/50">Rename</button>
-                        <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-rose-400/50">Archive</button>
-                      </div>
-                    </div>
-                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-                        <span>First response (hours)</span>
-                        <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ category.default_first_response_hours }}">
-                      </label>
-                      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-                        <span>Resolution (hours)</span>
-                        <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ category.default_resolution_hours }}">
-                      </label>
-                    </div>
-                    <div class="mt-3 flex justify-end gap-2">
-                      <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save timings</button>
-                      <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-slate-500/60">Reset</button>
-                    </div>
-                  </div>
-                {% endfor %}
-              </div>
-            </section>
-
-            <section class="space-y-6">
-              <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5">
-                <div class="flex items-start justify-between gap-2">
-                  <div>
-                    <h5 class="text-sm font-semibold text-slate-100">Channels</h5>
-                    <p class="text-xs text-slate-400">Choose where tickets originate — phone, email, web, walk-in or WhatsApp.</p>
-                  </div>
-                  <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30" data-add-channel-trigger>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-                    </svg>
-                    <span>Add channel</span>
-                  </button>
-                </div>
-                <form class="mt-4 hidden flex-col gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4 text-sm" data-add-channel-form>
-                  <p class="text-xs uppercase tracking-wide text-emerald-300">Add a new ticket intake channel</p>
-                  <div class="grid gap-3 sm:grid-cols-3">
-                    <label class="flex flex-col gap-1 text-xs text-slate-300">
-                      <span class="uppercase tracking-wide text-slate-500">Channel label</span>
-                      <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="E.g. Facebook" data-new-channel-label>
-                    </label>
-                    <label class="flex flex-col gap-1 text-xs text-slate-300">
-                      <span class="uppercase tracking-wide text-slate-500">Icon / emoji</span>
-                      <input type="text" maxlength="2" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="💬" data-new-channel-icon>
-                    </label>
-                    <div class="flex items-end gap-2">
-                      <button type="submit" class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                        </svg>
-                        <span>Add to list</span>
-                      </button>
-                      <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70" data-cancel-add-channel>Cancel</button>
-                    </div>
-                  </div>
-                </form>
-                <div class="mt-4 grid grid-cols-2 gap-3" data-channel-list>
-                  {% for channel in support_channels %}
-                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:border-emerald-400/40">
-                      <span class="text-lg">{{ channel.icon }}</span>
-                      <span>{{ channel.label }}</span>
-                      <input type="checkbox" class="ml-auto h-4 w-4 rounded border border-slate-600 bg-slate-950 text-emerald-400 focus:ring-emerald-400" checked>
-                    </label>
-                  {% endfor %}
-                </div>
-              </div>
-
-              <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5">
-                <div class="flex items-start justify-between gap-2">
-                  <div>
-                    <h5 class="text-sm font-semibold text-slate-100">SLA priorities</h5>
-                    <p class="text-xs text-slate-400">Adjust first response and resolution timers for each SLA priority agents can apply.</p>
-                    <p class="mt-2 text-xs uppercase tracking-wide text-slate-300">Priority management is handled by your admin team.</p>
-                  </div>
-                </div>
-                <div class="mt-4 space-y-3">
-                  {% for sla in support_sla_presets %}
-                    <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
-                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div class="text-sm font-semibold text-slate-100">{{ sla.label }}</div>
-                          <p class="text-xs text-slate-400">Adjust SLA windows directly below and save to update instantly.</p>
-                        </div>
-                        <div class="flex gap-2 text-xs">
-                          <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-slate-300 hover:border-rose-400/50">Remove</button>
-                        </div>
-                      </div>
-                      <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-                          <span>First response (hours)</span>
-                          <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ sla.first_response_hours }}">
-                        </label>
-                        <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-                          <span>Resolution (hours)</span>
-                          <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ sla.resolution_hours }}">
-                        </label>
-                      </div>
-                      <div class="mt-3 flex justify-end">
-                        <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save SLA priority</button>
-                      </div>
-                    </div>
-                  {% endfor %}
-                </div>
-              </div>
-            </section>
-          </div>
+              <span class="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200">Moved</span>
+            </div>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Support categories and descriptions</li>
+              <li>Inbound channel toggles and SLA timers</li>
+            </ul>
+            <div class="flex justify-end">
+              <a href="{{ url_for('customer_support_settings', tab='configuration') }}" class="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/25">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
+                <span>Open CS Settings</span>
+              </a>
+            </div>
+          </section>
         </div>
 
-        <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h4 class="text-base font-semibold text-slate-100">Service dropdown options</h4>
-              <p class="text-sm text-slate-400">Control the selectable values for lift configuration fields across create and edit forms.</p>
-            </div>
-            {% if current_user.is_admin %}
-              <p class="text-xs uppercase tracking-wide text-slate-300">Drag options to reorder. Changes apply instantly.</p>
-            {% endif %}
-          </div>
-
-          {% set managed_dropdown_fields = [
-            "lift_type",
-            "door_type",
-            "door_finish",
-            "power_supply",
-            "machine_type",
-            "passenger_capacity",
-            "load_capacity",
-          ] %}
-
-          <div class="space-y-6">
-            {% for field_key in managed_dropdown_fields %}
-              {% set definition = dropdown_meta.get(field_key) %}
-              {% if definition %}
-                {% set options = dropdown_options.get(field_key, []) %}
-                <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5" data-dropdown-section>
-                  <button type="button" class="flex w-full items-center justify-between gap-3 text-left" data-dropdown-section-trigger aria-expanded="false">
-                    <div>
-                      <h5 class="text-sm font-semibold text-slate-100">{{ definition.label }}</h5>
-                      <p class="text-xs text-slate-400">Appears in Service → Lifts when capturing lift details.</p>
-                    </div>
-                    <span class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800/60 text-base font-semibold text-emerald-200" data-dropdown-section-icon aria-hidden="true">+</span>
-                  </button>
-
-                  <div class="mt-4 space-y-4 hidden" data-dropdown-section-body>
-                    {% if current_user.is_admin %}
-                      <div>
-                        <p class="text-xs uppercase tracking-wide text-slate-300">Current options</p>
-                      </div>
-                      <ul class="space-y-3" data-dropdown-list data-field-key="{{ field_key }}" data-reorder-url="{{ url_for('settings_dropdown_option_reorder', field_key=field_key) }}">
-                        {% if options %}
-                          {% for option in options %}
-                            <li class="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4" data-dropdown-item data-option-id="{{ option.id }}">
-                              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
-                                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/60 text-slate-400" aria-hidden="true">☰</span>
-                                  <form method="post" action="{{ url_for('settings_dropdown_option_update', field_key=field_key, option_id=option.id) }}" class="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
-                                    {{ csrf_field() }}
-                                    <label class="flex-1 space-y-1">
-                                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Label</span>
-                                      <input name="label" value="{{ option.label }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-                                    </label>
-                                    {% if definition.value_editable %}
-                                      <label class="flex-1 space-y-1">
-                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Stored value</span>
-                                        <input name="value" value="{{ option.value }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-                                      </label>
-                                    {% else %}
-                                      <p class="text-xs text-slate-500 sm:w-40">Value: {{ option.value }}</p>
-                                    {% endif %}
-                                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save</button>
-                                  </form>
-                                </div>
-                                <form method="post" action="{{ url_for('settings_dropdown_option_delete', field_key=field_key, option_id=option.id) }}" class="self-start lg:self-center">
-                                  {{ csrf_field() }}
-                                  <button type="submit" class="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20" onclick="return confirm('Remove this option?');">Delete</button>
-                                </form>
-                              </div>
-                            </li>
-                          {% endfor %}
-                        {% else %}
-                          <li class="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">No options defined yet.</li>
-                        {% endif %}
-                      </ul>
-                      <form method="post" action="{{ url_for('settings_dropdown_option_create', field_key=field_key) }}" class="space-y-3 rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4">
-                        {{ csrf_field() }}
-                        <p class="text-xs uppercase tracking-wide text-slate-300">Add new option</p>
-                        <div class="grid gap-3 sm:grid-cols-{{ 2 if definition.value_editable else 1 }}">
-                          <label class="space-y-1">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Label</span>
-                            <input name="label" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="e.g. Stainless steel" />
-                          </label>
-                          {% if definition.value_editable %}
-                            <label class="space-y-1">
-                              <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Stored value</span>
-                              <input name="value" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Internal value" />
-                            </label>
-                          {% endif %}
-                        </div>
-                        <div class="flex justify-end">
-                          <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Add option</button>
-                        </div>
-                      </form>
-                    {% else %}
-                      <ul class="space-y-2 text-sm text-slate-300">
-                        {% for option in options %}
-                          <li class="rounded-xl border border-slate-800/60 bg-slate-900/60 px-3 py-2">{{ option.label }}</li>
-                        {% else %}
-                          <li class="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/40 px-3 py-2 text-slate-400">No options available.</li>
-                        {% endfor %}
-                      </ul>
-                    {% endif %}
-                  </div>
-                </section>
-              {% endif %}
-            {% endfor %}
-          </div>
-        </section>
-
-        <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h4 class="text-base font-semibold text-slate-100">Service routes</h4>
-              <p class="text-sm text-slate-400">Manage the list of states that service teams can assign to customers and lifts.</p>
-            </div>
-          </div>
-
-          {% if current_user.is_admin %}
-            <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
-              {{ csrf_field() }}
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
-                <input name="route_name" required placeholder="e.g. Panaji Urban" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-                <p class="text-xs text-slate-300">Type a new service route name to map it to a branch.</p>
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
-                <select name="branch" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
-                  <option value="">Select branch</option>
-                  {% for branch in SERVICE_BRANCH_OPTIONS %}
-                    <option value="{{ branch }}">{{ branch }}</option>
-                  {% endfor %}
-                </select>
-              </label>
-              <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Add route</button>
-            </form>
-          {% else %}
-            <div class="rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-400">
-              Only administrators can add or remove routes. Ask an admin if you need a new route added.
-            </div>
-          {% endif %}
-
-          <div class="space-y-3">
-            {% if service_routes %}
-              {% for route in service_routes %}
-                <div class="space-y-3 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200">
-                  <form method="post" action="{{ url_for('settings_service_route_update', route_id=route.id) }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
-                    {{ csrf_field() }}
-                    <label class="space-y-1">
-                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
-                      <input name="route_name" value="{{ route.route_name }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
-                    </label>
-                    <label class="space-y-1">
-                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
-                      <select name="branch" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
-                        <option value="">Select branch</option>
-                        {% for branch in SERVICE_BRANCH_OPTIONS %}
-                          <option value="{{ branch }}" {% if route.branch and route.branch.lower() == branch.lower() %}selected{% endif %}>{{ branch }}</option>
-                        {% endfor %}
-                      </select>
-                    </label>
-                    <div class="flex justify-end gap-2">
-                      <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save</button>
-                    </div>
-                  </form>
-                  <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span class="text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</span>
-                    {% if current_user.is_admin %}
-                      <form method="post" action="{{ url_for('settings_service_route_delete', route_id=route.id) }}" class="flex items-center">
-                        {{ csrf_field() }}
-                        <button type="submit" class="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20" onclick="return confirm('Remove this route?');">Remove</button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div class="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/40 p-5 text-sm text-slate-400">
-                No service routes defined yet. Add a route above to populate the dropdowns in Service → Customers and Lifts.
-              </div>
-            {% endif %}
-          </div>
-        </section>
       </section>
     </div>
   </div>

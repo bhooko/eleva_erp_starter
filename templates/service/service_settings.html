@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Service Settings · Eleva ERP{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-slate-950/70 text-slate-100">
+  <div class="mx-auto max-w-6xl px-6 py-10 space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="space-y-1">
+        <p class="text-xs uppercase tracking-wide text-emerald-300">Service</p>
+        <h1 class="text-2xl font-bold text-slate-100">Service Settings</h1>
+        <p class="text-sm text-slate-400">Control dropdown values and service routes used across the Service workspace.</p>
+      </div>
+      <a href="{{ url_for('service_home') }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/70">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6.75 5.25 12l5.25 5.25M5.25 12h13.5" />
+        </svg>
+        <span>Back to Service</span>
+      </a>
+    </div>
+
+    <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-100">Service dropdown options</h2>
+          <p class="text-sm text-slate-400">Control the selectable values for lift configuration fields across create and edit forms.</p>
+        </div>
+        <p class="text-xs uppercase tracking-wide text-slate-300">Drag options to reorder. Changes apply instantly.</p>
+      </div>
+
+      {% set managed_dropdown_fields = [
+        "lift_type",
+        "door_type",
+        "door_finish",
+        "power_supply",
+        "machine_type",
+        "passenger_capacity",
+        "load_capacity",
+      ] %}
+
+      <div class="space-y-6">
+        {% for field_key in managed_dropdown_fields %}
+          {% set definition = dropdown_meta.get(field_key) %}
+          {% if definition %}
+            {% set options = dropdown_options.get(field_key, []) %}
+            <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5" data-dropdown-section>
+              <button type="button" class="flex w-full items-center justify-between gap-3 text-left" data-dropdown-section-trigger aria-expanded="false">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-100">{{ definition.label }}</h3>
+                  <p class="text-xs text-slate-400">Appears in Service → Lifts when capturing lift details.</p>
+                </div>
+                <span class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800/60 text-base font-semibold text-emerald-200" data-dropdown-section-icon aria-hidden="true">+</span>
+              </button>
+
+              <div class="mt-4 space-y-4 hidden" data-dropdown-section-body>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-300">Current options</p>
+                </div>
+                <ul class="space-y-3" data-dropdown-list data-field-key="{{ field_key }}" data-reorder-url="{{ url_for('settings_dropdown_option_reorder', field_key=field_key) }}">
+                  {% if options %}
+                    {% for option in options %}
+                      <li class="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4" data-dropdown-item data-option-id="{{ option.id }}">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/60 text-slate-400" aria-hidden="true">☰</span>
+                            <form method="post" action="{{ url_for('settings_dropdown_option_update', field_key=field_key, option_id=option.id) }}" class="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
+                              {{ csrf_field() }}
+                              <label class="flex-1 space-y-1">
+                                <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Label</span>
+                                <input name="label" value="{{ option.label }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                              </label>
+                              {% if definition.value_editable %}
+                                <label class="flex-1 space-y-1">
+                                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Stored value</span>
+                                  <input name="value" value="{{ option.value }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                              {% else %}
+                                <p class="text-xs text-slate-500 sm:w-40">Value: {{ option.value }}</p>
+                              {% endif %}
+                              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save</button>
+                            </form>
+                          </div>
+                          <form method="post" action="{{ url_for('settings_dropdown_option_delete', field_key=field_key, option_id=option.id) }}" class="self-start lg:self-center">
+                            {{ csrf_field() }}
+                            <button type="submit" class="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20" onclick="return confirm('Remove this option?');">Delete</button>
+                          </form>
+                        </div>
+                      </li>
+                    {% endfor %}
+                  {% else %}
+                    <li class="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">No options defined yet.</li>
+                  {% endif %}
+                </ul>
+                <form method="post" action="{{ url_for('settings_dropdown_option_create', field_key=field_key) }}" class="space-y-3 rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4">
+                  {{ csrf_field() }}
+                  <p class="text-xs uppercase tracking-wide text-slate-300">Add new option</p>
+                  <div class="grid gap-3 sm:grid-cols-{{ 2 if definition.value_editable else 1 }}">
+                    <label class="space-y-1">
+                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Label</span>
+                      <input name="label" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="e.g. Stainless steel" />
+                    </label>
+                    {% if definition.value_editable %}
+                      <label class="space-y-1">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Stored value</span>
+                        <input name="value" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Internal value" />
+                      </label>
+                    {% endif %}
+                  </div>
+                  <div class="flex justify-end">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Add option</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-100">Service routes</h2>
+          <p class="text-sm text-slate-400">Manage the list of states that service teams can assign to customers and lifts.</p>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
+        {{ csrf_field() }}
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
+          <input name="route_name" required placeholder="e.g. Panaji Urban" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+          <p class="text-xs text-slate-300">Type a new service route name to map it to a branch.</p>
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
+          <select name="branch" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+            <option value="">Select branch</option>
+            {% for branch in SERVICE_BRANCH_OPTIONS %}
+              <option value="{{ branch }}">{{ branch }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Add route</button>
+      </form>
+
+      <div class="space-y-3">
+        {% if service_routes %}
+          {% for route in service_routes %}
+            <div class="space-y-3 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200">
+              <form method="post" action="{{ url_for('settings_service_route_update', route_id=route.id) }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
+                {{ csrf_field() }}
+                <label class="space-y-1">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
+                  <input name="route_name" value="{{ route.route_name }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Branch</span>
+                  <select name="branch" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+                    <option value="">Select branch</option>
+                    {% for branch in SERVICE_BRANCH_OPTIONS %}
+                      <option value="{{ branch }}" {% if route.branch and route.branch.lower() == branch.lower() %}selected{% endif %}>{{ branch }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <div class="flex justify-end gap-2">
+                  <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save</button>
+                </div>
+              </form>
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span class="text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</span>
+                <form method="post" action="{{ url_for('settings_service_route_delete', route_id=route.id) }}" class="flex items-center">
+                  {{ csrf_field() }}
+                  <button type="submit" class="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20" onclick="return confirm('Remove this route?');">Remove</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/40 p-5 text-sm text-slate-400">
+            No service routes defined yet. Add a route above to populate the dropdowns in Service → Customers and Lifts.
+          </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropdownSections = Array.from(document.querySelectorAll('[data-dropdown-section]'));
+      dropdownSections.forEach((section) => {
+        const trigger = section.querySelector('[data-dropdown-section-trigger]');
+        const body = section.querySelector('[data-dropdown-section-body]');
+        const icon = section.querySelector('[data-dropdown-section-icon]');
+        if (!trigger || !body) {
+          return;
+        }
+
+        const setExpanded = (expanded) => {
+          trigger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          body.classList.toggle('hidden', !expanded);
+          if (icon) {
+            icon.textContent = expanded ? '−' : '+';
+          }
+        };
+
+        setExpanded(false);
+        trigger.addEventListener('click', () => {
+          const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+          setExpanded(!isExpanded);
+        });
+      });
+
+      const dropdownLists = Array.from(document.querySelectorAll('[data-dropdown-list]'));
+      dropdownLists.forEach((list) => {
+        const reorderUrl = list.getAttribute('data-reorder-url');
+        if (!reorderUrl) {
+          return;
+        }
+
+        const getOrder = () =>
+          Array.from(list.querySelectorAll('[data-dropdown-item]'))
+            .map((item) => item.getAttribute('data-option-id'))
+            .filter((value) => value !== null && value !== undefined && value !== '');
+
+        let dragItem = null;
+        let lastOrder = getOrder();
+
+        const persistOrder = () => {
+          const currentOrder = getOrder();
+          if (!currentOrder.length || JSON.stringify(currentOrder) === JSON.stringify(lastOrder)) {
+            return;
+          }
+          lastOrder = currentOrder;
+          fetch(reorderUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ order: currentOrder }),
+          }).catch((error) => {
+            console.error('Failed to reorder dropdown options', error);
+          });
+        };
+
+        const attachDragEvents = (item) => {
+          if (!item) {
+            return;
+          }
+          item.setAttribute('draggable', 'true');
+          item.addEventListener('dragstart', (event) => {
+            dragItem = item;
+            item.classList.add('opacity-60');
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+              const optionId = item.getAttribute('data-option-id') || '';
+              event.dataTransfer.setData('text/plain', optionId);
+            }
+          });
+
+          item.addEventListener('dragend', () => {
+            item.classList.remove('opacity-60');
+            dragItem = null;
+            persistOrder();
+          });
+
+          item.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            const target = event.currentTarget;
+            if (!dragItem || dragItem === target || !target.parentElement) {
+              return;
+            }
+            const children = Array.from(target.parentElement.querySelectorAll('[data-dropdown-item]'));
+            const dragIndex = children.indexOf(dragItem);
+            const targetIndex = children.indexOf(target);
+            if (dragIndex < targetIndex) {
+              target.after(dragItem);
+            } else {
+              target.before(dragItem);
+            }
+          });
+        };
+
+        list.querySelectorAll('[data-dropdown-item]').forEach((item) => attachDragEvents(item));
+      });
+    });
+  </script>
+{% endblock %}
