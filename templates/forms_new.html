@@ -6,7 +6,13 @@
 <!-- Section title comes from base.html logic; we still show a card for the profile -->
 <div class="grid gap-6">
   <form method="POST" action="{{ url_for('forms_new') }}"
-        class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/20">
+        class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/20 relative">
+    <button type="button"
+            class="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-800/70 bg-slate-900/80 text-slate-300 hover:text-white"
+            data-form-close
+            aria-label="Close new form">
+      &times;
+    </button>
     {{ csrf_field() }}
     <div class="mb-4">
       <label class="block text-sm text-slate-400 mb-1">Form name</label>
@@ -49,7 +55,8 @@
         Save profile
       </button>
       <a href="{{ url_for('qc_settings', tab='templates') if 'forms_list' in current_app.view_functions else url_for('dashboard') }}"
-         class="px-4 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">
+         class="px-4 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60"
+         data-form-close>
         Cancel
       </a>
       <div class="text-sm text-slate-400 ml-auto">
@@ -58,4 +65,30 @@
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeTargets = document.querySelectorAll('[data-form-close]');
+    const fallbackUrl = '{{ url_for('qc_settings', tab='templates') if 'forms_list' in current_app.view_functions else url_for('dashboard') }}';
+
+    const handleClose = (event) => {
+      event.preventDefault();
+      const dialog = event.target.closest('dialog');
+      if (dialog && typeof dialog.close === 'function') {
+        dialog.close();
+        return;
+      }
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = fallbackUrl;
+      }
+    };
+
+    closeTargets.forEach((el) => el.addEventListener('click', handleClose));
+  });
+</script>
 {% endblock %}
