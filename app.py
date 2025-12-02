@@ -5790,6 +5790,30 @@ def store_dispatch():
     inventory = InventoryItem.query.order_by(InventoryItem.item_code).all()
 
     if request.method == "POST":
+        item_code = request.form.get("item_code")
+        try:
+            quantity = float(request.form.get("quantity_dispatched") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+
+        if not item_code or quantity <= 0:
+            flash(
+                "Please select an item and enter a quantity before creating a dispatch.",
+                "warning",
+            )
+            return redirect(url_for("store_dispatch"))
+
+        inv = InventoryItem.query.filter_by(item_code=item_code).first()
+        available_qty = inv.current_stock if inv and inv.current_stock is not None else 0
+
+        if not inv:
+            flash("The selected item is not available in inventory.", "danger")
+            return redirect(url_for("store_dispatch"))
+
+        if quantity > available_qty:
+            flash("Insufficient stock available for this dispatch quantity.", "danger")
+            return redirect(url_for("store_dispatch"))
+
         dispatch_number = request.form.get("dispatch_number") or f"DP-{uuid.uuid4().hex[:6].upper()}"
         project_id = request.form.get("project_id") or None
         dispatch_date_raw = request.form.get("dispatch_date")
@@ -5806,36 +5830,137 @@ def store_dispatch():
             vehicle_details=request.form.get("vehicle_details"),
             driver_name=request.form.get("driver_name"),
             notes=request.form.get("notes"),
+            is_completed=False,
+            completed_at=None,
         )
         db.session.add(dispatch)
         db.session.flush()
 
-        item_code = request.form.get("item_code")
-        quantity = float(request.form.get("quantity_dispatched") or 0)
-        if item_code and quantity:
-            dispatch_item = DispatchItem(
-                dispatch_id=dispatch.id,
-                item_code=item_code,
-                description=request.form.get("description"),
-                unit=request.form.get("unit"),
-                quantity_dispatched=quantity,
-            )
-            db.session.add(dispatch_item)
-            inv = InventoryItem.query.filter_by(item_code=item_code).first()
-            if inv and (inv.current_stock or 0) >= quantity:
-                inv.current_stock = (inv.current_stock or 0) - quantity
+        dispatch_item = DispatchItem(
+            dispatch_id=dispatch.id,
+            item_code=item_code,
+            description=request.form.get("description"),
+            unit=request.form.get("unit"),
+            quantity_dispatched=quantity,
+        )
+        db.session.add(dispatch_item)
+        inv.current_stock = (inv.current_stock or 0) - quantity
 
         db.session.commit()
         flash("Dispatch recorded.", "success")
         return redirect(url_for("store_dispatch"))
 
-    dispatches = Dispatch.query.order_by(Dispatch.id.desc()).all()
+    dispatches = (
+        Dispatch.query.options(
+            joinedload(Dispatch.project),
+            subqueryload(Dispatch.items),
+        )
+        .order_by(Dispatch.id.desc())
+        .all()
+    )
     return render_template(
         "store_dispatch.html",
         projects=projects,
         inventory=inventory,
         dispatches=dispatches,
     )
+
+
+@app.route("/store/dispatch/<int:dispatch_id>/edit", methods=["POST"])
+@login_required
+def edit_dispatch(dispatch_id):
+    ensure_bootstrap()
+    dispatch = (
+        Dispatch.query.options(subqueryload(Dispatch.items))
+        .filter_by(id=dispatch_id)
+        .first_or_404()
+    )
+
+    if dispatch.is_completed:
+        flash("Completed dispatches cannot be edited.", "warning")
+        return redirect(url_for("store_dispatch"))
+
+    item_code = request.form.get("item_code")
+    try:
+        quantity = float(request.form.get("quantity_dispatched") or 0)
+    except (TypeError, ValueError):
+        quantity = 0
+
+    if not item_code or quantity <= 0:
+        flash(
+            "Please select an item and enter a quantity before updating the dispatch.",
+            "warning",
+        )
+        return redirect(url_for("store_dispatch"))
+
+    dispatch_date_raw = request.form.get("dispatch_date")
+    try:
+        dispatch_date = datetime.datetime.strptime(dispatch_date_raw, "%Y-%m-%d").date() if dispatch_date_raw else None
+    except ValueError:
+        dispatch_date = None
+
+    existing_item = dispatch.items[0] if dispatch.items else None
+    prev_item_code = existing_item.item_code if existing_item else None
+    prev_quantity = existing_item.quantity_dispatched if existing_item else 0
+
+    target_inv = InventoryItem.query.filter_by(item_code=item_code).first()
+    prev_inv = InventoryItem.query.filter_by(item_code=prev_item_code).first() if prev_item_code else None
+
+    if not target_inv:
+        flash("The selected item is not available in inventory.", "danger")
+        return redirect(url_for("store_dispatch"))
+
+    available_stock = (target_inv.current_stock or 0)
+    if target_inv.item_code == prev_item_code:
+        available_stock += prev_quantity
+
+    if quantity > available_stock:
+        flash("Insufficient stock available for this dispatch quantity.", "danger")
+        return redirect(url_for("store_dispatch"))
+
+    if prev_inv:
+        prev_inv.current_stock = (prev_inv.current_stock or 0) + prev_quantity
+
+    dispatch.project_id = request.form.get("project_id") or None
+    dispatch.dispatch_number = request.form.get("dispatch_number") or dispatch.dispatch_number
+    dispatch.dispatch_date = dispatch_date
+    dispatch.vehicle_details = request.form.get("vehicle_details")
+    dispatch.driver_name = request.form.get("driver_name")
+    dispatch.notes = request.form.get("notes")
+    dispatch.is_completed = False
+    dispatch.completed_at = None
+
+    if not existing_item:
+        existing_item = DispatchItem(dispatch_id=dispatch.id)
+        db.session.add(existing_item)
+
+    existing_item.item_code = item_code
+    existing_item.description = request.form.get("description")
+    existing_item.unit = request.form.get("unit")
+    existing_item.quantity_dispatched = quantity
+
+    target_inv.current_stock = (target_inv.current_stock or 0) - quantity
+
+    db.session.commit()
+    flash("Dispatch updated.", "success")
+    return redirect(url_for("store_dispatch"))
+
+
+@app.route("/store/dispatch/<int:dispatch_id>/complete", methods=["POST"])
+@login_required
+def complete_dispatch(dispatch_id):
+    ensure_bootstrap()
+    dispatch = Dispatch.query.filter_by(id=dispatch_id).first_or_404()
+
+    if dispatch.is_completed:
+        flash("Dispatch already marked as complete.", "info")
+    else:
+        dispatch.is_completed = True
+        dispatch.completed_at = datetime.datetime.utcnow()
+        db.session.commit()
+        flash("Dispatch marked as complete.", "success")
+
+    return redirect(url_for("store_dispatch"))
 
 
 # ---------------------- SAFE DB REPAIR / MIGRATIONS ----------------------
@@ -6464,6 +6589,34 @@ def ensure_project_columns():
         print("✔️ project OK")
 
 
+def ensure_dispatch_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_dispatch_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(dispatch)")
+    dispatch_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "is_completed" not in dispatch_cols:
+        cur.execute("ALTER TABLE dispatch ADD COLUMN is_completed INTEGER DEFAULT 0;")
+        added_cols.append("is_completed")
+
+    if "completed_at" not in dispatch_cols:
+        cur.execute("ALTER TABLE dispatch ADD COLUMN completed_at DATETIME;")
+        added_cols.append("completed_at")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in dispatch: {', '.join(added_cols)}")
+    else:
+        print("✔️ dispatch OK")
+
+
 def migrate_plaintext_passwords():
     migrated = 0
     for user in User.query.all():
@@ -6481,6 +6634,7 @@ def bootstrap_db():
     ensure_user_columns()
     ensure_project_comment_table()
     ensure_project_columns()
+    ensure_dispatch_columns()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
