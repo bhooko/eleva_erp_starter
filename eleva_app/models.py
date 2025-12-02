@@ -559,6 +559,13 @@ class SalesActivity(db.Model):
     actor = db.relationship("User")
 
 
+sales_task_assignees = db.Table(
+    "sales_task_assignee",
+    db.Column("task_id", db.Integer, db.ForeignKey("sales_task.id"), primary_key=True),
+    db.Column("user_id", db.Integer, db.ForeignKey("user.id"), primary_key=True),
+)
+
+
 class SalesTask(db.Model):
     __tablename__ = "sales_task"
 
@@ -579,6 +586,12 @@ class SalesTask(db.Model):
 
     owner = db.relationship("User", foreign_keys=[owner_id])
     assignee = db.relationship("User", foreign_keys=[assignee_id])
+    assignees = db.relationship(
+        "User",
+        secondary=sales_task_assignees,
+        backref="assigned_sales_tasks",
+        lazy="joined",
+    )
     creator = db.relationship("User", foreign_keys=[created_by_id])
     opportunity = db.relationship("SalesOpportunity")
     client = db.relationship("SalesClient")
@@ -601,12 +614,50 @@ class SalesTask(db.Model):
 
     @property
     def assignee_display(self):
-        user = self.assignee or self.owner
+        users = self.assignees or ([])
+        if not users and self.assignee:
+            users = [self.assignee]
+
+        display_names = []
+        for user in users:
+            if not user:
+                continue
+            if user.display_name:
+                display_names.append(user.display_name)
+            elif user.username:
+                display_names.append(user.username)
+
+        if display_names:
+            return ", ".join(display_names)
+
+        user = self.owner
         if user and user.display_name:
             return user.display_name
         if user:
             return user.username
         return "Unassigned"
+
+    @property
+    def assignee_display_list(self):
+        users = self.assignees or ([])
+        if not users and self.assignee:
+            users = [self.assignee]
+
+        names = []
+        for user in users:
+            if not user:
+                continue
+            if user.display_name:
+                names.append(user.display_name)
+            elif user.username:
+                names.append(user.username)
+
+        if names:
+            return names
+
+        if self.owner_display != "Unassigned":
+            return [self.owner_display]
+        return []
 
     @property
     def related_display(self):

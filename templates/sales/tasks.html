@@ -188,10 +188,10 @@
           </div>
         </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="space-y-2" data-related-picker>
-          <label class="block text-xs uppercase tracking-wide text-slate-400">Related to</label>
-          <input type="text" data-related-search class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Search opportunity or client" />
-          <select name="related_ref" data-related-select class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+          <div class="space-y-2" data-related-picker>
+            <label class="block text-xs uppercase tracking-wide text-slate-400">Related to</label>
+            <input type="text" data-related-search class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Search opportunity or client" />
+            <select name="related_ref" data-related-select class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
               <option value="general" selected>General (not linked)</option>
               <optgroup label="Opportunities">
                 {% for opp in opportunities %}
@@ -206,24 +206,14 @@
             </select>
           </div>
           <div class="space-y-2">
-            <label class="block text-xs uppercase tracking-wide text-slate-400">Owner</label>
-            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="{{ current_user.id }}">{{ current_user.display_name or current_user.username }} (me)</option>
-              {% for user in sales_users %}
-              <option value="{{ user.id }}">{{ user.display_name or user.username }}</option>
-              {% endfor %}
-            </select>
-            <p class="text-xs text-slate-500">Owner tracks who is responsible for the task.</p>
-          </div>
-          <div class="space-y-2">
             <label class="block text-xs uppercase tracking-wide text-slate-400">Assigned to</label>
-            <select name="assignee_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="{{ current_user.id }}">{{ current_user.display_name or current_user.username }} (me)</option>
+            <select name="assignee_ids" multiple class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 min-h-[3.25rem]">
+              <option value="{{ current_user.id }}" selected>{{ current_user.display_name or current_user.username }} (me)</option>
               {% for user in sales_users %}
               <option value="{{ user.id }}">{{ user.display_name or user.username }}</option>
               {% endfor %}
             </select>
-            <p class="text-xs text-slate-500">Assigned to captures who will action the task.</p>
+            <p class="text-xs text-slate-500">Assign one or more teammates. You are set as the owner automatically.</p>
           </div>
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
@@ -285,32 +275,22 @@
                   <option value="opportunity:{{ opp.id }}" data-label="{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}">{{ opp.title }}{% if opp.client %} · {{ opp.client.display_name }}{% endif %}</option>
                   {% endfor %}
                 </optgroup>
-                <optgroup label="Clients">
-                  {% for client in clients %}
-                  <option value="client:{{ client.id }}" data-label="{{ client.display_name }}">{{ client.display_name }}</option>
-                  {% endfor %}
-              </optgroup>
-            </select>
-          </div>
-          <div class="space-y-2">
-            <label class="block text-xs uppercase tracking-wide text-slate-400">Owner</label>
-            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="{{ current_user.id }}">{{ current_user.display_name or current_user.username }} (me)</option>
-              {% for user in sales_users %}
-              <option value="{{ user.id }}">{{ user.display_name or user.username }}</option>
-              {% endfor %}
-            </select>
-            <p class="text-xs text-slate-500">Who is responsible for the task.</p>
-          </div>
+              <optgroup label="Clients">
+                {% for client in clients %}
+                <option value="client:{{ client.id }}" data-label="{{ client.display_name }}">{{ client.display_name }}</option>
+                {% endfor %}
+            </optgroup>
+          </select>
+        </div>
           <div class="space-y-2">
             <label class="block text-xs uppercase tracking-wide text-slate-400">Assigned to</label>
-            <select name="assignee_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              <option value="{{ current_user.id }}">{{ current_user.display_name or current_user.username }} (me)</option>
+            <select name="assignee_ids" multiple class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 min-h-[3.25rem]">
+              <option value="{{ current_user.id }}" selected>{{ current_user.display_name or current_user.username }} (me)</option>
               {% for user in sales_users %}
               <option value="{{ user.id }}">{{ user.display_name or user.username }}</option>
               {% endfor %}
             </select>
-            <p class="text-xs text-slate-500">Who will action the task.</p>
+            <p class="text-xs text-slate-500">Select one or more teammates. You will be set as the owner automatically.</p>
           </div>
         </div>
           <div>
