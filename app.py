@@ -2832,6 +2832,13 @@ def _handle_customer_support_ticket_creation():
             created_by=current_user if current_user.is_authenticated else None,
         )
         db.session.add(created_call_activity)
+        creator_user = current_user if current_user.is_authenticated else None
+        task_assignees = []
+        if sales_lead_owner:
+            task_assignees.append(sales_lead_owner)
+        if creator_user and creator_user not in task_assignees:
+            task_assignees.append(creator_user)
+
         created_sales_task = SalesTask(
             title=created_call_activity.subject,
             category="call",
@@ -2841,11 +2848,10 @@ def _handle_customer_support_ticket_creation():
             description=f"New enquiry call created from support ticket {ticket_id}.",
             related_type="opportunity",
             opportunity=created_opportunity,
-            owner=sales_lead_owner
-            or (current_user if current_user.is_authenticated else None),
-            assignee=sales_lead_owner
-            or (current_user if current_user.is_authenticated else None),
-            creator=current_user if current_user.is_authenticated else None,
+            owner=creator_user or sales_lead_owner,
+            assignee=task_assignees[0] if task_assignees else None,
+            assignees=task_assignees,
+            creator=creator_user,
         )
         db.session.add(created_sales_task)
         db.session.flush()
@@ -2945,7 +2951,13 @@ def _handle_customer_support_ticket_creation():
                 "owner": created_sales_task.owner_display,
                 "owner_id": created_sales_task.owner_id,
                 "assignee": created_sales_task.assignee_display,
-                "assignee_id": created_sales_task.assignee_id,
+                "assignee_id": created_sales_task.assignees[0].id
+                if created_sales_task.assignees
+                else created_sales_task.assignee_id,
+                "assignees": created_sales_task.assignee_display_list,
+                "assignee_ids": [
+                    user.id for user in created_sales_task.assignees if getattr(user, "id", None)
+                ],
                 "status": created_sales_task.status or "Pending",
                 "due_date": created_sales_task.due_date,
                 "details": created_sales_task.description,
@@ -4889,6 +4901,7 @@ from eleva_app.models import (
     SalesOpportunityFile,
     SalesOpportunityItem,
     SalesTask,
+    sales_task_assignees,
     ServiceRoute,
     Submission,
     TaskTemplate,
@@ -5029,11 +5042,15 @@ def restore_org_structure_from_backup():
     backup_org_structure()
     print("✅ Restored departments and positions from backup")
     return True
-def _module_visibility_required(module_key, owner_user_id=None):
+def _module_visibility_required(module_key, owner_user_id=None, owner_user_ids=None):
     if current_user.can_view_module(module_key):
         return
 
-    if owner_user_id is not None and owner_user_id == current_user.id:
+    candidate_owner_ids = set(owner_user_ids or [])
+    if owner_user_id is not None:
+        candidate_owner_ids.add(owner_user_id)
+
+    if candidate_owner_ids and current_user.id in candidate_owner_ids:
         return
 
     abort(403)
@@ -5617,6 +5634,7 @@ def ensure_sales_task_columns():
     cur.execute("PRAGMA table_info(sales_task)")
     task_cols = {row[1] for row in cur.fetchall()}
     added_cols = []
+    created_tables = []
 
     column_defs = [
         ("related_type", "TEXT"),
@@ -5640,12 +5658,28 @@ def ensure_sales_task_columns():
             "UPDATE sales_task SET created_by_id = owner_id WHERE created_by_id IS NULL;"
         )
 
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_task_assignee'"
+    )
+    assignee_table_exists = cur.fetchone() is not None
+    if not assignee_table_exists:
+        cur.execute(
+            "CREATE TABLE sales_task_assignee (task_id INTEGER NOT NULL, user_id INTEGER NOT NULL, PRIMARY KEY (task_id, user_id));"
+        )
+        created_tables.append("sales_task_assignee")
+
+    cur.execute(
+        "INSERT OR IGNORE INTO sales_task_assignee (task_id, user_id) SELECT id, assignee_id FROM sales_task WHERE assignee_id IS NOT NULL;"
+    )
+
     conn.commit()
     conn.close()
 
     if added_cols:
         print(f"✅ Auto-added in sales_task: {', '.join(added_cols)}")
-    else:
+    if created_tables:
+        print(f"✅ Created missing tables: {', '.join(created_tables)}")
+    if not added_cols and not created_tables:
         print("✔️ sales_task OK")
 
 
@@ -5741,6 +5775,7 @@ def ensure_tables():
         SalesOpportunity.__table__,
         SalesActivity.__table__,
         SalesTask.__table__,
+        sales_task_assignees,
         SalesOpportunityComment.__table__,
         SalesOpportunityFile.__table__,
         SalesOpportunityEngagement.__table__,
@@ -6648,21 +6683,32 @@ def sales_tasks():
             else:
                 related_type = "general"
 
-            owner_id = request.form.get("owner_id", type=int) or getattr(current_user, "id", None)
-            assignee_id = request.form.get("assignee_id", type=int)
-            owner_user = db.session.get(User, owner_id) if owner_id else None
+            owner_user = current_user if getattr(current_user, "is_authenticated", False) else None
             if owner_user and not owner_user.can_be_assigned_module("sales"):
-                flash("Selected owner cannot be assigned sales tasks.", "error")
+                flash("You cannot be set as owner for sales tasks.", "error")
                 return redirect(url_for("sales_tasks", tab=active_tab))
 
-            assignee_user = None
-            if assignee_id:
+            assignee_users = []
+            seen_assignee_ids = set()
+            assignee_ids = request.form.getlist("assignee_ids") or request.form.getlist("assignee_id")
+            for raw_id in assignee_ids:
+                try:
+                    assignee_id = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if assignee_id in seen_assignee_ids:
+                    continue
                 assignee_user = db.session.get(User, assignee_id)
                 if not assignee_user or not assignee_user.can_be_assigned_module("sales"):
-                    flash("Choose an assignee who can work on sales tasks.", "error")
+                    flash("Choose assignees who can work on sales tasks.", "error")
                     return redirect(url_for("sales_tasks", tab=active_tab))
+                seen_assignee_ids.add(assignee_id)
+                assignee_users.append(assignee_user)
 
-            assignee_user = assignee_user or owner_user or current_user
+            if not assignee_users and owner_user:
+                assignee_users.append(owner_user)
+            elif not assignee_users and getattr(current_user, "is_authenticated", False):
+                assignee_users.append(current_user)
 
             task = SalesTask(
                 title=title,
@@ -6673,7 +6719,8 @@ def sales_tasks():
                 opportunity_id=opportunity_id,
                 client_id=client_id,
                 owner=owner_user or current_user,
-                assignee=assignee_user,
+                assignee=assignee_users[0] if assignee_users else None,
+                assignees=assignee_users,
                 creator=current_user,
             )
             db.session.add(task)
@@ -6687,7 +6734,7 @@ def sales_tasks():
             joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
             joinedload(SalesTask.client),
             joinedload(SalesTask.owner),
-            joinedload(SalesTask.assignee),
+            joinedload(SalesTask.assignees),
         )
         .order_by(SalesTask.due_date.asc(), SalesTask.created_at.asc())
         .all()
@@ -6776,7 +6823,11 @@ def sales_task_detail(task_id):
         flash("Task not found.", "error")
         return redirect(url_for("sales_tasks"))
 
-    _module_visibility_required("sales", owner_user_id=task.assignee_id or task.owner_id)
+    assignee_ids = [user.id for user in task.assignees if getattr(user, "id", None)]
+    if task.owner_id:
+        assignee_ids.append(task.owner_id)
+
+    _module_visibility_required("sales", owner_user_ids=assignee_ids)
 
     if request.method == "POST":
         if not task.is_completed:
@@ -6802,7 +6853,11 @@ def sales_task_toggle(task_id):
         flash("Task not found.", "error")
         return redirect(url_for("sales_tasks"))
 
-    _module_visibility_required("sales", owner_user_id=task.assignee_id or task.owner_id)
+    assignee_ids = [user.id for user in task.assignees if getattr(user, "id", None)]
+    if task.owner_id:
+        assignee_ids.append(task.owner_id)
+
+    _module_visibility_required("sales", owner_user_ids=assignee_ids)
 
     if task.is_completed:
         task.status = "Pending"
@@ -9224,13 +9279,13 @@ def _build_task_overview(viewing_user: "User"):
                     joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
                     joinedload(SalesTask.client),
                     joinedload(SalesTask.owner),
-                    joinedload(SalesTask.assignee),
+                    joinedload(SalesTask.assignees),
                 )
                 .filter(
                     or_(
-                        SalesTask.assignee_id.in_(task_owner_ids),
+                        SalesTask.assignees.any(User.id.in_(task_owner_ids)),
                         and_(
-                            SalesTask.assignee_id.is_(None),
+                            ~SalesTask.assignees.any(),
                             SalesTask.owner_id.in_(task_owner_ids),
                         ),
                     )
@@ -9433,27 +9488,34 @@ def _build_task_overview(viewing_user: "User"):
                     metadata.append({"label": "Type", "value": task.related_type})
 
                 owner_user = None
-                assignee_user = None
-                if assignee_lookup:
-                    if task.owner_id:
-                        owner_user = assignee_lookup.get(task.owner_id)
-                    if task.assignee_id:
-                        assignee_user = assignee_lookup.get(task.assignee_id)
+                if assignee_lookup and task.owner_id:
+                    owner_user = assignee_lookup.get(task.owner_id)
 
                 if owner_user and owner_user.display_name:
                     metadata.append({"label": "Owner", "value": owner_user.display_name})
                 elif task.owner and task.owner.display_name:
                     metadata.append({"label": "Owner", "value": task.owner.display_name})
 
-                assignee_label = None
-                if assignee_user and assignee_user.display_name:
-                    assignee_label = assignee_user.display_name
-                elif task.assignee and task.assignee.display_name:
-                    assignee_label = task.assignee.display_name
-                elif task.owner and task.owner.display_name:
-                    assignee_label = task.owner.display_name
-                if assignee_label:
-                    metadata.append({"label": "Assigned", "value": assignee_label})
+                assignee_labels = []
+                potential_assignees = list(task.assignees or [])
+                if task.assignee and task.assignee not in potential_assignees:
+                    potential_assignees.append(task.assignee)
+
+                for user in potential_assignees:
+                    if not user:
+                        continue
+                    lookup_user = assignee_lookup.get(user.id) if assignee_lookup else None
+                    display_user = lookup_user or user
+                    if display_user.display_name:
+                        assignee_labels.append(display_user.display_name)
+                    elif display_user.username:
+                        assignee_labels.append(display_user.username)
+
+                if not assignee_labels and task.owner and task.owner.display_name:
+                    assignee_labels.append(task.owner.display_name)
+
+                if assignee_labels:
+                    metadata.append({"label": "Assigned", "value": ", ".join(assignee_labels)})
 
                 sales_module["items"].append(
                     {
