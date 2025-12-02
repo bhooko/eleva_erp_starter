@@ -166,18 +166,22 @@
         {% if view_mode == 'projects' %}
           <span data-tab-label="my">Pending Project Tasks for {{ viewing_user.display_name }}</span>
           <span data-tab-label="team" class="hidden">Team Project Tasks for {{ viewing_user.display_name }}</span>
+          <span data-tab-label="created" class="hidden">Sales Activities You Created</span>
         {% else %}
           <span data-tab-label="my">Pending Work for {{ viewing_user.display_name }}</span>
           <span data-tab-label="team" class="hidden">Team Workload for {{ viewing_user.display_name }}</span>
+          <span data-tab-label="created" class="hidden">Sales Activities You Created</span>
         {% endif %}
       </h2>
       <p class="text-sm text-slate-400 mt-1">
         {% if view_mode == 'projects' %}
           <span data-tab-description="my">Focus on the project execution items that still need your attention.</span>
           <span data-tab-description="team" class="hidden">See open project and QC work owned by your direct and indirect reports.</span>
+          <span data-tab-description="created" class="hidden">Sales engagements you scheduled for others.</span>
         {% else %}
           <span data-tab-description="my">Only tasks and activities that are still pending across Sales, Projects, and QC modules.</span>
           <span data-tab-description="team" class="hidden">Everything pending across your team's assignments in Sales, Projects, and QC.</span>
+          <span data-tab-description="created" class="hidden">Sales engagements you scheduled for others.</span>
         {% endif %}
       </p>
       {% if current_user.is_admin and viewing_user.id != current_user.id %}
@@ -190,6 +194,7 @@
         data-tab-count-display
         data-my-count="{{ pending_total|default(0) }}"
         data-team-count="{{ team_pending_total|default(0) }}"
+        data-created-count="{{ created_by_total|default(0) }}"
       >
         {{ pending_total|default(0) }}
       </div>
@@ -213,6 +218,23 @@
         data-tab-count="my"
       >{{ pending_total|default(0) }}</span>
     </button>
+    {% if view_mode != 'projects' %}
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+        data-tab-target="created"
+        role="tab"
+        aria-selected="false"
+        aria-controls="dashboard-panel-created"
+        id="dashboard-tab-created"
+      >
+        <span>Created by Me</span>
+        <span
+          class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+          data-tab-count="created"
+        >{{ created_by_total|default(0) }}</span>
+      </button>
+    {% endif %}
     <button
       type="button"
       class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
@@ -233,6 +255,12 @@
   <div id="dashboard-panel-my" data-tab-panel="my" role="tabpanel" aria-labelledby="dashboard-tab-my">
     {{ render_dashboard_cards(pending_modules or [], "Nothing pending — time for a coffee? ☕") }}
   </div>
+
+  {% if view_mode != 'projects' %}
+    <div id="dashboard-panel-created" data-tab-panel="created" role="tabpanel" aria-labelledby="dashboard-tab-created" class="hidden">
+      {{ render_dashboard_cards(created_by_modules or [], "No sales activities created by you are pending.") }}
+    </div>
+  {% endif %}
 
   <div id="dashboard-panel-team" data-tab-panel="team" role="tabpanel" aria-labelledby="dashboard-tab-team" class="hidden">
     {% if team_members %}
@@ -257,13 +285,15 @@
           return;
         }
 
+        const tabTargets = Array.from(buttons).map((btn) => btn.dataset.tabTarget).filter(Boolean);
+
         const countDisplay = root.querySelector('[data-tab-count-display]');
         const labelTargets = root.querySelectorAll('[data-tab-label]');
         const descriptionTargets = root.querySelectorAll('[data-tab-description]');
         const badgeTargets = root.querySelectorAll('[data-tab-count]');
 
         function activate(target) {
-          const normalized = target === 'team' ? 'team' : 'my';
+          const normalized = tabTargets.includes(target) ? target : tabTargets[0] || 'my';
 
           buttons.forEach(function (button) {
             const isActive = button.dataset.tabTarget === normalized;
@@ -299,7 +329,7 @@
           });
 
           if (countDisplay) {
-            const datasetKey = normalized === 'team' ? 'teamCount' : 'myCount';
+            const datasetKey = `${normalized}Count`;
             const value = countDisplay.dataset[datasetKey] || '0';
             countDisplay.textContent = value;
           }

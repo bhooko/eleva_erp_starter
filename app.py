@@ -9058,10 +9058,16 @@ def _build_task_overview(viewing_user: "User"):
         assignee_lookup=None,
         sales_user_ids=None,
         support_tickets=None,
+        *,
+        sales_filter_mode="owner_or_creator",
+        module_visibility_override=None,
+        include_sales_tasks=True,
     ):
         modules_map = OrderedDict()
         module_order = []
         pending_total = 0
+
+        module_visibility_override = module_visibility_override or {}
 
         has_project_tasks = any(task.project for task in open_tasks)
         has_qc_tasks = any(not task.project for task in open_tasks)
@@ -9071,17 +9077,21 @@ def _build_task_overview(viewing_user: "User"):
         if sales_user_ids is None:
             if viewing_user:
                 sales_user_id_set = {viewing_user.id}
-                sales_filters = [
-                    SalesOpportunity.owner_id == viewing_user.id,
-                    SalesOpportunityEngagement.created_by_id == viewing_user.id,
-                ]
         else:
             allowed_ids = {uid for uid in set(sales_user_ids) if uid}
             if allowed_ids:
                 sales_user_id_set = allowed_ids
+
+        if sales_user_id_set:
+            sales_filter_mode = (sales_filter_mode or "owner_or_creator").strip().lower()
+            if sales_filter_mode == "owner_only":
+                sales_filters = [SalesOpportunity.owner_id.in_(sales_user_id_set)]
+            elif sales_filter_mode == "creator_only":
+                sales_filters = [SalesOpportunityEngagement.created_by_id.in_(sales_user_id_set)]
+            else:
                 sales_filters = [
-                    SalesOpportunity.owner_id.in_(allowed_ids),
-                    SalesOpportunityEngagement.created_by_id.in_(allowed_ids),
+                    SalesOpportunity.owner_id.in_(sales_user_id_set),
+                    SalesOpportunityEngagement.created_by_id.in_(sales_user_id_set),
                 ]
 
         task_owner_ids = set()
@@ -9106,7 +9116,7 @@ def _build_task_overview(viewing_user: "User"):
             )
 
         sales_tasks = []
-        if task_owner_ids:
+        if include_sales_tasks and task_owner_ids:
             sales_tasks = (
                 SalesTask.query
                 .options(
@@ -9130,6 +9140,15 @@ def _build_task_overview(viewing_user: "User"):
         show_customer_support = (
             viewing_user.can_view_module("customer_support") if viewing_user else True
         ) or bool(support_tickets)
+
+        if "Projects" in module_visibility_override:
+            show_projects = bool(module_visibility_override["Projects"])
+        if "Quality Control" in module_visibility_override:
+            show_qc = bool(module_visibility_override["Quality Control"])
+        if "Sales" in module_visibility_override:
+            show_sales = bool(module_visibility_override["Sales"])
+        if "Customer Support" in module_visibility_override:
+            show_customer_support = bool(module_visibility_override["Customer Support"])
 
         if show_projects:
             _ensure_module(
@@ -9366,6 +9385,8 @@ def _build_task_overview(viewing_user: "User"):
         # --- Service module: AMC + breakdown visits assigned to user(s) ---
         # Only if the viewing user is allowed to see the Service module
         show_service = viewing_user.can_view_module("service") if viewing_user else False
+        if "Service" in module_visibility_override:
+            show_service = bool(module_visibility_override["Service"])
 
         if show_service:
             # Build set of allowed technician names depending on personal vs team view
@@ -9596,7 +9617,26 @@ def _build_task_overview(viewing_user: "User"):
         open_tasks,
         now,
         support_tickets=support_tickets,
+        sales_filter_mode="owner_only",
     )
+
+    created_by_modules = []
+    created_by_total = 0
+    if viewing_user and getattr(viewing_user, "id", None):
+        created_by_modules, created_by_total = _build_pending_modules(
+            viewing_user,
+            [],
+            now,
+            sales_user_ids={viewing_user.id},
+            sales_filter_mode="creator_only",
+            module_visibility_override={
+                "Projects": False,
+                "Quality Control": False,
+                "Customer Support": False,
+                "Service": False,
+            },
+            include_sales_tasks=False,
+        )
 
     team_members = _team_members_for(viewing_user)
     team_user_ids = sorted(
@@ -9622,6 +9662,7 @@ def _build_task_overview(viewing_user: "User"):
             assignee_lookup=assignment_lookup,
             sales_user_ids=team_user_ids,
             support_tickets=team_support_tickets,
+            sales_filter_mode="owner_only",
         )
 
     return {
@@ -9634,6 +9675,8 @@ def _build_task_overview(viewing_user: "User"):
         "team_load": team_load,
         "pending_modules": pending_modules,
         "pending_total": pending_total,
+        "created_by_modules": created_by_modules,
+        "created_by_total": created_by_total,
         "team_pending_modules": team_pending_modules,
         "team_pending_total": team_pending_total,
         "team_members": team_members,
