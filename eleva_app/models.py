@@ -572,10 +572,14 @@ class SalesTask(db.Model):
     opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assignee_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
-    owner = db.relationship("User")
+    owner = db.relationship("User", foreign_keys=[owner_id])
+    assignee = db.relationship("User", foreign_keys=[assignee_id])
+    creator = db.relationship("User", foreign_keys=[created_by_id])
     opportunity = db.relationship("SalesOpportunity")
     client = db.relationship("SalesClient")
 
@@ -586,6 +590,23 @@ class SalesTask(db.Model):
     @property
     def is_completed(self):
         return (self.status or "").strip().lower() == "completed"
+
+    @property
+    def owner_display(self):
+        if self.owner and self.owner.display_name:
+            return self.owner.display_name
+        if self.owner:
+            return self.owner.username
+        return "Unassigned"
+
+    @property
+    def assignee_display(self):
+        user = self.assignee or self.owner
+        if user and user.display_name:
+            return user.display_name
+        if user:
+            return user.username
+        return "Unassigned"
 
     @property
     def related_display(self):

@@ -166,22 +166,22 @@
         {% if view_mode == 'projects' %}
           <span data-tab-label="my">Pending Project Tasks for {{ viewing_user.display_name }}</span>
           <span data-tab-label="team" class="hidden">Team Project Tasks for {{ viewing_user.display_name }}</span>
-          <span data-tab-label="created" class="hidden">Sales Activities You Created</span>
+          <span data-tab-label="created" class="hidden">Items You Assigned</span>
         {% else %}
           <span data-tab-label="my">Pending Work for {{ viewing_user.display_name }}</span>
           <span data-tab-label="team" class="hidden">Team Workload for {{ viewing_user.display_name }}</span>
-          <span data-tab-label="created" class="hidden">Sales Activities You Created</span>
+          <span data-tab-label="created" class="hidden">Items You Assigned</span>
         {% endif %}
       </h2>
       <p class="text-sm text-slate-400 mt-1">
         {% if view_mode == 'projects' %}
           <span data-tab-description="my">Focus on the project execution items that still need your attention.</span>
           <span data-tab-description="team" class="hidden">See open project and QC work owned by your direct and indirect reports.</span>
-          <span data-tab-description="created" class="hidden">Sales engagements you scheduled for others.</span>
+          <span data-tab-description="created" class="hidden">Tasks and activities you created for others to complete.</span>
         {% else %}
           <span data-tab-description="my">Only tasks and activities that are still pending across Sales, Projects, and QC modules.</span>
           <span data-tab-description="team" class="hidden">Everything pending across your team's assignments in Sales, Projects, and QC.</span>
-          <span data-tab-description="created" class="hidden">Sales engagements you scheduled for others.</span>
+          <span data-tab-description="created" class="hidden">Tasks and activities you created for others to complete.</span>
         {% endif %}
       </p>
       {% if current_user.is_admin and viewing_user.id != current_user.id %}
@@ -228,7 +228,7 @@
         aria-controls="dashboard-panel-created"
         id="dashboard-tab-created"
       >
-        <span>Created by Me</span>
+        <span>Assigned by Me</span>
         <span
           class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
           data-tab-count="created"
@@ -258,7 +258,7 @@
 
   {% if view_mode != 'projects' %}
     <div id="dashboard-panel-created" data-tab-panel="created" role="tabpanel" aria-labelledby="dashboard-tab-created" class="hidden">
-      {{ render_dashboard_cards(created_by_modules or [], "No sales activities created by you are pending.") }}
+      {{ render_dashboard_cards(created_by_modules or [], "No items assigned by you are pending.") }}
     </div>
   {% endif %}
 

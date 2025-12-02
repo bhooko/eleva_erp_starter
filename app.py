@@ -2144,6 +2144,46 @@ def _resolve_ticket_assignee_user(ticket, module_key="customer_support"):
     return None
 
 
+def _resolve_ticket_owner_user(ticket, module_key="customer_support"):
+    if not isinstance(ticket, dict):
+        return None
+
+    owner_user_id = ticket.get("owner_user_id")
+    if owner_user_id:
+        try:
+            user_id = int(owner_user_id)
+        except (TypeError, ValueError):
+            user_id = None
+        if user_id is not None:
+            user = User.query.get(user_id)
+            if user and user.is_active:
+                if not module_key or user.can_be_assigned_module(module_key):
+                    return user
+
+    owner_name = (ticket.get("owner") or "").strip()
+    if not owner_name or owner_name.lower() == "unassigned":
+        return None
+
+    lowered_name = owner_name.lower()
+    potential_users = get_assignable_users_for_module(module_key) if module_key else User.query.all()
+    for user in potential_users:
+        if not user.is_active:
+            continue
+        if user.display_name.strip().lower() == lowered_name or user.username.strip().lower() == lowered_name:
+            ticket["owner_user_id"] = user.id
+            ticket["owner"] = user.display_name
+            return user
+
+    user = User.query.filter(func.lower(User.username) == lowered_name).first()
+    if user and user.is_active:
+        if not module_key or user.can_be_assigned_module(module_key):
+            ticket["owner_user_id"] = user.id
+            ticket["owner"] = user.display_name
+            return user
+
+    return None
+
+
 def _user_is_service_team_member(user, service_user_ids):
     if not user or not user.is_active:
         return False
@@ -2198,6 +2238,7 @@ def _service_complaint_tasks_from_support():
             continue
 
         assigned_user = _resolve_ticket_assignee_user(ticket)
+        owner_user = _resolve_ticket_owner_user(ticket)
         if not _user_is_service_team_member(assigned_user, service_user_ids):
             continue
 
@@ -2243,12 +2284,14 @@ def _service_complaint_tasks_from_support():
         complaint_tasks.append(
             {
                 "id": ticket.get("id"),
+                "owner": owner_user.display_name if owner_user else ticket.get("owner") or "Unassigned",
                 "site": site_label,
                 "client": client_label,
                 "lift_id": lift_label,
                 "call_type": f"Complaint · {ticket.get('category')}" if ticket.get("category") else "Complaint",
                 "priority": ticket.get("priority") or "Medium",
                 "technicians": [assigned_user.display_name] if assigned_user else [],
+                "assignee": assigned_user.display_name if assigned_user else ticket.get("assignee") or "Unassigned",
                 "schedule_window": schedule_window,
                 "sla": sla_label,
                 "status": ticket.get("status") or "Open",
@@ -2424,6 +2467,7 @@ def _handle_customer_support_ticket_creation():
     amc_site_id = (request.form.get("amc_site") or "").strip()
     channel_value = (request.form.get("channel") or "").strip()
     sla_priority_id = (request.form.get("sla_priority") or "").strip()
+    owner_value = (request.form.get("owner") or "").strip()
     assignee_value = (request.form.get("assignee") or "").strip()
     due_raw = (request.form.get("due_datetime") or "").strip()
     remarks = (request.form.get("remarks") or "").strip()
@@ -2437,6 +2481,7 @@ def _handle_customer_support_ticket_creation():
 
     errors = []
     form_values = request.form.to_dict(flat=True)
+    owner_user = None
     assignee_user = None
     assignee_user_id = None
     sales_lead_owner = None
@@ -2575,6 +2620,22 @@ def _handle_customer_support_ticket_creation():
         except ValueError:
             errors.append("Enter the due date in YYYY-MM-DD HH:MM format.")
 
+    if owner_value:
+        try:
+            owner_user_id = int(owner_value)
+        except (TypeError, ValueError):
+            owner_user_id = None
+        if owner_user_id is None:
+            errors.append("Select a valid owner from the ERP user list.")
+        else:
+            owner_user = User.query.get(owner_user_id)
+            if (
+                not owner_user
+                or not owner_user.is_active
+                or not owner_user.can_be_assigned_module("customer_support")
+            ):
+                errors.append("Select a valid owner from the ERP user list.")
+
     if assignee_value:
         try:
             assignee_user_id = int(assignee_value)
@@ -2619,6 +2680,7 @@ def _handle_customer_support_ticket_creation():
                 "channel": channel_value,
                 "sla_priority": sla_priority_id,
                 "assignee": assignee_value,
+                "owner": owner_value,
                 "remarks": remarks,
                 "due_datetime": due_raw,
                 "contact_name": contact_name,
@@ -2781,6 +2843,9 @@ def _handle_customer_support_ticket_creation():
             opportunity=created_opportunity,
             owner=sales_lead_owner
             or (current_user if current_user.is_authenticated else None),
+            assignee=sales_lead_owner
+            or (current_user if current_user.is_authenticated else None),
+            creator=current_user if current_user.is_authenticated else None,
         )
         db.session.add(created_sales_task)
         db.session.flush()
@@ -2812,6 +2877,12 @@ def _handle_customer_support_ticket_creation():
         "channel": channel_label or channel_value,
         "priority": "Medium",
         "status": "Open",
+        "owner": owner_user.display_name
+        if owner_user
+        else (current_user.display_name if current_user.is_authenticated else "Unassigned"),
+        "owner_user_id": owner_user.id
+        if owner_user
+        else (current_user.id if current_user.is_authenticated else None),
         "assignee": assignee_user.display_name if assignee_user else "Unassigned",
         "assignee_user_id": assignee_user.id if assignee_user else None,
         "created_at": created_at,
@@ -2871,10 +2942,10 @@ def _handle_customer_support_ticket_creation():
             {
                 "id": created_sales_task.id,
                 "title": created_sales_task.title,
-                "assignee": created_sales_task.owner.display_name
-                if created_sales_task.owner
-                else "Unassigned",
-                "assignee_id": created_sales_task.owner_id,
+                "owner": created_sales_task.owner_display,
+                "owner_id": created_sales_task.owner_id,
+                "assignee": created_sales_task.assignee_display,
+                "assignee_id": created_sales_task.assignee_id,
                 "status": created_sales_task.status or "Pending",
                 "due_date": created_sales_task.due_date,
                 "details": created_sales_task.description,
@@ -5551,12 +5622,23 @@ def ensure_sales_task_columns():
         ("related_type", "TEXT"),
         ("opportunity_id", "INTEGER"),
         ("client_id", "INTEGER"),
+        ("assignee_id", "INTEGER"),
+        ("created_by_id", "INTEGER"),
     ]
 
     for column_name, column_type in column_defs:
         if column_name not in task_cols:
             cur.execute(f"ALTER TABLE sales_task ADD COLUMN {column_name} {column_type};")
             added_cols.append(column_name)
+
+    if "assignee_id" not in task_cols:
+        cur.execute(
+            "UPDATE sales_task SET assignee_id = owner_id WHERE assignee_id IS NULL;"
+        )
+    if "created_by_id" not in task_cols:
+        cur.execute(
+            "UPDATE sales_task SET created_by_id = owner_id WHERE created_by_id IS NULL;"
+        )
 
     conn.commit()
     conn.close()
@@ -6566,11 +6648,21 @@ def sales_tasks():
             else:
                 related_type = "general"
 
-            owner_id = request.form.get("owner_id", type=int)
+            owner_id = request.form.get("owner_id", type=int) or getattr(current_user, "id", None)
+            assignee_id = request.form.get("assignee_id", type=int)
             owner_user = db.session.get(User, owner_id) if owner_id else None
             if owner_user and not owner_user.can_be_assigned_module("sales"):
-                flash("Selected assignee cannot be assigned sales tasks.", "error")
+                flash("Selected owner cannot be assigned sales tasks.", "error")
                 return redirect(url_for("sales_tasks", tab=active_tab))
+
+            assignee_user = None
+            if assignee_id:
+                assignee_user = db.session.get(User, assignee_id)
+                if not assignee_user or not assignee_user.can_be_assigned_module("sales"):
+                    flash("Choose an assignee who can work on sales tasks.", "error")
+                    return redirect(url_for("sales_tasks", tab=active_tab))
+
+            assignee_user = assignee_user or owner_user or current_user
 
             task = SalesTask(
                 title=title,
@@ -6581,6 +6673,8 @@ def sales_tasks():
                 opportunity_id=opportunity_id,
                 client_id=client_id,
                 owner=owner_user or current_user,
+                assignee=assignee_user,
+                creator=current_user,
             )
             db.session.add(task)
             db.session.commit()
@@ -6589,7 +6683,12 @@ def sales_tasks():
 
     tasks = (
         SalesTask.query
-        .options(joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client), joinedload(SalesTask.client))
+        .options(
+            joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
+            joinedload(SalesTask.client),
+            joinedload(SalesTask.owner),
+            joinedload(SalesTask.assignee),
+        )
         .order_by(SalesTask.due_date.asc(), SalesTask.created_at.asc())
         .all()
     )
@@ -6635,10 +6734,12 @@ def sales_tasks():
         .order_by(func.lower(SalesOpportunity.title))
         .all()
     )
-    sales_owners = [
+    assignable_sales_users = [
         user
-        for user in User.query.filter(User.active.is_(True)).all()
-        if user.can_be_assigned_module("sales") and user.id != current_user.id
+        for user in User.query.filter(User.active.is_(True))
+        .order_by(User.first_name.asc(), User.last_name.asc(), User.username.asc())
+        .all()
+        if user.can_be_assigned_module("sales")
     ]
     clients = SalesClient.query.order_by(func.lower(SalesClient.display_name)).all()
 
@@ -6659,7 +6760,7 @@ def sales_tasks():
         tasks_by_date=tasks_by_date,
         calendar_month_label=month_start.strftime("%B %Y"),
         opportunities=opportunities,
-        sales_owners=sales_owners,
+        sales_users=assignable_sales_users,
         clients=clients,
         calendar_prev_month=previous_month.strftime("%Y-%m"),
         calendar_next_month=next_month.strftime("%Y-%m"),
@@ -6675,7 +6776,7 @@ def sales_task_detail(task_id):
         flash("Task not found.", "error")
         return redirect(url_for("sales_tasks"))
 
-    _module_visibility_required("sales", owner_user_id=task.owner_id)
+    _module_visibility_required("sales", owner_user_id=task.assignee_id or task.owner_id)
 
     if request.method == "POST":
         if not task.is_completed:
@@ -6701,7 +6802,7 @@ def sales_task_toggle(task_id):
         flash("Task not found.", "error")
         return redirect(url_for("sales_tasks"))
 
-    _module_visibility_required("sales", owner_user_id=task.owner_id)
+    _module_visibility_required("sales", owner_user_id=task.assignee_id or task.owner_id)
 
     if task.is_completed:
         task.status = "Pending"
@@ -9122,8 +9223,18 @@ def _build_task_overview(viewing_user: "User"):
                 .options(
                     joinedload(SalesTask.opportunity).joinedload(SalesOpportunity.client),
                     joinedload(SalesTask.client),
+                    joinedload(SalesTask.owner),
+                    joinedload(SalesTask.assignee),
                 )
-                .filter(SalesTask.owner_id.in_(task_owner_ids))
+                .filter(
+                    or_(
+                        SalesTask.assignee_id.in_(task_owner_ids),
+                        and_(
+                            SalesTask.assignee_id.is_(None),
+                            SalesTask.owner_id.in_(task_owner_ids),
+                        ),
+                    )
+                )
                 .filter(SalesTask.due_date.isnot(None))
                 .filter(or_(SalesTask.status.is_(None), func.lower(SalesTask.status) != "completed"))
                 .order_by(SalesTask.due_date.asc(), SalesTask.id.asc())
@@ -9205,6 +9316,12 @@ def _build_task_overview(viewing_user: "User"):
             if task.project and task.project.name:
                 metadata.append(f"Project: {task.project.name}")
 
+            creator_user = getattr(task, "creator", None)
+            if creator_user and (not viewing_user or creator_user.id != viewing_user.id):
+                owner_label = creator_user.display_name or creator_user.username
+                if owner_label:
+                    metadata.append(f"Owner: {owner_label}")
+
             assignee_user = None
             if assignee_lookup:
                 assignee_user = assignee_lookup.get(getattr(task, "assigned_to", None))
@@ -9232,9 +9349,9 @@ def _build_task_overview(viewing_user: "User"):
                         if not assignee_user
                         or (viewing_user and assignee_user.id == viewing_user.id)
                         else [
-                            f"Owner: {assignee_user.display_name}"
+                            f"Assignee: {assignee_user.display_name}"
                             if assignee_user.display_name
-                            else f"Owner: {assignee_user.username}"
+                            else f"Assignee: {assignee_user.username}"
                         ]
                     ),
                 }
@@ -9314,6 +9431,29 @@ def _build_task_overview(viewing_user: "User"):
                     metadata.append({"label": "Category", "value": task.category})
                 if task.related_type:
                     metadata.append({"label": "Type", "value": task.related_type})
+
+                owner_user = None
+                assignee_user = None
+                if assignee_lookup:
+                    if task.owner_id:
+                        owner_user = assignee_lookup.get(task.owner_id)
+                    if task.assignee_id:
+                        assignee_user = assignee_lookup.get(task.assignee_id)
+
+                if owner_user and owner_user.display_name:
+                    metadata.append({"label": "Owner", "value": owner_user.display_name})
+                elif task.owner and task.owner.display_name:
+                    metadata.append({"label": "Owner", "value": task.owner.display_name})
+
+                assignee_label = None
+                if assignee_user and assignee_user.display_name:
+                    assignee_label = assignee_user.display_name
+                elif task.assignee and task.assignee.display_name:
+                    assignee_label = task.assignee.display_name
+                elif task.owner and task.owner.display_name:
+                    assignee_label = task.owner.display_name
+                if assignee_label:
+                    metadata.append({"label": "Assigned", "value": assignee_label})
 
                 sales_module["items"].append(
                     {
@@ -9623,15 +9763,29 @@ def _build_task_overview(viewing_user: "User"):
     created_by_modules = []
     created_by_total = 0
     if viewing_user and getattr(viewing_user, "id", None):
+        created_by_tasks = (
+            QCWork.query
+            .filter(QCWork.created_by == viewing_user.id)
+            .filter(QCWork.status != "Closed")
+            .order_by(status_order, QCWork.due_date.asc().nullslast(), QCWork.created_at.desc())
+            .all()
+        )
+        created_actionable_tasks = [
+            task
+            for task in created_by_tasks
+            if task.dependency_satisfied and task.assigned_to != viewing_user.id
+        ]
+        assignee_lookup = {
+            user.id: user for user in get_assignable_users_for_module("qc", order_by="username")
+        }
         created_by_modules, created_by_total = _build_pending_modules(
             viewing_user,
-            [],
+            created_actionable_tasks,
             now,
+            assignee_lookup=assignee_lookup,
             sales_user_ids={viewing_user.id},
             sales_filter_mode="creator_only",
             module_visibility_override={
-                "Projects": False,
-                "Quality Control": False,
                 "Customer Support": False,
                 "Service": False,
             },
@@ -11369,13 +11523,17 @@ def customer_support_tasks():
     # Allow the ticket owner to view the ticket modal even if their module
     # visibility has since been restricted.
     selected_ticket_assignee_id = None
+    selected_ticket_owner_id = None
     if selected_ticket:
         assignee_user = _resolve_ticket_assignee_user(selected_ticket, module_key=None)
         if assignee_user:
             selected_ticket_assignee_id = assignee_user.id
+        owner_user = _resolve_ticket_owner_user(selected_ticket, module_key=None)
+        if owner_user:
+            selected_ticket_owner_id = owner_user.id
 
     _module_visibility_required(
-        "customer_support", owner_user_id=selected_ticket_assignee_id
+        "customer_support", owner_user_id=selected_ticket_assignee_id or selected_ticket_owner_id
     )
     add_ticket_form_data = {}
     add_ticket_errors = []
@@ -11393,6 +11551,9 @@ def customer_support_tasks():
     tickets = []
     for ticket in CUSTOMER_SUPPORT_TICKETS:
         _resolve_ticket_assignee_user(ticket)
+        _resolve_ticket_owner_user(ticket)
+        if not ticket.get("owner"):
+            ticket["owner"] = "Unassigned"
         sla_due_at = _calculate_ticket_sla_due(ticket)
         ticket["_sla_due_at"] = sla_due_at
         ticket["_sla_due_iso"] = sla_due_at.isoformat() if sla_due_at else ""
@@ -11518,6 +11679,7 @@ def customer_support_create_linked_task():
 
     title = (request.form.get("title") or "").strip()
     details = (request.form.get("details") or "").strip()
+    owner_id_raw = (request.form.get("owner_id") or "").strip()
     assignee_id_raw = (request.form.get("assignee") or "").strip()
     due_date_raw = (request.form.get("due_date") or "").strip()
     task_url = (request.form.get("task_url") or "").strip()
@@ -11535,6 +11697,7 @@ def customer_support_create_linked_task():
         except ValueError:
             errors.append("Enter the due date in YYYY-MM-DD format.")
 
+    owner_user = None
     assignee_user = None
     if assignee_id_raw:
         try:
@@ -11555,6 +11718,19 @@ def customer_support_create_linked_task():
                 f"{assignee_user.display_name} cannot be assigned to this category based on CS settings."
             )
 
+    if owner_id_raw:
+        try:
+            owner_user = db.session.get(User, int(owner_id_raw))
+        except (TypeError, ValueError):
+            owner_user = None
+
+        if not owner_user:
+            errors.append("Select a valid owner for the linked task.")
+        elif not owner_user.is_active:
+            errors.append("The selected owner is not active on the portal.")
+        elif not owner_user.can_be_assigned_module("customer_support"):
+            errors.append("The selected user cannot own customer support tasks.")
+
     if errors:
         for message in errors:
             flash(message, "error")
@@ -11565,10 +11741,14 @@ def customer_support_create_linked_task():
         category_label = next((item.get("label") for item in CUSTOMER_SUPPORT_CATEGORIES if item.get("id") == category), None)
 
     assignee_label = assignee_user.display_name if assignee_user else "Unassigned"
+    owner_label = owner_user.display_name if owner_user else (current_user.display_name if current_user.is_authenticated else "Unassigned")
+    owner_id = owner_user.id if owner_user else (current_user.id if current_user.is_authenticated else None)
 
     new_task = {
         "id": generate_linked_task_id(),
         "title": title,
+        "owner": owner_label,
+        "owner_id": owner_id,
         "assignee": assignee_label,
         "assignee_id": assignee_user.id if assignee_user else None,
         "status": "Open",
@@ -11598,6 +11778,7 @@ def customer_support_update_ticket(ticket_id):
     support_settings = _load_customer_support_settings()
     status = (request.form.get("status") or ticket.get("status") or "Open").strip()
     priority = (request.form.get("priority") or ticket.get("priority") or "Medium").strip()
+    owner_value = (request.form.get("owner") or "").strip()
     assignee_value = (request.form.get("assignee") or "").strip()
     closing_comment = (request.form.get("closing_comment") or "").strip()
 
@@ -11609,11 +11790,24 @@ def customer_support_update_ticket(ticket_id):
     if priority not in allowed_priority:
         errors.append("Choose a valid priority for the ticket.")
 
+    owner_user = None
     assignee_user = None
     new_assignee_label = "Unassigned"
     new_assignee_id = None
     current_assignee_label = ticket.get("assignee") or "Unassigned"
     current_assignee_id = ticket.get("assignee_user_id")
+    owner_clear_requested = owner_value == ""
+    if owner_value:
+        try:
+            owner_user_id = int(owner_value)
+        except (TypeError, ValueError):
+            owner_user_id = None
+        if owner_user_id is None:
+            errors.append("Select an owner from the available team members.")
+        else:
+            owner_user = User.query.get(owner_user_id)
+            if not owner_user or not owner_user.is_active or not owner_user.can_be_assigned_module("customer_support"):
+                errors.append("Select an owner from the available team members.")
 
     if assignee_value:
         try:
@@ -11678,6 +11872,17 @@ def customer_support_update_ticket(ticket_id):
         changes.append(f"Assigned to {new_assignee_label}")
         ticket["assignee"] = new_assignee_label
         ticket["assignee_user_id"] = new_assignee_id
+
+    if owner_value or owner_clear_requested:
+        new_owner_label = owner_user.display_name if owner_user else "Unassigned"
+        new_owner_id = owner_user.id if owner_user else None
+        if (
+            new_owner_label != (ticket.get("owner") or "Unassigned")
+            or (new_owner_id or None) != (ticket.get("owner_user_id") or None)
+        ):
+            changes.append(f"Owner updated to {new_owner_label}")
+            ticket["owner"] = new_owner_label
+            ticket["owner_user_id"] = new_owner_id
 
     if not changes:
         flash("No changes detected to update.", "info")
@@ -12678,17 +12883,25 @@ def service_tasks():
     _module_visibility_required("service")
     tasks = []
     for task in SERVICE_TASKS:
+        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
+        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
         tasks.append(
             {
                 **task,
+                "owner_display": owner_display,
+                "assignee_display": assignee_display or "Unassigned",
                 "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
                 "technician_display": ", ".join(task.get("technicians") or []),
             }
         )
     for task in _service_complaint_tasks_from_support():
+        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
+        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
         tasks.append(
             {
                 **task,
+                "owner_display": owner_display,
+                "assignee_display": assignee_display or "Unassigned",
                 "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
                 "technician_display": ", ".join(task.get("technicians") or []),
             }
@@ -15677,6 +15890,7 @@ def qc_work_new():
     stage = (request.form.get("stage") or "").strip()
     lift_type = (request.form.get("lift_type") or "").strip()
     due = (request.form.get("due_date") or "").strip()
+    owner_id = request.form.get("owner_id", type=int) or getattr(current_user, "id", None)
     assigned_to = request.form.get("assigned_to", type=int)
     project_id = request.form.get("project_id", type=int)
     planned_start = (request.form.get("planned_start_date") or "").strip()
@@ -15730,6 +15944,13 @@ def qc_work_new():
 
     template = db.session.get(FormSchema, template_id)
 
+    owner_user = None
+    if owner_id:
+        owner_user = db.session.get(User, owner_id)
+        if not owner_user or not owner_user.is_active:
+            flash("Choose a valid owner for the task.", "error")
+            return redirect(url_for("qc_home"))
+
     assignee_user = None
     if assigned_to:
         assignee_user = db.session.get(User, assigned_to)
@@ -15746,7 +15967,7 @@ def qc_work_new():
         lift_type=lift_type or (template.lift_type if template else None),
         project_id=project.id if project else None,
         due_date=due_dt,
-        created_by=current_user.id,
+        created_by=owner_user.id if owner_user else current_user.id,
         assigned_to=assigned_to if assignee_user else None,
         name=site_name,
         planned_start_date=planned_start_date,

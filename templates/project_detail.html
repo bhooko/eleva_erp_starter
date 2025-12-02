@@ -251,7 +251,7 @@
                   <span class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-200 uppercase tracking-wide">{{ task.status }}</span>
                 </div>
                 <div class="mt-3 grid md:grid-cols-3 gap-2 text-xs text-slate-400">
-                  <div>Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
+                  <div>Owner: {{ task.creator.display_name if task.creator else 'Unassigned' }} · Assigned to {{ task.assignee.display_name if task.assignee else 'Unassigned' }}</div>
                   <div>Due {% if task.due_date %}{{ task.due_date.strftime('%Y-%m-%d') }}{% elif task.planned_due_date %}{{ task.planned_due_date.strftime('%Y-%m-%d') }}{% else %}No due date{% endif %}</div>
                   {% if task.planned_start_date or task.planned_duration_days is not none %}
                     <div>Schedule {% if task.planned_start_date %}starts {{ task.planned_start_date.strftime('%Y-%m-%d') }}{% endif %}{% if task.planned_start_date and task.planned_duration_days is not none %}; {% endif %}{% if task.planned_duration_days is not none %}{{ task.planned_duration_days }} day{% if task.planned_duration_days != 1 %}s{% endif %}{% endif %}</div>
