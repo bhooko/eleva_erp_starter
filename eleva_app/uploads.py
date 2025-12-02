@@ -776,7 +776,7 @@ def process_lift_upload_file(file_path, *, apply_changes):
 
     existing_by_code: Dict[str, Optional[Lift]] = {}
     existing_by_external: Dict[str, Optional[Lift]] = {}
-    processed_codes: set[str] = set()
+    processed_codes: Dict[str, str] = {}
     processed_external_ids: set[str] = set()
     generated_codes: set[str] = set()
 
