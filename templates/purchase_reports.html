@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Purchase Reports · Eleva ERP{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Purchase Analytics</p>
+      <h1 class="text-2xl font-semibold">Reports & Price History</h1>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+    <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+      <label class="space-y-1">
+        <span class="text-sm">Item code</span>
+        <select name="item_code" class="w-full rounded-lg border-slate-200">
+          <option value="">All</option>
+          {% for row in items %}<option value="{{ row.item_code }}" {% if selected_item==row.item_code %}selected{% endif %}>{{ row.item_code }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Vendor</span>
+        <select name="vendor_id" class="w-full rounded-lg border-slate-200">
+          <option value="">All</option>
+          {% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Start date</span>
+        <input type="date" name="start_date" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">End date</span>
+        <input type="date" name="end_date" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <div class="md:col-span-4 flex justify-end">
+        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Apply filters</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Price history</p>
+          <h2 class="text-lg font-semibold">PO price timeline</h2>
+        </div>
+      </div>
+      <canvas id="priceChart" class="w-full h-64"></canvas>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-1">PO</th>
+              <th class="py-1">Vendor</th>
+              <th class="py-1">Date</th>
+              <th class="py-1">Unit price</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for row in history_rows %}
+            <tr>
+              <td class="py-1">{{ row.PurchaseOrder.po_number }}</td>
+              <td class="py-1">{{ row.Vendor.name if row.Vendor else '—' }}</td>
+              <td class="py-1">{{ row.PurchaseOrder.order_date }}</td>
+              <td class="py-1">{{ row.PurchaseOrderItem.unit_price or 0 }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-2 text-slate-500">No data for filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <p class="text-xs uppercase text-slate-500">Vendor summary</p>
+        <h3 class="text-lg font-semibold mb-2">Spend by vendor</h3>
+        <div class="space-y-2">
+          {% for vendor, total in vendor_summary %}
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border">
+            <span>{{ vendor }}</span>
+            <span class="font-semibold">{{ '%.2f'|format(total or 0) }}</span>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No vendor spend yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <p class="text-xs uppercase text-slate-500">Project summary</p>
+        <h3 class="text-lg font-semibold mb-2">Spend by project</h3>
+        <div class="space-y-2">
+          {% for project, total in project_summary %}
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border">
+            <span>{{ project }}</span>
+            <span class="font-semibold">{{ '%.2f'|format(total or 0) }}</span>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No project spend yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('priceChart');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: {{ chart_labels|tojson }},
+      datasets: [{
+        label: 'Unit Price',
+        data: {{ chart_values|tojson }},
+        borderColor: '#fb923c',
+        backgroundColor: 'rgba(251, 146, 60, 0.15)',
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      interaction: { intersect: false, mode: 'index' },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Store · Receive Material{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Receive Material & QC</h1>
+    </div>
+  </div>
+
+  <form method="POST" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+    {{ csrf_field() }}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <label class="space-y-1">
+        <span class="text-sm">Purchase Order</span>
+        <select name="purchase_order_id" class="w-full rounded-lg border-slate-200">
+          {% for po in pos %}
+            <option value="{{ po.id }}">{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Receipt number</span>
+        <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Received date</span>
+        <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" />
+      </label>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Item</th>
+            <th class="py-2">Description</th>
+            <th class="py-2">Qty received</th>
+            <th class="py-2">QC</th>
+            <th class="py-2">Notes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% if pos %}
+            {% for item in pos[0].items %}
+            <tr>
+              <td class="py-2">{{ item.item_code }}</td>
+              <td class="py-2">{{ item.description }}</td>
+              <td class="py-2"><input type="number" step="0.01" name="item_{{ item.id }}_qty" class="w-28 rounded-lg border-slate-200" value="{{ item.quantity_ordered }}" /></td>
+              <td class="py-2">
+                <select name="item_{{ item.id }}_qc" class="rounded-lg border-slate-200">
+                  <option value="OK">OK</option>
+                  <option value="NG">NG</option>
+                </select>
+              </td>
+              <td class="py-2"><input type="text" name="item_{{ item.id }}_notes" class="w-full rounded-lg border-slate-200" /></td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="5" class="py-3 text-slate-500">No purchase orders available.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex justify-end">
+      <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save receipt</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

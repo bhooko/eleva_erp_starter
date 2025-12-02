@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Store · Dispatch{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Dispatch / Delivery Challan</h1>
+    </div>
+  </div>
+
+  <form method="POST" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+    {{ csrf_field() }}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <label class="space-y-1">
+        <span class="text-sm">Dispatch number</span>
+        <input type="text" name="dispatch_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Project</span>
+        <select name="project_id" class="w-full rounded-lg border-slate-200">
+          {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Dispatch date</span>
+        <input type="date" name="dispatch_date" class="w-full rounded-lg border-slate-200" />
+      </label>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <label class="space-y-1">
+        <span class="text-sm">Vehicle details</span>
+        <input type="text" name="vehicle_details" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Driver name</span>
+        <input type="text" name="driver_name" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Notes</span>
+        <input type="text" name="notes" class="w-full rounded-lg border-slate-200" />
+      </label>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <label class="space-y-1">
+        <span class="text-sm">Item code</span>
+        <select name="item_code" class="w-full rounded-lg border-slate-200">
+          {% for item in inventory %}<option value="{{ item.item_code }}">{{ item.item_code }} ({{ item.current_stock }})</option>{% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Description</span>
+        <input type="text" name="description" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Unit</span>
+        <input type="text" name="unit" class="w-full rounded-lg border-slate-200" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Quantity</span>
+        <input type="number" step="0.01" name="quantity_dispatched" class="w-full rounded-lg border-slate-200" />
+      </label>
+    </div>
+    <div class="flex justify-end">
+      <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Create dispatch</button>
+    </div>
+  </form>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {% for dispatch in dispatches %}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Dispatch</p>
+          <h3 class="text-lg font-semibold">{{ dispatch.dispatch_number }}</h3>
+          <p class="text-sm text-slate-500">{{ dispatch.dispatch_date }}</p>
+        </div>
+        <span class="px-3 py-1 bg-slate-100 rounded-full text-sm">{{ dispatch.project.name if dispatch.project else 'General' }}</span>
+      </div>
+      <div class="text-sm text-slate-600 border-t pt-2 space-y-1">
+        {% for item in dispatch.items %}
+          <p>{{ item.item_code }} · {{ item.quantity_dispatched }} {{ item.unit }}</p>
+        {% else %}
+          <p class="text-slate-500">No items recorded.</p>
+        {% endfor %}
+      </div>
+      <div class="border-t pt-2 text-xs text-slate-500">
+        <p>Vehicle: {{ dispatch.vehicle_details or '—' }}</p>
+        <p>Driver: {{ dispatch.driver_name or '—' }}</p>
+      </div>
+      <div class="border-t pt-3">
+        <p class="text-xs uppercase text-slate-500">Delivery Challan</p>
+        <div class="bg-slate-50 border rounded-xl p-3 text-sm">
+          <p class="font-semibold">Eleva Elevators & Escalators Pvt Ltd</p>
+          <p>Dispatch #: {{ dispatch.dispatch_number }} · Date: {{ dispatch.dispatch_date }}</p>
+          <p>Project: {{ dispatch.project.name if dispatch.project else 'General' }}</p>
+          <div class="mt-2">
+            {% for item in dispatch.items %}
+            <p>- {{ item.item_code }} · {{ item.description or 'Item' }} ({{ item.quantity_dispatched }} {{ item.unit }})</p>
+            {% endfor %}
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-3">
+            <p>Prepared by: ____________</p>
+            <p>Checked by: ____________</p>
+            <p>Store Incharge: ____________</p>
+            <p>Site Incharge: ____________</p>
+          </div>
+          <button onclick="window.print()" class="mt-3 px-3 py-1 rounded-lg bg-slate-900 text-white text-xs">Print</button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No dispatches yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
