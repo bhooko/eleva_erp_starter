@@ -6715,6 +6715,13 @@ def sales_task_toggle(task_id):
     return redirect(url_for("sales_tasks", tab=request.form.get("active_tab") or "taskboard"))
 
 
+@app.route("/sales/settings")
+@login_required
+def sales_settings():
+    _module_visibility_required("sales")
+    return render_template("sales_settings.html")
+
+
 @app.route("/sales/clients")
 @login_required
 def sales_clients():
@@ -9698,24 +9705,14 @@ def projects_pending():
 @login_required
 def forms_list():
     _module_visibility_required("qc")
-    sort = (request.args.get("sort") or "name").lower()
-    direction = (request.args.get("direction") or "asc").lower()
-    sort_map = {
-        "name": FormSchema.name,
-        "stage": FormSchema.stage,
-        "lift_type": FormSchema.lift_type,
-        "updated_at": FormSchema.updated_at,
-        "is_primary": FormSchema.is_primary,
-    }
-    sort_column = sort_map.get(sort, FormSchema.name)
-    ordered_column = sort_column.desc() if direction == "desc" else sort_column.asc()
-    forms = FormSchema.query.order_by(ordered_column, FormSchema.id.asc()).all()
-    return render_template(
-        "forms_list.html",
-        forms=forms,
-        category_label="Forms",
-        category_url=url_for('forms_list')
-    )
+    params = {"tab": "templates"}
+    sort = request.args.get("sort")
+    direction = request.args.get("direction")
+    if sort:
+        params["sort"] = sort
+    if direction:
+        params["direction"] = direction
+    return redirect(url_for("qc_settings", **params))
 
 
 @app.route("/forms/new", methods=["GET", "POST"])
@@ -9738,7 +9735,7 @@ def forms_new():
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=[],
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         if not name:
@@ -9750,7 +9747,7 @@ def forms_new():
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         if stage and stage not in STAGES:
@@ -9762,7 +9759,7 @@ def forms_new():
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
         if lift_type and lift_type not in LIFT_TYPES:
             flash("Select a valid Lift Type.", "error")
@@ -9773,7 +9770,7 @@ def forms_new():
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         if is_primary and (not stage or not lift_type):
@@ -9785,7 +9782,7 @@ def forms_new():
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         item = FormSchema(
@@ -9809,7 +9806,7 @@ def forms_new():
             )
         db.session.commit()
         flash("Form created", "success")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     return render_template(
         "forms_edit.html",
@@ -9818,7 +9815,7 @@ def forms_new():
         LIFT_TYPES=LIFT_TYPES,
         initial_schema=[],
         category_label="Forms",
-        category_url=url_for('forms_list')
+        category_url=url_for('qc_settings', tab='templates')
     )
 
 
@@ -9829,7 +9826,7 @@ def forms_edit(form_id):
     item = db.session.get(FormSchema, form_id)
     if not item:
         flash("Form not found", "error")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
@@ -9847,7 +9844,7 @@ def forms_edit(form_id):
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=[],
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         if name:
@@ -9863,7 +9860,7 @@ def forms_edit(form_id):
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
         if lift_type and lift_type not in LIFT_TYPES:
             flash("Select a valid Lift Type.", "error")
@@ -9874,7 +9871,7 @@ def forms_edit(form_id):
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         item.stage = stage or None
@@ -9890,7 +9887,7 @@ def forms_edit(form_id):
                 LIFT_TYPES=LIFT_TYPES,
                 initial_schema=schema,
                 category_label="Forms",
-                category_url=url_for('forms_list')
+                category_url=url_for('qc_settings', tab='templates')
             )
 
         item.is_primary = is_primary
@@ -9904,7 +9901,7 @@ def forms_edit(form_id):
             )
         db.session.commit()
         flash("Form updated", "success")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     return render_template(
         "forms_edit.html",
@@ -9913,7 +9910,7 @@ def forms_edit(form_id):
         LIFT_TYPES=LIFT_TYPES,
         initial_schema=json.loads(item.schema_json or "[]"),
         category_label="Forms",
-        category_url=url_for('forms_list')
+        category_url=url_for('qc_settings', tab='templates')
     )
 
 
@@ -9926,7 +9923,7 @@ def forms_delete(form_id):
         db.session.delete(item)
         db.session.commit()
         flash("Form deleted", "info")
-    return redirect(url_for("forms_list"))
+    return redirect(url_for("qc_settings", tab="templates"))
 
 
 @app.route("/forms/<int:form_id>/duplicate", methods=["POST"])
@@ -9936,7 +9933,7 @@ def forms_duplicate(form_id):
     source = db.session.get(FormSchema, form_id)
     if not source:
         flash("Form not found", "error")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     copy_name = f"{source.name} (Copy)"
     duplicate_form = FormSchema(
@@ -9962,7 +9959,7 @@ def forms_fill(form_id):
     fs = db.session.get(FormSchema, form_id)
     if not fs:
         flash("Form not found", "error")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     schema_raw = json.loads(fs.schema_json)
     sections, is_sectioned = _normalize_form_schema(schema_raw)
@@ -10050,7 +10047,7 @@ def forms_fill(form_id):
             sections=sections,
             is_sectioned=is_sectioned,
             category_label="Forms",
-            category_url=url_for('forms_list'),
+            category_url=url_for('qc_settings', tab='templates'),
             subcategory_label=subcategory_label or fs.name,
             back_url=back_url,
             draft_key=draft_key,
@@ -10244,19 +10241,19 @@ def forms_preview(form_id):
     fs = db.session.get(FormSchema, form_id)
     if not fs:
         flash("Form not found", "error")
-        return redirect(url_for("forms_list"))
+        return redirect(url_for("qc_settings", tab="templates"))
 
     schema_raw = json.loads(fs.schema_json or "[]")
     sections, is_sectioned = _normalize_form_schema(schema_raw)
     draft_key = f"qc_form_{form_id}_preview"
-    back_url = request.referrer or url_for("forms_list")
+    back_url = request.referrer or url_for("qc_settings", tab="templates")
     return render_template(
         "form_render.html",
         fs=fs,
         sections=sections,
         is_sectioned=is_sectioned,
         category_label="Forms",
-        category_url=url_for('forms_list'),
+        category_url=url_for('qc_settings', tab='templates'),
         subcategory_label=f"Preview – {fs.name}",
         preview_only=True,
         draft_key=draft_key,
@@ -10889,39 +10886,67 @@ def project_task_create(project_id):
     return redirect(url_for("qc_work_detail", work_id=work.id))
 
 
-@app.route("/project-templates", methods=["GET", "POST"])
-@login_required
-def project_templates():
-    _module_visibility_required("operations")
-    if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        description = (request.form.get("description") or "").strip()
-        if not name:
-            flash("Template name is required.", "error")
-        else:
-            template = ProjectTemplate(
-                name=name,
-                description=description or None,
-                created_by=current_user.id
-            )
-            db.session.add(template)
-            db.session.commit()
-            flash("Project template created.", "success")
-            return redirect(url_for("project_template_detail", template_id=template.id))
-
+def _load_project_template_context():
     templates = ProjectTemplate.query.order_by(ProjectTemplate.name.asc()).all()
     template_counts = {
         tpl.id: len(tpl.tasks)
         for tpl in templates
     }
     task_templates = TaskTemplate.query.order_by(TaskTemplate.created_at.desc()).all()
-    return render_template(
-        "project_templates.html",
-        templates=templates,
-        template_counts=template_counts,
-        task_templates=task_templates,
-        DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME
+    return {
+        "templates": templates,
+        "template_counts": template_counts,
+        "task_templates": task_templates,
+        "DEFAULT_TASK_FORM_NAME": DEFAULT_TASK_FORM_NAME,
+    }
+
+
+def _handle_project_template_create():
+    if request.method != "POST":
+        return None
+
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    if not name:
+        flash("Template name is required.", "error")
+        return None
+
+    template = ProjectTemplate(
+        name=name,
+        description=description or None,
+        created_by=current_user.id
     )
+    db.session.add(template)
+    db.session.commit()
+    flash("Project template created.", "success")
+    return redirect(url_for("project_template_detail", template_id=template.id))
+
+
+def _render_ni_settings(default_tab="settings"):
+    active_tab = request.args.get("tab") or default_tab
+    creation_result = _handle_project_template_create()
+    if request.method == "POST":
+        active_tab = "project-templates"
+    if creation_result:
+        return creation_result
+
+    context = _load_project_template_context()
+    context["active_tab"] = active_tab
+    return render_template("ni_settings.html", **context)
+
+
+@app.route("/projects/settings", methods=["GET", "POST"])
+@login_required
+def ni_settings():
+    _module_visibility_required("operations")
+    return _render_ni_settings()
+
+
+@app.route("/project-templates", methods=["GET", "POST"])
+@login_required
+def project_templates():
+    _module_visibility_required("operations")
+    return _render_ni_settings(default_tab="project-templates")
 
 
 @app.route("/project-templates/<int:template_id>", methods=["GET", "POST"])
@@ -11086,7 +11111,7 @@ def create_project_template_from_task_template(task_template_id):
     description = (request.form.get("description") or task_template.description or "").strip()
     if not name:
         flash("Template name is required.", "error")
-        return redirect(url_for("project_templates"))
+        return redirect(url_for("ni_settings", tab="project-templates"))
 
     new_template = ProjectTemplate(
         name=name,
@@ -11114,13 +11139,13 @@ def project_template_delete(template_id):
     template = ProjectTemplate.query.get_or_404(template_id)
     if not (current_user.is_admin or template.created_by == current_user.id):
         flash("You do not have permission to delete this template.", "error")
-        return redirect(url_for("project_templates"))
+        return redirect(url_for("ni_settings", tab="project-templates"))
 
     name = template.name or f'Template {template.id}'
     db.session.delete(template)
     db.session.commit()
     flash(f"Project template '{name}' deleted.", "success")
-    return redirect(url_for("project_templates"))
+    return redirect(url_for("ni_settings", tab="project-templates"))
 
 
 
@@ -15542,11 +15567,34 @@ def qc_home():
     )
 
 
+def _render_qc_settings(default_tab="settings"):
+    active_tab = request.args.get("tab") or default_tab
+    sort = (request.args.get("sort") or "name").lower()
+    direction = (request.args.get("direction") or "asc").lower()
+    sort_map = {
+        "name": FormSchema.name,
+        "stage": FormSchema.stage,
+        "lift_type": FormSchema.lift_type,
+        "updated_at": FormSchema.updated_at,
+        "is_primary": FormSchema.is_primary,
+    }
+    sort_column = sort_map.get(sort, FormSchema.name)
+    ordered_column = sort_column.desc() if direction == "desc" else sort_column.asc()
+    forms = FormSchema.query.order_by(ordered_column, FormSchema.id.asc()).all()
+    return render_template(
+        "qc_settings.html",
+        active_tab=active_tab,
+        forms=forms,
+        sort=sort,
+        direction=direction,
+    )
+
+
 @app.route("/qc/settings")
 @login_required
 def qc_settings():
     _module_visibility_required("qc")
-    return render_template("qc_settings.html")
+    return _render_qc_settings()
 
 
 @app.route("/qc/work/new", methods=["POST"])

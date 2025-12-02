@@ -11,7 +11,7 @@
 <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 shadow-inner shadow-black/20 animate-slide">
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-xl font-semibold tracking-tight">{{ 'Edit Form' if item else 'New Form' }}</h2>
-    <a href="{{ url_for('forms_list') }}" class="text-sm px-3 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">Back to Forms</a>
+    <a href="{{ url_for('qc_settings', tab='templates') }}" class="text-sm px-3 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">Back to Forms</a>
   </div>
 
   <form method="post" class="grid md:grid-cols-2 gap-4">
@@ -99,7 +99,7 @@
       <button class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">
         Save
       </button>
-      <a href="{{ url_for('forms_list') }}"
+      <a href="{{ url_for('qc_settings', tab='templates') }}"
          class="px-5 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 transition">
         Cancel
       </a>

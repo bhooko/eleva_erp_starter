@@ -48,7 +48,7 @@
               class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/60 shadow shadow-black/20 transition">
         Save profile
       </button>
-      <a href="{{ url_for('forms_list') if 'forms_list' in current_app.view_functions else url_for('dashboard') }}"
+      <a href="{{ url_for('qc_settings', tab='templates') if 'forms_list' in current_app.view_functions else url_for('dashboard') }}"
          class="px-4 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">
         Cancel
       </a>
