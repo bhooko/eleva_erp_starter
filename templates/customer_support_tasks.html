@@ -62,7 +62,8 @@
                 {% endfor %}
               </div>
             {% endif %}
-            <span>Owner: {{ ticket.assignee }}</span>
+            <span>Owner: {{ ticket.owner or 'Unassigned' }}</span>
+            <span>Assigned to: {{ ticket.assignee }}</span>
             <div class="ml-auto flex items-center gap-2">
               {% if ticket.status not in ['Resolved', 'Closed'] %}
                 <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/50 bg-emerald-400/15 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-400/25" data-mark-resolved data-ticket-id="{{ ticket.id }}" data-ticket-subject="{{ ticket.subject }}" data-ticket-summary="{{ ticket.id }}{% if ticket.subject %} · {{ ticket.subject }}{% endif %}" data-ticket-has-open-tasks="{{ 'true' if has_open_tasks else 'false' }}">
@@ -229,7 +230,7 @@
           <label class="text-xs uppercase tracking-wide text-slate-500">Ticket remarks</label>
           <textarea name="remarks" rows="3" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Add detailed notes or follow-up context">{{ add_ticket_form_data.get('remarks', '') }}</textarea>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">SLA Priority</label>
             <select name="sla_priority" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" required>
@@ -237,6 +238,19 @@
               {% for sla in sla_presets %}
                 <option value="{{ sla.id }}" {% if add_ticket_form_data.get('sla_priority') == sla.id %}selected{% endif %}>{{ sla.label }} · {{ sla.first_response_hours }}h / {{ sla.resolution_hours }}h</option>
               {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Owner</label>
+            <select name="owner" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+              <option value="">Unassigned</option>
+              {% if active_support_users %}
+                {% for user in active_support_users %}
+                  <option value="{{ user.id }}" {% if add_ticket_form_data.get('owner') == user.id|string %}selected{% endif %}>{{ user.display_name }}</option>
+                {% endfor %}
+              {% else %}
+                <option value="" disabled>No ERP users available</option>
+              {% endif %}
             </select>
           </div>
           <div>
@@ -308,7 +322,7 @@
           <label class="text-xs uppercase tracking-wide text-slate-500">Details</label>
           <textarea name="details" rows="3" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Outline the work to be completed"></textarea>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Assign to</label>
             <select name="assignee" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-category-source="linked-task">
@@ -318,6 +332,15 @@
               {% endfor %}
             </select>
             <p class="mt-1 text-sm text-slate-500">Only active portal users appear in this list.</p>
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Owner</label>
+            <select name="owner_id" class="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+              <option value="">Unassigned</option>
+              {% for user in active_support_users %}
+                <option value="{{ user.id }}">{{ user.display_name }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div>
             <label class="text-xs uppercase tracking-wide text-slate-500">Due date</label>
@@ -445,6 +468,18 @@
                   {% for option in priority_options %}
                     <option value="{{ option }}" {{ 'selected' if option == selected_ticket.priority else '' }}>{{ option }}</option>
                   {% endfor %}
+                </select>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span>Owner</span>
+                <select name="owner" class="w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 text-xs">
+                  <option value="" {{ 'selected' if (selected_ticket.get('owner_user_id') is none and (selected_ticket.owner or 'Unassigned') == 'Unassigned') else '' }}>Unassigned</option>
+                  {% for user in active_support_users %}
+                    <option value="{{ user.id }}" {{ 'selected' if user.id == selected_ticket.get('owner_user_id') else '' }}>{{ user.display_name }}</option>
+                  {% endfor %}
+                  {% if selected_ticket.owner and selected_ticket.owner not in ['Unassigned', ''] and selected_ticket.get('owner_user_id') is none %}
+                    <option value="{{ selected_ticket.owner }}" selected>{{ selected_ticket.owner }} (not in ERP)</option>
+                  {% endif %}
                 </select>
               </div>
               <div class="flex items-center justify-between gap-3">
@@ -584,7 +619,7 @@
                       </span>
                     </div>
                     <p class="mt-1 text-slate-300">{{ task.title }}</p>
-                    <p class="mt-1 text-xs text-slate-500">Assignee: {{ task.assignee }} · Status: {{ task.status }}{% if task.priority %} · Priority: {{ task.priority }}{% endif %}</p>
+                    <p class="mt-1 text-xs text-slate-500">Owner: {{ task.owner or 'Unassigned' }} · Assignee: {{ task.assignee }} · Status: {{ task.status }}{% if task.priority %} · Priority: {{ task.priority }}{% endif %}</p>
                     {% if task.details %}
                       <p class="mt-1 text-xs text-slate-400">{{ task.details }}</p>
                     {% endif %}

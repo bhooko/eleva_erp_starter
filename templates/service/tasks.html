@@ -28,6 +28,7 @@
             <th class="px-6 py-3">Lift ID</th>
             <th class="px-6 py-3">Call type</th>
             <th class="px-6 py-3">Priority</th>
+            <th class="px-6 py-3">Owner</th>
             <th class="px-6 py-3">Assigned tech(s)</th>
             <th class="px-6 py-3">Schedule window</th>
             <th class="px-6 py-3">SLA</th>
@@ -49,6 +50,7 @@
               <td class="px-6 py-4">
                 <span class="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-200">{{ task.priority }}</span>
               </td>
+              <td class="px-6 py-4 text-xs">{{ task.owner_display or 'Unassigned' }}</td>
               <td class="px-6 py-4 text-xs">{{ task.technician_display or 'Unassigned' }}</td>
               <td class="px-6 py-4 text-xs text-slate-300">{{ task.schedule_window }}</td>
               <td class="px-6 py-4 text-xs text-slate-300">{{ task.sla }}</td>

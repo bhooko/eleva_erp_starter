@@ -78,6 +78,7 @@
             —
           {% endif %}
         </p>
+        <p class="text-slate-300"><span class="text-slate-400">Owner:</span> {{ work.creator.display_name if work.creator else '—' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Assigned to:</span> {{ work.assignee.display_name if work.assignee else 'Unassigned' }}</p>
         <p class="text-slate-300"><span class="text-slate-400">Created:</span> {{ work.created_at.strftime('%Y-%m-%d') }}</p>
       </div>
