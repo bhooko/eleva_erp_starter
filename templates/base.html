@@ -795,7 +795,7 @@
 
         {% if current_user.is_authenticated and current_user.can_view_module('service') %}
           {% set service_endpoints = [
-            'service_home','service_overview','service_tasks','service_customers','service_lifts','service_complaints','service_contracts','service_parts_materials','service_preventive_maintenance','service_automations'
+            'service_home','service_overview','service_tasks','service_customers','service_lifts','service_complaints','service_contracts','service_parts_materials','service_preventive_maintenance','service_automations','service_settings'
           ] %}
           {% set service_parent_active = request.endpoint in service_endpoints %}
           <div class="space-y-1">
@@ -841,6 +841,12 @@
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_automations' else '' }}">
                 <span class="label">Automations</span>
               </a>
+              {% if current_user.is_admin %}
+                <a href="{{ url_for('service_settings') }}"
+                   class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'service_settings' else '' }}">
+                  <span class="label">Service Settings</span>
+                </a>
+              {% endif %}
             </div>
           </div>
         {% endif %}

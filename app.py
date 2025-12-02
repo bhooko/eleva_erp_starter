@@ -6021,10 +6021,6 @@ def settings():
     department_options = []
     position_options = []
 
-    service_routes = ServiceRoute.query.order_by(
-        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
-    ).all()
-    dropdown_options = get_dropdown_options_map()
     admin_settings = _load_admin_settings()
     app.config["ADMIN_SETTINGS"] = admin_settings
     app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(admin_settings)
@@ -6052,12 +6048,6 @@ def settings():
         department_branches=DEPARTMENT_BRANCHES,
         positions=positions,
         position_options=position_options,
-        support_categories=CUSTOMER_SUPPORT_CATEGORIES,
-        support_channels=CUSTOMER_SUPPORT_CHANNELS,
-        support_sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
-        service_routes=service_routes,
-        dropdown_options=dropdown_options,
-        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         admin_settings=admin_settings,
     )
 
@@ -6100,22 +6090,22 @@ def settings_service_route_create():
     route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
     if not route_name:
         flash("Route name is required to add a route.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     branch_value, error = validate_branch(request.form.get("branch"), required=True)
     if error:
         flash(error, "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower()).first()
     if existing:
         flash("A route with that name already exists.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     db.session.add(ServiceRoute(state=route_name, branch=branch_value))
     db.session.commit()
     flash(f"Route '{route_name}' for branch {branch_value} added.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/settings/service/routes/<int:route_id>/update", methods=["POST"])
@@ -6127,17 +6117,17 @@ def settings_service_route_update(route_id):
     route = db.session.get(ServiceRoute, route_id)
     if not route:
         flash("Route not found.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
     if not route_name:
         flash("Route name cannot be empty.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     branch_value, error = validate_branch(request.form.get("branch"), required=True)
     if error:
         flash(error, "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     duplicate = (
         ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower(), ServiceRoute.id != route.id)
@@ -6145,14 +6135,14 @@ def settings_service_route_update(route_id):
     )
     if duplicate:
         flash("Another route already uses that name.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     route.state = route_name
     route.branch = branch_value
     db.session.commit()
 
     flash("Route updated.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/settings/service/routes/<int:route_id>/delete", methods=["POST"])
@@ -6164,12 +6154,12 @@ def settings_service_route_delete(route_id):
     route = db.session.get(ServiceRoute, route_id)
     if not route:
         flash("Route not found.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
 
     db.session.delete(route)
     db.session.commit()
     flash(f"Route '{route.display_name}' removed.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/admin/reset-workspace", methods=["POST"])
@@ -6241,7 +6231,7 @@ def settings_dropdown_option_create(field_key):
     value = clean_str(request.form.get("value")) if definition.get("value_editable") else None
     if not label:
         flash("Option label cannot be empty.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     if not definition.get("value_editable"):
         value = label
     elif not value:
@@ -6255,7 +6245,7 @@ def settings_dropdown_option_create(field_key):
     )
     if existing:
         flash("An option with that label already exists.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     max_order = (
         db.session.query(func.coalesce(func.max(DropdownOption.order_index), -1))
         .filter(DropdownOption.field_key == field_key)
@@ -6270,7 +6260,7 @@ def settings_dropdown_option_create(field_key):
     db.session.add(option)
     db.session.commit()
     flash("Dropdown option added.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/options/<int:option_id>", methods=["POST"])
@@ -6282,12 +6272,12 @@ def settings_dropdown_option_update(field_key, option_id):
     option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
     if not option:
         flash("Option not found.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     label = clean_str(request.form.get("label"))
     value = clean_str(request.form.get("value")) if definition.get("value_editable") else option.label
     if not label:
         flash("Option label cannot be empty.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     if not definition.get("value_editable") or not value:
         value = label
     duplicate = (
@@ -6300,12 +6290,12 @@ def settings_dropdown_option_update(field_key, option_id):
     )
     if duplicate:
         flash("Another option already uses that label.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     option.label = label
     option.value = value
     db.session.commit()
     flash("Option updated.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/options/<int:option_id>/delete", methods=["POST"])
@@ -6317,11 +6307,11 @@ def settings_dropdown_option_delete(field_key, option_id):
     option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
     if not option:
         flash("Option not found.", "error")
-        return redirect(url_for("settings", tab="modules"))
+        return redirect(url_for("service_settings"))
     db.session.delete(option)
     db.session.commit()
     flash("Option removed.", "success")
-    return redirect(url_for("settings", tab="modules"))
+    return redirect(url_for("service_settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/reorder", methods=["POST"])
@@ -11825,6 +11815,10 @@ def customer_support_settings():
     _module_visibility_required("customer_support")
     _require_admin()
 
+    tab = (request.args.get("tab") or "assignments").lower()
+    allowed_tabs = {"assignments", "configuration"}
+    active_tab = tab if tab in allowed_tabs else "assignments"
+
     settings = _load_customer_support_settings()
     if request.method == "POST":
         updated = {
@@ -11839,7 +11833,7 @@ def customer_support_settings():
 
         _save_customer_support_settings(updated)
         flash("Customer Support settings saved.", "success")
-        return redirect(url_for("customer_support_settings"))
+        return redirect(url_for("customer_support_settings", tab=active_tab))
 
     positions = Position.query.options(joinedload(Position.department)).order_by(Position.title.asc()).all()
     positions = sorted(positions, key=lambda pos: (pos.display_label or "").lower())
@@ -11849,10 +11843,32 @@ def customer_support_settings():
         settings=settings,
         categories=CUSTOMER_SUPPORT_CATEGORIES,
         positions=positions,
+        support_channels=CUSTOMER_SUPPORT_CHANNELS,
+        support_sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
+        active_tab=active_tab,
     )
 
 
 # ---------------------- SERVICE MODULE ----------------------
+
+
+@app.route("/service/settings")
+@login_required
+def service_settings():
+    _module_visibility_required("service")
+    _require_admin()
+
+    service_routes = ServiceRoute.query.order_by(
+        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
+    ).all()
+    dropdown_options = get_dropdown_options_map()
+
+    return render_template(
+        "service/service_settings.html",
+        service_routes=service_routes,
+        dropdown_options=dropdown_options,
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+    )
 
 
 def _coerce_date(value):

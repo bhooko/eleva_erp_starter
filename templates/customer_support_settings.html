@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Customer Support Settings · Eleva ERP{% endblock %}
 {% block content %}
+{% set active = active_tab or 'assignments' %}
 <div class="min-h-screen bg-slate-950/70 text-slate-100">
-  <div class="mx-auto max-w-6xl px-6 py-10">
+  <div class="mx-auto max-w-6xl px-6 py-10 space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p class="text-xs uppercase tracking-wide text-amber-300">Customer Support</p>
@@ -11,67 +12,532 @@
       </div>
       <a href="{{ url_for('customer_support_overview') }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/70">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6.75L5.25 12l5.25 5.25M5.25 12h13.5" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6.75 5.25 12l5.25 5.25M5.25 12h13.5" />
         </svg>
         <span>Back to CS overview</span>
       </a>
     </div>
 
-    <form method="post" class="mt-8 space-y-6">
-      {{ csrf_field() }}
-      <section class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-5">
-        <div class="flex flex-col gap-1">
-          <h2 class="text-lg font-semibold text-slate-100">Category wise assignment by position</h2>
-          <p class="text-sm text-slate-400">Control which positions can own tickets inside each CS category. Assignments in the Tasks board will follow this matrix.</p>
-          <p class="text-xs uppercase tracking-wide text-slate-500">Positions missing from a category will be hidden from the assignee dropdown.</p>
-        </div>
+    <div class="rounded-2xl border border-slate-800/60 bg-slate-900/50 shadow-lg shadow-black/20">
+      <div class="flex flex-wrap gap-2 border-b border-slate-800/60 bg-slate-900/60 px-4 pt-4" role="tablist">
+        <button type="button" class="tab-trigger relative rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 {{ 'bg-slate-800/70 text-slate-100' if active == 'assignments' else 'text-slate-400 hover:text-slate-200' }}" data-tab-button="assignments" aria-selected="{{ 'true' if active == 'assignments' else 'false' }}" aria-controls="cs-settings-panel-assignments" id="cs-settings-tab-assignments">Assignments</button>
+        <button type="button" class="tab-trigger relative rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 {{ 'bg-slate-800/70 text-slate-100' if active == 'configuration' else 'text-slate-400 hover:text-slate-200' }}" data-tab-button="configuration" aria-selected="{{ 'true' if active == 'configuration' else 'false' }}" aria-controls="cs-settings-panel-configuration" id="cs-settings-tab-configuration">Configuration</button>
+      </div>
 
-        {% set assignments = settings.category_position_assignments or {} %}
-        <div class="grid gap-4 lg:grid-cols-2">
-          {% for category in categories %}
-            <div class="rounded-xl border border-slate-800/60 bg-slate-950/60 p-5 space-y-3">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p class="text-xs uppercase tracking-wide text-slate-500">{{ category.id }}</p>
-                  <h3 class="text-base font-semibold text-slate-100">{{ category.label }}</h3>
-                  <p class="text-sm text-slate-400">{{ category.description }}</p>
-                </div>
-                <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">Assignees</span>
+      <div class="space-y-8 p-6">
+        <section id="cs-settings-panel-assignments" class="motion-panel space-y-5 {{ 'is-active' if active == 'assignments' else 'hidden' }}" role="tabpanel" aria-labelledby="cs-settings-tab-assignments" data-tab-panel="assignments">
+          <form method="post" class="space-y-6">
+            {{ csrf_field() }}
+            <section class="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-5">
+              <div class="flex flex-col gap-1">
+                <h2 class="text-lg font-semibold text-slate-100">Category wise assignment by position</h2>
+                <p class="text-sm text-slate-400">Control which positions can own tickets inside each CS category. Assignments in the Tasks board will follow this matrix.</p>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Positions missing from a category will be hidden from the assignee dropdown.</p>
               </div>
 
-              {% set category_assignments = assignments.get(category.id) or [] %}
-              {% if positions %}
-                <div class="grid gap-2">
-                  {% for position in positions %}
-                    <label class="flex items-center gap-3 rounded-lg border border-slate-800/50 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
-                      <input type="checkbox" name="category_positions_{{ category.id }}" value="{{ position.id }}" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400" {{ 'checked' if position.id in category_assignments else '' }}>
-                      <div class="flex flex-col">
-                        <span class="font-semibold">{{ position.display_label }}</span>
-                        {% if position.department %}
-                          <span class="text-xs text-slate-500">{{ position.department.full_name }}</span>
-                        {% endif %}
+              {% set assignments = settings.category_position_assignments or {} %}
+              <div class="grid gap-4 lg:grid-cols-2">
+                {% for category in categories %}
+                  <div class="rounded-xl border border-slate-800/60 bg-slate-950/60 p-5 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-500">{{ category.id }}</p>
+                        <h3 class="text-base font-semibold text-slate-100">{{ category.label }}</h3>
+                        <p class="text-sm text-slate-400">{{ category.description }}</p>
                       </div>
-                    </label>
-                  {% endfor %}
-                </div>
-              {% else %}
-                <p class="text-sm text-slate-400">No positions available. Add roles in <a href="{{ url_for('settings', tab='modules') }}" class="text-amber-300 hover:text-amber-200">Settings</a> to enable assignment controls.</p>
-              {% endif %}
-            </div>
-          {% endfor %}
-        </div>
-      </section>
+                      <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-200">Assignees</span>
+                    </div>
 
-      <div class="flex items-center justify-end gap-3">
-        <a href="{{ url_for('customer_support_overview') }}" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Cancel</a>
-        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30 transition">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-          <span>Save CS settings</span>
-        </button>
+                    {% set category_assignments = assignments.get(category.id) or [] %}
+                    {% if positions %}
+                      <div class="grid gap-2">
+                        {% for position in positions %}
+                          <label class="flex items-center gap-3 rounded-lg border border-slate-800/50 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
+                            <input type="checkbox" name="category_positions_{{ category.id }}" value="{{ position.id }}" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400" {{ 'checked' if position.id in category_assignments else '' }}>
+                            <div class="flex flex-col">
+                              <span class="font-semibold">{{ position.display_label }}</span>
+                              {% if position.department %}
+                                <span class="text-xs text-slate-500">{{ position.department.full_name }}</span>
+                              {% endif %}
+                            </div>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <p class="text-sm text-slate-400">No positions available. Add roles in <a href="{{ url_for('settings', tab='admin') }}" class="text-amber-300 hover:text-amber-200">Settings</a> to enable assignment controls.</p>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+
+            <div class="flex items-center justify-end gap-3">
+              <a href="{{ url_for('customer_support_overview') }}" class="rounded-xl border border-slate-700/70 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Cancel</a>
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/30 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span>Save CS settings</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section id="cs-settings-panel-configuration" class="motion-panel space-y-5 {{ 'is-active' if active == 'configuration' else 'hidden' }}" role="tabpanel" aria-labelledby="cs-settings-tab-configuration" data-tab-panel="configuration">
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-6 space-y-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-400">Categories</p>
+                <h2 class="text-base font-semibold text-slate-100">Support queues</h2>
+                <p class="text-sm text-slate-400">Map tickets to relevant departments so the right team sees them in their views.</p>
+              </div>
+              <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-emerald-400/50" data-add-category-trigger>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                </svg>
+                <span>Add category</span>
+              </button>
+            </div>
+
+            <form class="mt-4 hidden flex-col gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4 text-sm" data-add-category-form>
+              <p class="text-xs uppercase tracking-wide text-emerald-300">Create a new support category</p>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="flex flex-col gap-1 text-xs text-slate-300">
+                  <span class="uppercase tracking-wide text-slate-500">Label</span>
+                  <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="E.g. Installations" data-new-category-label>
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-slate-300 sm:col-span-2">
+                  <span class="uppercase tracking-wide text-slate-500">Description</span>
+                  <textarea rows="2" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="What kind of requests belong here?" data-new-category-description></textarea>
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-slate-300">
+                  <span class="uppercase tracking-wide text-slate-500">First response (hours)</span>
+                  <input type="number" min="0" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="4" data-new-category-first-response>
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-slate-300">
+                  <span class="uppercase tracking-wide text-slate-500">Resolution (hours)</span>
+                  <input type="number" min="0" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="24" data-new-category-resolution>
+                </label>
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Add to list</span>
+                </button>
+                <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70" data-cancel-add-category>Cancel</button>
+              </div>
+            </form>
+
+            <div class="mt-4 space-y-3" data-category-list>
+              {% for category in categories %}
+                <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3" data-category-item>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div class="text-sm font-semibold text-slate-100" data-category-label>{{ category.label }}</div>
+                      <p class="text-xs text-slate-400" data-category-description>{{ category.description }}</p>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-2">
+                      <div class="flex items-center gap-1" role="group" aria-label="Reorder {{ category.label }}">
+                        <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="up" aria-label="Move up">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+                          </svg>
+                        </button>
+                        <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="down" aria-label="Move down">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </button>
+                      </div>
+                      <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-emerald-400/50">Rename</button>
+                      <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-rose-400/50">Archive</button>
+                    </div>
+                  </div>
+                  <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                      <span>First response (hours)</span>
+                      <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ category.default_first_response_hours }}">
+                    </label>
+                    <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                      <span>Resolution (hours)</span>
+                      <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ category.default_resolution_hours }}">
+                    </label>
+                  </div>
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save timings</button>
+                    <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-slate-500/60">Reset</button>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 space-y-4">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-100">Channels</h3>
+                  <p class="text-xs text-slate-400">Choose where tickets originate — phone, email, web, walk-in or WhatsApp.</p>
+                </div>
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30" data-add-channel-trigger>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                  </svg>
+                  <span>Add channel</span>
+                </button>
+              </div>
+
+              <form class="mt-4 hidden flex-col gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4 text-sm" data-add-channel-form>
+                <p class="text-xs uppercase tracking-wide text-emerald-300">Add a channel to the list</p>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="flex flex-col gap-1 text-xs text-slate-300">
+                    <span class="uppercase tracking-wide text-slate-500">Label</span>
+                    <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="E.g. WhatsApp" data-new-channel-label>
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs text-slate-300">
+                    <span class="uppercase tracking-wide text-slate-500">Icon</span>
+                    <input type="text" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Emoji or short text" data-new-channel-icon>
+                  </label>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    <span>Add to list</span>
+                  </button>
+                  <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70" data-cancel-add-channel>Cancel</button>
+                </div>
+              </form>
+
+              <div class="mt-4 flex flex-wrap gap-2 text-sm" data-channel-list>
+                {% for channel in support_channels %}
+                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-emerald-400/40 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:border-emerald-400/60">
+                    <span class="text-lg">{{ channel.icon }}</span>
+                    <span>{{ channel.label }}</span>
+                    <input type="checkbox" checked class="ml-auto h-4 w-4 rounded border border-slate-600 bg-slate-950 text-emerald-400 focus:ring-emerald-400">
+                  </label>
+                {% endfor %}
+              </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 space-y-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-400">SLA presets</p>
+                  <h3 class="text-sm font-semibold text-slate-100">Priority timers</h3>
+                  <p class="text-xs text-slate-400">Configure first response and resolution cut-offs for each priority type.</p>
+                </div>
+                <span class="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-200">Global</span>
+              </div>
+
+              <div class="space-y-3">
+                {% for sla in support_sla_presets %}
+                  <div class="rounded-xl border border-slate-800/60 bg-slate-900/60 p-4">
+                    <div class="flex items-start justify-between gap-2">
+                      <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">{{ sla.id }}</p>
+                        <h4 class="text-sm font-semibold text-slate-100">{{ sla.label }}</h4>
+                        <p class="text-xs text-slate-400">{{ sla.description }}</p>
+                      </div>
+                      <span class="rounded-full bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">Default</span>
+                    </div>
+
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                        <span>First response (hours)</span>
+                        <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ sla.first_response_hours }}">
+                      </label>
+                      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                        <span>Resolution (hours)</span>
+                        <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="{{ sla.resolution_hours }}">
+                      </label>
+                    </div>
+                    <div class="mt-3 flex justify-end">
+                      <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save SLA priority</button>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+          </div>
+        </section>
       </div>
-    </form>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const buttons = Array.from(document.querySelectorAll('[data-tab-button]'));
+      const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+
+      function activateTab(id) {
+        buttons.forEach((button) => {
+          const isActive = button.dataset.tabButton === id;
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          button.classList.toggle('bg-slate-800/70', isActive);
+          button.classList.toggle('text-slate-100', isActive);
+          button.classList.toggle('text-slate-400', !isActive);
+          button.classList.toggle('hover:text-slate-200', !isActive);
+        });
+
+        panels.forEach((panel) => {
+          const isActive = panel.dataset.tabPanel === id;
+          panel.classList.toggle('hidden', !isActive);
+          if (isActive) {
+            panel.classList.add('is-active');
+          } else {
+            panel.classList.remove('is-active');
+          }
+        });
+
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', id);
+          window.history.replaceState({}, '', url);
+        } catch (err) {
+          // ignore
+        }
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => activateTab(button.dataset.tabButton));
+      });
+
+      const addCategoryTrigger = document.querySelector('[data-add-category-trigger]');
+      const addCategoryForm = document.querySelector('[data-add-category-form]');
+      const addCategoryCancel = document.querySelector('[data-cancel-add-category]');
+      const categoryList = document.querySelector('[data-category-list]');
+
+      const refreshCategoryReorderState = () => {
+        if (!categoryList) {
+          return;
+        }
+        const items = Array.from(categoryList.querySelectorAll('[data-category-item]'));
+        items.forEach((item, index) => {
+          const up = item.querySelector('[data-move-category="up"]');
+          const down = item.querySelector('[data-move-category="down"]');
+          if (up) {
+            up.disabled = index === 0;
+            up.classList.toggle('opacity-50', index === 0);
+            up.setAttribute('aria-disabled', index === 0 ? 'true' : 'false');
+          }
+          if (down) {
+            down.disabled = index === items.length - 1;
+            down.classList.toggle('opacity-50', index === items.length - 1);
+            down.setAttribute('aria-disabled', index === items.length - 1 ? 'true' : 'false');
+          }
+          const reorderGroup = item.querySelector('[role="group"][aria-label^="Reorder"]');
+          if (reorderGroup) {
+            const label = item.querySelector('[data-category-label]')?.textContent?.trim() || 'category';
+            reorderGroup.setAttribute('aria-label', `Reorder ${label}`);
+          }
+        });
+      };
+
+      const attachCategoryControls = (item) => {
+        if (!item) {
+          return;
+        }
+        const buttons = item.querySelectorAll('[data-move-category]');
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => {
+            if (!categoryList) {
+              return;
+            }
+            const direction = button.dataset.moveCategory;
+            const sibling = direction === 'up' ? item.previousElementSibling : item.nextElementSibling;
+            if (!sibling || !sibling.matches('[data-category-item]')) {
+              return;
+            }
+            if (direction === 'up') {
+              categoryList.insertBefore(item, sibling);
+            } else {
+              categoryList.insertBefore(sibling, item);
+            }
+            refreshCategoryReorderState();
+          });
+        });
+      };
+
+      if (categoryList) {
+        const existingItems = categoryList.querySelectorAll('[data-category-item]');
+        existingItems.forEach((item) => attachCategoryControls(item));
+        refreshCategoryReorderState();
+      }
+
+      if (addCategoryTrigger && addCategoryForm && categoryList) {
+        const labelInput = addCategoryForm.querySelector('[data-new-category-label]');
+        const descriptionInput = addCategoryForm.querySelector('[data-new-category-description]');
+        const firstResponseInput = addCategoryForm.querySelector('[data-new-category-first-response]');
+        const resolutionInput = addCategoryForm.querySelector('[data-new-category-resolution]');
+
+        const toggleCategoryForm = (show) => {
+          const shouldShow = typeof show === 'boolean' ? show : addCategoryForm.classList.contains('hidden');
+          addCategoryForm.classList.toggle('hidden', !shouldShow);
+          if (shouldShow && labelInput) {
+            requestAnimationFrame(() => labelInput.focus());
+          }
+        };
+
+        addCategoryTrigger.addEventListener('click', () => toggleCategoryForm(true));
+
+        if (addCategoryCancel) {
+          addCategoryCancel.addEventListener('click', () => {
+            addCategoryForm.reset();
+            toggleCategoryForm(false);
+          });
+        }
+
+        addCategoryForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const label = labelInput ? labelInput.value.trim() : '';
+          const description = descriptionInput ? descriptionInput.value.trim() : '';
+          const firstResponse = firstResponseInput ? parseInt(firstResponseInput.value, 10) || 0 : 0;
+          const resolution = resolutionInput ? parseInt(resolutionInput.value, 10) || 0 : 0;
+
+          if (!label) {
+            if (labelInput) {
+              labelInput.focus();
+            }
+            return;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'rounded-xl border border-slate-800/70 bg-slate-900/70 p-3';
+          card.setAttribute('data-category-item', '');
+          card.innerHTML = `
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="text-sm font-semibold text-slate-100" data-category-label></div>
+                <p class="text-xs text-slate-400" data-category-description></p>
+              </div>
+              <div class="flex flex-wrap justify-end gap-2">
+                <div class="flex items-center gap-1" role="group" aria-label="Reorder">
+                  <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="up" aria-label="Move up">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+                    </svg>
+                  </button>
+                  <button type="button" class="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400 hover:border-emerald-400/50 hover:text-emerald-200" data-move-category="down" aria-label="Move down">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="h-3.5 w-3.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+                </div>
+                <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-emerald-400/50">Rename</button>
+                <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-rose-400/50">Archive</button>
+              </div>
+            </div>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                <span>First response (hours)</span>
+                <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="0" data-category-first-response>
+              </label>
+              <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-800/60 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+                <span>Resolution (hours)</span>
+                <input type="number" min="0" class="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="0" data-category-resolution>
+              </label>
+            </div>
+            <div class="mt-3 flex justify-end gap-2">
+              <button type="button" class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/30">Save timings</button>
+              <button type="button" class="rounded-lg border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:border-slate-500/60">Reset</button>
+            </div>
+          `;
+
+          const labelTarget = card.querySelector('[data-category-label]');
+          const descriptionTarget = card.querySelector('[data-category-description]');
+          const firstResponseField = card.querySelector('[data-category-first-response]');
+          const resolutionField = card.querySelector('[data-category-resolution]');
+
+          if (labelTarget) {
+            labelTarget.textContent = label;
+          }
+          if (descriptionTarget) {
+            descriptionTarget.textContent = description || 'Newly created support queue.';
+          }
+          if (firstResponseField) {
+            firstResponseField.value = firstResponse;
+          }
+          if (resolutionField) {
+            resolutionField.value = resolution;
+          }
+
+          categoryList.appendChild(card);
+          attachCategoryControls(card);
+          refreshCategoryReorderState();
+
+          addCategoryForm.reset();
+          toggleCategoryForm(false);
+        });
+      }
+
+      const addChannelTrigger = document.querySelector('[data-add-channel-trigger]');
+      const addChannelForm = document.querySelector('[data-add-channel-form]');
+      const addChannelCancel = document.querySelector('[data-cancel-add-channel]');
+      const channelList = document.querySelector('[data-channel-list]');
+
+      if (addChannelTrigger && addChannelForm && channelList) {
+        const labelInput = addChannelForm.querySelector('[data-new-channel-label]');
+        const iconInput = addChannelForm.querySelector('[data-new-channel-icon]');
+
+        const toggleChannelForm = (show) => {
+          const shouldShow = typeof show === 'boolean' ? show : addChannelForm.classList.contains('hidden');
+          addChannelForm.classList.toggle('hidden', !shouldShow);
+          if (shouldShow && labelInput) {
+            requestAnimationFrame(() => labelInput.focus());
+          }
+        };
+
+        addChannelTrigger.addEventListener('click', () => toggleChannelForm(true));
+
+        if (addChannelCancel) {
+          addChannelCancel.addEventListener('click', () => {
+            addChannelForm.reset();
+            toggleChannelForm(false);
+          });
+        }
+
+        addChannelForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const label = labelInput ? labelInput.value.trim() : '';
+          const icon = iconInput ? iconInput.value.trim() || '🆕' : '🆕';
+
+          if (!label) {
+            if (labelInput) {
+              labelInput.focus();
+            }
+            return;
+          }
+
+          const channelTag = document.createElement('label');
+          channelTag.className = 'flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-emerald-400/40 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 hover:border-emerald-400/60';
+
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'text-lg';
+          iconSpan.textContent = icon;
+
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = label;
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = true;
+          checkbox.className = 'ml-auto h-4 w-4 rounded border border-slate-600 bg-slate-950 text-emerald-400 focus:ring-emerald-400';
+
+          channelTag.append(iconSpan, labelSpan, checkbox);
+          channelList.appendChild(channelTag);
+
+          addChannelForm.reset();
+          toggleChannelForm(false);
+        });
+      }
+    });
+  </script>
 {% endblock %}
