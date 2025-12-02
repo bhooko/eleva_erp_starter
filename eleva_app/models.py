@@ -1823,6 +1823,8 @@ class Dispatch(db.Model):
     vehicle_details = db.Column(db.String(150), nullable=True)
     driver_name = db.Column(db.String(120), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    is_completed = db.Column(db.Boolean, nullable=False, default=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
 
     project = db.relationship("Project")
     dispatched_by = db.relationship("User")

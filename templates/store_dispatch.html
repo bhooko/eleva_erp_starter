@@ -57,7 +57,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <label class="space-y-1">
             <span class="text-sm">Item code</span>
-            <select name="item_code" class="w-full rounded-lg border-slate-200">
+            <select name="item_code" class="w-full rounded-lg border-slate-200" required>
               {% for item in inventory %}<option value="{{ item.item_code }}">{{ item.item_code }} ({{ item.current_stock }})</option>{% endfor %}
             </select>
           </label>
@@ -71,7 +71,7 @@
           </label>
           <label class="space-y-1">
             <span class="text-sm">Quantity</span>
-            <input type="number" step="0.01" name="quantity_dispatched" class="w-full rounded-lg border-slate-200" />
+            <input type="number" step="0.01" min="0.01" name="quantity_dispatched" class="w-full rounded-lg border-slate-200" required />
           </label>
         </div>
         <div class="flex justify-end">
@@ -88,26 +88,123 @@
           <th class="py-3 px-4">Dispatch #</th>
           <th class="py-3 px-4">Project</th>
           <th class="py-3 px-4">Date</th>
-          <th class="py-3 px-4">Items</th>
+          <th class="py-3 px-4">Item</th>
+          <th class="py-3 px-4">Qty</th>
           <th class="py-3 px-4">Vehicle</th>
           <th class="py-3 px-4">Driver</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4 text-right">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y">
         {% for dispatch in dispatches %}
-        <tr>
+        {% set primary_item = dispatch.items[0] if dispatch.items else None %}
+        <tr class="{% if dispatch.is_completed %}bg-slate-50{% endif %}">
           <td class="py-3 px-4 font-semibold text-slate-800">{{ dispatch.dispatch_number }}</td>
           <td class="py-3 px-4">{{ dispatch.project.name if dispatch.project else 'General' }}</td>
           <td class="py-3 px-4">{{ dispatch.dispatch_date or '—' }}</td>
-          <td class="py-3 px-4">{{ dispatch.items|length }}</td>
+          <td class="py-3 px-4">{{ primary_item.item_code if primary_item else '—' }}</td>
+          <td class="py-3 px-4">{{ primary_item.quantity_dispatched if primary_item else '—' }}</td>
           <td class="py-3 px-4">{{ dispatch.vehicle_details or '—' }}</td>
           <td class="py-3 px-4">{{ dispatch.driver_name or '—' }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700' if dispatch.is_completed else 'bg-amber-100 text-amber-700' }}">
+              {{ 'Completed' if dispatch.is_completed else 'Open' }}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right space-x-2">
+            <label for="edit-dispatch-{{ dispatch.id }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border {{ 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed pointer-events-none' if dispatch.is_completed else 'border-slate-200 hover:bg-slate-50 cursor-pointer' }}">
+              ✎ Edit
+            </label>
+            <form method="POST" action="{{ url_for('complete_dispatch', dispatch_id=dispatch.id) }}" class="inline">
+              {{ csrf_field() }}
+              <button type="submit" class="px-3 py-1.5 rounded-lg {{ 'bg-slate-100 text-slate-400 cursor-not-allowed' if dispatch.is_completed else 'bg-emerald-500 text-white hover:bg-emerald-600' }}" {% if dispatch.is_completed %}disabled{% endif %}>Mark complete</button>
+            </form>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="py-4 px-4 text-slate-500">No dispatches yet.</td></tr>
+        <tr><td colspan="9" class="py-4 px-4 text-slate-500">No dispatches yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% for dispatch in dispatches %}
+  {% set primary_item = dispatch.items[0] if dispatch.items else None %}
+  <input type="checkbox" id="edit-dispatch-{{ dispatch.id }}" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('edit-dispatch-{{ dispatch.id }}').checked=false;"></div>
+  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Dispatch</p>
+          <h2 class="text-lg font-semibold">Edit dispatch</h2>
+        </div>
+        <button class="text-slate-500" onclick="document.getElementById('edit-dispatch-{{ dispatch.id }}').checked=false;">✕</button>
+      </div>
+      <form method="POST" action="{{ url_for('edit_dispatch', dispatch_id=dispatch.id) }}" class="p-5 space-y-4">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="space-y-1">
+            <span class="text-sm">Dispatch number</span>
+            <input type="text" name="dispatch_number" class="w-full rounded-lg border-slate-200" value="{{ dispatch.dispatch_number }}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Project</span>
+            <select name="project_id" class="w-full rounded-lg border-slate-200">
+              <option value="">General</option>
+              {% for project in projects %}
+                <option value="{{ project.id }}" {% if dispatch.project_id == project.id %}selected{% endif %}>{{ project.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Dispatch date</span>
+            <input type="date" name="dispatch_date" class="w-full rounded-lg border-slate-200" value="{{ dispatch.dispatch_date.strftime('%Y-%m-%d') if dispatch.dispatch_date else '' }}" />
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="space-y-1">
+            <span class="text-sm">Vehicle details</span>
+            <input type="text" name="vehicle_details" class="w-full rounded-lg border-slate-200" value="{{ dispatch.vehicle_details or '' }}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Driver name</span>
+            <input type="text" name="driver_name" class="w-full rounded-lg border-slate-200" value="{{ dispatch.driver_name or '' }}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Notes</span>
+            <input type="text" name="notes" class="w-full rounded-lg border-slate-200" value="{{ dispatch.notes or '' }}" />
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <label class="space-y-1">
+            <span class="text-sm">Item code</span>
+            <select name="item_code" class="w-full rounded-lg border-slate-200" required>
+              {% for item in inventory %}
+                <option value="{{ item.item_code }}" {% if primary_item and primary_item.item_code == item.item_code %}selected{% endif %}>{{ item.item_code }} ({{ item.current_stock }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Description</span>
+            <input type="text" name="description" class="w-full rounded-lg border-slate-200" value="{{ primary_item.description if primary_item else '' }}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Unit</span>
+            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" value="{{ primary_item.unit if primary_item else '' }}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Quantity</span>
+            <input type="number" step="0.01" min="0.01" name="quantity_dispatched" class="w-full rounded-lg border-slate-200" value="{{ primary_item.quantity_dispatched if primary_item else '' }}" required />
+          </label>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button type="button" class="px-4 py-2 rounded-lg border border-slate-200" onclick="document.getElementById('edit-dispatch-{{ dispatch.id }}').checked=false;">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Update dispatch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
 </div>
 {% endblock %}
