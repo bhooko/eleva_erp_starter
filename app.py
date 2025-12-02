@@ -6566,6 +6566,12 @@ def sales_tasks():
             else:
                 related_type = "general"
 
+            owner_id = request.form.get("owner_id", type=int)
+            owner_user = db.session.get(User, owner_id) if owner_id else None
+            if owner_user and not owner_user.can_be_assigned_module("sales"):
+                flash("Selected assignee cannot be assigned sales tasks.", "error")
+                return redirect(url_for("sales_tasks", tab=active_tab))
+
             task = SalesTask(
                 title=title,
                 category=(request.form.get("category") or "task").strip() or "task",
@@ -6574,7 +6580,7 @@ def sales_tasks():
                 related_type=related_type,
                 opportunity_id=opportunity_id,
                 client_id=client_id,
-                owner=current_user,
+                owner=owner_user or current_user,
             )
             db.session.add(task)
             db.session.commit()
@@ -6629,6 +6635,11 @@ def sales_tasks():
         .order_by(func.lower(SalesOpportunity.title))
         .all()
     )
+    sales_owners = [
+        user
+        for user in User.query.filter(User.active.is_(True)).all()
+        if user.can_be_assigned_module("sales") and user.id != current_user.id
+    ]
     clients = SalesClient.query.order_by(func.lower(SalesClient.display_name)).all()
 
     previous_month = (month_start - datetime.timedelta(days=1)).replace(day=1)
@@ -6648,6 +6659,7 @@ def sales_tasks():
         tasks_by_date=tasks_by_date,
         calendar_month_label=month_start.strftime("%B %Y"),
         opportunities=opportunities,
+        sales_owners=sales_owners,
         clients=clients,
         calendar_prev_month=previous_month.strftime("%Y-%m"),
         calendar_next_month=next_month.strftime("%Y-%m"),

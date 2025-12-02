@@ -3,38 +3,34 @@
 
 {% macro render_dashboard_cards(modules, empty_text) %}
   {% set cards = namespace(count=0) %}
-  <div x-data="{ filter: 'all' }" class="space-y-4">
+  <div class="space-y-4" data-filter-scope>
     <div class="flex flex-wrap items-center gap-2 mb-1">
       <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
       <button
         type="button"
         class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        :class="filter === 'all' ? 'bg-slate-200 text-slate-900 border-slate-200 font-semibold' : ''"
-        @click="filter = 'all'"
+        data-filter-value="all"
       >
         All
       </button>
       <button
         type="button"
         class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        :class="filter === 'overdue' ? 'bg-rose-200/80 text-rose-900 border-rose-200 font-semibold' : ''"
-        @click="filter = 'overdue'"
+        data-filter-value="overdue"
       >
         Overdue
       </button>
       <button
         type="button"
         class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        :class="filter === 'today' ? 'bg-amber-200/80 text-amber-900 border-amber-200 font-semibold' : ''"
-        @click="filter = 'today'"
+        data-filter-value="today"
       >
         Today
       </button>
       <button
         type="button"
         class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        :class="filter === 'upcoming' ? 'bg-emerald-200/80 text-emerald-900 border-emerald-200 font-semibold' : ''"
-        @click="filter = 'upcoming'"
+        data-filter-value="upcoming"
       >
         Next 7 days
       </button>
@@ -52,8 +48,7 @@
           <section
             class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 space-y-3 shadow-sm"
             data-variants="{{ variants.values | unique | join(',') }}"
-            x-show="filter === 'all' || ($el.dataset.variants || '').split(',').includes(filter)"
-            x-transition
+            data-filter-section
           >
             <div class="flex items-start justify-between gap-3">
               <div class="space-y-1">
@@ -91,8 +86,9 @@
             <div class="grid gap-2">
               {% for item in items %}
                 <div
-                  x-show="filter === 'all' || filter === '{{ item.due_variant or 'none' }}'"
                   class="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-700 hover:shadow-lg hover:shadow-black/20 transition"
+                  data-due-variant="{{ item.due_variant or 'none' }}"
+                  data-filter-item
                 >
                   <div class="space-y-1 min-w-0">
                     <div class="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
@@ -315,6 +311,53 @@
         buttons.forEach(function (button) {
           button.addEventListener('click', function () {
             activate(button.dataset.tabTarget || 'my');
+          });
+        });
+      });
+
+      document.querySelectorAll('[data-filter-scope]').forEach(function (scope) {
+        const buttons = scope.querySelectorAll('[data-filter-value]');
+        const sections = scope.querySelectorAll('[data-filter-section]');
+        const items = scope.querySelectorAll('[data-filter-item]');
+        const activeClassMap = {
+          all: ['bg-slate-200', 'text-slate-900', 'border-slate-200', 'font-semibold'],
+          overdue: ['bg-rose-200/80', 'text-rose-900', 'border-rose-200', 'font-semibold'],
+          today: ['bg-amber-200/80', 'text-amber-900', 'border-amber-200', 'font-semibold'],
+          upcoming: ['bg-emerald-200/80', 'text-emerald-900', 'border-emerald-200', 'font-semibold'],
+        };
+        const allActiveClasses = Array.from(new Set(Object.values(activeClassMap).flat()));
+
+        function applyFilter(filter) {
+          const normalized = filter || 'all';
+
+          sections.forEach(function (section) {
+            const variants = (section.dataset.variants || '').split(',').filter(Boolean);
+            const show = normalized === 'all' || variants.includes(normalized);
+            section.classList.toggle('hidden', !show);
+          });
+
+          items.forEach(function (item) {
+            const variant = item.dataset.dueVariant || 'none';
+            const show = normalized === 'all' || variant === normalized;
+            item.classList.toggle('hidden', !show);
+          });
+
+          buttons.forEach(function (button) {
+            const value = button.dataset.filterValue || 'all';
+            const isActive = value === normalized;
+            button.classList.remove(...allActiveClasses);
+            if (isActive) {
+              button.classList.add(...(activeClassMap[value] || activeClassMap.all));
+            }
+          });
+        }
+
+        const defaultFilter = 'all';
+        applyFilter(defaultFilter);
+
+        buttons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            applyFilter(button.dataset.filterValue || 'all');
           });
         });
       });

@@ -204,6 +204,15 @@
             </select>
           </div>
           <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Assign to</label>
+            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">{{ current_user.display_name or current_user.username }} (me)</option>
+              {% for user in sales_owners %}
+              <option value="{{ user.id }}">{{ user.display_name or user.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
             <input type="text" name="description" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" placeholder="Add context or follow-up steps" />
           </div>
@@ -267,10 +276,19 @@
                   {% for client in clients %}
                   <option value="client:{{ client.id }}" data-label="{{ client.display_name }}">{{ client.display_name }}</option>
                   {% endfor %}
-                </optgroup>
-              </select>
-            </div>
+              </optgroup>
+            </select>
           </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Assign to</label>
+            <select name="owner_id" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
+              <option value="">{{ current_user.display_name or current_user.username }} (me)</option>
+              {% for user in sales_owners %}
+              <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.display_name or user.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
             <input type="text" name="description" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2" />
