@@ -6,65 +6,113 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Receive Material & QC</h1>
+      <p class="text-sm text-slate-600">Recent receipts and QC outcomes.</p>
+    </div>
+    <label for="new-receipt" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Record Receipt</label>
+  </div>
+
+  <input type="checkbox" id="new-receipt" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-receipt').checked=false;"></div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Material receipt</p>
+          <h2 class="text-lg font-semibold">Capture receipt & QC</h2>
+        </div>
+        <button class="text-slate-500" onclick="document.getElementById('new-receipt').checked=false;">✕</button>
+      </div>
+      <form method="POST" class="p-5 space-y-4">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="space-y-1">
+            <span class="text-sm">Purchase Order</span>
+            <select name="purchase_order_id" class="w-full rounded-lg border-slate-200">
+              {% for po in pos %}
+                <option value="{{ po.id }}">{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Receipt number</span>
+            <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Received date</span>
+            <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" />
+          </label>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2">Item</th>
+                <th class="py-2">Description</th>
+                <th class="py-2">Qty received</th>
+                <th class="py-2">QC</th>
+                <th class="py-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% if selected_po %}
+                {% for item in selected_po.items %}
+                <tr>
+                  <td class="py-2">{{ item.item_code }}</td>
+                  <td class="py-2">{{ item.description }}</td>
+                  <td class="py-2"><input type="number" step="0.01" name="item_{{ item.id }}_qty" class="w-28 rounded-lg border-slate-200" value="{{ item.quantity_ordered }}" /></td>
+                  <td class="py-2">
+                    <select name="item_{{ item.id }}_qc" class="rounded-lg border-slate-200">
+                      <option value="OK">OK</option>
+                      <option value="NG">NG</option>
+                    </select>
+                  </td>
+                  <td class="py-2"><input type="text" name="item_{{ item.id }}_notes" class="w-full rounded-lg border-slate-200" /></td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="5" class="py-3 text-slate-500">No purchase orders available.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save receipt</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <form method="POST" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
-    {{ csrf_field() }}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <label class="space-y-1">
-        <span class="text-sm">Purchase Order</span>
-        <select name="purchase_order_id" class="w-full rounded-lg border-slate-200">
-          {% for po in pos %}
-            <option value="{{ po.id }}">{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="space-y-1">
-        <span class="text-sm">Receipt number</span>
-        <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
-      </label>
-      <label class="space-y-1">
-        <span class="text-sm">Received date</span>
-        <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" />
-      </label>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-slate-500">
-            <th class="py-2">Item</th>
-            <th class="py-2">Description</th>
-            <th class="py-2">Qty received</th>
-            <th class="py-2">QC</th>
-            <th class="py-2">Notes</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          {% if pos %}
-            {% for item in pos[0].items %}
-            <tr>
-              <td class="py-2">{{ item.item_code }}</td>
-              <td class="py-2">{{ item.description }}</td>
-              <td class="py-2"><input type="number" step="0.01" name="item_{{ item.id }}_qty" class="w-28 rounded-lg border-slate-200" value="{{ item.quantity_ordered }}" /></td>
-              <td class="py-2">
-                <select name="item_{{ item.id }}_qc" class="rounded-lg border-slate-200">
-                  <option value="OK">OK</option>
-                  <option value="NG">NG</option>
-                </select>
-              </td>
-              <td class="py-2"><input type="text" name="item_{{ item.id }}_notes" class="w-full rounded-lg border-slate-200" /></td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr><td colspan="5" class="py-3 text-slate-500">No purchase orders available.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
-    <div class="flex justify-end">
-      <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save receipt</button>
-    </div>
-  </form>
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Receipt #</th>
+          <th class="py-3 px-4">PO</th>
+          <th class="py-3 px-4">Received on</th>
+          <th class="py-3 px-4">Items</th>
+          <th class="py-3 px-4">QC OK</th>
+          <th class="py-3 px-4">QC NG</th>
+          <th class="py-3 px-4">Recorded by</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for receipt in receipts %}
+        {% set ok_items = receipt.items|selectattr('qc_status','equalto','OK')|list %}
+        {% set ng_items = receipt.items|selectattr('qc_status','equalto','NG')|list %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ receipt.receipt_number }}</td>
+          <td class="py-3 px-4">{{ receipt.purchase_order.po_number if receipt.purchase_order else '—' }}</td>
+          <td class="py-3 px-4">{{ receipt.received_date or '—' }}</td>
+          <td class="py-3 px-4">{{ receipt.items|length }}</td>
+          <td class="py-3 px-4 text-green-700">{{ ok_items|length }}</td>
+          <td class="py-3 px-4 text-orange-700">{{ ng_items|length }}</td>
+          <td class="py-3 px-4">{{ receipt.received_by.display_name if receipt.received_by else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="py-4 px-4 text-slate-500">No receipts captured yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

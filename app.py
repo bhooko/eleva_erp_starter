@@ -5536,7 +5536,15 @@ def purchase_orders():
         flash("Purchase order saved.", "success")
         return redirect(url_for("purchase_orders"))
 
-    pos = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).all()
+    pos = (
+        PurchaseOrder.query.options(
+            joinedload(PurchaseOrder.vendor),
+            joinedload(PurchaseOrder.project),
+            subqueryload(PurchaseOrder.items),
+        )
+        .order_by(PurchaseOrder.id.desc())
+        .all()
+    )
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
@@ -5619,6 +5627,59 @@ def purchase_reports():
     )
 
 
+@app.route("/purchase/parts", methods=["GET", "POST"])
+@login_required
+def purchase_parts():
+    ensure_bootstrap()
+    if request.method == "POST":
+        item_code = (request.form.get("item_code") or "").strip()
+        description = (request.form.get("description") or "").strip() or None
+        unit = (request.form.get("unit") or "").strip() or None
+        location = (request.form.get("location") or "").strip() or None
+
+        if not item_code:
+            flash("Item code is required to add a part.", "danger")
+        else:
+            part = InventoryItem.query.filter_by(item_code=item_code).first()
+            if not part:
+                part = InventoryItem(item_code=item_code)
+                db.session.add(part)
+            part.description = description or part.description
+            part.unit = unit or part.unit
+            part.location = location or part.location
+            db.session.commit()
+            flash("Part saved.", "success")
+            return redirect(url_for("purchase_parts"))
+
+    parts = InventoryItem.query.order_by(InventoryItem.item_code).all()
+    return render_template("purchase_parts.html", parts=parts)
+
+
+@app.route("/purchase/vendors", methods=["GET", "POST"])
+@login_required
+def purchase_vendors():
+    ensure_bootstrap()
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        contact_person = (request.form.get("contact_person") or "").strip() or None
+        phone = (request.form.get("phone") or "").strip() or None
+        email = (request.form.get("email") or "").strip() or None
+        address = (request.form.get("address") or "").strip() or None
+        notes = (request.form.get("notes") or "").strip() or None
+
+        if not name:
+            flash("Vendor name is required.", "danger")
+        else:
+            vendor = Vendor(name=name, contact_person=contact_person, phone=phone, email=email, address=address, notes=notes)
+            db.session.add(vendor)
+            db.session.commit()
+            flash("Vendor added.", "success")
+            return redirect(url_for("purchase_vendors"))
+
+    vendors = Vendor.query.order_by(Vendor.name).all()
+    return render_template("purchase_vendors.html", vendors=vendors)
+
+
 @app.route("/store/receive", methods=["GET", "POST"])
 @login_required
 def store_receive():
@@ -5688,7 +5749,18 @@ def store_receive():
         return redirect(url_for("store_receive"))
 
     selected_po = pos[0] if pos else None
-    return render_template("store_receive.html", pos=pos, selected_po=selected_po)
+    receipts = (
+        InventoryReceipt.query.options(
+            joinedload(InventoryReceipt.purchase_order),
+            joinedload(InventoryReceipt.received_by),
+            subqueryload(InventoryReceipt.items),
+        )
+        .order_by(InventoryReceipt.id.desc())
+        .all()
+    )
+    return render_template(
+        "store_receive.html", pos=pos, selected_po=selected_po, receipts=receipts
+    )
 
 
 @app.route("/store/inventory")

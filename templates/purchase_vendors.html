@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Purchase · Vendors{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Purchase</p>
+      <h1 class="text-2xl font-semibold">Vendors</h1>
+      <p class="text-sm text-slate-600">Keep track of approved vendors for purchasing.</p>
+    </div>
+    <label for="new-vendor" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Vendor</label>
+  </div>
+
+  <input type="checkbox" id="new-vendor" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-vendor').checked=false;"></div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Vendor registry</p>
+          <h2 class="text-lg font-semibold">Add vendor</h2>
+        </div>
+        <button class="text-slate-500" onclick="document.getElementById('new-vendor').checked=false;">✕</button>
+      </div>
+      <form method="POST" class="p-5 space-y-4">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Vendor name</span>
+            <input type="text" name="name" class="w-full rounded-lg border-slate-200" required />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Contact person</span>
+            <input type="text" name="contact_person" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Phone</span>
+            <input type="text" name="phone" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Email</span>
+            <input type="email" name="email" class="w-full rounded-lg border-slate-200" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-sm text-slate-600">Address</span>
+          <textarea name="address" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-sm text-slate-600">Notes</span>
+          <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
+        </label>
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('new-vendor').checked=false;">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Save Vendor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Vendor</th>
+          <th class="py-3 px-4">Contact</th>
+          <th class="py-3 px-4">Phone</th>
+          <th class="py-3 px-4">Email</th>
+          <th class="py-3 px-4">Address</th>
+          <th class="py-3 px-4">Notes</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for vendor in vendors %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ vendor.name }}</td>
+          <td class="py-3 px-4">{{ vendor.contact_person or '—' }}</td>
+          <td class="py-3 px-4">{{ vendor.phone or '—' }}</td>
+          <td class="py-3 px-4">{{ vendor.email or '—' }}</td>
+          <td class="py-3 px-4">{{ vendor.address or '—' }}</td>
+          <td class="py-3 px-4 text-slate-600">{{ vendor.notes or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="py-4 px-4 text-slate-500">No vendors have been added yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
