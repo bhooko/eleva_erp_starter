@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Design Task {{ task.id }} · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Design → Drawings → BOM</p>
+      <h1 class="text-2xl font-semibold">{{ task.project_label }}</h1>
+      <p class="text-sm text-slate-500">{{ task.task_type.replace('_',' ').title() }}</p>
+    </div>
+    <a href="{{ url_for('design_tasks') }}" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Back to board</a>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="lg:col-span-2 space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Task summary</p>
+            <h2 class="text-lg font-semibold">{{ task.description or 'No description yet' }}</h2>
+          </div>
+          <span class="px-3 py-1 rounded-full text-sm bg-orange-100 text-orange-700">{{ task.status|title }}</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-600">
+          <div class="p-3 bg-slate-50 rounded-xl">Priority: <strong>{{ task.priority.title() }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Due: <strong>{{ task.due_date or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Designer: <strong>{{ task.assigned_to.display_name if task.assigned_to else 'Unassigned' }}</strong></div>
+          {% if task.site_visit_date %}
+          <div class="p-3 bg-slate-50 rounded-xl col-span-2">Visit {{ task.site_visit_status or 'scheduled' }} on <strong>{{ task.site_visit_date }}</strong></div>
+          {% endif %}
+        </div>
+        {% if task.site_visit_address %}
+        <div class="bg-slate-50 border rounded-xl p-3 text-sm text-slate-700">
+          <p class="font-semibold">Site visit</p>
+          <p>{{ task.site_visit_address }}</p>
+          {% if task.site_visit_contact %}<p>Contact: {{ task.site_visit_contact }} ({{ task.site_visit_phone }})</p>{% endif %}
+          {% if task.site_visit_notes %}<p class="text-xs text-slate-500 mt-1">{{ task.site_visit_notes }}</p>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Drawings</p>
+            <h2 class="text-lg font-semibold">Revisions timeline</h2>
+          </div>
+        </div>
+        <form method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50 border rounded-xl p-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="revision" />
+          <label class="space-y-1">
+            <span class="text-sm">Drawing name</span>
+            <input type="text" name="drawing_name" class="w-full rounded-lg border-slate-200" placeholder="Lift GA Drawing" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Attach file</span>
+            <input type="file" name="revision_file" class="w-full text-sm" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Reason / notes</span>
+            <input type="text" name="change_reason" class="w-full rounded-lg border-slate-200" placeholder="Updated shaft details" />
+          </label>
+          <div class="md:col-span-2 lg:col-span-3 flex items-center justify-end">
+            <button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Upload revision</button>
+          </div>
+        </form>
+        <div class="space-y-3">
+          {% for drawing in drawings %}
+          <div class="border rounded-xl p-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold">{{ drawing.name }}</p>
+                <p class="text-xs text-slate-500">Current v{{ drawing.current_version_number }}</p>
+              </div>
+            </div>
+            <div class="mt-2 space-y-2">
+              {% for rev in drawing.revisions|sort(attribute='version_number', reverse=True) %}
+              <div class="flex items-start gap-3 text-sm">
+                <div class="px-2 py-1 bg-slate-100 rounded-lg">v{{ rev.version_number }}</div>
+                <div class="flex-1">
+                  <p class="font-semibold">{{ rev.change_reason or 'Uploaded revision' }}</p>
+                  <p class="text-xs text-slate-500">{{ rev.created_at.strftime('%d %b %Y, %I:%M %p') if rev.created_at else '' }} · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}</p>
+                  <a href="{{ url_for('static', filename='uploads/' ~ rev.file_name) }}" class="text-orange-600 text-xs" download>Download</a>
+                </div>
+              </div>
+              {% else %}
+              <p class="text-sm text-slate-500">No revisions yet.</p>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No drawings uploaded yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Bill of Materials</p>
+            <h2 class="text-lg font-semibold">Add line items</h2>
+          </div>
+        </div>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 border rounded-xl p-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="bom_item" />
+          <label class="space-y-1">
+            <span class="text-sm">BOM name</span>
+            <input type="text" name="bom_name" class="w-full rounded-lg border-slate-200" placeholder="Main lift BOM" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Status</span>
+            <select name="bom_status" class="w-full rounded-lg border-slate-200">
+              <option value="draft">Draft</option>
+              <option value="finalized">Finalized</option>
+              <option value="locked">Locked</option>
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Item code</span>
+            <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" required />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Qty</span>
+            <input type="number" step="0.01" name="quantity_required" class="w-full rounded-lg border-slate-200" value="1" />
+          </label>
+          <label class="space-y-1 lg:col-span-2">
+            <span class="text-sm">Description</span>
+            <input type="text" name="item_description" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Category</span>
+            <input type="text" name="category" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Unit</span>
+            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
+          </label>
+          <label class="space-y-1 lg:col-span-4">
+            <span class="text-sm">Remarks</span>
+            <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="lg:col-span-4 flex justify-end">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Add item</button>
+          </div>
+        </form>
+        <div class="space-y-3">
+          {% for bom in boms %}
+          <div class="border rounded-xl p-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="font-semibold">{{ bom.bom_name }}</p>
+                <p class="text-xs text-slate-500">{{ bom.status.title() }}</p>
+              </div>
+            </div>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-slate-500">
+                    <th class="py-1">Item</th>
+                    <th class="py-1">Description</th>
+                    <th class="py-1">Qty</th>
+                    <th class="py-1">Unit</th>
+                    <th class="py-1">Category</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  {% for item in bom.items %}
+                  <tr>
+                    <td class="py-1">{{ item.item_code }}</td>
+                    <td class="py-1">{{ item.description }}</td>
+                    <td class="py-1">{{ item.quantity_required }}</td>
+                    <td class="py-1">{{ item.unit }}</td>
+                    <td class="py-1">{{ item.category }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="5" class="py-2 text-slate-500">No items yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No BOM added yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <h3 class="text-lg font-semibold mb-2">Quotation proposal check</h3>
+        <form method="POST" class="space-y-2">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="shaft" />
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" name="shaft_width_mm" placeholder="Shaft width (mm)" class="rounded-lg border-slate-200" />
+            <input type="number" name="shaft_depth_mm" placeholder="Shaft depth (mm)" class="rounded-lg border-slate-200" />
+            <input type="number" name="pit_depth_mm" placeholder="Pit depth (mm)" class="rounded-lg border-slate-200" />
+            <input type="number" name="headroom_mm" placeholder="Headroom (mm)" class="rounded-lg border-slate-200" />
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" name="machine_room_required" class="rounded" /> Machine room required
+          </label>
+          <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200" placeholder="Comments"></textarea>
+          <button type="submit" class="w-full px-4 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.01] transition">Save suggestion</button>
+        </form>
+        <div class="mt-3 space-y-2">
+          {% for suggestion in task.shaft_suggestions|sort(attribute='created_at', reverse=True) %}
+            <div class="p-2 bg-slate-50 rounded-lg text-sm">
+              <p class="font-semibold">{{ suggestion.created_at.strftime('%d %b %Y') if suggestion.created_at else '' }}</p>
+              <p class="text-slate-600">{{ suggestion.shaft_width_mm }} x {{ suggestion.shaft_depth_mm }} · Pit {{ suggestion.pit_depth_mm }} · Head {{ suggestion.headroom_mm }}</p>
+              <p class="text-xs text-slate-500">{{ suggestion.notes }}</p>
+            </div>
+          {% else %}
+            <p class="text-sm text-slate-500">No shaft suggestions yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <h3 class="text-lg font-semibold mb-2">Comments</h3>
+        <form method="POST" class="space-y-2">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="comment" />
+          <textarea name="body" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Sales ↔ Design notes"></textarea>
+          <button type="submit" class="w-full px-4 py-2 rounded-lg bg-orange-500 text-white hover:shadow-lg hover:scale-[1.01] transition">Add comment</button>
+        </form>
+        <div class="mt-3 space-y-2">
+          {% for comment in task.comments|sort(attribute='created_at', reverse=True) %}
+          <div class="p-2 bg-slate-50 rounded-lg text-sm">
+            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at.strftime('%d %b %Y %I:%M %p') if comment.created_at else '' }}</span></p>
+            <p class="text-slate-600">{{ comment.body }}</p>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No comments yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

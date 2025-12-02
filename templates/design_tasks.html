@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Design Tasks · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase tracking-wide text-slate-500">Design Board</p>
+      <h1 class="text-2xl font-semibold">Design Tasks</h1>
+    </div>
+    <label for="new-task" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New Design Task</label>
+  </div>
+
+  <input type="checkbox" id="new-task" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-task').checked=false;"></div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Design intake</p>
+          <h2 class="text-lg font-semibold">Create design task</h2>
+        </div>
+        <button class="text-slate-500" onclick="document.getElementById('new-task').checked=false;">✕</button>
+      </div>
+      <form method="POST" class="p-5 space-y-4">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Task type</span>
+            <select name="task_type" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
+              <option value="quotation_check">Quotation Proposal Check</option>
+              <option value="site_visit">Site Visit Request</option>
+              <option value="drawing">Drawing Preparation</option>
+              <option value="bom">BOM Preparation</option>
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Project</span>
+            <select name="project_id" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
+              <option value="">Unlinked</option>
+              {% for project in projects %}
+              <option value="{{ project.id }}">{{ project.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Project (text)</span>
+            <input type="text" name="project_name" class="w-full rounded-lg border-slate-200" placeholder="If project not in list" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Priority</span>
+            <select name="priority" class="w-full rounded-lg border-slate-200">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Due date</span>
+            <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Assigned designer</span>
+            <select name="assigned_to_user_id" class="w-full rounded-lg border-slate-200">
+              <option value="">Unassigned</option>
+              {% for user in users %}
+                <option value="{{ user.id }}">{{ user.display_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Site visit date (for visit requests)</span>
+            <input type="date" name="site_visit_date" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Site visit status</span>
+            <select name="site_visit_status" class="w-full rounded-lg border-slate-200">
+              <option value="">—</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Site visit address</span>
+            <input type="text" name="site_visit_address" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Site contact</span>
+            <input type="text" name="site_visit_contact" class="w-full rounded-lg border-slate-200" placeholder="Name" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Phone</span>
+            <input type="text" name="site_visit_phone" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-slate-600">Requested by (sales)</span>
+            <select name="requested_by_user_id" class="w-full rounded-lg border-slate-200">
+              <option value="">{{ current_user.display_name }}</option>
+              {% for user in users %}
+                <option value="{{ user.id }}">{{ user.display_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-sm text-slate-600">Description / Notes</span>
+          <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Context for design team"></textarea>
+        </label>
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('new-task').checked=false;">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+    {% for key, label in statuses.items() %}
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b">
+        <div>
+          <p class="text-xs uppercase text-slate-500">{{ label }}</p>
+          <h3 class="text-lg font-semibold">{{ tasks_by_status[key]|length }} tasks</h3>
+        </div>
+      </div>
+      <div class="p-3 space-y-3 overflow-y-auto" style="max-height: 65vh;">
+        {% for task in tasks_by_status[key] %}
+        <div class="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-lg hover:scale-[1.01] transition">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-700">{{ task.task_type.replace('_',' ').title() }}</span>
+            <form method="POST" action="{{ url_for('design_task_status', task_id=task.id) }}">
+              {{ csrf_field() }}
+              <select name="status" class="text-xs bg-white border rounded-lg px-2 py-1" onchange="this.form.submit()">
+                {% for skey, slabel in statuses.items() %}
+                  <option value="{{ skey }}" {% if task.status==skey %}selected{% endif %}>{{ slabel }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </div>
+          <div class="mt-2 space-y-1">
+            <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="block text-lg font-semibold text-slate-800 hover:text-orange-600">{{ task.project_label }}</a>
+            <p class="text-sm text-slate-600">{{ task.description or 'No description yet.' }}</p>
+            <div class="flex flex-wrap gap-2 text-xs text-slate-500 mt-2">
+              <span class="px-2 py-1 bg-slate-100 rounded-full">Priority: {{ task.priority.title() }}</span>
+              {% if task.due_date %}<span class="px-2 py-1 bg-slate-100 rounded-full">Due {{ task.due_date }}</span>{% endif %}
+              {% if task.assigned_to %}<span class="px-2 py-1 bg-slate-100 rounded-full">{{ task.assigned_to.display_name }}</span>{% endif %}
+            </div>
+          </div>
+          {% if task.site_visit_address %}
+          <div class="mt-2 text-xs text-slate-600 bg-slate-50 border rounded-lg p-2">
+            <p class="font-semibold">Site visit</p>
+            <p>{{ task.site_visit_address }}</p>
+            {% if task.site_visit_date %}<p>Date: {{ task.site_visit_date }}</p>{% endif %}
+            {% if task.site_visit_contact %}<p>Contact: {{ task.site_visit_contact }} ({{ task.site_visit_phone }})</p>{% endif %}
+            {% if task.site_visit_status %}<p>Status: {{ task.site_visit_status|title }}</p>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500">No tasks in this stage.</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

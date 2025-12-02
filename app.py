@@ -4892,6 +4892,19 @@ from eleva_app.models import (
     QCWorkComment,
     QCWorkDependency,
     QCWorkLog,
+    BillOfMaterials,
+    BOMItem,
+    BookInventory,
+    DesignDrawing,
+    DesignDrawingRevision,
+    DesignShaftSuggestion,
+    DesignTask,
+    DesignTaskComment,
+    Dispatch,
+    DispatchItem,
+    InventoryItem,
+    InventoryReceipt,
+    InventoryReceiptItem,
     SalesActivity,
     SalesClient,
     SalesCompany,
@@ -4903,6 +4916,9 @@ from eleva_app.models import (
     SalesTask,
     sales_task_assignees,
     ServiceRoute,
+    Vendor,
+    PurchaseOrder,
+    PurchaseOrderItem,
     Submission,
     TaskTemplate,
     User,
@@ -5237,6 +5253,517 @@ def block_child_tasks(work, actor_id=None):
                 actor_id=actor_id,
                 details={"dependency": work.id}
             )
+
+
+# ---------------------- DESIGN / PURCHASE / STORE MODULES ----------------------
+
+
+def _design_default_filters(query):
+    """Limit design data visibility to design-team users unless admin."""
+    if current_user.is_admin:
+        return query
+    role = (current_user.role or "").lower()
+    if "design" in role:
+        return query.filter(
+            or_(
+                DesignTask.assigned_to_user_id == current_user.id,
+                DesignTask.requested_by_user_id == current_user.id,
+            )
+        )
+    return query
+
+
+@app.route("/design/tasks", methods=["GET", "POST"])
+@login_required
+def design_tasks():
+    ensure_bootstrap()
+    if request.method == "POST":
+        task_type = request.form.get("task_type") or "quotation_check"
+        project_id = request.form.get("project_id") or None
+        project_name = request.form.get("project_name") or None
+        requested_by = request.form.get("requested_by_user_id") or None
+        assigned_to = request.form.get("assigned_to_user_id") or None
+        status_value = request.form.get("status") or "new"
+        priority = request.form.get("priority") or "medium"
+        due_date_raw = request.form.get("due_date")
+        description = request.form.get("description")
+        site_visit_date_raw = request.form.get("site_visit_date")
+        site_visit_status = request.form.get("site_visit_status") or None
+
+        try:
+            due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date() if due_date_raw else None
+        except ValueError:
+            due_date = None
+
+        try:
+            site_visit_date = (
+                datetime.datetime.strptime(site_visit_date_raw, "%Y-%m-%d").date()
+                if site_visit_date_raw
+                else None
+            )
+        except ValueError:
+            site_visit_date = None
+
+        task = DesignTask(
+            task_type=task_type,
+            project_id=project_id if project_id else None,
+            project_name=project_name,
+            requested_by_user_id=requested_by if requested_by else current_user.id,
+            assigned_to_user_id=assigned_to if assigned_to else None,
+            status=status_value,
+            priority=priority,
+            due_date=due_date,
+            description=description,
+            site_visit_date=site_visit_date,
+            site_visit_status=site_visit_status,
+            site_visit_address=request.form.get("site_visit_address") or None,
+            site_visit_contact=request.form.get("site_visit_contact") or None,
+            site_visit_phone=request.form.get("site_visit_phone") or None,
+            site_visit_notes=request.form.get("site_visit_notes") or None,
+        )
+        db.session.add(task)
+        db.session.commit()
+        flash("Design task created.", "success")
+        return redirect(url_for("design_tasks"))
+
+    projects = Project.query.order_by(Project.name).all()
+    users = User.query.order_by(User.first_name, User.username).all()
+    statuses = {
+        "new": "New",
+        "in_progress": "In Progress",
+        "waiting_info": "Waiting for Info",
+        "completed": "Completed",
+        "on_hold": "On Hold",
+    }
+    tasks_by_status = {}
+    for key in statuses:
+        tasks_by_status[key] = _design_default_filters(
+            DesignTask.query.filter(DesignTask.status == key)
+        ).order_by(DesignTask.due_date.nullsfirst()).all()
+
+    return render_template(
+        "design_tasks.html",
+        tasks_by_status=tasks_by_status,
+        statuses=statuses,
+        users=users,
+        projects=projects,
+    )
+
+
+@app.route("/design/tasks/<int:task_id>/status", methods=["POST"])
+@login_required
+def design_task_status(task_id):
+    task = DesignTask.query.get_or_404(task_id)
+    new_status = request.form.get("status") or task.status
+    task.status = new_status
+    task.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    flash("Task status updated.", "success")
+    return redirect(url_for("design_tasks"))
+
+
+@app.route("/design/tasks/<int:task_id>", methods=["GET", "POST"])
+@login_required
+def design_task_detail(task_id):
+    task = DesignTask.query.get_or_404(task_id)
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "comment":
+            body = request.form.get("body")
+            if body:
+                db.session.add(
+                    DesignTaskComment(
+                        design_task_id=task.id,
+                        body=body,
+                        author_id=current_user.id,
+                    )
+                )
+                db.session.commit()
+                flash("Comment added.", "success")
+        elif action == "shaft":
+            suggestion = DesignShaftSuggestion(
+                design_task_id=task.id,
+                shaft_width_mm=request.form.get("shaft_width_mm") or None,
+                shaft_depth_mm=request.form.get("shaft_depth_mm") or None,
+                pit_depth_mm=request.form.get("pit_depth_mm") or None,
+                headroom_mm=request.form.get("headroom_mm") or None,
+                machine_room_required=bool(request.form.get("machine_room_required")),
+                notes=request.form.get("notes"),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(suggestion)
+            db.session.commit()
+            flash("Shaft suggestion saved.", "success")
+        elif action == "revision":
+            drawing_id = request.form.get("drawing_id")
+            drawing_name = request.form.get("drawing_name") or "Untitled Drawing"
+            file = request.files.get("revision_file")
+            if not file or not file.filename:
+                flash("Please attach a drawing file for the revision.", "danger")
+            else:
+                filename = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
+                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                file.save(save_path)
+                if drawing_id:
+                    drawing = DesignDrawing.query.get(drawing_id)
+                else:
+                    drawing = DesignDrawing(
+                        project_id=task.project_id,
+                        design_task_id=task.id,
+                        name=drawing_name,
+                        created_by_user_id=current_user.id,
+                    )
+                    db.session.add(drawing)
+                    db.session.flush()
+                latest = max([rev.version_number for rev in drawing.revisions], default=0)
+                next_version = latest + 1
+                drawing.current_version_number = next_version
+                revision = DesignDrawingRevision(
+                    drawing_id=drawing.id,
+                    version_number=next_version,
+                    file_name=filename,
+                    change_reason=request.form.get("change_reason"),
+                    changed_by_user_id=current_user.id,
+                )
+                db.session.add(revision)
+                db.session.commit()
+                flash("Drawing revision uploaded.", "success")
+        elif action == "bom_item":
+            bom_id = request.form.get("bom_id")
+            bom_status = request.form.get("bom_status") or "draft"
+            bom_name = request.form.get("bom_name") or "Task BOM"
+            if bom_id:
+                bom = BillOfMaterials.query.get(bom_id)
+            else:
+                bom = BillOfMaterials(
+                    project_id=task.project_id,
+                    design_task_id=task.id,
+                    bom_name=bom_name,
+                    status=bom_status,
+                    created_by_user_id=current_user.id,
+                )
+                db.session.add(bom)
+                db.session.flush()
+            item = BOMItem(
+                bom_id=bom.id,
+                item_code=request.form.get("item_code"),
+                description=request.form.get("item_description"),
+                category=request.form.get("category"),
+                unit=request.form.get("unit"),
+                quantity_required=float(request.form.get("quantity_required") or 0),
+                remarks=request.form.get("remarks"),
+            )
+            db.session.add(item)
+            db.session.commit()
+            flash("BOM item added.", "success")
+        return redirect(url_for("design_task_detail", task_id=task.id))
+
+    drawings = DesignDrawing.query.filter_by(design_task_id=task.id).all()
+    bom_list = BillOfMaterials.query.filter_by(design_task_id=task.id).all()
+
+    return render_template(
+        "design_task_detail.html",
+        task=task,
+        drawings=drawings,
+        boms=bom_list,
+    )
+
+
+@app.route("/purchase/orders", methods=["GET", "POST"])
+@login_required
+def purchase_orders():
+    ensure_bootstrap()
+    if request.method == "POST":
+        po_number = request.form.get("po_number") or f"PO-{uuid.uuid4().hex[:6].upper()}"
+        project_id = request.form.get("project_id") or None
+        vendor_id = request.form.get("vendor_id") or None
+        order_date_raw = request.form.get("order_date")
+        expected_raw = request.form.get("expected_delivery_date")
+        status_value = request.form.get("status") or "draft"
+        notes = request.form.get("notes")
+        try:
+            order_date = datetime.datetime.strptime(order_date_raw, "%Y-%m-%d").date() if order_date_raw else None
+        except ValueError:
+            order_date = None
+        try:
+            expected_delivery_date = (
+                datetime.datetime.strptime(expected_raw, "%Y-%m-%d").date() if expected_raw else None
+            )
+        except ValueError:
+            expected_delivery_date = None
+
+        po = PurchaseOrder(
+            po_number=po_number,
+            project_id=project_id,
+            vendor_id=vendor_id,
+            status=status_value,
+            order_date=order_date,
+            expected_delivery_date=expected_delivery_date,
+            created_by_user_id=current_user.id,
+            notes=notes,
+        )
+        db.session.add(po)
+        db.session.flush()
+
+        item_code = request.form.get("item_code")
+        if item_code:
+            quantity = float(request.form.get("quantity_ordered") or 0)
+            unit_price = float(request.form.get("unit_price") or 0)
+            total_amount = quantity * unit_price if unit_price else None
+            poi = PurchaseOrderItem(
+                purchase_order_id=po.id,
+                bom_item_id=request.form.get("bom_item_id") or None,
+                item_code=item_code,
+                description=request.form.get("description"),
+                unit=request.form.get("unit"),
+                quantity_ordered=quantity,
+                unit_price=unit_price,
+                total_amount=total_amount,
+                currency=request.form.get("currency") or "INR",
+            )
+            db.session.add(poi)
+
+            book = BookInventory.query.filter_by(item_code=item_code).first()
+            if not book:
+                book = BookInventory(item_code=item_code)
+                db.session.add(book)
+            book.quantity_ordered_total = (book.quantity_ordered_total or 0) + quantity
+            book.last_po_id = po.id
+
+        db.session.commit()
+        flash("Purchase order saved.", "success")
+        return redirect(url_for("purchase_orders"))
+
+    pos = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).all()
+    vendors = Vendor.query.order_by(Vendor.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
+
+    return render_template(
+        "purchase_orders.html",
+        pos=pos,
+        vendors=vendors,
+        projects=projects,
+        bom_items=bom_items,
+    )
+
+
+@app.route("/purchase/reports")
+@login_required
+def purchase_reports():
+    ensure_bootstrap()
+    item_code = request.args.get("item_code")
+    vendor_id = request.args.get("vendor_id")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    history_query = (
+        db.session.query(PurchaseOrderItem, PurchaseOrder, Vendor)
+        .join(PurchaseOrder, PurchaseOrderItem.purchase_order_id == PurchaseOrder.id)
+        .outerjoin(Vendor, PurchaseOrder.vendor_id == Vendor.id)
+    )
+    if item_code:
+        history_query = history_query.filter(PurchaseOrderItem.item_code == item_code)
+    if vendor_id:
+        history_query = history_query.filter(PurchaseOrder.vendor_id == vendor_id)
+    if start_date:
+        try:
+            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+            history_query = history_query.filter(PurchaseOrder.order_date >= start_dt)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+            history_query = history_query.filter(PurchaseOrder.order_date <= end_dt)
+        except ValueError:
+            pass
+
+    history_rows = history_query.order_by(PurchaseOrder.order_date).all()
+
+    vendor_summary = (
+        db.session.query(Vendor.name, func.sum(PurchaseOrderItem.total_amount))
+        .join(PurchaseOrder, PurchaseOrderItem.purchase_order_id == PurchaseOrder.id)
+        .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
+        .group_by(Vendor.name)
+        .all()
+    )
+    project_summary = (
+        db.session.query(Project.name, func.sum(PurchaseOrderItem.total_amount))
+        .join(PurchaseOrder, PurchaseOrderItem.purchase_order_id == PurchaseOrder.id)
+        .join(Project, PurchaseOrder.project_id == Project.id)
+        .group_by(Project.name)
+        .all()
+    )
+    items = db.session.query(PurchaseOrderItem.item_code).distinct().all()
+    vendors = Vendor.query.order_by(Vendor.name).all()
+
+    chart_labels = [
+        row.PurchaseOrder.order_date.strftime("%d %b") if row.PurchaseOrder.order_date else ""
+        for row in history_rows
+    ]
+    chart_values = [row.PurchaseOrderItem.unit_price or 0 for row in history_rows]
+
+    return render_template(
+        "purchase_reports.html",
+        history_rows=history_rows,
+        vendor_summary=vendor_summary,
+        project_summary=project_summary,
+        items=items,
+        vendors=vendors,
+        selected_item=item_code,
+        chart_labels=chart_labels,
+        chart_values=chart_values,
+    )
+
+
+@app.route("/store/receive", methods=["GET", "POST"])
+@login_required
+def store_receive():
+    ensure_bootstrap()
+    pos = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).all()
+
+    if request.method == "POST":
+        purchase_order_id = request.form.get("purchase_order_id")
+        receipt_number = request.form.get("receipt_number") or f"RC-{uuid.uuid4().hex[:6].upper()}"
+        received_date_raw = request.form.get("received_date")
+        try:
+            received_date = (
+                datetime.datetime.strptime(received_date_raw, "%Y-%m-%d").date()
+                if received_date_raw
+                else None
+            )
+        except ValueError:
+            received_date = None
+
+        receipt = InventoryReceipt(
+            purchase_order_id=purchase_order_id,
+            receipt_number=receipt_number,
+            received_date=received_date,
+            received_by_user_id=current_user.id,
+        )
+        db.session.add(receipt)
+        db.session.flush()
+
+        for key in request.form:
+            if key.startswith("item_") and key.endswith("_qty"):
+                item_id = key.split("_")[1]
+                qty = float(request.form.get(key) or 0)
+                status_key = f"item_{item_id}_qc"
+                notes_key = f"item_{item_id}_notes"
+                qc_status = request.form.get(status_key)
+                qc_notes = request.form.get(notes_key)
+                poi = PurchaseOrderItem.query.get(item_id)
+                receipt_item = InventoryReceiptItem(
+                    inventory_receipt_id=receipt.id,
+                    purchase_order_item_id=item_id,
+                    item_code=poi.item_code if poi else "",
+                    description=poi.description if poi else None,
+                    quantity_received=qty,
+                    qc_status=qc_status,
+                    qc_notes=qc_notes,
+                )
+                db.session.add(receipt_item)
+
+                inv = InventoryItem.query.filter_by(item_code=receipt_item.item_code).first()
+                if not inv:
+                    inv = InventoryItem(
+                        item_code=receipt_item.item_code,
+                        description=receipt_item.description,
+                        unit=poi.unit if poi else None,
+                    )
+                    db.session.add(inv)
+                if qc_status == "OK":
+                    inv.current_stock = (inv.current_stock or 0) + qty
+                else:
+                    inv.quarantined_stock = (inv.quarantined_stock or 0) + qty
+                book = BookInventory.query.filter_by(item_code=receipt_item.item_code).first()
+                if book:
+                    book.quantity_received_total = (book.quantity_received_total or 0) + qty
+
+        db.session.commit()
+        flash("Receipt captured and inventory updated.", "success")
+        return redirect(url_for("store_receive"))
+
+    selected_po = pos[0] if pos else None
+    return render_template("store_receive.html", pos=pos, selected_po=selected_po)
+
+
+@app.route("/store/inventory")
+@login_required
+def store_inventory():
+    ensure_bootstrap()
+    items = InventoryItem.query.order_by(InventoryItem.item_code).all()
+    total_items = len(items)
+    quarantined = sum([item.quarantined_stock or 0 for item in items])
+    usable = sum([item.current_stock or 0 for item in items])
+    low_stock = [item for item in items if (item.current_stock or 0) < 1]
+    return render_template(
+        "store_inventory.html",
+        items=items,
+        total_items=total_items,
+        quarantined=quarantined,
+        usable=usable,
+        low_stock=low_stock,
+    )
+
+
+@app.route("/store/dispatch", methods=["GET", "POST"])
+@login_required
+def store_dispatch():
+    ensure_bootstrap()
+    projects = Project.query.order_by(Project.name).all()
+    inventory = InventoryItem.query.order_by(InventoryItem.item_code).all()
+
+    if request.method == "POST":
+        dispatch_number = request.form.get("dispatch_number") or f"DP-{uuid.uuid4().hex[:6].upper()}"
+        project_id = request.form.get("project_id") or None
+        dispatch_date_raw = request.form.get("dispatch_date")
+        try:
+            dispatch_date = datetime.datetime.strptime(dispatch_date_raw, "%Y-%m-%d").date() if dispatch_date_raw else None
+        except ValueError:
+            dispatch_date = None
+
+        dispatch = Dispatch(
+            project_id=project_id,
+            dispatch_number=dispatch_number,
+            dispatch_date=dispatch_date,
+            dispatched_by_user_id=current_user.id,
+            vehicle_details=request.form.get("vehicle_details"),
+            driver_name=request.form.get("driver_name"),
+            notes=request.form.get("notes"),
+        )
+        db.session.add(dispatch)
+        db.session.flush()
+
+        item_code = request.form.get("item_code")
+        quantity = float(request.form.get("quantity_dispatched") or 0)
+        if item_code and quantity:
+            dispatch_item = DispatchItem(
+                dispatch_id=dispatch.id,
+                item_code=item_code,
+                description=request.form.get("description"),
+                unit=request.form.get("unit"),
+                quantity_dispatched=quantity,
+            )
+            db.session.add(dispatch_item)
+            inv = InventoryItem.query.filter_by(item_code=item_code).first()
+            if inv and (inv.current_stock or 0) >= quantity:
+                inv.current_stock = (inv.current_stock or 0) - quantity
+
+        db.session.commit()
+        flash("Dispatch recorded.", "success")
+        return redirect(url_for("store_dispatch"))
+
+    dispatches = Dispatch.query.order_by(Dispatch.id.desc()).all()
+    return render_template(
+        "store_dispatch.html",
+        projects=projects,
+        inventory=inventory,
+        dispatches=dispatches,
+    )
 
 
 # ---------------------- SAFE DB REPAIR / MIGRATIONS ----------------------
@@ -5791,6 +6318,22 @@ def ensure_tables():
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
         QCWorkLog.__table__,
+        DesignTask.__table__,
+        DesignShaftSuggestion.__table__,
+        DesignTaskComment.__table__,
+        DesignDrawing.__table__,
+        DesignDrawingRevision.__table__,
+        BillOfMaterials.__table__,
+        BOMItem.__table__,
+        Vendor.__table__,
+        PurchaseOrder.__table__,
+        PurchaseOrderItem.__table__,
+        BookInventory.__table__,
+        InventoryItem.__table__,
+        InventoryReceipt.__table__,
+        InventoryReceiptItem.__table__,
+        Dispatch.__table__,
+        DispatchItem.__table__,
     ]
 
     for table in models:

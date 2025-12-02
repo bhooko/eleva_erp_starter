@@ -1542,3 +1542,300 @@ class DropdownOption(db.Model):
     def as_choice(self):
         option_value = self.value if self.value is not None else self.label
         return {"id": self.id, "value": option_value, "label": self.label}
+
+
+# ----------------------------
+# Design module models
+# ----------------------------
+
+
+class DesignTask(db.Model):
+    __tablename__ = "design_task"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    project_name = db.Column(db.String(150), nullable=True)
+    task_type = db.Column(db.String(50), nullable=False)
+    requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    status = db.Column(db.String(50), nullable=False, default="new")
+    priority = db.Column(db.String(50), nullable=False, default="medium")
+    due_date = db.Column(db.Date, nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    site_visit_date = db.Column(db.Date, nullable=True)
+    site_visit_address = db.Column(db.String(255), nullable=True)
+    site_visit_contact = db.Column(db.String(120), nullable=True)
+    site_visit_phone = db.Column(db.String(50), nullable=True)
+    site_visit_notes = db.Column(db.Text, nullable=True)
+    site_visit_status = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    project = db.relationship("Project", backref="design_tasks")
+    requested_by = db.relationship("User", foreign_keys=[requested_by_user_id])
+    assigned_to = db.relationship("User", foreign_keys=[assigned_to_user_id])
+
+    @property
+    def project_label(self):
+        if self.project:
+            return self.project.name
+        return self.project_name or "Unlinked"
+
+
+class DesignShaftSuggestion(db.Model):
+    __tablename__ = "design_shaft_suggestion"
+
+    id = db.Column(db.Integer, primary_key=True)
+    design_task_id = db.Column(
+        db.Integer, db.ForeignKey("design_task.id"), nullable=False, index=True
+    )
+    shaft_width_mm = db.Column(db.Integer, nullable=True)
+    shaft_depth_mm = db.Column(db.Integer, nullable=True)
+    pit_depth_mm = db.Column(db.Integer, nullable=True)
+    headroom_mm = db.Column(db.Integer, nullable=True)
+    machine_room_required = db.Column(db.Boolean, default=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    design_task = db.relationship("DesignTask", backref="shaft_suggestions")
+    created_by = db.relationship("User")
+
+
+class DesignTaskComment(db.Model):
+    __tablename__ = "design_task_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    design_task_id = db.Column(
+        db.Integer, db.ForeignKey("design_task.id"), nullable=False, index=True
+    )
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    design_task = db.relationship("DesignTask", backref="comments")
+    author = db.relationship("User")
+
+
+class DesignDrawing(db.Model):
+    __tablename__ = "design_drawing"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    design_task_id = db.Column(
+        db.Integer, db.ForeignKey("design_task.id"), nullable=True, index=True
+    )
+    name = db.Column(db.String(150), nullable=False)
+    current_version_number = db.Column(db.Integer, default=1)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    project = db.relationship("Project")
+    design_task = db.relationship("DesignTask", backref="drawings")
+    created_by = db.relationship("User")
+
+
+class DesignDrawingRevision(db.Model):
+    __tablename__ = "design_drawing_revision"
+
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_id = db.Column(
+        db.Integer, db.ForeignKey("design_drawing.id"), nullable=False, index=True
+    )
+    version_number = db.Column(db.Integer, nullable=False)
+    file_name = db.Column(db.String(255), nullable=False)
+    change_reason = db.Column(db.Text, nullable=True)
+    changed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    drawing = db.relationship("DesignDrawing", backref="revisions")
+    changed_by = db.relationship("User")
+
+
+# ----------------------------
+# Purchase module models
+# ----------------------------
+
+
+class BillOfMaterials(db.Model):
+    __tablename__ = "bill_of_materials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    design_task_id = db.Column(db.Integer, db.ForeignKey("design_task.id"), nullable=True)
+    bom_name = db.Column(db.String(150), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default="draft")
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    project = db.relationship("Project")
+    design_task = db.relationship("DesignTask", backref="boms")
+    created_by = db.relationship("User")
+
+
+class BOMItem(db.Model):
+    __tablename__ = "bom_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=False)
+    item_code = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    category = db.Column(db.String(80), nullable=True)
+    unit = db.Column(db.String(20), nullable=True)
+    quantity_required = db.Column(db.Float, nullable=False, default=1)
+    remarks = db.Column(db.Text, nullable=True)
+
+    bom = db.relationship("BillOfMaterials", backref="items")
+
+
+class Vendor(db.Model):
+    __tablename__ = "vendor"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    contact_person = db.Column(db.String(120), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    address = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+
+class PurchaseOrder(db.Model):
+    __tablename__ = "purchase_order"
+
+    id = db.Column(db.Integer, primary_key=True)
+    po_number = db.Column(db.String(80), unique=True, nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True)
+    status = db.Column(db.String(50), nullable=False, default="draft")
+    order_date = db.Column(db.Date, nullable=True)
+    expected_delivery_date = db.Column(db.Date, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    subtotal_amount = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    project = db.relationship("Project")
+    vendor = db.relationship("Vendor")
+    created_by = db.relationship("User")
+
+
+class PurchaseOrderItem(db.Model):
+    __tablename__ = "purchase_order_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(
+        db.Integer, db.ForeignKey("purchase_order.id"), nullable=False
+    )
+    bom_item_id = db.Column(db.Integer, db.ForeignKey("bom_item.id"), nullable=True)
+    item_code = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    unit = db.Column(db.String(20), nullable=True)
+    quantity_ordered = db.Column(db.Float, nullable=False, default=1)
+    unit_price = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(10), nullable=True, default="INR")
+    total_amount = db.Column(db.Float, nullable=True)
+
+    purchase_order = db.relationship("PurchaseOrder", backref="items")
+    bom_item = db.relationship("BOMItem")
+
+
+class BookInventory(db.Model):
+    __tablename__ = "book_inventory"
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_code = db.Column(db.String(120), nullable=False, unique=True)
+    quantity_ordered_total = db.Column(db.Float, default=0)
+    quantity_received_total = db.Column(db.Float, default=0)
+    quantity_booked_for_projects = db.Column(db.Float, default=0)
+    last_po_id = db.Column(db.Integer, db.ForeignKey("purchase_order.id"), nullable=True)
+
+    last_po = db.relationship("PurchaseOrder")
+
+
+# ----------------------------
+# Store / Inventory module models
+# ----------------------------
+
+
+class InventoryItem(db.Model):
+    __tablename__ = "inventory_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_code = db.Column(db.String(120), nullable=False, unique=True)
+    description = db.Column(db.String(255), nullable=True)
+    unit = db.Column(db.String(20), nullable=True)
+    current_stock = db.Column(db.Float, default=0)
+    quarantined_stock = db.Column(db.Float, default=0)
+    location = db.Column(db.String(120), nullable=True)
+
+
+class InventoryReceipt(db.Model):
+    __tablename__ = "inventory_receipt"
+
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(
+        db.Integer, db.ForeignKey("purchase_order.id"), nullable=True
+    )
+    receipt_number = db.Column(db.String(80), nullable=False)
+    received_date = db.Column(db.Date, nullable=True)
+    received_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    purchase_order = db.relationship("PurchaseOrder")
+    received_by = db.relationship("User")
+
+
+class InventoryReceiptItem(db.Model):
+    __tablename__ = "inventory_receipt_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    inventory_receipt_id = db.Column(
+        db.Integer, db.ForeignKey("inventory_receipt.id"), nullable=False
+    )
+    purchase_order_item_id = db.Column(
+        db.Integer, db.ForeignKey("purchase_order_item.id"), nullable=True
+    )
+    item_code = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    quantity_received = db.Column(db.Float, nullable=False, default=0)
+    qc_status = db.Column(db.String(20), nullable=True)
+    qc_notes = db.Column(db.Text, nullable=True)
+
+    receipt = db.relationship("InventoryReceipt", backref="items")
+    purchase_order_item = db.relationship("PurchaseOrderItem")
+
+
+class Dispatch(db.Model):
+    __tablename__ = "dispatch"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    dispatch_number = db.Column(db.String(80), nullable=False)
+    dispatch_date = db.Column(db.Date, nullable=True)
+    dispatched_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    vehicle_details = db.Column(db.String(150), nullable=True)
+    driver_name = db.Column(db.String(120), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    project = db.relationship("Project")
+    dispatched_by = db.relationship("User")
+
+
+class DispatchItem(db.Model):
+    __tablename__ = "dispatch_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispatch_id = db.Column(db.Integer, db.ForeignKey("dispatch.id"), nullable=False)
+    item_code = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    unit = db.Column(db.String(20), nullable=True)
+    quantity_dispatched = db.Column(db.Float, nullable=False, default=0)
+
+    dispatch = db.relationship("Dispatch", backref="items")
