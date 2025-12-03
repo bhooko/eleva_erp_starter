@@ -54,59 +54,165 @@
     <p class="text-xs text-slate-500">Type to filter results; click a column header to sort.</p>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-    <table id="parts-table" class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-slate-500">
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="0">
-            <span class="inline-flex items-center gap-1">Name <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="1">
-            <span class="inline-flex items-center gap-1">Sales Price <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="2">
-            <span class="inline-flex items-center gap-1">Cost <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="3">
-            <span class="inline-flex items-center gap-1">UoM <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="4">
-            <span class="inline-flex items-center gap-1">Purchase UoM <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="5">
-            <span class="inline-flex items-center gap-1">Qty on Hand <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="6">
-            <span class="inline-flex items-center gap-1">Forecast Qty <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="7">
-            <span class="inline-flex items-center gap-1">Favorite <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-        </tr>
-      </thead>
-      <tbody class="divide-y">
-        {% for product in products %}
-        <tr>
-          <td class="py-3 px-4 font-semibold text-slate-800">{{ product.name }}</td>
-          <td class="py-3 px-4">{{ (product.sale_price or 0) | round(2) }}</td>
-          <td class="py-3 px-4">{{ (product.cost or 0) | round(2) }}</td>
-          <td class="py-3 px-4">{{ product.uom or '—' }}</td>
-          <td class="py-3 px-4">{{ product.purchase_uom or '—' }}</td>
-          <td class="py-3 px-4">{{ (product.qty_on_hand or 0) | round(2) }}</td>
-          <td class="py-3 px-4">{{ (product.forecast_qty or 0) | round(2) }}</td>
-          <td class="py-3 px-4">
-            {% if product.is_favorite %}
-            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-xs font-semibold">★ Favorite</span>
-            {% else %}
-            <span class="text-slate-500">—</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No parts have been added yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="grid gap-6 lg:grid-cols-[7fr_5fr] items-start">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+      <table id="parts-table" class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="0">
+              <span class="inline-flex items-center gap-1">Name <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="1">
+              <span class="inline-flex items-center gap-1">Sales Price <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="2">
+              <span class="inline-flex items-center gap-1">Cost <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="3">
+              <span class="inline-flex items-center gap-1">UoM <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="4">
+              <span class="inline-flex items-center gap-1">Purchase UoM <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="5">
+              <span class="inline-flex items-center gap-1">Qty on Hand <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="6">
+              <span class="inline-flex items-center gap-1">Forecast Qty <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+            <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="7">
+              <span class="inline-flex items-center gap-1">Favorite <span class="sort-indicator text-xs">⇅</span></span>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for product in products %}
+          <tr data-product-id="{{ product.id }}" class="hover:bg-amber-50/60 transition">
+            <td class="py-3 px-4 font-semibold text-slate-800">{{ product.name }}</td>
+            <td class="py-3 px-4">{{ (product.sale_price or 0) | round(2) }}</td>
+            <td class="py-3 px-4">{{ (product.cost or 0) | round(2) }}</td>
+            <td class="py-3 px-4">{{ product.uom or '—' }}</td>
+            <td class="py-3 px-4">{{ product.purchase_uom or '—' }}</td>
+            <td class="py-3 px-4">{{ (product.qty_on_hand or 0) | round(2) }}</td>
+            <td class="py-3 px-4">{{ (product.forecast_qty or 0) | round(2) }}</td>
+            <td class="py-3 px-4">
+              {% if product.is_favorite %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-xs font-semibold">★ Favorite</span>
+              {% else %}
+              <span class="text-slate-500">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="py-4 px-4 text-slate-500">No parts have been added yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 text-slate-50 shadow-lg p-6 sticky top-6">
+      <div id="part-detail-empty" class="text-center py-10 space-y-2">
+        <p class="text-lg font-semibold text-slate-100">Select a part</p>
+        <p class="text-sm text-slate-400">Click any row to view or edit specifications, vendors, and notes.</p>
+      </div>
+      <form id="part-detail-form" class="hidden space-y-5" method="POST" data-update-url-template="{{ url_for('purchase_parts_update', product_id=0) }}">
+        {{ csrf_field() }}
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="text-xs uppercase tracking-wide text-amber-200">Part overview</p>
+            <h3 id="part-title" class="text-xl font-semibold text-white">—</h3>
+            <p id="part-meta" class="text-sm text-slate-300">—</p>
+          </div>
+          <div class="text-right space-y-1">
+            <span id="part-status-pill" class="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-200 text-xs font-semibold px-3 py-1">Active</span>
+            <div class="text-xs text-slate-400">Primary vendor</div>
+            <div id="primary-vendor-chip" class="text-sm font-semibold text-white">—</div>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Name</span>
+            <input name="name" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">UoM</span>
+            <input name="uom" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Sales Price</span>
+            <input name="sale_price" type="number" step="0.01" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Cost</span>
+            <input name="cost" type="number" step="0.01" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Purchase UoM</span>
+            <input name="purchase_uom" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Qty on Hand</span>
+            <input name="qty_on_hand" type="number" step="0.01" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Forecast Qty</span>
+            <input name="forecast_qty" type="number" step="0.01" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Primary vendor</span>
+            <select name="primary_vendor" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <option value="">No primary vendor</option>
+              {% for vendor in vendors %}
+              <option value="{{ vendor.name }}">{{ vendor.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Linked vendors</span>
+            <textarea name="linked_vendors" rows="2" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Comma separated list"></textarea>
+          </label>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Specifications</span>
+            <textarea name="specifications" rows="3" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"></textarea>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-400">Other details</span>
+            <textarea name="notes" rows="3" class="w-full rounded-lg border border-slate-700 bg-slate-800 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"></textarea>
+          </label>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex flex-wrap items-center gap-4 text-sm">
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" name="is_favorite" class="rounded border-slate-700 bg-slate-800" />
+              <span class="text-slate-200">Mark as favorite</span>
+            </label>
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" name="is_active" class="rounded border-slate-700 bg-slate-800" />
+              <span class="text-slate-200">Active</span>
+            </label>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 mb-1">Linked vendors</p>
+            <div id="linked-vendors-list" class="flex flex-wrap gap-2 text-xs"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-xs text-slate-400">Update specifications, vendors, and stock numbers, then save your changes.</p>
+          <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-slate-900 font-semibold rounded-lg shadow hover:shadow-lg hover:scale-[1.01] transition">
+            Save changes
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -271,6 +377,130 @@
     }
 
     setupInteractiveTable("parts-table", "parts-search");
+
+    const productsDataset = {{ products_payload | default([], true) | tojson }};
+    const detailForm = document.getElementById("part-detail-form");
+    const emptyState = document.getElementById("part-detail-empty");
+    const linkedVendorsList = document.getElementById("linked-vendors-list");
+    const primaryVendorChip = document.getElementById("primary-vendor-chip");
+    const partTitle = document.getElementById("part-title");
+    const partMeta = document.getElementById("part-meta");
+    const statusPill = document.getElementById("part-status-pill");
+    const productMap = new Map(productsDataset.map((item) => [String(item.id), item]));
+    const updateUrlTemplate = detailForm?.dataset.updateUrlTemplate || "";
+
+    function setFieldValue(name, value) {
+      if (!detailForm) return;
+      const field = detailForm.querySelector(`[name="${name}"]`);
+      if (!field) return;
+      if (field.type === "checkbox") {
+        field.checked = Boolean(value);
+      } else if (field.tagName === "SELECT") {
+        const optionExists = Array.from(field.options).some((opt) => opt.value === (value || ""));
+        if (!optionExists && value) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          field.appendChild(option);
+        }
+        field.value = value || "";
+      } else {
+        field.value = value ?? "";
+      }
+    }
+
+    function formatStockMeta(product) {
+      const meta = [];
+      if (product.uom) meta.push(product.uom);
+      if (product.purchase_uom) meta.push(`Purchase UoM: ${product.purchase_uom}`);
+      meta.push(`On hand: ${(product.qty_on_hand ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      meta.push(`Forecast: ${(product.forecast_qty ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      return meta.join(" • ");
+    }
+
+    function renderLinkedVendors(vendorsText) {
+      if (!linkedVendorsList) return;
+      linkedVendorsList.innerHTML = "";
+      const names = (vendorsText || "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean);
+
+      if (!names.length) {
+        const empty = document.createElement("span");
+        empty.className = "text-slate-400";
+        empty.textContent = "No linked vendors";
+        linkedVendorsList.appendChild(empty);
+        return;
+      }
+
+      names.forEach((name) => {
+        const chip = document.createElement("span");
+        chip.className = "inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-1 text-amber-100";
+        chip.textContent = name;
+        linkedVendorsList.appendChild(chip);
+      });
+    }
+
+    function updateStatusPill(isActive, isFavorite) {
+      if (!statusPill) return;
+      statusPill.textContent = isActive ? "Active" : "Inactive";
+      statusPill.className = `inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+        isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-700 text-slate-200"
+      } ${isFavorite ? "ring-2 ring-amber-300" : ""}`;
+    }
+
+    function showProductDetail(productId) {
+      if (!detailForm || !emptyState) return;
+      const product = productMap.get(String(productId));
+      if (!product) return;
+
+      emptyState.classList.add("hidden");
+      detailForm.classList.remove("hidden");
+      detailForm.action = updateUrlTemplate.replace("/0/update", `/${product.id}/update`);
+
+      partTitle.textContent = product.name || "—";
+      partMeta.textContent = formatStockMeta(product);
+      updateStatusPill(product.is_active, product.is_favorite);
+
+      const primaryVendor = product.primary_vendor || "No primary vendor selected";
+      if (primaryVendorChip) {
+        primaryVendorChip.textContent = primaryVendor;
+        primaryVendorChip.className = `inline-flex items-center px-3 py-1 rounded-full text-sm ${
+          product.primary_vendor ? "bg-amber-500/20 text-amber-100" : "bg-slate-800 text-slate-200"
+        }`;
+      }
+
+      setFieldValue("name", product.name);
+      setFieldValue("uom", product.uom);
+      setFieldValue("sale_price", product.sale_price ?? "");
+      setFieldValue("cost", product.cost ?? "");
+      setFieldValue("purchase_uom", product.purchase_uom);
+      setFieldValue("qty_on_hand", product.qty_on_hand ?? "");
+      setFieldValue("forecast_qty", product.forecast_qty ?? "");
+      setFieldValue("primary_vendor", product.primary_vendor);
+      setFieldValue("linked_vendors", product.linked_vendors);
+      setFieldValue("specifications", product.specifications);
+      setFieldValue("notes", product.notes);
+      setFieldValue("is_favorite", product.is_favorite);
+      setFieldValue("is_active", product.is_active);
+
+      renderLinkedVendors(product.linked_vendors);
+
+      document.querySelectorAll("#parts-table tbody tr").forEach((row) => {
+        row.classList.toggle(
+          "outline outline-amber-300/80 outline-2",
+          row.dataset.productId === String(productId),
+        );
+      });
+    }
+
+    document.querySelectorAll("#parts-table tbody tr").forEach((row) => {
+      row.classList.add("cursor-pointer");
+      row.addEventListener("click", () => {
+        showProductDetail(row.dataset.productId);
+      });
+    });
   })();
 </script>
 {% endblock %}

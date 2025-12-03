@@ -1852,6 +1852,10 @@ class Product(db.Model):
     forecast_qty = db.Column(db.Float, default=0)
     is_favorite = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    primary_vendor = db.Column(db.String(255), nullable=True)
+    linked_vendors = db.Column(db.Text, nullable=True)
+    specifications = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
