@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from flask import current_app
+import pandas as pd
 
 from eleva_app import db
 from eleva_app.models import DrawingHistory
@@ -87,11 +88,32 @@ def _parse_int(value, label):
     return parsed, None
 
 
+def _extract_drawing_history_upload(upload):
+    filename = (upload.filename or "").lower()
+    if filename.endswith(".xlsx"):
+        from app import _ensure_openpyxl
+
+        _ensure_openpyxl()
+        upload.stream.seek(0)
+        df_raw = pd.read_excel(upload, header=None)
+        if df_raw.empty:
+            return [], []
+
+        header_row = df_raw.iloc[0].fillna("")
+        df = df_raw.iloc[1:].copy()
+        df.columns = header_row
+        df = df.loc[:, df.columns.astype(str).str.strip() != ""]
+        df.columns = [str(column).strip() for column in df.columns]
+        return list(df.columns), df.values.tolist()
+
+    return _extract_tabular_upload(upload)
+
+
 def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
     result = DrawingHistoryUploadResult()
 
     try:
-        header_cells, data_rows = _extract_tabular_upload(upload)
+        header_cells, data_rows = _extract_drawing_history_upload(upload)
     except MissingDependencyError:
         result.fatal_error = OPENPYXL_MISSING_MESSAGE
         return result
