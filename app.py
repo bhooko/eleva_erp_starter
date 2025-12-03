@@ -4918,6 +4918,7 @@ from eleva_app.models import (
     sales_task_assignees,
     ServiceRoute,
     Product,
+    PurchaseOrderLine,
     Vendor,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -5661,6 +5662,244 @@ def purchase_orders():
         vendors=vendors,
         projects=projects,
         bom_items=bom_items,
+    )
+
+
+@app.route("/purchase/orders/upload-odoo", methods=["POST"])
+@login_required
+def purchase_orders_upload_odoo():
+    ensure_bootstrap()
+
+    def _render_result(
+        *,
+        processed_rows=0,
+        created_count=0,
+        updated_count=0,
+        rows_with_errors=0,
+        row_errors=None,
+        fatal_error=None,
+    ):
+        return render_template(
+            "purchase_order_upload_result.html",
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            rows_with_errors=rows_with_errors,
+            row_errors=row_errors or [],
+            fatal_error=fatal_error,
+        )
+
+    upload = request.files.get("purchase_order_upload_file")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        return _render_result(fatal_error=str(exc))
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(upload)
+    except MissingDependencyError:
+        return _render_result(fatal_error=OPENPYXL_MISSING_MESSAGE)
+    except ValueError:
+        return _render_result(
+            fatal_error="Upload a .xlsx or .csv file exported from Odoo purchase orders.",
+        )
+    except UploadStageTimeoutError as exc:
+        return _render_result(fatal_error=str(exc))
+    except Exception:
+        current_app.logger.exception("Failed to read uploaded purchase order file")
+        return _render_result(
+            fatal_error=(
+                "There was a problem reading this Purchase Order file. Please check that you’re using the correct Odoo export and try again."
+            )
+        )
+
+    required_headers = {
+        "Billing Status",
+        "Buyer",
+        "Confirmation Date",
+        "Expected Arrival",
+        "Order Reference",
+        "Priority",
+        "Total",
+        "Vendor",
+        "Product",
+    }
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        label = stringify_cell(header)
+        if label:
+            header_map[label] = idx
+
+    missing_headers = [label for label in required_headers if label not in header_map]
+    if missing_headers:
+        return _render_result(
+            fatal_error=(
+                "The uploaded sheet is missing required columns: "
+                + ", ".join(sorted(missing_headers))
+            )
+        )
+
+    processed_rows = 0
+    created_count = 0
+    updated_count = 0
+    row_errors = []
+
+    def _get_cell(row_values, position):
+        return row_values[position] if position < len(row_values) else None
+
+    def _parse_numeric(value, label):
+        if value is None:
+            return 0.0, None
+        text_value = stringify_cell(value)
+        if text_value is None or text_value == "":
+            return 0.0, None
+        try:
+            return float(text_value), None
+        except (TypeError, ValueError):
+            try:
+                cleaned = str(text_value).replace(",", "").replace("₹", "").strip()
+                return float(cleaned), None
+            except (TypeError, ValueError):
+                return None, f"Invalid numeric {label}"
+
+    def _parse_odoo_datetime(value, label):
+        if value is None:
+            return None, None
+        if isinstance(value, datetime.datetime):
+            return value, None
+        if isinstance(value, datetime.date):
+            return datetime.datetime.combine(value, datetime.time())
+        text_value = stringify_cell(value)
+        if text_value is None or text_value == "":
+            return None, None
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y",
+        ):
+            try:
+                return datetime.datetime.strptime(text_value, fmt), None
+            except ValueError:
+                continue
+        return None, f"Could not parse {label}"
+
+    for row_index, row_values in enumerate(data_rows or [], start=2):
+        if not row_values:
+            continue
+        row_data = {}
+        has_value = False
+        for header, position in header_map.items():
+            value = _get_cell(row_values, position)
+            cell_value = stringify_cell(value)
+            if cell_value not in (None, ""):
+                has_value = True
+            row_data[header] = value
+        if not has_value:
+            continue
+
+        processed_rows += 1
+        row_issue = []
+
+        order_ref = clean_str(row_data.get("Order Reference"))
+        vendor_name = clean_str(row_data.get("Vendor"))
+        product_name = clean_str(row_data.get("Product"))
+        billing_status = clean_str(row_data.get("Billing Status")) or None
+        buyer = clean_str(row_data.get("Buyer")) or None
+        priority_value = clean_str(row_data.get("Priority")) or None
+        source_document = clean_str(row_data.get("Source Document")) or None
+
+        confirmation_date, confirmation_error = _parse_odoo_datetime(
+            row_data.get("Confirmation Date"), "Confirmation Date"
+        )
+        if confirmation_error:
+            row_issue.append(confirmation_error)
+
+        expected_arrival, arrival_error = _parse_odoo_datetime(
+            row_data.get("Expected Arrival"), "Expected Arrival"
+        )
+        if arrival_error:
+            row_issue.append(arrival_error)
+
+        total_amount, total_error = _parse_numeric(row_data.get("Total"), "Total")
+        if total_error:
+            row_issue.append(total_error)
+
+        if not order_ref:
+            row_issue.append("Missing Order Reference")
+        if not vendor_name:
+            row_issue.append("Missing Vendor")
+        if not product_name:
+            row_issue.append("Missing Product")
+
+        if row_issue:
+            row_errors.append(f"Row {row_index}: " + "; ".join(row_issue))
+            continue
+
+        pol = (
+            PurchaseOrderLine.query.filter_by(
+                order_ref=order_ref,
+                vendor_name=vendor_name,
+                product_name=product_name,
+                confirmation_date=confirmation_date,
+            )
+            .with_for_update(read=True)
+            .first()
+        )
+        is_new = pol is None
+        if is_new:
+            pol = PurchaseOrderLine(
+                order_ref=order_ref,
+                vendor_name=vendor_name,
+                product_name=product_name,
+                confirmation_date=confirmation_date,
+            )
+            db.session.add(pol)
+            created_count += 1
+        else:
+            updated_count += 1
+
+        pol.order_ref = order_ref
+        pol.vendor_name = vendor_name
+        pol.product_name = product_name
+        pol.confirmation_date = confirmation_date
+        pol.billing_status = billing_status
+        pol.buyer = buyer
+        pol.expected_arrival = expected_arrival
+        pol.priority = priority_value
+        pol.source_document = source_document
+        pol.total_amount = total_amount if total_amount is not None else 0
+        pol.is_active = True if pol.is_active is None else pol.is_active
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Failed to save purchase order line upload changes"
+        )
+        return _render_result(
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            rows_with_errors=len(row_errors),
+            row_errors=row_errors,
+            fatal_error="Could not save purchase order lines due to a database error.",
+        )
+
+    return _render_result(
+        processed_rows=processed_rows,
+        created_count=created_count,
+        updated_count=updated_count,
+        rows_with_errors=len(row_errors),
+        row_errors=row_errors,
     )
 
 
