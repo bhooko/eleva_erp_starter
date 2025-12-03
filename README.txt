@@ -24,6 +24,9 @@ flask run --debug
   virtual environment is activated and run `pip install -r requirements.txt` (or install
   the package directly with `pip install Flask-WTF`). This error simply means the
   dependencies were not installed in the environment you're using to launch Flask.
+- If you see `ModuleNotFoundError: No module named 'pandas'`, activate your virtual
+  environment and run `pip install -r requirements.txt` to install the data import
+  dependency used by Drawing History uploads.
 
 If you're starting from a fresh clone, the database file will be created automatically on first run (or via `flask initdb`).
 

@@ -111,6 +111,11 @@ OPENPYXL_MISSING_MESSAGE = (
     "`pip install -r requirements.txt` and restart the application."
 )
 
+PANDAS_MISSING_MESSAGE = (
+    "Drawing History imports require the pandas package. Install dependencies "
+    "with `pip install -r requirements.txt` and restart the application."
+)
+
 
 ORG_BACKUP_PATH = os.path.join(BASE_DIR, "instance", "org_structure_backup.json")
 CUSTOMER_SUPPORT_DATA_PATH = os.path.join(
