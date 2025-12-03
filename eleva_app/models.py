@@ -1775,6 +1775,25 @@ class BookInventory(db.Model):
     last_po = db.relationship("PurchaseOrder")
 
 
+class Product(db.Model):
+    __tablename__ = "product"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+    sale_price = db.Column(db.Float, nullable=True)
+    cost = db.Column(db.Float, nullable=True)
+    uom = db.Column(db.String(120), nullable=True)
+    purchase_uom = db.Column(db.String(120), nullable=True)
+    qty_on_hand = db.Column(db.Float, default=0)
+    forecast_qty = db.Column(db.Float, default=0)
+    is_favorite = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 # ----------------------------
 # Store / Inventory module models
 # ----------------------------

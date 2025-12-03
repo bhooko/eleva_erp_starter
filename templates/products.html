@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
+      <h1 class="text-2xl font-semibold">Products</h1>
+      <p class="text-sm text-slate-600">Manage product master data and sync updates from Odoo exports.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <label for="upload-products" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Products (Odoo)</label>
+    </div>
+  </div>
+
+  <div class="relative">
+    <input type="checkbox" id="upload-products" class="hidden peer" />
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-products').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+          <div>
+            <p class="text-xs text-slate-500 uppercase">Product import</p>
+            <h2 class="text-lg font-semibold">Upload Products (Odoo)</h2>
+          </div>
+          <button class="text-slate-500" type="button" onclick="document.getElementById('upload-products').checked=false;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('products_upload') }}" enctype="multipart/form-data" class="p-5 space-y-4">
+          {{ csrf_field() }}
+          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Odoo Products.xlsx</span> export (.xlsx or .csv). The sheet must include columns: Name, Sales Price, Cost, Unit of Measure, Purchase Unit, Quantity On Hand.</p>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Upload file</span>
+            <input type="file" name="product_upload_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-products').checked=false;">Cancel</button>
+            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Products</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Name</th>
+          <th class="py-3 px-4">Sales Price</th>
+          <th class="py-3 px-4">Cost</th>
+          <th class="py-3 px-4">UoM</th>
+          <th class="py-3 px-4">Purchase UoM</th>
+          <th class="py-3 px-4">Qty on Hand</th>
+          <th class="py-3 px-4">Forecast Qty</th>
+          <th class="py-3 px-4">Favorite</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for product in products %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ product.name }}</td>
+          <td class="py-3 px-4">{{ (product.sale_price or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ (product.cost or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ product.uom or '—' }}</td>
+          <td class="py-3 px-4">{{ product.purchase_uom or '—' }}</td>
+          <td class="py-3 px-4">{{ (product.qty_on_hand or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ (product.forecast_qty or 0) | round(2) }}</td>
+          <td class="py-3 px-4">
+            {% if product.is_favorite %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-xs font-semibold">★ Favorite</span>
+            {% else %}
+            <span class="text-slate-500">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No products have been added yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

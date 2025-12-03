@@ -4916,6 +4916,7 @@ from eleva_app.models import (
     SalesTask,
     sales_task_assignees,
     ServiceRoute,
+    Product,
     Vendor,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -5653,6 +5654,198 @@ def purchase_parts():
 
     parts = InventoryItem.query.order_by(InventoryItem.item_code).all()
     return render_template("purchase_parts.html", parts=parts)
+
+
+@app.route("/products", methods=["GET"])
+@login_required
+def products():
+    ensure_bootstrap()
+    records = Product.query.order_by(Product.name).all()
+    return render_template("products.html", products=records)
+
+
+@app.route("/products/upload", methods=["POST"])
+@login_required
+def products_upload():
+    ensure_bootstrap()
+
+    def _render_result(
+        *,
+        processed_rows=0,
+        created_count=0,
+        updated_count=0,
+        row_errors=None,
+        fatal_error=None,
+    ):
+        return render_template(
+            "product_upload_result.html",
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            row_errors=row_errors or [],
+            fatal_error=fatal_error,
+        )
+
+    upload = request.files.get("product_upload_file")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        return _render_result(fatal_error=str(exc))
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(upload)
+    except MissingDependencyError:
+        return _render_result(fatal_error=OPENPYXL_MISSING_MESSAGE)
+    except ValueError:
+        return _render_result(
+            fatal_error="Upload a .xlsx or .csv file exported from Odoo products.",
+        )
+    except UploadStageTimeoutError as exc:
+        return _render_result(fatal_error=str(exc))
+    except Exception:
+        current_app.logger.exception("Failed to read uploaded product file")
+        return _render_result(
+            fatal_error=(
+                "There was a problem reading this file, please check the format and try again."
+            )
+        )
+
+    required_headers = {
+        "Name",
+        "Sales Price",
+        "Cost",
+        "Unit of Measure",
+        "Purchase Unit",
+        "Quantity On Hand",
+    }
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        label = stringify_cell(header)
+        if label:
+            header_map[label] = idx
+
+    missing_headers = [label for label in required_headers if label not in header_map]
+    if missing_headers:
+        return _render_result(
+            fatal_error=(
+                "The uploaded sheet is missing required columns: "
+                + ", ".join(sorted(missing_headers))
+            )
+        )
+
+    processed_rows = 0
+    created_count = 0
+    updated_count = 0
+    row_errors = []
+
+    def _get_cell(row_values, position):
+        return row_values[position] if position < len(row_values) else None
+
+    def _parse_numeric(value, label):
+        if value is None:
+            return 0.0, None
+        text_value = stringify_cell(value)
+        if text_value is None or text_value == "":
+            return 0.0, None
+        try:
+            return float(text_value)
+        except (TypeError, ValueError):
+            try:
+                cleaned = str(text_value).replace(",", "")
+                return float(cleaned)
+            except (TypeError, ValueError):
+                return None, f"Invalid numeric value in {label}"
+
+    for row_index, row_values in enumerate(data_rows or [], start=2):
+        if not row_values:
+            continue
+        row_data = {}
+        has_value = False
+        for header, position in header_map.items():
+            value = _get_cell(row_values, position)
+            cell_value = stringify_cell(value)
+            if cell_value:
+                has_value = True
+            row_data[header] = value
+        if not has_value:
+            continue
+
+        processed_rows += 1
+        row_issue = []
+        name = clean_str(row_data.get("Name"))
+        sale_price, error = _parse_numeric(row_data.get("Sales Price"), "Sales Price")
+        if error:
+            row_issue.append(error)
+        cost, cost_error = _parse_numeric(row_data.get("Cost"), "Cost")
+        if cost_error:
+            row_issue.append(cost_error)
+        qty_on_hand, qty_error = _parse_numeric(
+            row_data.get("Quantity On Hand"), "Quantity On Hand"
+        )
+        if qty_error:
+            row_issue.append(qty_error)
+        forecast_qty, forecast_error = _parse_numeric(
+            row_data.get("Forecasted Quantity"), "Forecasted Quantity"
+        )
+        if forecast_error:
+            row_issue.append(forecast_error)
+
+        if not name:
+            row_issue.append("Missing Name")
+
+        if row_issue:
+            row_errors.append(f"Row {row_index}: " + "; ".join(row_issue))
+            continue
+
+        product = (
+            Product.query.filter(func.lower(Product.name) == name.lower()).first()
+        )
+        is_new = product is None
+        if is_new:
+            product = Product(name=name)
+            db.session.add(product)
+            created_count += 1
+        else:
+            updated_count += 1
+
+        product.name = name
+        product.sale_price = sale_price
+        product.cost = cost
+        product.uom = clean_str(row_data.get("Unit of Measure")) or None
+        product.purchase_uom = clean_str(row_data.get("Purchase Unit")) or None
+        product.qty_on_hand = qty_on_hand or 0
+        product.forecast_qty = forecast_qty or 0
+        product.is_favorite = _parse_boolean_cell(
+            row_data.get("Favorite"), default=False
+        )
+        product.is_active = (
+            product.is_active if product.is_active is not None else True
+        )
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to save product upload changes")
+        return _render_result(
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            row_errors=row_errors,
+            fatal_error="Could not save product records due to a database error.",
+        )
+
+    return _render_result(
+        processed_rows=processed_rows,
+        created_count=created_count,
+        updated_count=updated_count,
+        row_errors=row_errors,
+    )
 
 
 @app.route("/purchase/vendors/upload", methods=["POST"])
@@ -6526,6 +6719,44 @@ def ensure_vendor_columns():
         print("✔️ vendor OK")
 
 
+def ensure_product_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_product_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(product)")
+    product_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    column_defs = [
+        ("sale_price", "REAL"),
+        ("cost", "REAL"),
+        ("uom", "TEXT"),
+        ("purchase_uom", "TEXT"),
+        ("qty_on_hand", "REAL DEFAULT 0"),
+        ("forecast_qty", "REAL DEFAULT 0"),
+        ("is_favorite", "INTEGER DEFAULT 0"),
+        ("is_active", "INTEGER DEFAULT 1"),
+        ("created_at", "DATETIME"),
+        ("updated_at", "DATETIME"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in product_cols:
+            cur.execute(f"ALTER TABLE product ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in product: {', '.join(added_cols)}")
+    else:
+        print("✔️ product OK")
+
+
 def ensure_sales_client_columns():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -6730,6 +6961,7 @@ def ensure_tables():
         DesignDrawingRevision.__table__,
         BillOfMaterials.__table__,
         BOMItem.__table__,
+        Product.__table__,
         Vendor.__table__,
         PurchaseOrder.__table__,
         PurchaseOrderItem.__table__,
@@ -6851,6 +7083,7 @@ def bootstrap_db():
     ensure_sales_opportunity_columns()
     ensure_customer_columns()
     ensure_vendor_columns()
+    ensure_product_columns()
     ensure_dropdown_options_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
