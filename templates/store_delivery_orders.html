@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Store · Delivery Orders{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Delivery Orders</h1>
+      <p class="text-sm text-slate-600">Create and track delivery orders created by Store.</p>
+    </div>
+    {% if can_create %}
+    <a href="{{ url_for('create_delivery_order') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
+      + Create Delivery Order
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">DO Number</th>
+          <th class="py-3 px-4">Project / Site</th>
+          <th class="py-3 px-4">Receiver</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">Date</th>
+          <th class="py-3 px-4">Created By</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for order in orders %}
+        <tr class="hover:bg-slate-50 transition">
+          <td class="py-3 px-4 font-semibold text-slate-800">
+            <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="hover:text-orange-600">
+              {{ order.do_number }}
+            </a>
+          </td>
+          <td class="py-3 px-4">{{ order.project_or_site }}</td>
+          <td class="py-3 px-4">{{ order.receiver_name }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700' if order.status == 'Dispatched' else 'bg-slate-100 text-slate-700' }}">
+              {{ order.status or 'Created' }}
+            </span>
+          </td>
+          <td class="py-3 px-4">{{ order.date_created.date() if order.date_created else '—' }}</td>
+          <td class="py-3 px-4">{{ order.created_by.display_name if order.created_by else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="py-4 px-4 text-slate-500">No delivery orders captured yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
