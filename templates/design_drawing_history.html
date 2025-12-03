@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Design · Drawing History{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Design</p>
+      <h1 class="text-2xl font-semibold">Drawing History</h1>
+      <p class="text-sm text-slate-600">Search, filter, and review drawing records for all lifts.</p>
+    </div>
+    <label for="upload-drawing-history" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Drawing History (Excel)</label>
+  </div>
+
+  <div class="relative">
+    <input type="checkbox" id="upload-drawing-history" class="hidden peer" />
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-drawing-history').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+          <div>
+            <p class="text-xs text-slate-500 uppercase">Drawing history import</p>
+            <h2 class="text-lg font-semibold">Upload Drawing History</h2>
+          </div>
+          <button class="text-slate-500" type="button" onclick="document.getElementById('upload-drawing-history').checked=false;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('design_drawing_history_upload') }}" enctype="multipart/form-data" class="p-5 space-y-4">
+          {{ csrf_field() }}
+          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Drawing History</span> sheet (.xlsx or .csv). Required columns: {{ required_headers|join(', ') if required_headers else 'Project No., CLIENT NAME, SITE LOCATION, DRG NUMBER, DRG BY, REV. NO., DRG APPROVAL, LIFT TYPE, SHAFT INNER DIMS (Actual), CAR INNER DIMS, NO. OF PASS. (Actual), NO. OF PASS. (Quoted), FLR. LEVEL, LANDING DOOR OPENING, NO. OF SIDES OF STRUCT.' }}.</p>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Upload file</span>
+            <input type="file" name="drawing_history_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-drawing-history').checked=false;">Cancel</button>
+            <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <label class="space-y-1 block">
+        <span class="text-xs uppercase text-slate-500">Project No.</span>
+        <input type="text" name="project_no" value="{{ filters.project_no }}" class="w-full rounded-lg border-slate-200" placeholder="Search project" />
+      </label>
+      <label class="space-y-1 block">
+        <span class="text-xs uppercase text-slate-500">Client Name</span>
+        <input type="text" name="client_name" value="{{ filters.client_name }}" class="w-full rounded-lg border-slate-200" placeholder="Search client" />
+      </label>
+      <label class="space-y-1 block">
+        <span class="text-xs uppercase text-slate-500">Lift Type</span>
+        <input type="text" name="lift_type" value="{{ filters.lift_type }}" class="w-full rounded-lg border-slate-200" placeholder="e.g. MRL" />
+      </label>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="space-y-1 block">
+          <span class="text-xs uppercase text-slate-500">From date</span>
+          <input type="date" name="date_from" value="{{ filters.date_from }}" class="w-full rounded-lg border-slate-200" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs uppercase text-slate-500">To date</span>
+          <input type="date" name="date_to" value="{{ filters.date_to }}" class="w-full rounded-lg border-slate-200" />
+        </label>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-3 pt-2">
+      <a href="{{ url_for('design_drawing_history') }}" class="px-4 py-2 rounded-lg border">Reset</a>
+      <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Apply Filters</button>
+    </div>
+  </form>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Project No.</th>
+          <th class="py-3 px-4">Client</th>
+          <th class="py-3 px-4">Site Location</th>
+          <th class="py-3 px-4">DRG Number</th>
+          <th class="py-3 px-4">DRG By</th>
+          <th class="py-3 px-4">Rev. No.</th>
+          <th class="py-3 px-4">DRG Approval</th>
+          <th class="py-3 px-4">Lift Type</th>
+          <th class="py-3 px-4">Floor Level</th>
+          <th class="py-3 px-4">Landing Door Opening</th>
+          <th class="py-3 px-4">Pass (Actual)</th>
+          <th class="py-3 px-4">Pass (Quoted)</th>
+          <th class="py-3 px-4">Last Updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for record in records %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ record.project_no or '—' }}</td>
+          <td class="py-3 px-4">{{ record.client_name or '—' }}</td>
+          <td class="py-3 px-4">{{ record.site_location or '—' }}</td>
+          <td class="py-3 px-4">{{ record.drg_number or '—' }}</td>
+          <td class="py-3 px-4">{{ record.drg_by or '—' }}</td>
+          <td class="py-3 px-4">{{ record.rev_no or '—' }}</td>
+          <td class="py-3 px-4">{{ record.drg_approval or '—' }}</td>
+          <td class="py-3 px-4">{{ record.lift_type or '—' }}</td>
+          <td class="py-3 px-4">{{ record.floor_level or '—' }}</td>
+          <td class="py-3 px-4">{{ record.landing_door_opening or '—' }}</td>
+          <td class="py-3 px-4">{{ record.num_pass_actual if record.num_pass_actual is not none else '—' }}</td>
+          <td class="py-3 px-4">{{ record.num_pass_quoted if record.num_pass_quoted is not none else '—' }}</td>
+          <td class="py-3 px-4">{{ record.updated_at.strftime('%d %b %Y, %I:%M %p') if record.updated_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="13" class="py-4 px-4 text-slate-500">No drawing history records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flex items-center justify-between text-sm text-slate-600">
+    <p>Showing {{ records|length }} of {{ total_records }} records</p>
+    <div class="flex items-center gap-2">
+      {% set prev_page = page - 1 %}
+      {% set next_page = page + 1 %}
+      <a href="{{ url_for('design_drawing_history', page=prev_page if page>1 else 1, project_no=filters.project_no, client_name=filters.client_name, lift_type=filters.lift_type, date_from=filters.date_from, date_to=filters.date_to) }}" class="px-3 py-1 rounded-lg border {{ 'opacity-50 pointer-events-none' if page <=1 else '' }}">Prev</a>
+      <span>Page {{ page }} of {{ total_pages }}</span>
+      <a href="{{ url_for('design_drawing_history', page=next_page if page < total_pages else total_pages, project_no=filters.project_no, client_name=filters.client_name, lift_type=filters.lift_type, date_from=filters.date_from, date_to=filters.date_to) }}" class="px-3 py-1 rounded-lg border {{ 'opacity-50 pointer-events-none' if page >= total_pages else '' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
