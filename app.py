@@ -17,7 +17,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math
 from datetime import datetime as datetime_cls, date
 import importlib.util
 import csv
@@ -4895,6 +4895,7 @@ from eleva_app.models import (
     BillOfMaterials,
     BOMItem,
     BookInventory,
+    DrawingHistory,
     DesignDrawing,
     DesignDrawingRevision,
     DesignShaftSuggestion,
@@ -4938,6 +4939,11 @@ from eleva_app.uploads import (
     process_lift_upload_file,
     save_pending_upload_file,
     UploadStageTimeoutError,
+)
+from eleva_app.drawing_history_import import (
+    DrawingHistoryUploadResult,
+    REQUIRED_HEADERS as DRAWING_REQUIRED_HEADERS,
+    process_drawing_history_upload,
 )
 
 
@@ -5470,6 +5476,105 @@ def design_task_detail(task_id):
         drawings=drawings,
         boms=bom_list,
     )
+
+
+@app.route("/design/drawing-history")
+@login_required
+def design_drawing_history():
+    ensure_bootstrap()
+    query = DrawingHistory.query
+
+    project_no = (request.args.get("project_no") or "").strip()
+    client_name = (request.args.get("client_name") or "").strip()
+    lift_type = (request.args.get("lift_type") or "").strip()
+    date_from_raw = (request.args.get("date_from") or "").strip()
+    date_to_raw = (request.args.get("date_to") or "").strip()
+
+    if project_no:
+        query = query.filter(DrawingHistory.project_no.ilike(f"%{project_no}%"))
+    if client_name:
+        query = query.filter(DrawingHistory.client_name.ilike(f"%{client_name}%"))
+    if lift_type:
+        query = query.filter(DrawingHistory.lift_type.ilike(f"%{lift_type}%"))
+
+    try:
+        date_from = (
+            datetime.datetime.strptime(date_from_raw, "%Y-%m-%d") if date_from_raw else None
+        )
+    except ValueError:
+        date_from = None
+
+    try:
+        date_to = datetime.datetime.strptime(date_to_raw, "%Y-%m-%d") if date_to_raw else None
+    except ValueError:
+        date_to = None
+
+    if date_from:
+        query = query.filter(DrawingHistory.created_at >= date_from)
+    if date_to:
+        day_end = date_to + datetime.timedelta(days=1)
+        query = query.filter(DrawingHistory.created_at < day_end)
+
+    page = max(int(request.args.get("page", 1) or 1), 1)
+    per_page = 20
+    total_records = query.count()
+    total_pages = max(1, math.ceil(total_records / per_page)) if total_records else 1
+    records = (
+        query.order_by(DrawingHistory.updated_at.desc().nullslast())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return render_template(
+        "design_drawing_history.html",
+        records=records,
+        filters={
+            "project_no": project_no,
+            "client_name": client_name,
+            "lift_type": lift_type,
+            "date_from": date_from_raw,
+            "date_to": date_to_raw,
+        },
+        page=page,
+        total_pages=total_pages,
+        total_records=total_records,
+        per_page=per_page,
+        required_headers=sorted(DRAWING_REQUIRED_HEADERS),
+    )
+
+
+@app.route("/design/drawing-history/upload", methods=["POST"])
+@login_required
+def design_drawing_history_upload():
+    ensure_bootstrap()
+
+    def _render_result(result: DrawingHistoryUploadResult):
+        return render_template(
+            "drawing_history_upload_result.html",
+            processed_rows=result.processed_rows,
+            created_count=result.created_count,
+            updated_count=result.updated_count,
+            row_errors=result.row_errors,
+            fatal_error=result.fatal_error,
+        )
+
+    upload = request.files.get("drawing_history_file")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        return _render_result(
+            DrawingHistoryUploadResult(
+                fatal_error=str(exc),
+            )
+        )
+
+    result = process_drawing_history_upload(upload)
+    return _render_result(result)
 
 
 @app.route("/purchase/orders", methods=["GET", "POST"])
@@ -6978,6 +7083,7 @@ def ensure_tables():
         DesignTaskComment.__table__,
         DesignDrawing.__table__,
         DesignDrawingRevision.__table__,
+        DrawingHistory.__table__,
         BillOfMaterials.__table__,
         BOMItem.__table__,
         Product.__table__,

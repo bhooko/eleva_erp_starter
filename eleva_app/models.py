@@ -1657,6 +1657,39 @@ class DesignDrawingRevision(db.Model):
     changed_by = db.relationship("User")
 
 
+class DrawingHistory(db.Model):
+    __tablename__ = "drawing_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_no = db.Column(db.String(120), nullable=True, index=True)
+    client_name = db.Column(db.String(150), nullable=True, index=True)
+    site_location = db.Column(db.String(150), nullable=True)
+    drg_number = db.Column(db.String(120), nullable=True, index=True)
+    drg_by = db.Column(db.String(120), nullable=True)
+    rev_no = db.Column(db.String(50), nullable=True)
+    drg_approval = db.Column(db.String(120), nullable=True)
+    lift_type = db.Column(db.String(120), nullable=True, index=True)
+    shaft_inner_dims = db.Column(db.String(150), nullable=True)
+    car_inner_dims = db.Column(db.String(150), nullable=True)
+    num_pass_actual = db.Column(db.Integer, nullable=True)
+    num_pass_quoted = db.Column(db.Integer, nullable=True)
+    floor_level = db.Column(db.String(120), nullable=True)
+    landing_door_opening = db.Column(db.String(150), nullable=True)
+    num_sides_struct = db.Column(db.Integer, nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "project_no", "drg_number", "rev_no", name="uq_drawing_history_revision"
+        ),
+    )
+
+
 # ----------------------------
 # Purchase module models
 # ----------------------------
