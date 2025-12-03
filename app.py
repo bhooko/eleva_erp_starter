@@ -5753,11 +5753,11 @@ def products_upload():
         if text_value is None or text_value == "":
             return 0.0, None
         try:
-            return float(text_value)
+            return float(text_value), None
         except (TypeError, ValueError):
             try:
                 cleaned = str(text_value).replace(",", "")
-                return float(cleaned)
+                return float(cleaned), None
             except (TypeError, ValueError):
                 return None, f"Invalid numeric value in {label}"
 
