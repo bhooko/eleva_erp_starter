@@ -153,6 +153,12 @@
       const tbody = table.querySelector("tbody");
       const headers = Array.from(table.querySelectorAll("th[data-sort-index]"));
 
+      const params = new URLSearchParams(window.location.search);
+      const initialItemCode = params.get("item_code");
+      if (initialItemCode && searchInput) {
+        searchInput.value = initialItemCode;
+      }
+
       let sortState = { key: null, direction: 1 };
 
       function computeTokenScore(text, token) {
