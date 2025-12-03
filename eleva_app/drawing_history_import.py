@@ -1,8 +1,8 @@
+import importlib
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 from flask import current_app
-import pandas as pd
 
 from eleva_app import db
 from eleva_app.models import DrawingHistory
@@ -10,6 +10,7 @@ from eleva_app.uploads import _extract_tabular_upload
 from app import (
     MissingDependencyError,
     OPENPYXL_MISSING_MESSAGE,
+    PANDAS_MISSING_MESSAGE,
     UploadStageTimeoutError,
     clean_str,
     parse_int_field,
@@ -60,6 +61,12 @@ INTEGER_HEADERS = {
 }
 
 
+def _get_pandas():
+    if importlib.util.find_spec("pandas") is None:
+        raise MissingDependencyError(PANDAS_MISSING_MESSAGE)
+    return importlib.import_module("pandas")
+
+
 @dataclass
 class DrawingHistoryUploadResult:
     processed_rows: int = 0
@@ -89,6 +96,7 @@ def _parse_int(value, label):
 
 
 def _extract_drawing_history_upload(upload):
+    pd = _get_pandas()
     filename = (upload.filename or "").lower()
     if filename.endswith(".xlsx"):
         from app import _ensure_openpyxl
