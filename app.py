@@ -4909,6 +4909,7 @@ from eleva_app.models import (
     Dispatch,
     DispatchItem,
     InventoryItem,
+    InventoryStock,
     InventoryReceipt,
     InventoryReceiptItem,
     SalesActivity,
@@ -6313,6 +6314,268 @@ def _sync_inventory_with_products():
             )
 
 
+def _normalize_inventory_header(header: str) -> str:
+    text = clean_str(header).lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+INVENTORY_HEADER_ALIASES = {
+    "product": "product",
+    "product name": "product",
+    "product_name": "product",
+    "quantity": "quantity",
+    "qty": "quantity",
+    "location": "location",
+    "uom": "uom",
+    "unit of measure": "uom",
+    "value": "value",
+    "on hand value": "value",
+    "company": "company",
+}
+
+
+def _process_inventory_upload(upload, extension):
+    upload.stream.seek(0)
+    if extension == ".xlsx":
+        _ensure_openpyxl()
+        workbook = load_workbook(upload.stream, data_only=True)
+        sheet = workbook.active
+        rows = sheet.iter_rows(values_only=True)
+    else:
+        content = upload.stream.read()
+        try:
+            text = content.decode("utf-8-sig")
+        except Exception:
+            text = content.decode("latin-1")
+        reader = csv.reader(StringIO(text))
+        rows = reader
+
+    header_row = next(rows, None)
+    if not header_row:
+        return {
+            "processed_rows": 0,
+            "created_count": 0,
+            "updated_count": 0,
+            "row_errors": ["The uploaded file does not contain any data."],
+            "rows_with_errors": 1,
+            "rows_uploaded": 0,
+            "rows_skipped": 1,
+            "rows_missing_products": 0,
+            "missing_products": [],
+            "fatal_error": None,
+        }
+
+    header_map = {}
+    for idx, header in enumerate(header_row):
+        canonical = INVENTORY_HEADER_ALIASES.get(_normalize_inventory_header(header))
+        if canonical and canonical not in header_map:
+            header_map[canonical] = idx
+
+    missing = [col for col in ("product", "quantity", "location") if col not in header_map]
+    if missing:
+        return {
+            "processed_rows": 0,
+            "created_count": 0,
+            "updated_count": 0,
+            "row_errors": [
+                "Missing required column(s): " + ", ".join(missing).title()
+            ],
+            "rows_with_errors": 1,
+            "rows_uploaded": 0,
+            "rows_skipped": 1,
+            "rows_missing_products": 0,
+            "missing_products": [],
+            "fatal_error": None,
+        }
+
+    processed_rows = created_count = updated_count = 0
+    row_errors = []
+    missing_products = []
+    now = datetime.datetime.utcnow()
+
+    for row_index, row in enumerate(rows, start=2):
+        row_values = {}
+        for key, idx in header_map.items():
+            if isinstance(row, (list, tuple)):
+                row_values[key] = row[idx] if idx < len(row) else None
+            else:
+                try:
+                    row_values[key] = row[idx]
+                except Exception:
+                    row_values[key] = None
+
+        if not any(clean_str(value) for value in row_values.values()):
+            continue
+
+        processed_rows += 1
+
+        product = clean_str(row_values.get("product"))
+        if not product:
+            row_errors.append(f"Row {row_index}: Missing Product")
+            continue
+
+        product_in_master = (
+            Product.query.filter(func.lower(Product.name) == product.lower()).first()
+        )
+        if not product_in_master:
+            message = (
+                f"Row {row_index}: Product '{product}' does not exist in Parts master. Skipped."
+            )
+            row_errors.append(message)
+            missing_products.append(message)
+            continue
+
+        location = clean_str(row_values.get("location"))
+        quantity_raw = row_values.get("quantity")
+        issues = []
+
+        if not location:
+            issues.append("Missing Location")
+
+        try:
+            quantity = float(quantity_raw)
+        except (TypeError, ValueError):
+            quantity_text = clean_str(quantity_raw)
+            if quantity_text:
+                try:
+                    quantity = float(quantity_text)
+                except (TypeError, ValueError):
+                    quantity = None
+            else:
+                quantity = None
+
+        if quantity is None:
+            issues.append("Quantity is not numeric")
+
+        value_raw = row_values.get("value")
+        on_hand_value = None
+        if value_raw not in (None, ""):
+            try:
+                on_hand_value = float(value_raw)
+            except (TypeError, ValueError):
+                value_text = clean_str(value_raw)
+                try:
+                    on_hand_value = float(value_text)
+                except (TypeError, ValueError):
+                    issues.append("Value is not numeric")
+
+        if issues:
+            row_errors.append(f"Row {row_index}: " + "; ".join(issues))
+            continue
+
+        record = (
+            InventoryStock.query.filter(
+                func.lower(InventoryStock.product_name) == product.lower(),
+                func.lower(InventoryStock.location) == location.lower(),
+            ).first()
+        )
+
+        if record:
+            updated_count += 1
+        else:
+            record = InventoryStock(product_name=product, location=location)
+            record.is_active = True
+            db.session.add(record)
+            created_count += 1
+
+        record.product_name = product
+        record.location = location
+        record.quantity = quantity
+        record.uom = clean_str(row_values.get("uom")) or None
+        record.company = clean_str(row_values.get("company")) or None
+        record.on_hand_value = on_hand_value
+        record.last_updated = now
+        record.is_active = record.is_active if record.is_active is not None else True
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to save inventory upload changes")
+        return {
+            "processed_rows": processed_rows,
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "row_errors": row_errors,
+            "rows_with_errors": len(row_errors),
+            "rows_uploaded": created_count + updated_count,
+            "rows_skipped": len(row_errors),
+            "rows_missing_products": len(missing_products),
+            "missing_products": missing_products,
+            "fatal_error": "Could not save inventory records due to a database error.",
+        }
+
+    return {
+        "processed_rows": processed_rows,
+        "created_count": created_count,
+        "updated_count": updated_count,
+        "row_errors": row_errors,
+        "rows_with_errors": len(row_errors),
+        "rows_uploaded": created_count + updated_count,
+        "rows_skipped": len(row_errors),
+        "rows_missing_products": len(missing_products),
+        "missing_products": missing_products,
+        "fatal_error": None,
+    }
+
+
+@app.route("/inventory/upload", methods=["POST"])
+@login_required
+def inventory_upload():
+    ensure_bootstrap()
+
+    def _render_result(**kwargs):
+        defaults = {
+            "processed_rows": 0,
+            "created_count": 0,
+            "updated_count": 0,
+            "row_errors": [],
+            "rows_with_errors": 0,
+            "rows_uploaded": 0,
+            "rows_skipped": 0,
+            "rows_missing_products": 0,
+            "missing_products": [],
+            "fatal_error": None,
+        }
+        defaults.update(kwargs)
+        return render_template("inventory_upload_result.html", **defaults)
+
+    upload = request.files.get("inventory_file")
+    try:
+        extension = _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        return _render_result(fatal_error=str(exc))
+    except RequestEntityTooLarge:
+        return _render_result(
+            fatal_error=(
+                f"Uploads are limited to {int(_get_max_upload_size_bytes() / (1024 * 1024))} MB."
+            )
+        )
+
+    try:
+        result = _process_inventory_upload(upload, extension)
+    except MissingDependencyError:
+        return _render_result(fatal_error=OPENPYXL_MISSING_MESSAGE)
+    except Exception:
+        current_app.logger.exception("Failed to process inventory upload")
+        return _render_result(
+            fatal_error=(
+                "There was a problem reading this inventory file. Please check the template and try again."
+            )
+        )
+
+    fatal_error = result.get("fatal_error")
+    if fatal_error:
+        return _render_result(**result)
+
+    return render_template("inventory_upload_result.html", **result)
+
+
 @app.route("/purchase/vendors/upload", methods=["POST"])
 @login_required
 def purchase_vendors_upload():
@@ -6810,6 +7073,11 @@ def store_inventory():
     usable_items = [item for item in items if (item.current_stock or 0) > 0]
     usable_count = len(usable_items)
     low_stock = [item for item in items if (item.current_stock or 0) < 1]
+    inventory_records = (
+        InventoryStock.query.order_by(
+            InventoryStock.product_name, InventoryStock.location
+        ).all()
+    )
     return render_template(
         "store_inventory.html",
         items=items,
@@ -6819,6 +7087,7 @@ def store_inventory():
         usable=usable_count,
         usable_items=usable_items,
         low_stock=low_stock,
+        inventory_records=inventory_records,
     )
 
 

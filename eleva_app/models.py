@@ -1879,6 +1879,24 @@ class InventoryItem(db.Model):
     location = db.Column(db.String(120), nullable=True)
 
 
+class InventoryStock(db.Model):
+    __tablename__ = "inventory_stock"
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_name = db.Column(db.String(255), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    last_updated = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    uom = db.Column(db.String(120), nullable=True)
+    on_hand_value = db.Column(db.Float, nullable=True)
+    company = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("product_name", "location", name="uq_inventory_stock_product_location"),
+    )
+
+
 class InventoryReceipt(db.Model):
     __tablename__ = "inventory_receipt"
 

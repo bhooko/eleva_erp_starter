@@ -7,6 +7,11 @@
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Inventory Overview</h1>
     </div>
+    <button type="button" data-modal-target="inventory-upload-modal"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M9 3a1 1 0 012 0v6h3a1 1 0 010 2h-3v6a1 1 0 01-2 0v-6H6a1 1 0 010-2h3V3z"/></svg>
+      Upload Inventory (Odoo)
+    </button>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -125,6 +130,51 @@
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="text-lg font-semibold">Imported inventory (Odoo Quants)</h2>
+        <p class="text-sm text-slate-600">Latest stock on hand by product and location.</p>
+      </div>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-2">Product</th>
+          <th class="py-2">Location</th>
+          <th class="py-2">Quantity</th>
+          <th class="py-2">UoM</th>
+          <th class="py-2">Value</th>
+          <th class="py-2">Company</th>
+          <th class="py-2">Last updated</th>
+          <th class="py-2">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for record in inventory_records %}
+        <tr>
+          <td class="py-2">{{ record.product_name }}</td>
+          <td class="py-2">{{ record.location }}</td>
+          <td class="py-2">{{ record.quantity }}</td>
+          <td class="py-2">{{ record.uom or '—' }}</td>
+          <td class="py-2">{{ record.on_hand_value if record.on_hand_value is not none else '—' }}</td>
+          <td class="py-2">{{ record.company or '—' }}</td>
+          <td class="py-2">{{ record.last_updated.strftime('%Y-%m-%d %H:%M') if record.last_updated else '—' }}</td>
+          <td class="py-2">
+            {% if record.is_active %}
+            <span class="inline-flex items-center px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Active</span>
+            {% else %}
+            <span class="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">Inactive</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="py-3 text-slate-500">No Odoo inventory uploaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
@@ -149,6 +199,28 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+</div>
+
+<div id="inventory-upload-modal" class="hidden fixed inset-0 z-40 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3 border-b">
+      <h2 class="text-lg font-semibold">Upload Inventory (Odoo)</h2>
+      <button type="button" class="text-slate-500 hover:text-slate-700" data-modal-close="inventory-upload-modal">✕</button>
+    </div>
+    <form action="{{ url_for('inventory_upload') }}" method="POST" enctype="multipart/form-data" class="space-y-4 p-5">
+      {{ csrf_token() }}
+      <p class="text-sm text-slate-600">Upload the <strong>Quants (stock.quant).xlsx</strong> file exported from Odoo or a compatible CSV.</p>
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Inventory file</span>
+        <input type="file" name="inventory_file" accept=".xlsx,.csv" required class="mt-1 block w-full text-sm text-slate-700 border border-slate-200 rounded-lg p-2" />
+        <span class="text-xs text-slate-500">Accepted formats: .xlsx, .csv</span>
+      </label>
+      <div class="flex items-center justify-end gap-3">
+        <button type="button" class="px-4 py-2 text-slate-600 hover:text-slate-800" data-modal-close="inventory-upload-modal">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg">Upload</button>
+      </div>
+    </form>
   </div>
 </div>
 <script>
@@ -177,7 +249,7 @@
       });
     });
 
-    document.querySelectorAll('#usable-modal, #quarantine-modal, #low-stock-modal').forEach((overlay) => {
+    document.querySelectorAll('#usable-modal, #quarantine-modal, #low-stock-modal, #inventory-upload-modal').forEach((overlay) => {
       overlay.addEventListener('click', (event) => {
         if (event.target === overlay) {
           overlay.classList.add('hidden');
