@@ -7916,6 +7916,7 @@ def ensure_tables():
         PurchaseOrderItem.__table__,
         BookInventory.__table__,
         InventoryItem.__table__,
+        InventoryStock.__table__,
         InventoryReceipt.__table__,
         InventoryReceiptItem.__table__,
         Dispatch.__table__,
