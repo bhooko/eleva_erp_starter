@@ -528,6 +528,45 @@
       color: #e5e7eb !important;
     }
 
+    /* FORM FIELDS IN ELEVA DARK THEMES */
+    html[data-theme="eleva-signature"] input,
+    html[data-theme="eleva-signature"] select,
+    html[data-theme="eleva-signature"] textarea,
+    html[data-theme="metallic-elevate"] input,
+    html[data-theme="metallic-elevate"] select,
+    html[data-theme="metallic-elevate"] textarea {
+      background-color: #111827 !important;   /* dark field */
+      color: #e5e7eb !important;              /* light text */
+      border: 1px solid #374151 !important;
+    }
+
+    /* Placeholder styling */
+    html[data-theme="eleva-signature"] input::placeholder,
+    html[data-theme="eleva-signature"] textarea::placeholder,
+    html[data-theme="metallic-elevate"] input::placeholder,
+    html[data-theme="metallic-elevate"] textarea::placeholder {
+      color: #6b7280 !important;              /* softer gray */
+    }
+
+    /* Disabled + Readonly fields */
+    html[data-theme="eleva-signature"] input[disabled],
+    html[data-theme="eleva-signature"] textarea[disabled],
+    html[data-theme="eleva-signature"] select[disabled],
+    html[data-theme="eleva-signature"] input[readonly],
+    html[data-theme="eleva-signature"] textarea[readonly],
+    html[data-theme="eleva-signature"] select[readonly],
+    html[data-theme="metallic-elevate"] input[disabled],
+    html[data-theme="metallic-elevate"] textarea[disabled],
+    html[data-theme="metallic-elevate"] select[disabled],
+    html[data-theme="metallic-elevate"] input[readonly],
+    html[data-theme="metallic-elevate"] textarea[readonly],
+    html[data-theme="metallic-elevate"] select[readonly] {
+      opacity: 1 !important;
+      background-color: #1f2937 !important;   /* slightly lighter dark */
+      color: #9ca3af !important;              /* readable muted text */
+      cursor: not-allowed;
+    }
+
     .collapsible-card {
       overflow: hidden;
       border-radius: 18px;
