@@ -517,6 +517,17 @@
       background-color: rgba(var(--color-primary-rgb), 0.05);
     }
 
+    /* Improved table text contrast for dark themes */
+    html[data-theme="eleva-signature"] table th,
+    html[data-theme="metallic-elevate"] table th {
+      color: #f3f4f6 !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="eleva-signature"] table td,
+    html[data-theme="metallic-elevate"] table td {
+      color: #e5e7eb !important;
+    }
+
     .collapsible-card {
       overflow: hidden;
       border-radius: 18px;
