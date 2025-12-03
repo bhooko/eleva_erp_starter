@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Purchase · Part Detail{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div class="space-y-1">
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold">{{ product.name }}</h1>
+        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ 'bg-emerald-500/15 text-emerald-200' if product.is_active else 'bg-slate-700 text-slate-200' }}">
+          {{ 'Active' if product.is_active else 'Inactive' }}
+        </span>
+        {% if product.is_favorite %}
+        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-semibold">★ Favorite</span>
+        {% endif %}
+      </div>
+      <p class="text-sm text-slate-600">Manage specifications, vendors, and stock for this part.</p>
+    </div>
+    <a href="{{ url_for('purchase_parts') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 shadow hover:shadow-lg hover:scale-[1.02] transition">
+      ← Back to parts list
+    </a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Unit info</p>
+          <p class="text-sm text-slate-700">{{ product.uom or '—' }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Purchase UoM</p>
+          <p class="text-sm text-slate-700">{{ product.purchase_uom or '—' }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Qty on hand</p>
+          <p class="text-sm text-slate-700">{{ (product.qty_on_hand or 0) | round(2) }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Forecast qty</p>
+          <p class="text-sm text-slate-700">{{ (product.forecast_qty or 0) | round(2) }}</p>
+        </div>
+      </div>
+
+      <form method="POST" action="{{ url_for('purchase_parts_update', product_id=product.id) }}" class="space-y-5">
+        {{ csrf_field() }}
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Name</span>
+            <input name="name" value="{{ product.name }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">UoM</span>
+            <input name="uom" value="{{ product.uom or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Sales Price</span>
+            <input name="sale_price" type="number" step="0.01" value="{{ product.sale_price or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Cost</span>
+            <input name="cost" type="number" step="0.01" value="{{ product.cost or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Purchase UoM</span>
+            <input name="purchase_uom" value="{{ product.purchase_uom or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Qty on Hand</span>
+            <input name="qty_on_hand" type="number" step="0.01" value="{{ product.qty_on_hand or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Forecast Qty</span>
+            <input name="forecast_qty" type="number" step="0.01" value="{{ product.forecast_qty or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </label>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Primary vendor</span>
+            <select name="primary_vendor" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <option value="" {% if not product.primary_vendor %}selected{% endif %}>No primary vendor</option>
+              {% for vendor in vendors %}
+              <option value="{{ vendor.name }}" {% if product.primary_vendor == vendor.name %}selected{% endif %}>{{ vendor.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Linked vendors</span>
+            <textarea name="linked_vendors" rows="2" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Comma separated list">{{ product.linked_vendors or '' }}</textarea>
+          </label>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Specifications</span>
+            <textarea name="specifications" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">{{ product.specifications or '' }}</textarea>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Other details</span>
+            <textarea name="notes" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">{{ product.notes or '' }}</textarea>
+          </label>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" name="is_favorite" class="rounded border-slate-300" {% if product.is_favorite %}checked{% endif %} />
+            <span class="text-slate-700">Mark as favorite</span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" name="is_active" class="rounded border-slate-300" {% if product.is_active %}checked{% endif %} />
+            <span class="text-slate-700">Active</span>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-slate-900 font-semibold rounded-lg shadow hover:shadow-lg hover:scale-[1.01] transition">
+            Save changes
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="bg-slate-900/90 text-slate-50 rounded-2xl border border-slate-800 shadow p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-amber-200">Primary vendor</p>
+        <p class="text-sm font-semibold text-white mt-1">{{ product.primary_vendor or 'No primary vendor selected' }}</p>
+      </div>
+      <div class="space-y-2">
+        <p class="text-xs uppercase tracking-wide text-amber-200">Linked vendors</p>
+        <div class="flex flex-wrap gap-2 text-xs">
+          {% set vendor_names = (product.linked_vendors or '').split(',') %}
+          {% set ns = namespace(has_vendor=False) %}
+          {% for name in vendor_names %}
+            {% set trimmed = name.strip() %}
+            {% if trimmed %}
+              {% set ns.has_vendor = True %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-1 text-amber-100">{{ trimmed }}</span>
+            {% endif %}
+          {% endfor %}
+          {% if not ns.has_vendor %}
+          <span class="text-slate-300">No linked vendors</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
