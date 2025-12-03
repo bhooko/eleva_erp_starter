@@ -6415,7 +6415,6 @@ def _process_inventory_upload(upload, extension):
             message = (
                 f"Row {row_index}: Product '{product}' does not exist in Parts master. Skipped."
             )
-            row_errors.append(message)
             missing_products.append(message)
             continue
 
@@ -6486,27 +6485,29 @@ def _process_inventory_upload(upload, extension):
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Failed to save inventory upload changes")
+        row_issue_count = len(row_errors) + len(missing_products)
         return {
             "processed_rows": processed_rows,
             "created_count": created_count,
             "updated_count": updated_count,
             "row_errors": row_errors,
-            "rows_with_errors": len(row_errors),
+            "rows_with_errors": row_issue_count,
             "rows_uploaded": created_count + updated_count,
-            "rows_skipped": len(row_errors),
+            "rows_skipped": row_issue_count,
             "rows_missing_products": len(missing_products),
             "missing_products": missing_products,
             "fatal_error": "Could not save inventory records due to a database error.",
         }
 
+    row_issue_count = len(row_errors) + len(missing_products)
     return {
         "processed_rows": processed_rows,
         "created_count": created_count,
         "updated_count": updated_count,
         "row_errors": row_errors,
-        "rows_with_errors": len(row_errors),
+        "rows_with_errors": row_issue_count,
         "rows_uploaded": created_count + updated_count,
-        "rows_skipped": len(row_errors),
+        "rows_skipped": row_issue_count,
         "rows_missing_products": len(missing_products),
         "missing_products": missing_products,
         "fatal_error": None,
