@@ -5923,12 +5923,61 @@ def products_upload():
             fatal_error="Could not save product records due to a database error.",
         )
 
+    _sync_inventory_with_products()
+
     return _render_result(
         processed_rows=processed_rows,
         created_count=created_count,
         updated_count=updated_count,
         row_errors=row_errors,
     )
+
+
+def _sync_inventory_with_products():
+    """Ensure imported products are reflected in the inventory list."""
+
+    products = Product.query.order_by(Product.name).all()
+    updates_made = False
+
+    for product in products:
+        item_code = (product.name or "").strip()
+        if not item_code:
+            continue
+
+        inventory_item = (
+            InventoryItem.query.filter(
+                func.lower(InventoryItem.item_code) == item_code.lower()
+            ).first()
+        )
+
+        if not inventory_item:
+            inventory_item = InventoryItem(item_code=item_code)
+            db.session.add(inventory_item)
+            updates_made = True
+
+        preferred_unit = product.uom or product.purchase_uom
+        target_stock = product.qty_on_hand or 0
+
+        if inventory_item.description != product.name:
+            inventory_item.description = product.name
+            updates_made = True
+
+        if preferred_unit and inventory_item.unit != preferred_unit:
+            inventory_item.unit = preferred_unit
+            updates_made = True
+
+        if (inventory_item.current_stock or 0) != target_stock:
+            inventory_item.current_stock = target_stock
+            updates_made = True
+
+    if updates_made:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Failed to sync products into inventory records"
+            )
 
 
 @app.route("/purchase/vendors/upload", methods=["POST"])
@@ -6227,6 +6276,7 @@ def store_receive():
 @login_required
 def store_inventory():
     ensure_bootstrap()
+    _sync_inventory_with_products()
     items = InventoryItem.query.order_by(InventoryItem.item_code).all()
     total_items = len(items)
     quarantined = sum([item.quarantined_stock or 0 for item in items])
