@@ -1775,6 +1775,37 @@ class PurchaseOrder(db.Model):
     created_by = db.relationship("User")
 
 
+class PurchaseOrderLine(db.Model):
+    __tablename__ = "purchase_order_line"
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_ref = db.Column(db.String(255), nullable=False)
+    vendor_name = db.Column(db.String(255), nullable=False)
+    product_name = db.Column(db.String(255), nullable=False)
+    billing_status = db.Column(db.String(120), nullable=True)
+    buyer = db.Column(db.String(120), nullable=True)
+    confirmation_date = db.Column(db.DateTime, nullable=True)
+    expected_arrival = db.Column(db.DateTime, nullable=True)
+    priority = db.Column(db.String(120), nullable=True)
+    source_document = db.Column(db.String(255), nullable=True)
+    total_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "order_ref",
+            "vendor_name",
+            "product_name",
+            "confirmation_date",
+            name="uq_purchase_order_line_ref_vendor_product_date",
+        ),
+    )
+
+
 class PurchaseOrderItem(db.Model):
     __tablename__ = "purchase_order_item"
 
