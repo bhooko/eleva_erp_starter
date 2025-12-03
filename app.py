@@ -5985,31 +5985,24 @@ def purchase_parts():
     ensure_bootstrap()
     records = Product.query.order_by(Product.name).all()
     vendors = Vendor.query.order_by(Vendor.name).all()
-    product_payloads = [
-        {
-            "id": product.id,
-            "name": product.name,
-            "sale_price": product.sale_price,
-            "cost": product.cost,
-            "uom": product.uom,
-            "purchase_uom": product.purchase_uom,
-            "qty_on_hand": product.qty_on_hand,
-            "forecast_qty": product.forecast_qty,
-            "is_favorite": product.is_favorite,
-            "is_active": product.is_active,
-            "primary_vendor": product.primary_vendor,
-            "linked_vendors": product.linked_vendors,
-            "specifications": product.specifications,
-            "notes": product.notes,
-        }
-        for product in records
-    ]
 
     return render_template(
         "purchase_parts.html",
         products=records,
         vendors=vendors,
-        products_payload=product_payloads,
+    )
+
+
+@app.route("/purchase/parts/<int:product_id>", methods=["GET"])
+@login_required
+def purchase_part_detail(product_id):
+    ensure_bootstrap()
+    product = Product.query.get_or_404(product_id)
+    vendors = Vendor.query.order_by(Vendor.name).all()
+    return render_template(
+        "purchase_part_detail.html",
+        product=product,
+        vendors=vendors,
     )
 
 
@@ -6054,7 +6047,7 @@ def purchase_parts_update(product_id):
     if errors:
         for message in errors:
             flash(message, "danger")
-        return redirect(url_for("purchase_parts", item_code=name or product.name))
+        return redirect(url_for("purchase_part_detail", product_id=product.id))
 
     product.name = name
     product.sale_price = sale_price
@@ -6077,7 +6070,7 @@ def purchase_parts_update(product_id):
         db.session.rollback()
         flash("Could not update part details right now.", "danger")
 
-    return redirect(url_for("purchase_parts", item_code=product.name))
+    return redirect(url_for("purchase_part_detail", product_id=product.id))
 
 
 @app.route("/products/upload", methods=["POST"])
