@@ -6502,6 +6502,30 @@ def ensure_customer_columns():
         print("✔️ customer OK")
 
 
+def ensure_vendor_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(vendor)")
+    vendor_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "vendor_code" not in vendor_cols:
+        cur.execute("ALTER TABLE vendor ADD COLUMN vendor_code TEXT;")
+        added_cols.append("vendor_code")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in vendor: {', '.join(added_cols)}")
+    else:
+        print("✔️ vendor OK")
+
+
 def ensure_sales_client_columns():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -6826,6 +6850,7 @@ def bootstrap_db():
     ensure_sales_task_columns()
     ensure_sales_opportunity_columns()
     ensure_customer_columns()
+    ensure_vendor_columns()
     ensure_dropdown_options_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
