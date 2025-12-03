@@ -1700,12 +1700,27 @@ class Vendor(db.Model):
     __tablename__ = "vendor"
 
     id = db.Column(db.Integer, primary_key=True)
+    vendor_code = db.Column(db.String(80), unique=True, nullable=True)
     name = db.Column(db.String(150), nullable=False)
     contact_person = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(120), nullable=True)
+    activities = db.Column(db.String(200), nullable=True)
+    city = db.Column(db.String(120), nullable=True)
+    country = db.Column(db.String(120), nullable=True)
+    salesperson = db.Column(db.String(120), nullable=True)
+    gstin = db.Column(db.String(80), nullable=True)
+    address_line1 = db.Column(db.String(255), nullable=True)
+    address_line2 = db.Column(db.String(255), nullable=True)
+    pincode = db.Column(db.String(40), nullable=True)
+    state = db.Column(db.String(120), nullable=True)
     address = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
 
 
 class PurchaseOrder(db.Model):

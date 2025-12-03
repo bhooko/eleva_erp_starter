@@ -8,7 +8,38 @@
       <h1 class="text-2xl font-semibold">Vendors</h1>
       <p class="text-sm text-slate-600">Keep track of approved vendors for purchasing.</p>
     </div>
-    <label for="new-vendor" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Vendor</label>
+    <div class="flex items-center gap-3">
+      <label for="upload-vendors" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Vendors (Odoo)</label>
+      <label for="new-vendor" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Vendor</label>
+    </div>
+  </div>
+
+  <div class="relative">
+    <input type="checkbox" id="upload-vendors" class="hidden peer" />
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-vendors').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+          <div>
+            <p class="text-xs text-slate-500 uppercase">Vendor import</p>
+            <h2 class="text-lg font-semibold">Upload Vendors (Odoo)</h2>
+          </div>
+          <button class="text-slate-500" type="button" onclick="document.getElementById('upload-vendors').checked=false;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('purchase_vendors_upload') }}" enctype="multipart/form-data" class="p-5 space-y-4">
+          {{ csrf_field() }}
+          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Odoo Vendors.xlsx</span> export (.xlsx or .csv). The sheet must include columns: Complete Name, Activities, City, Country, Email, Phone, Salesperson.</p>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Upload file</span>
+            <input type="file" name="vendor_upload_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-vendors').checked=false;">Cancel</button>
+            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Vendors</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <input type="checkbox" id="new-vendor" class="hidden peer" />

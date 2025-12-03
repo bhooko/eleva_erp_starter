@@ -5655,6 +5655,190 @@ def purchase_parts():
     return render_template("purchase_parts.html", parts=parts)
 
 
+@app.route("/purchase/vendors/upload", methods=["POST"])
+@login_required
+def purchase_vendors_upload():
+    ensure_bootstrap()
+
+    def _render_result(
+        *,
+        processed_rows=0,
+        created_count=0,
+        updated_count=0,
+        row_errors=None,
+        fatal_error=None,
+    ):
+        return render_template(
+            "purchase_vendor_upload_result.html",
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            row_errors=row_errors or [],
+            fatal_error=fatal_error,
+        )
+
+    upload = request.files.get("vendor_upload_file")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        return _render_result(fatal_error=str(exc))
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(upload)
+    except MissingDependencyError:
+        return _render_result(fatal_error=OPENPYXL_MISSING_MESSAGE)
+    except ValueError:
+        return _render_result(
+            fatal_error="Upload a .xlsx or .csv file exported from Odoo vendors."
+        )
+    except UploadStageTimeoutError as exc:
+        return _render_result(fatal_error=str(exc))
+    except Exception:
+        current_app.logger.exception("Failed to read uploaded vendor file")
+        return _render_result(
+            fatal_error="Could not read the uploaded file. Please ensure it is a valid spreadsheet."
+        )
+
+    required_headers = {
+        "Complete Name",
+        "Activities",
+        "City",
+        "Country",
+        "Email",
+        "Phone",
+        "Salesperson",
+    }
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        label = stringify_cell(header)
+        if label:
+            header_map[label] = idx
+
+    missing_headers = [label for label in required_headers if label not in header_map]
+    if missing_headers:
+        return _render_result(
+            fatal_error=(
+                "The uploaded sheet is missing required columns: "
+                + ", ".join(sorted(missing_headers))
+            )
+        )
+
+    email_pattern = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    phone_pattern = re.compile(r"^[0-9+\-\s]+$")
+
+    processed_rows = 0
+    created_count = 0
+    updated_count = 0
+    row_errors = []
+
+    for row_index, row_values in enumerate(data_rows or [], start=2):
+        if not row_values:
+            continue
+        row_data = {}
+        has_value = False
+        for header, position in header_map.items():
+            value = row_values[position] if position < len(row_values) else None
+            cell_value = stringify_cell(value)
+            if cell_value:
+                has_value = True
+            row_data[header] = cell_value
+        if not has_value:
+            continue
+
+        processed_rows += 1
+        name = clean_str(row_data.get("Complete Name"))
+        activities = clean_str(row_data.get("Activities")) or None
+        city = clean_str(row_data.get("City")) or None
+        country = clean_str(row_data.get("Country")) or None
+        email_value = clean_str(row_data.get("Email")) or None
+        phone_value = clean_str(row_data.get("Phone")) or None
+        salesperson = clean_str(row_data.get("Salesperson")) or None
+        gstin = clean_str(row_data.get("GSTIN")) or None
+        vendor_code = clean_str(row_data.get("Vendor Code")) or None
+        address_line1 = (
+            clean_str(row_data.get("Street"))
+            or clean_str(row_data.get("Address Line 1"))
+            or None
+        )
+        address_line2 = (
+            clean_str(row_data.get("Street2"))
+            or clean_str(row_data.get("Address Line 2"))
+            or None
+        )
+        pincode = clean_str(row_data.get("Zip")) or clean_str(row_data.get("Pincode")) or None
+        state = clean_str(row_data.get("State")) or None
+
+        row_issue = []
+        if not name:
+            row_issue.append("Complete Name is required")
+        if email_value and not email_pattern.match(email_value):
+            row_issue.append("Email format is invalid")
+        if phone_value and not phone_pattern.match(phone_value):
+            row_issue.append("Phone contains invalid characters")
+
+        if row_issue:
+            row_errors.append(f"Row {row_index}: " + "; ".join(row_issue))
+            continue
+
+        vendor = (
+            Vendor.query.filter(func.lower(Vendor.name) == name.lower()).first()
+        )
+        is_new = vendor is None
+        if is_new:
+            vendor = Vendor(name=name)
+            db.session.add(vendor)
+            created_count += 1
+        else:
+            updated_count += 1
+
+        vendor.vendor_code = vendor_code or vendor.vendor_code
+        vendor.name = name
+        vendor.activities = activities
+        vendor.city = city
+        vendor.country = country
+        vendor.email = email_value
+        vendor.phone = phone_value
+        vendor.salesperson = salesperson
+        vendor.gstin = gstin
+        vendor.address_line1 = address_line1
+        vendor.address_line2 = address_line2
+        vendor.pincode = pincode
+        vendor.state = state
+        vendor.is_active = True if vendor.is_active is None else vendor.is_active
+
+        address_parts = [
+            part
+            for part in [address_line1, address_line2, city, state, pincode, country]
+            if part
+        ]
+        vendor.address = ", ".join(address_parts) if address_parts else vendor.address
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to save vendor upload changes")
+        return _render_result(
+            processed_rows=processed_rows,
+            created_count=created_count,
+            updated_count=updated_count,
+            row_errors=row_errors,
+            fatal_error="Could not save vendor records due to a database error.",
+        )
+
+    return _render_result(
+        processed_rows=processed_rows,
+        created_count=created_count,
+        updated_count=updated_count,
+        row_errors=row_errors,
+    )
+
+
 @app.route("/purchase/vendors", methods=["GET", "POST"])
 @login_required
 def purchase_vendors():
