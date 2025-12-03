@@ -6706,9 +6706,28 @@ def ensure_vendor_columns():
     vendor_cols = {row[1] for row in cur.fetchall()}
     added_cols = []
 
-    if "vendor_code" not in vendor_cols:
-        cur.execute("ALTER TABLE vendor ADD COLUMN vendor_code TEXT;")
-        added_cols.append("vendor_code")
+    column_defs = [
+        ("vendor_code", "TEXT"),
+        ("activities", "TEXT"),
+        ("city", "TEXT"),
+        ("country", "TEXT"),
+        ("salesperson", "TEXT"),
+        ("gstin", "TEXT"),
+        ("address_line1", "TEXT"),
+        ("address_line2", "TEXT"),
+        ("pincode", "TEXT"),
+        ("state", "TEXT"),
+        ("address", "TEXT"),
+        ("notes", "TEXT"),
+        ("is_active", "INTEGER DEFAULT 1"),
+        ("created_at", "DATETIME"),
+        ("updated_at", "DATETIME"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in vendor_cols:
+            cur.execute(f"ALTER TABLE vendor ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
 
     conn.commit()
     conn.close()
