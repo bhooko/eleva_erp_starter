@@ -5733,40 +5733,18 @@ def purchase_reports():
     )
 
 
-@app.route("/purchase/parts", methods=["GET", "POST"])
+@app.route("/purchase/parts", methods=["GET"])
 @login_required
 def purchase_parts():
     ensure_bootstrap()
-    if request.method == "POST":
-        item_code = (request.form.get("item_code") or "").strip()
-        description = (request.form.get("description") or "").strip() or None
-        unit = (request.form.get("unit") or "").strip() or None
-        location = (request.form.get("location") or "").strip() or None
-
-        if not item_code:
-            flash("Item code is required to add a part.", "danger")
-        else:
-            part = InventoryItem.query.filter_by(item_code=item_code).first()
-            if not part:
-                part = InventoryItem(item_code=item_code)
-                db.session.add(part)
-            part.description = description or part.description
-            part.unit = unit or part.unit
-            part.location = location or part.location
-            db.session.commit()
-            flash("Part saved.", "success")
-            return redirect(url_for("purchase_parts"))
-
-    parts = InventoryItem.query.order_by(InventoryItem.item_code).all()
-    return render_template("purchase_parts.html", parts=parts)
+    records = Product.query.order_by(Product.name).all()
+    return render_template("purchase_parts.html", products=records)
 
 
 @app.route("/products", methods=["GET"])
 @login_required
 def products():
-    ensure_bootstrap()
-    records = Product.query.order_by(Product.name).all()
-    return render_template("products.html", products=records)
+    return redirect(url_for("purchase_parts"))
 
 
 @app.route("/products/upload", methods=["POST"])
