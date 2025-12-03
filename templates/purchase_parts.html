@@ -4,49 +4,40 @@
 <div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase</p>
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
       <h1 class="text-2xl font-semibold">Parts</h1>
-      <p class="text-sm text-slate-600">Reference catalogue of parts available for purchasing.</p>
+      <p class="text-sm text-slate-600">Manage part master data and sync updates from Odoo exports.</p>
     </div>
-    <label for="new-part" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Part</label>
+    <div class="flex items-center gap-3">
+      <label for="upload-products" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Parts (Odoo)</label>
+    </div>
   </div>
 
-  <input type="checkbox" id="new-part" class="hidden peer" />
-  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-part').checked=false;"></div>
-  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-    <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
-      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
-        <div>
-          <p class="text-xs text-slate-500 uppercase">Catalogue</p>
-          <h2 class="text-lg font-semibold">Add part</h2>
+  <div class="relative">
+    <input type="checkbox" id="upload-products" class="hidden peer" />
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-products').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+          <div>
+            <p class="text-xs text-slate-500 uppercase">Part import</p>
+            <h2 class="text-lg font-semibold">Upload Parts (Odoo)</h2>
+          </div>
+          <button class="text-slate-500" type="button" onclick="document.getElementById('upload-products').checked=false;">✕</button>
         </div>
-        <button class="text-slate-500" onclick="document.getElementById('new-part').checked=false;">✕</button>
+        <form method="POST" action="{{ url_for('products_upload') }}" enctype="multipart/form-data" class="p-5 space-y-4">
+          {{ csrf_field() }}
+          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Odoo Products.xlsx</span> export (.xlsx or .csv). The sheet must include columns: Name, Sales Price, Cost, Unit of Measure, Purchase Unit, Quantity On Hand.</p>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Upload file</span>
+            <input type="file" name="product_upload_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-products').checked=false;">Cancel</button>
+            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Parts</button>
+          </div>
+        </form>
       </div>
-      <form method="POST" class="p-5 space-y-4">
-        {{ csrf_field() }}
-        <label class="space-y-1 block">
-          <span class="text-sm text-slate-600">Item code</span>
-          <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" required />
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-sm text-slate-600">Description</span>
-          <input type="text" name="description" class="w-full rounded-lg border-slate-200" />
-        </label>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="space-y-1 block">
-            <span class="text-sm text-slate-600">Unit</span>
-            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos" />
-          </label>
-          <label class="space-y-1 block">
-            <span class="text-sm text-slate-600">Default location</span>
-            <input type="text" name="location" class="w-full rounded-lg border-slate-200" placeholder="Main store" />
-          </label>
-        </div>
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('new-part').checked=false;">Cancel</button>
-          <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Save Part</button>
-        </div>
-      </form>
     </div>
   </div>
 
@@ -54,26 +45,36 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
-          <th class="py-3 px-4">Item code</th>
-          <th class="py-3 px-4">Description</th>
-          <th class="py-3 px-4">Unit</th>
-          <th class="py-3 px-4">Usable stock</th>
-          <th class="py-3 px-4">Quarantine</th>
-          <th class="py-3 px-4">Location</th>
+          <th class="py-3 px-4">Name</th>
+          <th class="py-3 px-4">Sales Price</th>
+          <th class="py-3 px-4">Cost</th>
+          <th class="py-3 px-4">UoM</th>
+          <th class="py-3 px-4">Purchase UoM</th>
+          <th class="py-3 px-4">Qty on Hand</th>
+          <th class="py-3 px-4">Forecast Qty</th>
+          <th class="py-3 px-4">Favorite</th>
         </tr>
       </thead>
       <tbody class="divide-y">
-        {% for part in parts %}
+        {% for product in products %}
         <tr>
-          <td class="py-3 px-4 font-semibold text-slate-800">{{ part.item_code }}</td>
-          <td class="py-3 px-4">{{ part.description or '—' }}</td>
-          <td class="py-3 px-4">{{ part.unit or '—' }}</td>
-          <td class="py-3 px-4 text-green-700">{{ '%.2f'|format(part.current_stock or 0) }}</td>
-          <td class="py-3 px-4 text-orange-700">{{ '%.2f'|format(part.quarantined_stock or 0) }}</td>
-          <td class="py-3 px-4">{{ part.location or 'Main store' }}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ product.name }}</td>
+          <td class="py-3 px-4">{{ (product.sale_price or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ (product.cost or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ product.uom or '—' }}</td>
+          <td class="py-3 px-4">{{ product.purchase_uom or '—' }}</td>
+          <td class="py-3 px-4">{{ (product.qty_on_hand or 0) | round(2) }}</td>
+          <td class="py-3 px-4">{{ (product.forecast_qty or 0) | round(2) }}</td>
+          <td class="py-3 px-4">
+            {% if product.is_favorite %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-xs font-semibold">★ Favorite</span>
+            {% else %}
+            <span class="text-slate-500">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="py-4 px-4 text-slate-500">No parts have been captured yet.</td></tr>
+        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No parts have been added yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
