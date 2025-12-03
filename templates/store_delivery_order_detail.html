@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Delivery Order {{ order.do_number }}{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Delivery Order {{ order.do_number }}</h1>
+      <p class="text-sm text-slate-600">Read-only detail of the delivery order.</p>
+    </div>
+    <a href="{{ url_for('store_delivery_orders') }}" class="text-sm text-orange-600 hover:underline">Back to list</a>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
+      <p class="text-xs text-slate-500">Project / Site</p>
+      <p class="text-lg font-semibold text-slate-800">{{ order.project_or_site }}</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
+      <p class="text-xs text-slate-500">Receiver</p>
+      <p class="text-lg font-semibold text-slate-800">{{ order.receiver_name }}</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
+      <p class="text-xs text-slate-500">Status</p>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700' if order.status == 'Dispatched' else 'bg-slate-100 text-slate-700' }}">{{ order.status }}</span>
+        {% if order.dispatched_by %}
+          <span class="text-xs text-slate-500">by {{ order.dispatched_by.display_name }} on {{ order.dispatched_at.strftime('%Y-%m-%d %H:%M') if order.dispatched_at else '' }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs text-slate-500">DO Number</p>
+        <p class="text-base font-semibold">{{ order.do_number }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">Created On</p>
+        <p class="text-base font-semibold">{{ order.date_created.strftime('%Y-%m-%d') if order.date_created else '—' }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">Created By</p>
+        <p class="text-base font-semibold">{{ order.created_by.display_name if order.created_by else '—' }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">Remarks</p>
+        <p class="text-base">{{ order.remarks or '—' }}</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Product</th>
+            <th class="py-2">Quantity</th>
+            <th class="py-2">UOM</th>
+            <th class="py-2">Remarks</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for item in order.items %}
+          <tr>
+            <td class="py-2">{{ item.product_name }}</td>
+            <td class="py-2">{{ '%.2f'|format(item.quantity or 0) }}</td>
+            <td class="py-2">{{ item.uom or '—' }}</td>
+            <td class="py-2">{{ item.remarks or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-3 text-slate-500">No items added.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if can_dispatch %}
+    <div class="flex justify-end">
+      <form method="POST" action="{{ url_for('dispatch_delivery_order', order_id=order.id) }}" onsubmit="return confirm('Mark this Delivery Order as dispatched?');">
+        {{ csrf_field() }}
+        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition {{ 'opacity-50 cursor-not-allowed' if order.status == 'Dispatched' else '' }}" {% if order.status == 'Dispatched' %}disabled{% endif %}>Mark as Dispatched</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

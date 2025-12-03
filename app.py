@@ -4917,6 +4917,8 @@ from eleva_app.models import (
     SalesTask,
     sales_task_assignees,
     ServiceRoute,
+    DeliveryOrder,
+    DeliveryOrderItem,
     Product,
     PurchaseOrderLine,
     Vendor,
@@ -6428,6 +6430,199 @@ def purchase_vendors():
     return render_template("purchase_vendors.html", vendors=vendors)
 
 
+@app.route("/store/delivery-orders")
+@login_required
+def store_delivery_orders():
+    ensure_bootstrap()
+    _require_delivery_order_permission("view")
+
+    orders = (
+        DeliveryOrder.query.options(
+            joinedload(DeliveryOrder.created_by),
+            joinedload(DeliveryOrder.dispatched_by),
+        )
+        .order_by(DeliveryOrder.id.desc())
+        .all()
+    )
+
+    can_create = _current_role_key() in {"store", "purchase", "admin"}
+
+    return render_template(
+        "store_delivery_orders.html",
+        orders=orders,
+        can_create=can_create,
+    )
+
+
+def _parse_delivery_order_items(form):
+    product_names = form.getlist("item_product_name")
+    quantities_raw = form.getlist("item_quantity")
+    uoms = form.getlist("item_uom")
+    remarks = form.getlist("item_remarks")
+
+    max_len = max(
+        len(product_names), len(quantities_raw), len(uoms), len(remarks)
+    )
+
+    items = []
+    errors = []
+
+    for idx in range(max_len):
+        product_name = (product_names[idx] if idx < len(product_names) else "").strip()
+        quantity_raw = (quantities_raw[idx] if idx < len(quantities_raw) else "").strip()
+        uom = (uoms[idx] if idx < len(uoms) else "").strip() or None
+        remark = (remarks[idx] if idx < len(remarks) else "").strip() or None
+
+        if not any([product_name, quantity_raw, uom, remark]):
+            continue
+
+        try:
+            quantity_value = float(quantity_raw)
+        except (TypeError, ValueError):
+            quantity_value = None
+
+        if not product_name:
+            errors.append("Product name is required for each item.")
+        if quantity_value is None:
+            errors.append("Quantity must be numeric.")
+        elif quantity_value <= 0:
+            errors.append("Quantity must be greater than zero.")
+
+        items.append(
+            {
+                "product_name": product_name,
+                "quantity": quantity_value,
+                "uom": uom,
+                "remarks": remark,
+            }
+        )
+
+    if not items:
+        errors.append("Add at least one delivery item.")
+
+    return items, errors
+
+
+@app.route("/store/delivery-orders/new", methods=["GET", "POST"])
+@login_required
+def create_delivery_order():
+    ensure_bootstrap()
+    _require_delivery_order_permission("create")
+
+    products = Product.query.filter_by(is_active=True).order_by(Product.name).all()
+
+    if request.method == "POST":
+        project_or_site = (request.form.get("project_or_site") or "").strip()
+        receiver_name = (request.form.get("receiver_name") or "").strip()
+        remarks = (request.form.get("remarks") or "").strip() or None
+
+        items, item_errors = _parse_delivery_order_items(request.form)
+        errors = []
+
+        if not project_or_site:
+            errors.append("Project / Site Name is required.")
+        if not receiver_name:
+            errors.append("Receiver Name is required.")
+
+        errors.extend(item_errors)
+
+        if errors:
+            for error in errors:
+                flash(error, "danger")
+            return render_template(
+                "store_delivery_order_new.html",
+                products=products,
+                form_data={
+                    "project_or_site": project_or_site,
+                    "receiver_name": receiver_name,
+                    "remarks": remarks,
+                    "items": items,
+                },
+            )
+
+        order = DeliveryOrder(
+            do_number="DO-PENDING",
+            date_created=datetime.datetime.utcnow(),
+            created_by_user_id=current_user.id,
+            project_or_site=project_or_site,
+            receiver_name=receiver_name,
+            remarks=remarks,
+            status="Created",
+        )
+        db.session.add(order)
+        db.session.flush()
+
+        order.do_number = f"DO-{order.id:04d}"
+
+        for item in items:
+            db.session.add(
+                DeliveryOrderItem(
+                    delivery_order_id=order.id,
+                    product_name=item.get("product_name"),
+                    quantity=item.get("quantity") or 0,
+                    uom=item.get("uom"),
+                    remarks=item.get("remarks"),
+                )
+            )
+
+        db.session.commit()
+        flash("Delivery Order created.", "success")
+        return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+    return render_template(
+        "store_delivery_order_new.html",
+        products=products,
+        form_data={"items": [{}]},
+    )
+
+
+@app.route("/store/delivery-orders/<int:order_id>")
+@login_required
+def delivery_order_detail(order_id):
+    ensure_bootstrap()
+    _require_delivery_order_permission("view")
+
+    order = (
+        DeliveryOrder.query.options(
+            subqueryload(DeliveryOrder.items),
+            joinedload(DeliveryOrder.created_by),
+            joinedload(DeliveryOrder.dispatched_by),
+        )
+        .filter_by(id=order_id)
+        .first_or_404()
+    )
+
+    can_dispatch = _current_role_key() in {"store", "purchase", "admin"}
+
+    return render_template(
+        "store_delivery_order_detail.html",
+        order=order,
+        can_dispatch=can_dispatch,
+    )
+
+
+@app.route("/store/delivery-orders/<int:order_id>/dispatch", methods=["POST"])
+@login_required
+def dispatch_delivery_order(order_id):
+    ensure_bootstrap()
+    _require_delivery_order_permission("dispatch")
+
+    order = DeliveryOrder.query.filter_by(id=order_id).first_or_404()
+
+    if order.status == "Dispatched":
+        flash("This Delivery Order is already dispatched.", "info")
+        return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+    order.status = "Dispatched"
+    order.updated_at = datetime.datetime.utcnow()
+    order.dispatched_by_user_id = current_user.id
+    order.dispatched_at = datetime.datetime.utcnow()
+
+    db.session.commit()
+    flash("Delivery Order marked as dispatched.", "success")
+    return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+
 @app.route("/store/receive", methods=["GET", "POST"])
 @login_required
 def store_receive():
@@ -7363,6 +7558,8 @@ def ensure_tables():
         InventoryReceiptItem.__table__,
         Dispatch.__table__,
         DispatchItem.__table__,
+        DeliveryOrder.__table__,
+        DeliveryOrderItem.__table__,
     ]
 
     for table in models:
@@ -7389,6 +7586,21 @@ def ensure_project_comment_table():
     # guards against race conditions with ensure_tables.
     ProjectComment.__table__.create(bind=db.engine, checkfirst=True)
     print("✅ Backfilled missing table: project_comment")
+
+
+def _current_role_key():
+    return (current_user.role or "").strip().lower()
+
+
+def _require_delivery_order_permission(action: str):
+    role = _current_role_key()
+    if role in {"admin", "purchase"}:
+        return "full"
+
+    if role == "store" and action in {"view", "create", "dispatch"}:
+        return "limited"
+
+    abort(403)
 
 
 def ensure_project_columns():

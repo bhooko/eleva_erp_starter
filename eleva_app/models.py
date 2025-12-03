@@ -1939,3 +1939,42 @@ class DispatchItem(db.Model):
     quantity_dispatched = db.Column(db.Float, nullable=False, default=0)
 
     dispatch = db.relationship("Dispatch", backref="items")
+
+
+class DeliveryOrder(db.Model):
+    __tablename__ = "delivery_order"
+
+    id = db.Column(db.Integer, primary_key=True)
+    do_number = db.Column(db.String(120), nullable=False, unique=True)
+    date_created = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    project_or_site = db.Column(db.String(255), nullable=False)
+    receiver_name = db.Column(db.String(255), nullable=False)
+    remarks = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="Created")
+    dispatched_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    dispatched_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id])
+    dispatched_by = db.relationship("User", foreign_keys=[dispatched_by_user_id])
+
+
+class DeliveryOrderItem(db.Model):
+    __tablename__ = "delivery_order_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    delivery_order_id = db.Column(
+        db.Integer, db.ForeignKey("delivery_order.id"), nullable=False
+    )
+    product_name = db.Column(db.String(255), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    uom = db.Column(db.String(80), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+
+    delivery_order = db.relationship(
+        "DeliveryOrder", backref=db.backref("items", cascade="all, delete-orphan")
+    )
