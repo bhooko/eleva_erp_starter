@@ -5984,13 +5984,100 @@ def purchase_reports():
 def purchase_parts():
     ensure_bootstrap()
     records = Product.query.order_by(Product.name).all()
-    return render_template("purchase_parts.html", products=records)
+    vendors = Vendor.query.order_by(Vendor.name).all()
+    product_payloads = [
+        {
+            "id": product.id,
+            "name": product.name,
+            "sale_price": product.sale_price,
+            "cost": product.cost,
+            "uom": product.uom,
+            "purchase_uom": product.purchase_uom,
+            "qty_on_hand": product.qty_on_hand,
+            "forecast_qty": product.forecast_qty,
+            "is_favorite": product.is_favorite,
+            "is_active": product.is_active,
+            "primary_vendor": product.primary_vendor,
+            "linked_vendors": product.linked_vendors,
+            "specifications": product.specifications,
+            "notes": product.notes,
+        }
+        for product in records
+    ]
+
+    return render_template(
+        "purchase_parts.html",
+        products=records,
+        vendors=vendors,
+        products_payload=product_payloads,
+    )
 
 
 @app.route("/products", methods=["GET"])
 @login_required
 def products():
     return redirect(url_for("purchase_parts"))
+
+
+@app.route("/purchase/parts/<int:product_id>/update", methods=["POST"])
+@login_required
+def purchase_parts_update(product_id):
+    ensure_bootstrap()
+
+    product = Product.query.get_or_404(product_id)
+    name = (request.form.get("name") or "").strip()
+    primary_vendor = (request.form.get("primary_vendor") or "").strip() or None
+    linked_vendors = (request.form.get("linked_vendors") or "").strip() or None
+    specifications = (request.form.get("specifications") or "").strip() or None
+    notes = (request.form.get("notes") or "").strip() or None
+
+    sale_price, sale_error = parse_float_field(
+        request.form.get("sale_price"), "Sale price"
+    )
+    cost, cost_error = parse_float_field(request.form.get("cost"), "Cost")
+    qty_on_hand, stock_error = parse_float_field(
+        request.form.get("qty_on_hand"), "Qty on hand"
+    )
+    forecast_qty, forecast_error = parse_float_field(
+        request.form.get("forecast_qty"), "Forecast Qty"
+    )
+
+    errors = [
+        message
+        for message in [sale_error, cost_error, stock_error, forecast_error]
+        if message
+    ]
+
+    if not name:
+        errors.append("Part name is required.")
+
+    if errors:
+        for message in errors:
+            flash(message, "danger")
+        return redirect(url_for("purchase_parts", item_code=name or product.name))
+
+    product.name = name
+    product.sale_price = sale_price
+    product.cost = cost
+    product.uom = (request.form.get("uom") or "").strip() or None
+    product.purchase_uom = (request.form.get("purchase_uom") or "").strip() or None
+    product.qty_on_hand = qty_on_hand or 0
+    product.forecast_qty = forecast_qty or 0
+    product.is_favorite = request.form.get("is_favorite") == "on"
+    product.is_active = request.form.get("is_active") == "on"
+    product.primary_vendor = primary_vendor
+    product.linked_vendors = linked_vendors
+    product.specifications = specifications
+    product.notes = notes
+
+    try:
+        db.session.commit()
+        flash("Part details updated.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not update part details right now.", "danger")
+
+    return redirect(url_for("purchase_parts", item_code=product.name))
 
 
 @app.route("/products/upload", methods=["POST"])
@@ -7334,6 +7421,10 @@ def ensure_product_columns():
         ("forecast_qty", "REAL DEFAULT 0"),
         ("is_favorite", "INTEGER DEFAULT 0"),
         ("is_active", "INTEGER DEFAULT 1"),
+        ("primary_vendor", "TEXT"),
+        ("linked_vendors", "TEXT"),
+        ("specifications", "TEXT"),
+        ("notes", "TEXT"),
         ("created_at", "DATETIME"),
         ("updated_at", "DATETIME"),
     ]
