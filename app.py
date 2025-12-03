@@ -6730,6 +6730,7 @@ def store_inventory():
         quarantined=quarantined_count,
         quarantined_items=quarantined_items,
         usable=usable_count,
+        usable_items=usable_items,
         low_stock=low_stock,
     )
 
