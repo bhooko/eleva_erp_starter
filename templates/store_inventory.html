@@ -15,16 +15,86 @@
       <p class="text-2xl font-semibold">{{ total_items }}</p>
     </div>
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-      <p class="text-xs uppercase text-slate-500">Usable stock</p>
-      <p class="text-2xl font-semibold text-green-600">{{ '%.2f'|format(usable) }}</p>
+      <p class="text-xs uppercase text-slate-500">Usable stock (items)</p>
+      <p class="text-2xl font-semibold text-green-600">{{ usable }}</p>
     </div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-      <p class="text-xs uppercase text-slate-500">Quarantined</p>
-      <p class="text-2xl font-semibold text-red-600">{{ '%.2f'|format(quarantined) }}</p>
-    </div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-      <p class="text-xs uppercase text-slate-500">Low stock</p>
+    <button type="button" data-modal-target="quarantine-modal"
+            class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left focus:outline-none focus:ring-2 focus:ring-orange-500">
+      <p class="text-xs uppercase text-slate-500 flex items-center gap-2">
+        <span>Quarantined</span>
+        <span class="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">View list</span>
+      </p>
+      <p class="text-2xl font-semibold text-red-600">{{ quarantined }}</p>
+    </button>
+    <button type="button" data-modal-target="low-stock-modal"
+            class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left focus:outline-none focus:ring-2 focus:ring-orange-500">
+      <p class="text-xs uppercase text-slate-500 flex items-center gap-2">
+        <span>Low stock</span>
+        <span class="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">View list</span>
+      </p>
       <p class="text-2xl font-semibold text-orange-600">{{ low_stock|length }}</p>
+    </button>
+  </div>
+
+  <div id="quarantine-modal" class="hidden fixed inset-0 z-40 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b">
+        <h2 class="text-lg font-semibold">Quarantined items ({{ quarantined }})</h2>
+        <button type="button" class="text-slate-500 hover:text-slate-700" data-modal-close="quarantine-modal">✕</button>
+      </div>
+      <div class="max-h-[60vh] overflow-y-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr class="text-left">
+              <th class="py-2 px-4">Item code</th>
+              <th class="py-2 px-4">Description</th>
+              <th class="py-2 px-4">Quarantined stock</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for item in quarantined_items %}
+            <tr>
+              <td class="py-2 px-4">{{ item.item_code }}</td>
+              <td class="py-2 px-4">{{ item.description }}</td>
+              <td class="py-2 px-4">{{ item.quarantined_stock }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="py-3 px-4 text-slate-500">No items in quarantine.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="low-stock-modal" class="hidden fixed inset-0 z-40 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b">
+        <h2 class="text-lg font-semibold">Low stock items ({{ low_stock|length }})</h2>
+        <button type="button" class="text-slate-500 hover:text-slate-700" data-modal-close="low-stock-modal">✕</button>
+      </div>
+      <div class="max-h-[60vh] overflow-y-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr class="text-left">
+              <th class="py-2 px-4">Item code</th>
+              <th class="py-2 px-4">Description</th>
+              <th class="py-2 px-4">Usable stock</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for item in low_stock %}
+            <tr>
+              <td class="py-2 px-4">{{ item.item_code }}</td>
+              <td class="py-2 px-4">{{ item.description }}</td>
+              <td class="py-2 px-4">{{ item.current_stock }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="py-3 px-4 text-slate-500">No items are low on stock.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -55,4 +125,39 @@
     </table>
   </div>
 </div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const openModal = (id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    };
+
+    const closeModal = (id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    };
+
+    document.querySelectorAll('[data-modal-target]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-modal-target');
+        if (target) openModal(target);
+      });
+    });
+
+    document.querySelectorAll('[data-modal-close]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-modal-close');
+        if (target) closeModal(target);
+      });
+    });
+
+    document.querySelectorAll('#quarantine-modal, #low-stock-modal').forEach((overlay) => {
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+          overlay.classList.add('hidden');
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

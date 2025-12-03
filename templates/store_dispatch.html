@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Store · Dispatch{% endblock %}
+{% block title %}Store · Delivery Challan{% endblock %}
 {% block content %}
 <div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
-      <h1 class="text-2xl font-semibold">Dispatch / Delivery Challan</h1>
-      <p class="text-sm text-slate-600">Review dispatch history and create new challans.</p>
+      <h1 class="text-2xl font-semibold">Delivery Challan</h1>
+      <p class="text-sm text-slate-600">Review delivery challan history and create new challans.</p>
     </div>
-    <label for="new-dispatch" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New Dispatch</label>
+    <label for="new-dispatch" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New Delivery Challan</label>
   </div>
 
   <input type="checkbox" id="new-dispatch" class="hidden peer" />
@@ -17,8 +17,8 @@
     <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
       <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
         <div>
-          <p class="text-xs text-slate-500 uppercase">Dispatch</p>
-          <h2 class="text-lg font-semibold">Create dispatch</h2>
+          <p class="text-xs text-slate-500 uppercase">Delivery challan</p>
+          <h2 class="text-lg font-semibold">Create delivery challan</h2>
         </div>
         <button class="text-slate-500" onclick="document.getElementById('new-dispatch').checked=false;">✕</button>
       </div>
@@ -26,7 +26,7 @@
         {{ csrf_field() }}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1">
-            <span class="text-sm">Dispatch number</span>
+            <span class="text-sm">Challan number</span>
             <input type="text" name="dispatch_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
           </label>
           <label class="space-y-1">
@@ -36,7 +36,7 @@
             </select>
           </label>
           <label class="space-y-1">
-            <span class="text-sm">Dispatch date</span>
+            <span class="text-sm">Challan date</span>
             <input type="date" name="dispatch_date" class="w-full rounded-lg border-slate-200" />
           </label>
         </div>
@@ -75,7 +75,7 @@
           </label>
         </div>
         <div class="flex justify-end">
-          <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Create dispatch</button>
+          <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Create delivery challan</button>
         </div>
       </form>
     </div>
@@ -85,7 +85,7 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
-          <th class="py-3 px-4">Dispatch #</th>
+          <th class="py-3 px-4">Challan #</th>
           <th class="py-3 px-4">Project</th>
           <th class="py-3 px-4">Date</th>
           <th class="py-3 px-4">Item</th>
@@ -123,7 +123,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="py-4 px-4 text-slate-500">No dispatches yet.</td></tr>
+        <tr><td colspan="9" class="py-4 px-4 text-slate-500">No delivery challans yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -136,8 +136,8 @@
     <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
       <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
         <div>
-          <p class="text-xs text-slate-500 uppercase">Dispatch</p>
-          <h2 class="text-lg font-semibold">Edit dispatch</h2>
+          <p class="text-xs text-slate-500 uppercase">Delivery challan</p>
+          <h2 class="text-lg font-semibold">Edit delivery challan</h2>
         </div>
         <button class="text-slate-500" onclick="document.getElementById('edit-dispatch-{{ dispatch.id }}').checked=false;">✕</button>
       </div>
@@ -145,7 +145,7 @@
         {{ csrf_field() }}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1">
-            <span class="text-sm">Dispatch number</span>
+            <span class="text-sm">Challan number</span>
             <input type="text" name="dispatch_number" class="w-full rounded-lg border-slate-200" value="{{ dispatch.dispatch_number }}" />
           </label>
           <label class="space-y-1">
@@ -158,7 +158,7 @@
             </select>
           </label>
           <label class="space-y-1">
-            <span class="text-sm">Dispatch date</span>
+            <span class="text-sm">Challan date</span>
             <input type="date" name="dispatch_date" class="w-full rounded-lg border-slate-200" value="{{ dispatch.dispatch_date.strftime('%Y-%m-%d') if dispatch.dispatch_date else '' }}" />
           </label>
         </div>
@@ -200,7 +200,7 @@
         </div>
         <div class="flex justify-end gap-3">
           <button type="button" class="px-4 py-2 rounded-lg border border-slate-200" onclick="document.getElementById('edit-dispatch-{{ dispatch.id }}').checked=false;">Cancel</button>
-          <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Update dispatch</button>
+          <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Update delivery challan</button>
         </div>
       </form>
     </div>

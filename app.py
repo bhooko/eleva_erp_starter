@@ -6518,15 +6518,18 @@ def store_inventory():
     _sync_inventory_with_products()
     items = InventoryItem.query.order_by(InventoryItem.item_code).all()
     total_items = len(items)
-    quarantined = sum([item.quarantined_stock or 0 for item in items])
-    usable = sum([item.current_stock or 0 for item in items])
+    quarantined_items = [item for item in items if (item.quarantined_stock or 0) > 0]
+    quarantined_count = len(quarantined_items)
+    usable_items = [item for item in items if (item.current_stock or 0) > 0]
+    usable_count = len(usable_items)
     low_stock = [item for item in items if (item.current_stock or 0) < 1]
     return render_template(
         "store_inventory.html",
         items=items,
         total_items=total_items,
-        quarantined=quarantined,
-        usable=usable,
+        quarantined=quarantined_count,
+        quarantined_items=quarantined_items,
+        usable=usable_count,
         low_stock=low_stock,
     )
 
