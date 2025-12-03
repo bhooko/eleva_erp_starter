@@ -209,7 +209,7 @@
       <button type="button" class="text-slate-500 hover:text-slate-700" data-modal-close="inventory-upload-modal">✕</button>
     </div>
     <form action="{{ url_for('inventory_upload') }}" method="POST" enctype="multipart/form-data" class="space-y-4 p-5">
-      {{ csrf_token() }}
+      {{ csrf_field() }}
       <p class="text-sm text-slate-600">Upload the <strong>Quants (stock.quant).xlsx</strong> file exported from Odoo or a compatible CSV.</p>
       <label class="block">
         <span class="text-sm font-medium text-slate-700">Inventory file</span>
