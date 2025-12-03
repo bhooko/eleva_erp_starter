@@ -942,7 +942,7 @@
           {% endif %}
 
           {% if purchase_visible %}
-          {% set purchase_endpoints = ['purchase_orders','purchase_reports','purchase_parts','purchase_vendors'] %}
+          {% set purchase_endpoints = ['purchase_orders','purchase_reports','purchase_parts','products','purchase_vendors'] %}
           <div class="space-y-1">
             <a href="{{ url_for('purchase_orders') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in purchase_endpoints else '' }}">
@@ -961,6 +961,10 @@
               <a href="{{ url_for('purchase_parts') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_parts' else '' }}">
                 <span class="label">Parts</span>
+              </a>
+              <a href="{{ url_for('products') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'products' else '' }}">
+                <span class="label">Products</span>
               </a>
               <a href="{{ url_for('purchase_vendors') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_vendors' else '' }}">
