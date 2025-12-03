@@ -41,18 +41,47 @@
     </div>
   </div>
 
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <label class="relative w-full md:max-w-sm">
+      <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">🔍</span>
+      <input
+        id="parts-search"
+        type="search"
+        placeholder="Search parts by name, unit, or pricing"
+        class="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900/50"
+      />
+    </label>
+    <p class="text-xs text-slate-500">Type to filter results; click a column header to sort.</p>
+  </div>
+
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-    <table class="w-full text-sm">
+    <table id="parts-table" class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
-          <th class="py-3 px-4">Name</th>
-          <th class="py-3 px-4">Sales Price</th>
-          <th class="py-3 px-4">Cost</th>
-          <th class="py-3 px-4">UoM</th>
-          <th class="py-3 px-4">Purchase UoM</th>
-          <th class="py-3 px-4">Qty on Hand</th>
-          <th class="py-3 px-4">Forecast Qty</th>
-          <th class="py-3 px-4">Favorite</th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="0">
+            <span class="inline-flex items-center gap-1">Name <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="1">
+            <span class="inline-flex items-center gap-1">Sales Price <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="2">
+            <span class="inline-flex items-center gap-1">Cost <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="3">
+            <span class="inline-flex items-center gap-1">UoM <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="4">
+            <span class="inline-flex items-center gap-1">Purchase UoM <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="5">
+            <span class="inline-flex items-center gap-1">Qty on Hand <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="6">
+            <span class="inline-flex items-center gap-1">Forecast Qty <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
+          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="7">
+            <span class="inline-flex items-center gap-1">Favorite <span class="sort-indicator text-xs">⇅</span></span>
+          </th>
         </tr>
       </thead>
       <tbody class="divide-y">
@@ -80,4 +109,152 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (() => {
+    function levenshtein(a, b) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+
+      const matrix = Array.from({ length: b.length + 1 }, (_, i) => [i]);
+      for (let j = 0; j <= a.length; j += 1) {
+        matrix[0][j] = j;
+      }
+
+      for (let i = 1; i <= b.length; i += 1) {
+        for (let j = 1; j <= a.length; j += 1) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1,
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1,
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    function normalizeSortValue(value) {
+      const numeric = parseFloat((value || "").replace(/,/g, ""));
+      return Number.isNaN(numeric) ? (value || "").toLowerCase() : numeric;
+    }
+
+    function setupInteractiveTable(tableId, searchId) {
+      const table = document.getElementById(tableId);
+      const searchInput = document.getElementById(searchId);
+      if (!table) return;
+      const tbody = table.querySelector("tbody");
+      const headers = Array.from(table.querySelectorAll("th[data-sort-index]"));
+
+      let sortState = { key: null, direction: 1 };
+
+      function computeMatchScore(text, query) {
+        if (!query) return 0;
+        if (text === query) return 0;
+        if (text.startsWith(query)) return 1;
+        if (text.includes(query)) {
+          return 2 + text.indexOf(query) / Math.max(text.length, 1);
+        }
+        const distance = levenshtein(text, query);
+        return 3 + distance / Math.max(query.length, text.length, 1);
+      }
+
+      function applyIndicators() {
+        headers.forEach((th) => {
+          const indicator = th.querySelector(".sort-indicator");
+          if (!indicator) return;
+          const idx = Number(th.dataset.sortIndex);
+          if (sortState.key === idx) {
+            indicator.textContent = sortState.direction === 1 ? "▲" : "▼";
+          } else {
+            indicator.textContent = "⇅";
+          }
+        });
+      }
+
+      function getCellValue(row, index) {
+        const cell = row.cells[index];
+        return cell ? (cell.dataset.sortValue || cell.textContent.trim()) : "";
+      }
+
+      function applySort(columnIndex = sortState.key, direction = sortState.direction) {
+        const query = (searchInput?.value || "").trim();
+        const rows = Array.from(tbody.querySelectorAll("tr")).filter(
+          (row) => row.style.display !== "none",
+        );
+
+        const sorted = rows.sort((a, b) => {
+          if (columnIndex === null && query) {
+            return (
+              parseFloat(a.dataset.score) - parseFloat(b.dataset.score)
+            ) || a.innerText.localeCompare(b.innerText);
+          }
+
+          const aVal = normalizeSortValue(getCellValue(a, columnIndex));
+          const bVal = normalizeSortValue(getCellValue(b, columnIndex));
+
+          if (typeof aVal === "number" && typeof bVal === "number") {
+            const numericOrder = (aVal - bVal) * direction;
+            if (numericOrder !== 0) return numericOrder;
+            return a.innerText.localeCompare(b.innerText);
+          }
+
+          const textOrder = aVal.toString().localeCompare(bVal.toString()) * direction;
+          if (textOrder !== 0) return textOrder;
+          return parseFloat(a.dataset.score) - parseFloat(b.dataset.score);
+        });
+
+        sorted.forEach((row) => tbody.appendChild(row));
+      }
+
+      function refresh() {
+        const query = (searchInput?.value || "").trim().toLowerCase();
+        Array.from(tbody.querySelectorAll("tr")).forEach((row) => {
+          const cellTexts = Array.from(row.cells).map((cell) =>
+            cell.textContent.trim().toLowerCase(),
+          );
+          const combined = cellTexts.join(" ");
+          if (!query) {
+            row.dataset.score = "0";
+            row.style.display = "";
+            return;
+          }
+
+          const scores = cellTexts.map((text) => computeMatchScore(text, query));
+          const bestScore = Math.min(...scores);
+          const related = combined.includes(query) || bestScore < 3.8;
+
+          row.style.display = related ? "" : "none";
+          row.dataset.score = related ? String(bestScore) : "9999";
+        });
+        applySort();
+        applyIndicators();
+      }
+
+      headers.forEach((th) => {
+        th.addEventListener("click", () => {
+          const col = Number(th.dataset.sortIndex);
+          sortState = {
+            key: col,
+            direction: sortState.key === col ? sortState.direction * -1 : 1,
+          };
+          applySort(sortState.key, sortState.direction);
+          applyIndicators();
+        });
+      });
+
+      searchInput?.addEventListener("input", refresh);
+      refresh();
+    }
+
+    setupInteractiveTable("parts-table", "parts-search");
+  })();
+</script>
 {% endblock %}
