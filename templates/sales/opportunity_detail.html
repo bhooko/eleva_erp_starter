@@ -16,6 +16,9 @@
         {% set label, badge = opportunity.badge_variant %}
         <span class="inline-flex items-center px-2 py-1 rounded-lg text-xs {{ badge }}">{{ label or opportunity.temperature|capitalize }}</span>
       {% endif %}
+      {% if open_design_tasks %}
+        <span class="inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 border border-amber-400/40">Waiting on Design</span>
+      {% endif %}
     </div>
   </div>
   <div class="flex items-center gap-3">
@@ -101,6 +104,53 @@
   <div class="mt-4 rounded-xl border border-slate-800/60 bg-slate-950/50 p-4">
     <p class="text-xs uppercase tracking-wide text-slate-500">Description</p>
     <p class="mt-2 whitespace-pre-line text-sm text-slate-300">{{ opportunity.description or 'No description added yet.' }}</p>
+  </div>
+</div>
+
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 60ms;">
+  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Design Tasks for this Opportunity</p>
+      <p class="text-sm text-slate-300">Link design requests raised from this deal and track their progress.</p>
+    </div>
+    <button
+      type="button"
+      data-design-task-modal="salesDesignTaskModal"
+      class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+    >
+      + Create Sales Query Task
+    </button>
+  </div>
+  <div class="mt-3 overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/40">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Task Type</th>
+          <th class="py-3 px-4">Title</th>
+          <th class="py-3 px-4">Assigned To</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">Due Date</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/70">
+        {% for task in design_tasks %}
+        <tr class="hover:bg-slate-900/60">
+          <td class="py-3 px-4 font-semibold text-slate-200">{{ task.task_type.replace('_',' ').title() }}</td>
+          <td class="py-3 px-4">
+            <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="text-emerald-100 hover:text-emerald-200 font-semibold">{{ task.description or task.project_label }}</a>
+            <div class="text-xs text-slate-500">ID #{{ task.id }}</div>
+          </td>
+          <td class="py-3 px-4">{{ task.assigned_to.display_name if task.assigned_to else 'Unassigned' }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center rounded-full px-2 py-1 text-xs {{ 'bg-emerald-500/20 text-emerald-100 border border-emerald-400/40' if task.status == 'completed' else 'bg-amber-500/20 text-amber-100 border border-amber-400/40' if task.status in ['new','in_progress','waiting_info'] else 'bg-slate-800/70 text-slate-200 border border-slate-700' }}">{{ task.status.replace('_',' ').title() }}</span>
+          </td>
+          <td class="py-3 px-4">{{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-4 px-4 text-center text-slate-500">No design tasks linked yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -548,6 +598,25 @@
     </form>
   </div>
 </div>
+
+{% with
+  modal_id='salesDesignTaskModal',
+  modal_title='Create Sales Query Task',
+  submit_label='Create Task',
+  projects=design_projects,
+  users=design_users,
+  default_task_type='sales_query',
+  default_origin_type='sales',
+  default_origin_id=opportunity.id,
+  default_origin_reference=opportunity.title,
+  default_project_id=opportunity.project_id,
+  default_project_name=opportunity.related_project or opportunity.title,
+  default_description=opportunity.title,
+  show_origin_fields=False,
+  default_priority='medium'
+%}
+  {% include 'partials/design_task_modal.html' %}
+{% endwith %}
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {

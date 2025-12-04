@@ -5842,21 +5842,37 @@ def design_drawing_site_detail(site_id: int):
         .first()
     )
 
-    related_tasks = []
+    bom_item_count = len(bom.items) if bom and bom.items else 0
+    bom_stage_summary = []
+    if bom and bom.items:
+        stage_counter = Counter()
+        for item in bom.items:
+            stage_name = None
+            if item.stage:
+                stage_name = item.stage.name
+            elif default_stage:
+                stage_name = default_stage.name
+            stage_counter[stage_name or "Unassigned"] += 1
+        bom_stage_summary = [
+            {"name": name, "count": count} for name, count in stage_counter.items()
+        ]
+
+    task_filters = []
     if site.project_id:
-        related_tasks = (
-            DesignTask.query.filter(DesignTask.project_id == site.project_id)
-            .order_by(DesignTask.created_at.desc())
-            .all()
-        )
-    elif site.project_no:
-        related_tasks = (
-            DesignTask.query.filter(
-                DesignTask.project_name.ilike(f"%{site.project_no}%")
-            )
-            .order_by(DesignTask.created_at.desc())
-            .all()
-        )
+        task_filters.append(DesignTask.project_id == site.project_id)
+    if site.project_no:
+        task_filters.append(DesignTask.project_name.ilike(f"%{site.project_no}%"))
+    if site.site_location:
+        task_filters.append(DesignTask.origin_reference.ilike(f"%{site.site_location}%"))
+    if site.lift_identifier:
+        task_filters.append(DesignTask.origin_reference.ilike(f"%{site.lift_identifier}%"))
+
+    related_tasks = (
+        DesignTask.query.filter(or_(*task_filters)).order_by(DesignTask.created_at.desc()).all()
+        if task_filters
+        else []
+    )
+    design_users = User.query.order_by(User.first_name, User.username).all()
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -6010,12 +6026,15 @@ def design_drawing_site_detail(site_id: int):
         versions=versions,
         comments=comments,
         bom=bom,
+        bom_item_count=bom_item_count,
+        bom_stage_summary=bom_stage_summary,
         related_tasks=related_tasks,
         can_edit_bom=can_edit_bom,
         stage_options=stage_options,
         default_stage=default_stage,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
+        design_users=design_users,
     )
 
 
@@ -6390,6 +6409,14 @@ def generate_po_from_bom(bom_id):
         .all()
     )
     project_options = Project.query.order_by(Project.name.asc()).all()
+    related_pos = (
+        PurchaseOrder.query.options(
+            joinedload(PurchaseOrder.vendor), joinedload(PurchaseOrder.stage)
+        )
+        .filter(PurchaseOrder.bom_id == bom.id)
+        .order_by(PurchaseOrder.id.desc())
+        .all()
+    )
 
     selected_stage_id = request.values.get("stage_id") or (
         default_stage.id if default_stage else None
@@ -6566,6 +6593,7 @@ def generate_po_from_bom(bom_id):
                     flash("No line items were selected for ordering.", "danger")
                 else:
                     db.session.commit()
+                    # TODO: create_notification for purchase/design teams about PO creation from this BOM.
                     flash(
                         f"Purchase Order {po.po_number} created from BOM {bom.bom_name} – Stage {stage_record.name if stage_record else selected_stage_id} for vendor {vendor_record.name if vendor_record else selected_vendor_id}.",
                         "success",
@@ -6585,6 +6613,7 @@ def generate_po_from_bom(bom_id):
         pending_only=pending_only,
         preview_items=preview_items,
         selected_stage_name=selected_stage_name,
+        related_pos=related_pos,
     )
 
 
@@ -8214,6 +8243,7 @@ def confirm_delivery_order(order_id):
     if warnings:
         for warn in warnings:
             flash(warn, "warning")
+    # TODO: create_notification for store team when a DO is confirmed.
     flash("Delivery Order confirmed and stock reserved (book).", "success")
     return redirect(url_for("delivery_order_detail", order_id=order.id))
 
@@ -8630,6 +8660,7 @@ def store_dispatch():
     dispatches = (
         DeliveryChallan.query.options(
             joinedload(DeliveryChallan.project),
+            joinedload(DeliveryChallan.delivery_order),
             subqueryload(DeliveryChallan.items),
         )
         .order_by(DeliveryChallan.id.desc())
@@ -8754,6 +8785,7 @@ def complete_dispatch(dispatch_id):
     dispatch.completed_at = dispatch.delivered_at
 
     db.session.commit()
+    # TODO: create_notification for purchase team when a DC is delivered.
     flash("Delivery challan marked as delivered.", "success")
 
     return redirect(url_for("store_dispatch"))
@@ -12094,6 +12126,32 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesOpportunityItem.created_at.desc())
         .all()
     )
+    design_task_filters = [
+        and_(DesignTask.origin_type == "sales", DesignTask.origin_id == opportunity.id)
+    ]
+    if opportunity.project_id:
+        design_task_filters.append(DesignTask.project_id == opportunity.project_id)
+    if opportunity.related_project:
+        design_task_filters.append(
+            DesignTask.project_name.ilike(f"%{opportunity.related_project}%")
+        )
+    if opportunity.project and opportunity.project.name:
+        design_task_filters.append(
+            DesignTask.project_name.ilike(f"%{opportunity.project.name}%")
+        )
+
+    design_tasks = (
+        DesignTask.query.filter(or_(*design_task_filters))
+        .order_by(DesignTask.created_at.desc())
+        .all()
+    )
+    open_design_tasks = [
+        task
+        for task in design_tasks
+        if (task.status or "").lower() in {"new", "in_progress", "waiting_info"}
+    ]
+    design_projects = Project.query.order_by(Project.name).all()
+    design_users = User.query.order_by(User.first_name, User.username).all()
     owners = get_assignable_users_for_module("sales", order_by="name")
     clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
 
@@ -12111,6 +12169,10 @@ def sales_opportunity_detail(opportunity_id):
         files=files,
         scheduled_activities=scheduled_activities,
         items=items,
+        design_tasks=design_tasks,
+        open_design_tasks=open_design_tasks,
+        design_projects=design_projects,
+        design_users=design_users,
         reminder_options=OPPORTUNITY_REMINDER_OPTIONS,
         lift_types=LIFT_TYPES,
         temperature_choices=SALES_TEMPERATURES,
@@ -14671,6 +14733,24 @@ def project_detail(project_id):
         .order_by(ProjectComment.created_at.desc())
         .all()
     )
+    project_delivery_orders = (
+        DeliveryOrder.query.filter(DeliveryOrder.project_id == project.id)
+        .order_by(DeliveryOrder.created_at.desc().nullslast())
+        .limit(10)
+        .all()
+    )
+    project_delivery_challans = (
+        DeliveryChallan.query.options(joinedload(DeliveryChallan.delivery_order))
+        .filter(
+            or_(
+                DeliveryChallan.project_id == project.id,
+                DeliveryChallan.delivery_order.has(DeliveryOrder.project_id == project.id),
+            )
+        )
+        .order_by(DeliveryChallan.created_at.desc().nullslast())
+        .limit(10)
+        .all()
+    )
 
     return render_template(
         "project_detail.html",
@@ -14695,6 +14775,8 @@ def project_detail(project_id):
         PROJECT_CABIN_FINISHES=PROJECT_CABIN_FINISHES,
         PROJECT_DOOR_OPERATION_TYPES=PROJECT_DOOR_OPERATION_TYPES,
         PROJECT_DOOR_FINISHES=PROJECT_DOOR_FINISHES,
+        project_delivery_orders=project_delivery_orders,
+        project_delivery_challans=project_delivery_challans,
     )
 
 

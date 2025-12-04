@@ -36,16 +36,6 @@
           <div class="p-3 bg-slate-50 rounded-xl">Latest Revision: <strong>{{ site.latest_revision or '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Last Updated: <strong>{{ site.last_updated.strftime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</strong></div>
         </div>
-        {% if related_tasks %}
-        <div class="border-t pt-3">
-          <p class="text-xs uppercase text-slate-500">Related Design Tasks</p>
-          <div class="flex flex-wrap gap-2 mt-2">
-            {% for task in related_tasks %}
-            <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-sm hover:bg-slate-200">Task #{{ task.id }} · {{ task.description or task.project_label }}</a>
-            {% endfor %}
-          </div>
-        </div>
-        {% endif %}
       </div>
 
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
@@ -199,17 +189,92 @@
 
     <div class="space-y-4">
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Design Tasks for this Lift/Site</p>
+            <h3 class="text-lg font-semibold">Linked requests</h3>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-design-task-modal="drawingTaskModal"
+              class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+            >
+              Create Drawing Task
+            </button>
+            <button
+              type="button"
+              data-design-task-modal="bomTaskModal"
+              class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+            >
+              Create BOM Task
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2">Task Type</th>
+                <th class="py-2">Title</th>
+                <th class="py-2">Assigned To</th>
+                <th class="py-2">Status</th>
+                <th class="py-2">Due Date</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% for task in related_tasks %}
+              <tr class="hover:bg-slate-50">
+                <td class="py-2 font-semibold">{{ task.task_type.replace('_',' ').title() }}</td>
+                <td class="py-2">
+                  <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="text-orange-600 hover:underline font-semibold">{{ task.description or task.project_label }}</a>
+                  <div class="text-xs text-slate-500">Task #{{ task.id }}</div>
+                </td>
+                <td class="py-2">{{ task.assigned_to.display_name if task.assigned_to else 'Unassigned' }}</td>
+                <td class="py-2">
+                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs {{ 'bg-emerald-100 text-emerald-700' if task.status == 'completed' else 'bg-amber-100 text-amber-700' if task.status in ['new','in_progress','waiting_info'] else 'bg-slate-100 text-slate-700' }}">{{ task.status.replace('_',' ').title() }}</span>
+                </td>
+                <td class="py-2">{{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="py-3 text-slate-500">No design tasks linked yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-semibold">BOM linked to site</h3>
-          <button class="px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600" disabled>Generate PO (Stage-wise)</button>
+          {% if bom %}
+          <a
+            href="{{ url_for('generate_po_from_bom', bom_id=bom.id) }}"
+            class="px-3 py-1 text-xs rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50"
+          >
+            Open BOM
+          </a>
+          {% else %}
+          <span class="px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600">No BOM yet</span>
+          {% endif %}
         </div>
         {% if bom %}
         <div class="grid grid-cols-2 gap-3 text-sm text-slate-700">
           <div class="p-3 bg-slate-50 rounded-xl">Name: <strong>{{ bom.bom_name }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Status: <strong>{{ bom.status.title() }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Created: <strong>{{ bom.created_at.strftime('%d %b %Y') if bom.created_at else '—' }}</strong></div>
-          <div class="p-3 bg-slate-50 rounded-xl">Items: <strong>{{ bom.items|length }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Items: <strong>{{ bom_item_count }}</strong></div>
         </div>
+        {% if bom_stage_summary %}
+        <div class="p-3 bg-slate-50 rounded-xl text-sm text-slate-700">
+          <p class="font-semibold mb-2">Stage split</p>
+          <ul class="list-disc list-inside space-y-1">
+            {% for entry in bom_stage_summary %}
+            <li>{{ entry.name }} – {{ entry.count }} item(s)</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
         {% if can_edit_bom %}
         <div class="flex justify-end mt-2">
           <button
@@ -417,6 +482,40 @@
     </div>
   </div>
 </div>
+
+{% with
+  modal_id='drawingTaskModal',
+  modal_title='Create Drawing Task',
+  submit_label='Create Task',
+  projects=project_options,
+  users=design_users,
+  default_task_type='drawing',
+  default_origin_type='design',
+  default_origin_reference=site.project_no or site.site_location or site.client_name,
+  default_project_id=site.project_id,
+  default_project_name=site.project_no or site.client_name,
+  default_description=site.project_no or site.client_name,
+  show_origin_fields=False
+%}
+  {% include 'partials/design_task_modal.html' %}
+{% endwith %}
+
+{% with
+  modal_id='bomTaskModal',
+  modal_title='Create BOM Task',
+  submit_label='Create Task',
+  projects=project_options,
+  users=design_users,
+  default_task_type='bom',
+  default_origin_type='design',
+  default_origin_reference=site.project_no or site.site_location or site.client_name,
+  default_project_id=site.project_id,
+  default_project_name=site.project_no or site.client_name,
+  default_description='BOM requirement for ' ~ (site.project_no or site.client_name),
+  show_origin_fields=False
+%}
+  {% include 'partials/design_task_modal.html' %}
+{% endwith %}
 <script>
   function toggleSiteBomDuplicate(state){
     const modal = document.getElementById('siteDuplicateBomModal');

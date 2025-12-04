@@ -5,8 +5,11 @@
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
-      <h1 class="text-2xl font-semibold">Delivery Challan</h1>
-      <p class="text-sm text-slate-600">Review delivery challan history and create new challans.</p>
+      <h1 class="text-2xl font-semibold">Delivery Challan (DC)</h1>
+      <p class="text-sm text-slate-600">Review delivery challan history and create new DCs.</p>
+      <div class="mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2 text-xs text-amber-800 inline-flex items-center gap-2">
+        <span class="font-semibold">Note:</span> Delivery Challans move physical stock out of the store. Link them to Delivery Orders to reflect reservations accurately.
+      </div>
     </div>
     <label for="new-dispatch" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New Delivery Challan</label>
   </div>
@@ -86,6 +89,7 @@
       <thead>
         <tr class="text-left text-slate-500">
           <th class="py-3 px-4">Challan #</th>
+          <th class="py-3 px-4">Delivery Order</th>
           <th class="py-3 px-4">Project</th>
           <th class="py-3 px-4">Date</th>
           <th class="py-3 px-4">Item</th>
@@ -101,7 +105,15 @@
         {% set primary_item = dispatch.items[0] if dispatch.items else None %}
         <tr class="{% if dispatch.is_completed %}bg-slate-50{% endif %}">
           <td class="py-3 px-4 font-semibold text-slate-800">{{ dispatch.dispatch_number }}</td>
-          <td class="py-3 px-4">{{ dispatch.project.name if dispatch.project else 'General' }}</td>
+          <td class="py-3 px-4">
+            {% if dispatch.delivery_order %}
+              <a href="{{ url_for('delivery_order_detail', order_id=dispatch.delivery_order.id) }}" class="text-orange-600 hover:underline">{{ dispatch.delivery_order.do_number }}</a>
+              <div class="text-xs text-slate-500">{{ dispatch.delivery_order.project_or_site }}</div>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="py-3 px-4">{{ dispatch.project.name if dispatch.project else (dispatch.delivery_order.project_or_site if dispatch.delivery_order else 'General') }}</td>
           <td class="py-3 px-4">{{ dispatch.dispatch_date or '—' }}</td>
           <td class="py-3 px-4">{{ primary_item.item_code if primary_item else '—' }}</td>
           <td class="py-3 px-4">{{ primary_item.quantity_dispatched if primary_item else '—' }}</td>

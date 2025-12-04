@@ -466,6 +466,83 @@
       </div>
     </div>
   </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-100">Material Dispatches (DO/DC)</h3>
+        <p class="text-xs text-slate-500">Recent Delivery Orders and Delivery Challans for this project/site.</p>
+      </div>
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-sm font-semibold text-slate-100">Delivery Orders (DO)</h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2">DO Number</th>
+                <th class="py-2">Status</th>
+                <th class="py-2">Created</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/80">
+              {% for do in project_delivery_orders %}
+              <tr>
+                <td class="py-2">
+                  <a href="{{ url_for('delivery_order_detail', order_id=do.id) }}" class="text-emerald-200 hover:text-emerald-100 font-semibold">{{ do.do_number }}</a>
+                  <div class="text-xs text-slate-500">{{ do.project_or_site }}</div>
+                </td>
+                <td class="py-2 text-slate-200">{{ do.status }}</td>
+                <td class="py-2 text-slate-200">{{ do.date_created.strftime('%d %b %Y') if do.date_created else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="py-3 text-slate-500">No delivery orders yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-sm font-semibold text-slate-100">Delivery Challans (DC)</h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2">DC Number</th>
+                <th class="py-2">Delivered</th>
+                <th class="py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/80">
+              {% for dc in project_delivery_challans %}
+              <tr>
+                <td class="py-2">
+                  {% if dc.delivery_order %}
+                    <a href="{{ url_for('delivery_order_detail', order_id=dc.delivery_order.id) }}" class="text-emerald-200 hover:text-emerald-100 font-semibold">{{ dc.dispatch_number }}</a>
+                    <div class="text-xs text-slate-500">Linked DO {{ dc.delivery_order.do_number }}</div>
+                  {% else %}
+                    <span class="font-semibold text-emerald-200">{{ dc.dispatch_number }}</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-slate-200">{{ (dc.delivered_at or dc.dispatch_date).strftime('%d %b %Y') if dc.delivered_at or dc.dispatch_date else '—' }}</td>
+                <td class="py-2">
+                  <span class="inline-flex items-center rounded-full px-2 py-1 text-xs {{ 'bg-emerald-500/20 text-emerald-100 border border-emerald-400/40' if dc.is_completed else 'bg-amber-500/20 text-amber-100 border border-amber-400/40' }}">{{ dc.status or 'Draft' }}</span>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="py-3 text-slate-500">No delivery challans yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

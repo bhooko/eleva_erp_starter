@@ -5,8 +5,8 @@
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
-      <h1 class="text-2xl font-semibold">Delivery Order {{ order.do_number }}</h1>
-      <p class="text-sm text-slate-600">Read-only detail of the delivery order.</p>
+      <h1 class="text-2xl font-semibold">Delivery Order (DO) {{ order.do_number }}</h1>
+      <p class="text-sm text-slate-600">Read-only detail of the delivery order and its stock reservations.</p>
     </div>
     <a href="{{ url_for('store_delivery_orders') }}" class="text-sm text-orange-600 hover:underline">Back to list</a>
   </div>
@@ -15,6 +15,9 @@
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
       <p class="text-xs text-slate-500">Project / Site</p>
       <p class="text-lg font-semibold text-slate-800">{{ order.project_or_site }}</p>
+      {% if order.project %}
+        <a href="{{ url_for('project_detail', project_id=order.project.id) }}" class="text-xs text-orange-600 hover:underline">Open project</a>
+      {% endif %}
     </div>
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
       <p class="text-xs text-slate-500">Receiver</p>
@@ -26,6 +29,9 @@
         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if order.status in ['Completed', 'Confirmed'] else 'bg-amber-100 text-amber-700' if order.status == 'Partially Delivered' else 'bg-slate-100 text-slate-700' }}">{{ order.status }}</span>
         {% if order.dispatched_by %}
           <span class="text-xs text-slate-500">by {{ order.dispatched_by.display_name }} on {{ order.dispatched_at.strftime('%Y-%m-%d %H:%M') if order.dispatched_at else '' }}</span>
+        {% endif %}
+        {% if order.stage %}
+          <div class="text-xs text-slate-500">Stage: {{ order.stage.name }}</div>
         {% endif %}
       </div>
     </div>
@@ -49,6 +55,10 @@
         <p class="text-xs text-slate-500">Remarks</p>
         <p class="text-base">{{ order.remarks or '—' }}</p>
       </div>
+    </div>
+
+    <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+      This DO reserves stock (book inventory). Physical stock reduces only when Delivery Challans (DC) are delivered.
     </div>
 
     <div class="overflow-x-auto">

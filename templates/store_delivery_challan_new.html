@@ -5,7 +5,7 @@
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
-      <h1 class="text-2xl font-semibold">Create Delivery Challan</h1>
+      <h1 class="text-2xl font-semibold">Create Delivery Challan (DC)</h1>
       <p class="text-sm text-slate-600">Issue material against Delivery Order {{ order.do_number }}.</p>
     </div>
     <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="text-sm text-orange-600 hover:underline">Back to DO</a>
@@ -16,6 +16,9 @@
       <div>
         <p class="text-xs text-slate-500">Project / Site</p>
         <p class="text-base font-semibold">{{ order.project_or_site }}</p>
+        {% if order.project %}
+        <a href="{{ url_for('project_detail', project_id=order.project.id) }}" class="text-xs text-orange-600 hover:underline">Open project</a>
+        {% endif %}
       </div>
       <div>
         <p class="text-xs text-slate-500">Receiver</p>
@@ -25,6 +28,10 @@
         <p class="text-xs text-slate-500">Status</p>
         <p class="text-base font-semibold">{{ order.status }}</p>
       </div>
+    </div>
+
+    <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+      This DC moves physical stock out of store for this project/site. Linked Delivery Order: <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="font-semibold text-amber-900 hover:underline">{{ order.do_number }}</a>.
     </div>
 
     <form method="POST" class="space-y-4">
