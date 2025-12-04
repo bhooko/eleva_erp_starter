@@ -1655,6 +1655,111 @@ class DesignDrawingRevision(db.Model):
     changed_by = db.relationship("User")
 
 
+class DrawingSite(db.Model):
+    __tablename__ = "drawing_site"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_no = db.Column(db.String(120), nullable=True, index=True)
+    client_name = db.Column(db.String(150), nullable=True, index=True)
+    site_location = db.Column(db.String(150), nullable=True, index=True)
+    lift_identifier = db.Column(db.String(120), nullable=True, index=True)
+    lift_type = db.Column(db.String(120), nullable=True, index=True)
+    latest_drawing_number = db.Column(db.String(120), nullable=True)
+    latest_revision = db.Column(db.String(50), nullable=True)
+    approval_status = db.Column(db.String(80), nullable=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    project = db.relationship("Project")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "project_no",
+            "client_name",
+            "site_location",
+            "lift_identifier",
+            "lift_type",
+            name="uq_drawing_site_scope",
+        ),
+    )
+
+    def apply_latest_version(self):
+        latest_version = None
+        for version in sorted(
+            self.versions or [],
+            key=lambda v: (
+                v.created_at or datetime.datetime.min,
+                v.id or 0,
+            ),
+            reverse=True,
+        ):
+            latest_version = version
+            break
+
+        if latest_version:
+            self.latest_drawing_number = latest_version.drawing_number
+            self.latest_revision = latest_version.revision_no
+            self.approval_status = latest_version.approval_status
+            candidate = latest_version.created_at or datetime.datetime.utcnow()
+            if self.last_updated:
+                self.last_updated = max(self.last_updated, candidate)
+            else:
+                self.last_updated = candidate
+
+
+class DrawingVersion(db.Model):
+    __tablename__ = "drawing_version"
+
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_site_id = db.Column(
+        db.Integer, db.ForeignKey("drawing_site.id"), nullable=False, index=True
+    )
+    drawing_number = db.Column(db.String(120), nullable=True, index=True)
+    revision_no = db.Column(db.String(50), nullable=True, index=True)
+    file_path = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    submitted_date = db.Column(db.DateTime, nullable=True)
+    approved_date = db.Column(db.DateTime, nullable=True)
+    approval_status = db.Column(db.String(80), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    revision_reason = db.Column(db.Text, nullable=True)
+
+    site = db.relationship("DrawingSite", backref="versions")
+    created_by = db.relationship("User")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "drawing_site_id",
+            "drawing_number",
+            "revision_no",
+            name="uq_drawing_version_revision",
+        ),
+    )
+
+
+class DrawingComment(db.Model):
+    __tablename__ = "drawing_comment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_site_id = db.Column(
+        db.Integer, db.ForeignKey("drawing_site.id"), nullable=False, index=True
+    )
+    drawing_version_id = db.Column(
+        db.Integer, db.ForeignKey("drawing_version.id"), nullable=True, index=True
+    )
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    site = db.relationship("DrawingSite", backref="comments")
+    version = db.relationship("DrawingVersion")
+    author = db.relationship("User")
+
+
 class DrawingHistory(db.Model):
     __tablename__ = "drawing_history"
 
@@ -1699,6 +1804,9 @@ class BillOfMaterials(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
     design_task_id = db.Column(db.Integer, db.ForeignKey("design_task.id"), nullable=True)
+    drawing_site_id = db.Column(
+        db.Integer, db.ForeignKey("drawing_site.id"), nullable=True, index=True
+    )
     bom_name = db.Column(db.String(150), nullable=False)
     status = db.Column(db.String(50), nullable=False, default="draft")
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -1709,6 +1817,7 @@ class BillOfMaterials(db.Model):
 
     project = db.relationship("Project")
     design_task = db.relationship("DesignTask", backref="boms")
+    drawing_site = db.relationship("DrawingSite", backref="boms")
     created_by = db.relationship("User")
 
 
