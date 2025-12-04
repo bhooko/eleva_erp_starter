@@ -42,6 +42,10 @@
           {% endfor %}
         </select>
       </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-sm">PO Notes (optional)</span>
+        <textarea name="po_notes" rows="1" class="w-full rounded-lg border-slate-200" placeholder="Generated from BOM {{ bom.bom_name }} – Stage ...">{{ po_notes }}</textarea>
+      </label>
       <label class="flex items-center gap-2">
         <input type="checkbox" name="pending_only" value="1" {% if pending_only %}checked{% endif %} class="rounded border-slate-300" />
         <span class="text-sm">Include only items not yet fully ordered</span>
@@ -61,7 +65,8 @@
       </div>
       <div class="text-right text-sm text-slate-600">
         <div>Stage: <strong>{{ selected_stage_name or '—' }}</strong></div>
-        <div>Vendor ID: <strong>{{ selected_vendor_id or '—' }}</strong></div>
+        {% set selected_vendor = vendor_options | selectattr('id','equalto', selected_vendor_id|int) | list %}
+        <div>Vendor: <strong>{{ (selected_vendor[0].name if selected_vendor and selected_vendor[0] else selected_vendor_id) or '—' }}</strong></div>
       </div>
     </div>
     {% if preview_items %}
@@ -71,6 +76,7 @@
       <input type="hidden" name="stage_id" value="{{ selected_stage_id }}" />
       <input type="hidden" name="vendor_id" value="{{ selected_vendor_id }}" />
       <input type="hidden" name="project_id" value="{{ project_id_value or '' }}" />
+      <input type="hidden" name="po_notes" value="{{ po_notes or '' }}" />
       {% if pending_only %}<input type="hidden" name="pending_only" value="1" />{% endif %}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -83,21 +89,35 @@
               <th class="py-2 px-3">Ordered</th>
               <th class="py-2 px-3">Quantity to Order</th>
               <th class="py-2 px-3">Unit</th>
+              <th class="py-2 px-3">Unit Price</th>
+              <th class="py-2 px-3">Line Total</th>
             </tr>
           </thead>
           <tbody class="divide-y">
             {% for entry in preview_items %}
             <tr>
-              <td class="py-2 px-3 font-semibold">{{ entry.item.item_code }}</td>
+              <td class="py-2 px-3 font-semibold">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" name="item_id" value="{{ entry.item.id }}" class="rounded border-slate-300" checked />
+                  <span>{{ entry.item.item_code }}</span>
+                </label>
+              </td>
               <td class="py-2 px-3">{{ entry.item.description }}</td>
               <td class="py-2 px-3">{{ entry.stage_name }}</td>
               <td class="py-2 px-3">{{ entry.bom_qty }}</td>
               <td class="py-2 px-3">{{ entry.ordered_qty }}</td>
               <td class="py-2 px-3">
-                <input type="hidden" name="item_id" value="{{ entry.item.id }}" />
                 <input type="number" step="0.01" name="quantity_to_order_{{ entry.item.id }}" value="{{ entry.quantity_to_order }}" class="w-28 rounded-lg border-slate-200" />
               </td>
               <td class="py-2 px-3">{{ entry.item.unit }}</td>
+              <td class="py-2 px-3">
+                <input type="number" step="0.01" name="unit_price_{{ entry.item.id }}" value="{{ entry.unit_price if entry.unit_price is not none else '' }}" class="w-28 rounded-lg border-slate-200" />
+              </td>
+              <td class="py-2 px-3">
+                {% if entry.unit_price is not none %}
+                {{ (entry.quantity_to_order or 0) * (entry.unit_price or 0) }}
+                {% else %}—{% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>

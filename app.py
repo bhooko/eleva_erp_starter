@@ -5654,6 +5654,7 @@ def design_task_detail(task_id):
         project_options=project_options,
         drawing_site_options=drawing_site_options,
         stage_options=stage_options,
+        default_stage=default_stage,
     )
 
 
@@ -5962,6 +5963,7 @@ def design_drawing_site_detail(site_id: int):
         related_tasks=related_tasks,
         can_edit_bom=can_edit_bom,
         stage_options=stage_options,
+        default_stage=default_stage,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
     )
@@ -6073,6 +6075,36 @@ def duplicate_bom(bom_id: int):
     if new_bom.project_id:
         return redirect(url_for("project_detail", project_id=new_bom.project_id))
     return redirect(request.referrer or url_for("design_tasks"))
+
+
+@app.route("/purchase/bom-item/<int:item_id>/stage", methods=["POST"])
+@login_required
+def update_bom_item_stage(item_id: int):
+    ensure_bootstrap()
+    item = BOMItem.query.get_or_404(item_id)
+    role = (current_user.role or "").lower()
+    can_edit_bom = current_user.is_admin or any(
+        keyword in role for keyword in ["design", "purchase", "project", "installation"]
+    )
+    if not can_edit_bom:
+        abort(403)
+
+    redirect_url = request.form.get("redirect_url") or request.referrer or url_for("design_tasks")
+    stage_id_raw = request.form.get("stage_id") or None
+    try:
+        stage_id = int(stage_id_raw) if stage_id_raw else None
+    except (TypeError, ValueError):
+        stage_id = None
+
+    stage = ProcurementStage.query.get(stage_id) if stage_id else None
+    item.stage_id = stage.id if stage else None
+    db.session.commit()
+
+    if stage:
+        flash(f"Stage updated to {stage.name}.", "success")
+    else:
+        flash("Stage cleared for this BOM line.", "info")
+    return redirect(redirect_url)
 
 
 @app.route("/purchase/orders", methods=["GET", "POST"])
@@ -6187,6 +6219,27 @@ def purchase_orders():
     )
 
 
+@app.route("/purchase/orders/<int:po_id>")
+@login_required
+def purchase_order_detail_view(po_id: int):
+    ensure_bootstrap()
+    po = (
+        PurchaseOrder.query.options(
+            joinedload(PurchaseOrder.vendor),
+            joinedload(PurchaseOrder.project),
+            joinedload(PurchaseOrder.stage),
+            joinedload(PurchaseOrder.bom),
+            subqueryload(PurchaseOrder.items).joinedload(PurchaseOrderItem.bom_item),
+        )
+        .filter(PurchaseOrder.id == po_id)
+        .first()
+    )
+    if not po:
+        abort(404)
+
+    return render_template("purchase_order_detail.html", po=po)
+
+
 @app.route("/purchase/procurement-stages", methods=["GET", "POST"])
 @login_required
 def purchase_procurement_stages():
@@ -6292,6 +6345,7 @@ def generate_po_from_bom(bom_id):
     )
     selected_vendor_id = request.values.get("vendor_id") or None
     project_id_value = request.values.get("project_id") or bom.project_id
+    po_notes = request.values.get("po_notes") or None
     pending_only = request.values.get("pending_only") is not None
     preview_items = None
     selected_stage_name = next(
@@ -6329,19 +6383,31 @@ def generate_po_from_bom(bom_id):
                     if target_stage_id and item_stage_id != target_stage_id:
                         continue
                     bom_qty = item.quantity_required or 0
-                    book = BookInventory.query.filter_by(item_code=item.item_code).first()
-                    ordered_qty = book.quantity_ordered_total if book else 0
-                    suggested_qty = max(bom_qty - (ordered_qty or 0), 0)
-                    quantity_to_order = suggested_qty if suggested_qty > 0 else 0
-                    if pending_only and suggested_qty <= 0:
-                        continue
+                    ordered_qty = 0
+                    if pending_only:
+                        book = BookInventory.query.filter_by(item_code=item.item_code).first()
+                        ordered_qty = book.quantity_ordered_total if book else 0
+                        suggested_qty = max(bom_qty - (ordered_qty or 0), 0)
+                        if suggested_qty <= 0:
+                            continue
+                        quantity_to_order = suggested_qty
+                    else:
+                        quantity_to_order = bom_qty
+
+                    product = None
+                    if item.item_code:
+                        product = Product.query.filter(
+                            func.lower(Product.name) == (item.item_code or "").lower()
+                        ).first()
+                    unit_price = product.cost if product else None
                     preview_items.append(
                         {
                             "item": item,
                             "bom_qty": bom_qty,
                             "ordered_qty": ordered_qty or 0,
-                            "quantity_to_order": quantity_to_order if book else bom_qty,
+                            "quantity_to_order": quantity_to_order,
                             "stage_name": item.stage.name if item.stage else (default_stage.name if default_stage else "—"),
+                            "unit_price": unit_price,
                         }
                     )
 
@@ -6349,6 +6415,7 @@ def generate_po_from_bom(bom_id):
             selected_stage_id = request.form.get("stage_id") or None
             selected_vendor_id = request.form.get("vendor_id") or None
             project_id_value = request.form.get("project_id") or bom.project_id
+            po_notes = request.form.get("po_notes") or None
             pending_only = request.form.get("pending_only") is not None
 
             if not selected_stage_id or not selected_vendor_id:
@@ -6363,6 +6430,13 @@ def generate_po_from_bom(bom_id):
                 stage_record = ProcurementStage.query.get(stage_id_int) if stage_id_int else None
                 vendor_record = Vendor.query.get(vendor_id_int) if vendor_id_int else None
 
+                base_note = (
+                    f"Generated from BOM {bom.bom_name} (ID {bom.id}) – Stage {stage_record.name if stage_record else 'N/A'}"
+                )
+                notes_combined = base_note
+                if po_notes:
+                    notes_combined = f"{base_note}\n\n{po_notes}" if base_note else po_notes
+
                 po = PurchaseOrder(
                     po_number=f"PO-{uuid.uuid4().hex[:6].upper()}",
                     project_id=project_id_parsed,
@@ -6372,7 +6446,7 @@ def generate_po_from_bom(bom_id):
                     status="draft",
                     order_date=date.today(),
                     created_by_user_id=current_user.id,
-                    notes=f"Generated from BOM {bom.bom_name} (ID {bom.id}) – Stage {stage_record.name if stage_record else 'N/A'}",
+                    notes=notes_combined,
                 )
                 db.session.add(po)
                 db.session.flush()
@@ -6396,12 +6470,11 @@ def generate_po_from_bom(bom_id):
                     if qty_value <= 0:
                         continue
 
-                    product = None
-                    if bom_item.item_code:
-                        product = Product.query.filter(
-                            func.lower(Product.name) == (bom_item.item_code or "").lower()
-                        ).first()
-                    unit_price = product.cost if product else None
+                    unit_price_raw = request.form.get(f"unit_price_{parsed_id}") or None
+                    try:
+                        unit_price = float(unit_price_raw) if unit_price_raw not in (None, "") else None
+                    except (TypeError, ValueError):
+                        unit_price = None
                     total_amount = qty_value * unit_price if unit_price is not None else None
 
                     db.session.add(
@@ -6416,13 +6489,6 @@ def generate_po_from_bom(bom_id):
                             total_amount=total_amount,
                         )
                     )
-
-                    book = BookInventory.query.filter_by(item_code=bom_item.item_code).first()
-                    if not book:
-                        book = BookInventory(item_code=bom_item.item_code)
-                        db.session.add(book)
-                    book.quantity_ordered_total = (book.quantity_ordered_total or 0) + qty_value
-                    book.last_po_id = po.id
                     created_items += 1
 
                 if created_items == 0:
@@ -6431,10 +6497,10 @@ def generate_po_from_bom(bom_id):
                 else:
                     db.session.commit()
                     flash(
-                        f"Purchase Order {po.po_number} created for stage {stage_record.name if stage_record else selected_stage_id} and vendor {vendor_record.name if vendor_record else selected_vendor_id}.",
+                        f"Purchase Order {po.po_number} created from BOM {bom.bom_name} – Stage {stage_record.name if stage_record else selected_stage_id} for vendor {vendor_record.name if vendor_record else selected_vendor_id}.",
                         "success",
                     )
-                    return redirect(url_for("purchase_orders"))
+                    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
     return render_template(
         "purchase_generate_po_from_bom.html",
@@ -6445,6 +6511,7 @@ def generate_po_from_bom(bom_id):
         selected_stage_id=str(selected_stage_id or ""),
         selected_vendor_id=str(selected_vendor_id or ""),
         project_id_value=project_id_value,
+        po_notes=po_notes,
         pending_only=pending_only,
         preview_items=preview_items,
         selected_stage_name=selected_stage_name,
