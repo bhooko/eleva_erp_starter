@@ -8059,6 +8059,10 @@ def ensure_design_task_columns():
         cur.execute("ALTER TABLE design_task ADD COLUMN origin_reference TEXT;")
         added_cols.append("origin_reference")
 
+    if "notes" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN notes TEXT;")
+        added_cols.append("notes")
+
     conn.commit()
     conn.close()
 
