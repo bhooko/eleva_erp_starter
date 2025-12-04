@@ -8024,6 +8024,38 @@ def ensure_dispatch_columns():
         print("✔️ dispatch OK")
 
 
+def ensure_design_task_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_design_task_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='design_task'")
+    exists = cur.fetchone() is not None
+
+    if not exists:
+        conn.close()
+        print("ℹ️ design_task table does not exist; skipping ensure_design_task_columns.")
+        return
+
+    cur.execute("PRAGMA table_info(design_task)")
+    design_task_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "subtype" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN subtype TEXT;")
+        added_cols.append("subtype")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in design_task: {', '.join(added_cols)}")
+    else:
+        print("✔️ design_task OK")
+
+
 def migrate_plaintext_passwords():
     migrated = 0
     for user in User.query.all():
@@ -8042,6 +8074,7 @@ def bootstrap_db():
     ensure_project_comment_table()
     ensure_project_columns()
     ensure_dispatch_columns()
+    ensure_design_task_columns()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
