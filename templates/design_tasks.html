@@ -61,6 +61,13 @@
   function initDragAndDrop(){
     if (!canMove || !kanbanBoard) return;
     let dragged = null;
+    const dropzones = kanbanBoard.querySelectorAll('.dropzone');
+    if (!dropzones.length){
+      kanbanBoard.querySelectorAll('[draggable="true"]').forEach(card => {
+        card.setAttribute('draggable', 'false');
+      });
+      return;
+    }
     const cardsGrid = kanbanBoard.querySelector('[data-cards-grid]');
     kanbanBoard.querySelectorAll('[draggable="true"]').forEach(card => {
       card.addEventListener('dragstart', ()=>{
@@ -74,7 +81,7 @@
         isDragging = false;
       });
     });
-    kanbanBoard.querySelectorAll('.dropzone').forEach(zone => {
+    dropzones.forEach(zone => {
       zone.addEventListener('dragover', (e)=>{ e.preventDefault(); zone.classList.add('ring','ring-orange-200');});
       zone.addEventListener('dragleave', ()=> zone.classList.remove('ring','ring-orange-200'));
       zone.addEventListener('drop', (e)=>{
