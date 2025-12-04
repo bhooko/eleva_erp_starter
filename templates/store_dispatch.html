@@ -118,7 +118,7 @@
             </label>
             <form method="POST" action="{{ url_for('complete_dispatch', dispatch_id=dispatch.id) }}" class="inline">
               {{ csrf_field() }}
-              <button type="submit" class="px-3 py-1.5 rounded-lg {{ 'bg-slate-100 text-slate-400 cursor-not-allowed' if dispatch.is_completed else 'bg-emerald-500 text-white hover:bg-emerald-600' }}" {% if dispatch.is_completed %}disabled{% endif %}>Mark complete</button>
+              <button type="submit" class="px-3 py-1.5 rounded-lg {{ 'bg-slate-100 text-slate-400 cursor-not-allowed' if dispatch.is_completed else 'bg-emerald-500 text-white hover:bg-emerald-600' }}" {% if dispatch.is_completed %}disabled{% endif %}>Mark delivered</button>
             </form>
           </td>
         </tr>

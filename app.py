@@ -6498,6 +6498,24 @@ def generate_po_from_bom(bom_id):
                             total_amount=total_amount,
                         )
                     )
+
+                    inv = InventoryItem.query.filter_by(item_code=bom_item.item_code).first()
+                    if not inv:
+                        inv = InventoryItem(
+                            item_code=bom_item.item_code,
+                            description=bom_item.description,
+                            unit=bom_item.unit,
+                        )
+                        db.session.add(inv)
+                    _initialize_book_stock(inv)
+                    inv.book_stock = (inv.book_stock or inv.current_stock or 0) + qty_value
+
+                    book = BookInventory.query.filter_by(item_code=bom_item.item_code).first()
+                    if not book:
+                        book = BookInventory(item_code=bom_item.item_code)
+                        db.session.add(book)
+                    book.quantity_ordered_total = (book.quantity_ordered_total or 0) + qty_value
+                    book.last_po_id = po.id
                     created_items += 1
 
                 if created_items == 0:
@@ -7347,7 +7365,7 @@ def _initialize_book_stock(inventory_item):
     if inventory_item.book_stock is None:
         inventory_item.book_stock = physical
         updated = True
-    elif inventory_item.book_stock == 0 and physical:
+    elif inventory_item.id is None and inventory_item.book_stock == 0 and physical:
         inventory_item.book_stock = physical
         updated = True
     return updated
@@ -7951,18 +7969,18 @@ def create_delivery_order():
         order.do_number = f"DO-{order.id:04d}"
 
         for item in items:
-            db.session.add(
-                DeliveryOrderItem(
-                    delivery_order_id=order.id,
-                    item_code=item.get("item_code") or item.get("product_name"),
-                    product_name=item.get("product_name"),
-                    requested_qty=item.get("quantity") or 0,
-                    reserved_qty=item.get("quantity") or 0,
-                    delivered_qty_total=0,
-                    uom=item.get("uom"),
-                    remarks=item.get("remarks"),
-                )
-            )
+                    db.session.add(
+                        DeliveryOrderItem(
+                            delivery_order_id=order.id,
+                            item_code=item.get("item_code") or item.get("product_name"),
+                            product_name=item.get("product_name"),
+                            requested_qty=item.get("quantity") or 0,
+                            reserved_qty=0,
+                            delivered_qty_total=0,
+                            uom=item.get("uom"),
+                            remarks=item.get("remarks"),
+                        )
+                    )
 
         db.session.commit()
         flash("Delivery Order created.", "success")
@@ -8015,6 +8033,10 @@ def create_delivery_challan_from_do(order_id):
         .first_or_404()
     )
 
+    if order.status in {"Draft", "Created"}:
+        flash("Confirm the Delivery Order before creating a Delivery Challan.", "warning")
+        return redirect(url_for("delivery_order_detail", order_id=order.id))
+
     items_context = []
     for item in order.items:
         reserved = item.reserved_qty or item.requested_qty or 0
@@ -8038,6 +8060,15 @@ def create_delivery_challan_from_do(order_id):
             except (TypeError, ValueError):
                 qty_value = 0
             if qty_value > 0:
+                if qty_value > ctx["remaining"]:
+                    flash(
+                        f"Cannot deliver more than reserved for {ctx['record'].item_code}.", "danger"
+                    )
+                    return render_template(
+                        "store_delivery_challan_new.html",
+                        order=order,
+                        items=items_context,
+                    )
                 selections.append((ctx["record"], qty_value))
 
         if not selections:
@@ -8073,34 +8104,11 @@ def create_delivery_challan_from_do(order_id):
                 )
             )
 
-        for record, qty in selections:
-            inv = InventoryItem.query.filter_by(item_code=record.item_code).first()
-            if not inv:
-                inv = InventoryItem(
-                    item_code=record.item_code,
-                    description=record.product_name,
-                    unit=record.uom,
-                )
-                db.session.add(inv)
-            _initialize_book_stock(inv)
-            inv.current_stock = (inv.current_stock or 0) - qty
-            record.delivered_qty_total = (record.delivered_qty_total or 0) + qty
-
-        all_fulfilled = True
-        for record in order.items:
-            reserved = record.reserved_qty or record.requested_qty or 0
-            delivered = record.delivered_qty_total or 0
-            if delivered < reserved:
-                all_fulfilled = False
-        order.status = "Completed" if all_fulfilled else "Partially Delivered"
-
-        challan.status = "Delivered"
-        challan.delivered_at = datetime.datetime.utcnow()
-        challan.is_completed = True
-        challan.completed_at = challan.delivered_at
-
         db.session.commit()
-        flash("Delivery challan created and stock updated.", "success")
+        flash(
+            "Delivery challan created in Draft. Mark it as delivered once the materials move.",
+            "success",
+        )
         return redirect(url_for("delivery_order_detail", order_id=order.id))
 
     return render_template(
@@ -8125,7 +8133,8 @@ def confirm_delivery_order(order_id):
     warnings = []
 
     for item in order.items:
-        item.reserved_qty = item.reserved_qty or item.requested_qty or 0
+        item.reserved_qty = item.requested_qty or 0
+        item.delivered_qty_total = item.delivered_qty_total or 0
         inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
         if not inv:
             inv = InventoryItem(item_code=item.item_code, description=item.product_name, unit=item.uom)
@@ -8325,10 +8334,10 @@ def store_dispatch():
             vehicle_details=request.form.get("vehicle_details"),
             driver_name=request.form.get("driver_name"),
             notes=request.form.get("notes"),
-            status="Delivered",
-            delivered_at=datetime.datetime.utcnow(),
-            is_completed=True,
-            completed_at=datetime.datetime.utcnow(),
+            status="Draft",
+            delivered_at=None,
+            is_completed=False,
+            completed_at=None,
         )
         db.session.add(dispatch)
         db.session.flush()
@@ -8341,12 +8350,9 @@ def store_dispatch():
             qty_delivered=quantity,
         )
         db.session.add(dispatch_item)
-        _initialize_book_stock(inv)
-        inv.current_stock = (inv.current_stock or 0) - quantity
-        inv.book_stock = (inv.book_stock or inv.current_stock or 0) - quantity
 
         db.session.commit()
-        flash("Delivery challan recorded and stock updated.", "success")
+        flash("Delivery challan created in Draft. Mark as delivered when dispatched.", "success")
         return redirect(url_for("store_dispatch"))
 
     dispatches = (
@@ -8398,28 +8404,17 @@ def edit_dispatch(dispatch_id):
     except ValueError:
         dispatch_date = None
 
-    existing_item = dispatch.items[0] if dispatch.items else None
-    prev_item_code = existing_item.item_code if existing_item else None
-    prev_quantity = existing_item.quantity_dispatched if existing_item else 0
-
     target_inv = InventoryItem.query.filter_by(item_code=item_code).first()
-    prev_inv = InventoryItem.query.filter_by(item_code=prev_item_code).first() if prev_item_code else None
 
     if not target_inv:
         flash("The selected item is not available in inventory.", "danger")
         return redirect(url_for("store_dispatch"))
 
     available_stock = (target_inv.current_stock or 0)
-    if target_inv.item_code == prev_item_code:
-        available_stock += prev_quantity
 
     if quantity > available_stock:
         flash("Insufficient stock available for this dispatch quantity.", "danger")
         return redirect(url_for("store_dispatch"))
-
-    if prev_inv:
-        prev_inv.current_stock = (prev_inv.current_stock or 0) + prev_quantity
-        prev_inv.book_stock = (prev_inv.book_stock or prev_inv.current_stock or 0) + prev_quantity
 
     dispatch.project_id = request.form.get("project_id") or None
     dispatch.dispatch_number = request.form.get("dispatch_number") or dispatch.dispatch_number
@@ -8431,6 +8426,7 @@ def edit_dispatch(dispatch_id):
     dispatch.completed_at = None
     dispatch.status = "Draft"
 
+    existing_item = dispatch.items[0] if dispatch.items else None
     if not existing_item:
         existing_item = DeliveryChallanItem(delivery_challan_id=dispatch.id)
         db.session.add(existing_item)
@@ -8439,10 +8435,6 @@ def edit_dispatch(dispatch_id):
     existing_item.description = request.form.get("description")
     existing_item.unit = request.form.get("unit")
     existing_item.quantity_dispatched = quantity
-
-    _initialize_book_stock(target_inv)
-    target_inv.current_stock = (target_inv.current_stock or 0) - quantity
-    target_inv.book_stock = (target_inv.book_stock or target_inv.current_stock or 0) - quantity
 
     db.session.commit()
     flash("Delivery challan updated.", "success")
@@ -9243,8 +9235,12 @@ def ensure_inventory_item_columns():
 
     if "book_stock" not in cols:
         cur.execute("ALTER TABLE inventory_item ADD COLUMN book_stock REAL DEFAULT 0;")
-        cur.execute("UPDATE inventory_item SET book_stock = current_stock WHERE book_stock IS NULL OR book_stock = 0;")
         added.append("book_stock")
+
+    cur.execute(
+        "UPDATE inventory_item SET book_stock = current_stock "
+        "WHERE book_stock IS NULL OR (book_stock = 0 AND current_stock IS NOT NULL);"
+    )
 
     conn.commit()
     conn.close()
