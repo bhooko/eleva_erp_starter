@@ -9662,6 +9662,15 @@ def ensure_delivery_challan_columns():
     cur.execute("PRAGMA table_info(dispatch_item)")
     item_cols = {row[1] for row in cur.fetchall()}
     item_added = []
+    if "delivery_challan_id" not in item_cols:
+        cur.execute("ALTER TABLE dispatch_item ADD COLUMN delivery_challan_id INTEGER;")
+        item_added.append("delivery_challan_id")
+
+        if "dispatch_id" in item_cols:
+            cur.execute(
+                "UPDATE dispatch_item SET delivery_challan_id = dispatch_id "
+                "WHERE delivery_challan_id IS NULL;"
+            )
     if "delivery_order_item_id" not in item_cols:
         cur.execute("ALTER TABLE dispatch_item ADD COLUMN delivery_order_item_id INTEGER;")
         item_added.append("delivery_order_item_id")
