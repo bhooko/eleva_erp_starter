@@ -33,6 +33,7 @@ from sqlalchemy.orm import joinedload, subqueryload, load_only, object_session
 from sqlalchemy.engine.url import make_url
 
 from eleva_app import create_app, csrf, db, login_manager
+from utils.notifications import create_notification
 
 def _is_password_hashed(value: Optional[str]) -> bool:
     if not value or not isinstance(value, str):
@@ -5385,14 +5386,6 @@ def _get_design_board_payload():
     return statuses, tasks_by_status, ordered_tasks
 
 
-def _create_notification(user_id, message, link_url=None):
-    if not user_id or not message:
-        return None
-    note = Notification(user_id=user_id, message=message, link_url=link_url)
-    db.session.add(note)
-    return note
-
-
 @event.listens_for(DesignTask, "after_insert")
 def _notify_design_task_assignee(mapper, connection, target):
     if not target.assigned_to_user_id:
@@ -5548,6 +5541,16 @@ def design_task_status(task_id):
         return ("Invalid status", 400)
     task.status = status_value
     task.updated_at = datetime.datetime.utcnow()
+    if (
+        task.assigned_to_user_id
+        and task.assigned_to_user_id != current_user.id
+    ):
+        create_notification(
+            task.assigned_to_user_id,
+            f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+            url_for("design_task_detail", task_id=task.id),
+            commit=False,
+        )
     db.session.commit()
     if request.is_json:
         return {"ok": True, "status": status_value}
@@ -5566,6 +5569,16 @@ def design_task_detail(task_id):
     stage_options = _get_active_procurement_stages()
     default_stage = _get_default_procurement_stage()
 
+    def _notify_assignee(message, link_suffix=""):
+        assignee_id = getattr(task, "assigned_to_user_id", None)
+        if assignee_id and assignee_id != current_user.id:
+            create_notification(
+                assignee_id,
+                message,
+                f"{url_for('design_task_detail', task_id=task.id)}{link_suffix}",
+                commit=False,
+            )
+
     if request.method == "POST":
         action = request.form.get("action")
         if action == "comment":
@@ -5577,6 +5590,10 @@ def design_task_detail(task_id):
                         body=body,
                         author_id=current_user.id,
                     )
+                )
+                _notify_assignee(
+                    f"New comment on task '{task.description or task.project_label}' by {current_user.display_name}.",
+                    link_suffix="#comments",
                 )
                 db.session.commit()
                 flash("Comment added.", "success")
@@ -5611,8 +5628,11 @@ def design_task_detail(task_id):
                     file_name=filename,
                     change_reason=request.form.get("change_reason"),
                     changed_by_user_id=current_user.id,
-                )
+                    )
                 db.session.add(revision)
+                _notify_assignee(
+                    f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+                )
                 db.session.commit()
                 flash("Drawing revision uploaded.", "success")
         elif action == "bom_item":
@@ -5646,6 +5666,9 @@ def design_task_detail(task_id):
                 remarks=request.form.get("remarks"),
             )
             db.session.add(item)
+            _notify_assignee(
+                f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+            )
             db.session.commit()
             flash("BOM item added.", "success")
         elif action == "clarification":
@@ -5669,11 +5692,16 @@ def design_task_detail(task_id):
                 sales_user_id = opportunity.owner_id if opportunity else None
 
             if sales_user_id:
-                _create_notification(
+                create_notification(
                     sales_user_id,
                     f"Designer requested clarification on task {task.description or task.project_label}",
                     url_for("design_task_detail", task_id=task.id),
+                    commit=False,
                 )
+
+            _notify_assignee(
+                f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+            )
 
             db.session.commit()
             flash("Clarification request sent to sales.", "success")
@@ -5711,6 +5739,21 @@ def design_task_detail(task_id):
         stage_options=stage_options,
         default_stage=default_stage,
     )
+
+
+@app.route("/notifications")
+@login_required
+def notifications_list():
+    notifications = (
+        Notification.query.filter_by(user_id=current_user.id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update(
+        {"is_read": True}
+    )
+    db.session.commit()
+    return render_template("notifications_list.html", notifications=notifications)
 
 
 @app.route("/notifications/mark-read", methods=["POST"])
@@ -15042,6 +15085,12 @@ def project_apply_template(project_id):
                 actor_id=current_user.id,
                 details={"assigned_to": assigned_user.id}
             )
+            create_notification(
+                assigned_user.id,
+                f"You have been assigned a new task: {new_task.display_title}",
+                url_for("qc_work_detail", work_id=new_task.id),
+                commit=False,
+            )
         if status == "Blocked" and dependency_tasks:
             log_work_event(
                 new_task.id,
@@ -15193,6 +15242,12 @@ def project_task_create(project_id):
             "assigned",
             actor_id=current_user.id,
             details={"assigned_to": assigned_to}
+        )
+        create_notification(
+            assignee_user.id,
+            f"You have been assigned a new task: {work.display_title}",
+            url_for("qc_work_detail", work_id=work.id),
+            commit=False,
         )
     if status == "Blocked" and dependency_tasks:
         log_work_event(
@@ -20117,6 +20172,12 @@ def qc_work_new():
             actor_id=current_user.id,
             details={"assigned_to": assigned_to}
         )
+        create_notification(
+            assignee_user.id,
+            f"You have been assigned a new task: {work.display_title}",
+            url_for("qc_work_detail", work_id=work.id),
+            commit=False,
+        )
     db.session.commit()
     flash("QC work created.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
@@ -20229,6 +20290,20 @@ def qc_work_assign(work_id):
             actor_id=current_user.id,
             details={"from": previous, "to": work.assigned_to}
         )
+        if previous and previous != work.assigned_to:
+            create_notification(
+                previous,
+                f"Task '{work.display_title}' has been reassigned.",
+                url_for("qc_work_detail", work_id=work.id),
+                commit=False,
+            )
+        if work.assigned_to and work.assigned_to != previous and work.assigned_to != current_user.id:
+            create_notification(
+                work.assigned_to,
+                f"You have been assigned task '{work.display_title}'.",
+                url_for("qc_work_detail", work_id=work.id),
+                commit=False,
+            )
         db.session.commit()
         flash("Assignment updated.", "success")
     else:
@@ -20279,6 +20354,13 @@ def qc_work_comment(work_id):
         actor_id=current_user.id,
         details=log_details
     )
+    if work.assigned_to and work.assigned_to != current_user.id:
+        create_notification(
+            work.assigned_to,
+            f"New comment on task '{work.display_title}' by {current_user.display_name}.",
+            f"{url_for('qc_work_detail', work_id=work.id)}#comments",
+            commit=False,
+        )
     db.session.commit()
     flash("Comment added.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))
@@ -20337,6 +20419,13 @@ def qc_work_status(work_id, action):
         release_dependent_tasks(work, actor_id=current_user.id)
     elif action == "reopen":
         block_child_tasks(work, actor_id=current_user.id)
+    if work.assigned_to and work.assigned_to != current_user.id:
+        create_notification(
+            work.assigned_to,
+            f"Task '{work.display_title}' was updated by {current_user.display_name}.",
+            url_for("qc_work_detail", work_id=work.id),
+            commit=False,
+        )
     db.session.commit()
     flash(f"Work status changed to {new_status}.", "success")
     return redirect(url_for("qc_work_detail", work_id=work.id))

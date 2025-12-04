@@ -109,6 +109,11 @@ class User(UserMixin, db.Model):
     module_permissions_json = db.Column(db.Text, nullable=False, default="{}")
 
     position = db.relationship("Position", back_populates="users")
+    notifications = db.relationship(
+        "Notification",
+        backref="user",
+        lazy="dynamic",
+    )
 
     @property
     def display_name(self):
