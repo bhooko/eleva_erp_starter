@@ -24,7 +24,12 @@
           {% endif %}
         </div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-700">
-          <div class="p-3 bg-slate-50 rounded-xl">Project No.: <strong>{{ site.project_no or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">
+            Project No.: <strong>{{ site.project_no or '—' }}</strong>
+            {% if site.project_id %}
+            <div><a href="{{ url_for('project_detail', project_id=site.project_id) }}" class="text-orange-600 text-xs">Open project</a></div>
+            {% endif %}
+          </div>
           <div class="p-3 bg-slate-50 rounded-xl">Lift Type: <strong>{{ site.lift_type or '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Lift Identifier: <strong>{{ site.lift_identifier or '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Latest Drawing: <strong>{{ site.latest_drawing_number or '—' }}</strong></div>
