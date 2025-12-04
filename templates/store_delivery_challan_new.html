@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}New Delivery Challan{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Create Delivery Challan</h1>
+      <p class="text-sm text-slate-600">Issue material against Delivery Order {{ order.do_number }}.</p>
+    </div>
+    <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="text-sm text-orange-600 hover:underline">Back to DO</a>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div>
+        <p class="text-xs text-slate-500">Project / Site</p>
+        <p class="text-base font-semibold">{{ order.project_or_site }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">Receiver</p>
+        <p class="text-base font-semibold">{{ order.receiver_name }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">Status</p>
+        <p class="text-base font-semibold">{{ order.status }}</p>
+      </div>
+    </div>
+
+    <form method="POST" class="space-y-4">
+      {{ csrf_field() }}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2">Item</th>
+              <th class="py-2">Reserved</th>
+              <th class="py-2">Delivered</th>
+              <th class="py-2">Remaining</th>
+              <th class="py-2">Quantity to deliver</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for ctx in items %}
+            <tr>
+              <td class="py-2">{{ ctx.record.product_name }}</td>
+              <td class="py-2">{{ '%.2f'|format(ctx.reserved) }}</td>
+              <td class="py-2">{{ '%.2f'|format(ctx.delivered) }}</td>
+              <td class="py-2">{{ '%.2f'|format(ctx.remaining) }}</td>
+              <td class="py-2">
+                <input type="number" step="0.01" min="0" max="{{ ctx.remaining }}" name="item_{{ ctx.record.id }}_qty" value="{{ ctx.remaining }}" class="w-32 rounded-lg border-slate-200" />
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="py-3 text-slate-500">No items on this Delivery Order.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="px-4 py-2 rounded-lg border border-slate-200">Cancel</a>
+        <button type="submit" class="px-5 py-2 bg-orange-500 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create & Deliver</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
