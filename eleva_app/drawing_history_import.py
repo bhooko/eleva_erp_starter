@@ -1,5 +1,4 @@
 import datetime
-import importlib
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -9,14 +8,12 @@ from eleva_app import db
 from eleva_app.models import DrawingSite, DrawingVersion
 from eleva_app.uploads import _extract_tabular_upload
 from app import (
-    MissingDependencyError,
-    OPENPYXL_MISSING_MESSAGE,
-    PANDAS_MISSING_MESSAGE,
     UploadStageTimeoutError,
     clean_str,
     parse_int_field,
     stringify_cell,
 )
+from utils.excel_utils import iter_rows_from_xlsx
 
 
 REQUIRED_HEADERS = {
@@ -65,12 +62,6 @@ INTEGER_HEADERS = {
 }
 
 
-def _get_pandas():
-    if importlib.util.find_spec("pandas") is None:
-        raise MissingDependencyError(PANDAS_MISSING_MESSAGE)
-    return importlib.import_module("pandas")
-
-
 @dataclass
 class DrawingHistoryUploadResult:
     processed_rows: int = 0
@@ -100,23 +91,15 @@ def _parse_int(value, label):
 
 
 def _extract_drawing_history_upload(upload):
-    pd = _get_pandas()
     filename = (upload.filename or "").lower()
     if filename.endswith(".xlsx"):
-        from app import _ensure_openpyxl
-
-        _ensure_openpyxl()
         upload.stream.seek(0)
-        df_raw = pd.read_excel(upload, header=None)
-        if df_raw.empty:
-            return [], []
-
-        header_row = df_raw.iloc[0].fillna("")
-        df = df_raw.iloc[1:].copy()
-        df.columns = header_row
-        df = df.loc[:, df.columns.astype(str).str.strip() != ""]
-        df.columns = [str(column).strip() for column in df.columns]
-        return list(df.columns), df.values.tolist()
+        headers, row_dicts = iter_rows_from_xlsx(upload.stream)
+        data_rows = [
+            [row_dict.get(header) for header in headers]
+            for row_dict in row_dicts
+        ]
+        return headers, data_rows
 
     return _extract_tabular_upload(upload)
 
@@ -161,9 +144,6 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
 
     try:
         header_cells, data_rows = _extract_drawing_history_upload(upload)
-    except MissingDependencyError:
-        result.fatal_error = OPENPYXL_MISSING_MESSAGE
-        return result
     except ValueError:
         result.fatal_error = "Upload a valid .xlsx or .csv Drawing History file."
         return result
