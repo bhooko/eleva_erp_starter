@@ -1,4 +1,5 @@
 import os
+import datetime
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
@@ -47,6 +48,17 @@ def create_app():
     app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
         app.config["ADMIN_SETTINGS"]
     )
+    app.config["PURCHASE_ODOO_IMPORT_ENABLED"] = (
+        str(os.environ.get("PURCHASE_ODOO_IMPORT_ENABLED", "true")).strip().lower()
+        in {"1", "true", "yes", "y", "on"}
+    )
+    go_live_raw = os.environ.get("ERP_PO_GO_LIVE_DATE")
+    try:
+        app.config["ERP_PO_GO_LIVE_DATE"] = (
+            datetime.date.fromisoformat(go_live_raw) if go_live_raw else None
+        )
+    except ValueError:
+        app.config["ERP_PO_GO_LIVE_DATE"] = None
 
     db.init_app(app)
     login_manager.init_app(app)
