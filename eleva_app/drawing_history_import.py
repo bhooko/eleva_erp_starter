@@ -37,6 +37,8 @@ REQUIRED_HEADERS = {
     "NO. OF SIDES OF STRUCT.",
 }
 
+OPTIONAL_HEADERS = {"LIFT IDENTIFIER"}
+
 FIELD_MAP = {
     "Project No.": "project_no",
     "CLIENT NAME": "client_name",
@@ -46,6 +48,7 @@ FIELD_MAP = {
     "REV. NO.": "rev_no",
     "DRG APPROVAL": "drg_approval",
     "LIFT TYPE": "lift_type",
+    "LIFT IDENTIFIER": "lift_identifier",
     "SHAFT INNER DIMS (Actual)": "shaft_inner_dims",
     "CAR INNER DIMS": "car_inner_dims",
     "NO. OF PASS. (Actual)": "num_pass_actual",
@@ -118,13 +121,16 @@ def _extract_drawing_history_upload(upload):
     return _extract_tabular_upload(upload)
 
 
-def _find_or_create_site(project_no, client_name, site_location, lift_type):
+def _find_or_create_site(
+    project_no, client_name, site_location, lift_type, lift_identifier=None
+):
     existing_site = (
         DrawingSite.query.filter(
             DrawingSite.project_no == project_no,
             DrawingSite.client_name == client_name,
             DrawingSite.site_location == site_location,
             DrawingSite.lift_type == lift_type,
+            DrawingSite.lift_identifier == lift_identifier,
         )
         .order_by(DrawingSite.id.asc())
         .first()
@@ -138,6 +144,7 @@ def _find_or_create_site(project_no, client_name, site_location, lift_type):
         client_name=client_name,
         site_location=site_location,
         lift_type=lift_type,
+        lift_identifier=lift_identifier,
     )
     db.session.add(site)
     db.session.flush()
@@ -150,6 +157,7 @@ def _apply_latest_version(site: DrawingSite):
 
 def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
     result = DrawingHistoryUploadResult()
+    touched_sites = []
 
     try:
         header_cells, data_rows = _extract_drawing_history_upload(upload)
@@ -183,6 +191,15 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
             + ", ".join(sorted(missing_headers))
         )
         return result
+
+    # Add any optional headers that are present to the header map
+    for header in OPTIONAL_HEADERS:
+        if header in header_map:
+            continue
+        for candidate in header_map.keys():
+            if candidate.strip().lower() == header.lower():
+                header_map[header] = header_map[candidate]
+                break
 
     for row_index, row_values in enumerate(data_rows or [], start=2):
         if not row_values:
@@ -224,6 +241,7 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
             mapped_values.get("client_name"),
             mapped_values.get("site_location"),
             mapped_values.get("lift_type"),
+            mapped_values.get("lift_identifier"),
         )
 
         # Keep the site record aligned with the latest metadata from the sheet.
@@ -231,6 +249,7 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
         site.client_name = mapped_values.get("client_name") or site.client_name
         site.site_location = mapped_values.get("site_location") or site.site_location
         site.lift_type = mapped_values.get("lift_type") or site.lift_type
+        site.lift_identifier = mapped_values.get("lift_identifier") or site.lift_identifier
 
         version = (
             DrawingVersion.query.filter(
@@ -265,6 +284,19 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
 
         _apply_latest_version(site)
         site.last_updated = datetime.datetime.utcnow()
+        touched_sites.append(site)
+
+    for site in {s for s in touched_sites if s}:
+        _apply_latest_version(site)
+        if site.versions and not site.last_updated:
+            latest = sorted(
+                site.versions,
+                key=lambda v: (v.created_at or datetime.datetime.min, v.id or 0),
+                reverse=True,
+            )
+            site.last_updated = (
+                latest[0].created_at if latest and latest[0].created_at else datetime.datetime.utcnow()
+            )
 
     try:
         db.session.commit()
