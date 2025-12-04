@@ -1894,6 +1894,7 @@ class PurchaseOrder(db.Model):
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     subtotal_amount = db.Column(db.Float, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    origin = db.Column(db.String(40), nullable=True, default="erp")
 
     project = db.relationship("Project")
     vendor = db.relationship("Vendor")

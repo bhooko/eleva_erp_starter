@@ -22,18 +22,23 @@
         <span class="text-sm">Vendor</span>
         <select name="vendor_id" class="w-full rounded-lg border-slate-200">
           <option value="">All</option>
-          {% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.name }}</option>{% endfor %}
+          {% for vendor in vendors %}<option value="{{ vendor.id }}" {% if vendor.id|string == request.args.get('vendor_id') %}selected{% endif %}>{{ vendor.name }}</option>{% endfor %}
         </select>
       </label>
       <label class="space-y-1">
         <span class="text-sm">Start date</span>
-        <input type="date" name="start_date" class="w-full rounded-lg border-slate-200" />
+        <input type="date" name="start_date" value="{{ request.args.get('start_date','') }}" class="w-full rounded-lg border-slate-200" />
       </label>
       <label class="space-y-1">
         <span class="text-sm">End date</span>
-        <input type="date" name="end_date" class="w-full rounded-lg border-slate-200" />
+        <input type="date" name="end_date" value="{{ request.args.get('end_date','') }}" class="w-full rounded-lg border-slate-200" />
       </label>
-      <div class="md:col-span-4 flex justify-end">
+      <label class="space-y-1 inline-flex items-center gap-2">
+        <input type="checkbox" name="include_odoo" value="1" {% if include_odoo %}checked{% endif %} class="rounded border-slate-300" />
+        <span class="text-sm">Include Odoo history</span>
+      </label>
+      <div class="md:col-span-4 flex justify-end gap-3">
+        <a href="{{ url_for('purchase_reports') }}" class="px-4 py-2 rounded-lg border">Reset</a>
         <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Apply filters</button>
       </div>
     </form>
@@ -52,6 +57,7 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-slate-500">
+              <th class="py-1">Source</th>
               <th class="py-1">PO</th>
               <th class="py-1">Vendor</th>
               <th class="py-1">Date</th>
@@ -61,13 +67,14 @@
           <tbody class="divide-y">
             {% for row in history_rows %}
             <tr>
-              <td class="py-1">{{ row.PurchaseOrder.po_number }}</td>
-              <td class="py-1">{{ row.Vendor.name if row.Vendor else '—' }}</td>
-              <td class="py-1">{{ row.PurchaseOrder.order_date }}</td>
-              <td class="py-1">{{ row.PurchaseOrderItem.unit_price or 0 }}</td>
+              <td class="py-1"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ row.source }}</span></td>
+              <td class="py-1">{{ row.po_number }}</td>
+              <td class="py-1">{{ row.vendor }}</td>
+              <td class="py-1">{{ row.date or '—' }}</td>
+              <td class="py-1">{{ row.unit_price or 0 }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="py-2 text-slate-500">No data for filters.</td></tr>
+            <tr><td colspan="5" class="py-2 text-slate-500">No data for filters.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -112,18 +119,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const ctx = document.getElementById('priceChart');
+  const datasets = {{ chart_datasets|tojson }};
   const chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: {{ chart_labels|tojson }},
-      datasets: [{
-        label: 'Unit Price',
-        data: {{ chart_values|tojson }},
-        borderColor: '#fb923c',
-        backgroundColor: 'rgba(251, 146, 60, 0.15)',
-        tension: 0.35,
-        fill: true,
-      }]
+      datasets: datasets.map(ds => ({
+        ...ds,
+      }))
     },
     options: {
       responsive: true,

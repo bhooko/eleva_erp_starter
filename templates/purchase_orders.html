@@ -7,38 +7,11 @@
       <p class="text-sm uppercase text-slate-500">Purchase</p>
       <h1 class="text-2xl font-semibold">Purchase Orders</h1>
       <p class="text-sm text-slate-600">Browse existing POs and add new ones from the modal.</p>
+      <p class="text-xs text-slate-500 mt-1">This is an Eleva ERP Purchase Order workspace. All new purchasing must be done here. Odoo POs are only for historical reference.</p>
     </div>
     <div class="flex items-center gap-3">
-      <label for="upload-po-odoo" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Purchase Orders (Odoo)</label>
       <label for="new-po" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New PO</label>
-    </div>
-  </div>
-
-  <div class="relative">
-    <input type="checkbox" id="upload-po-odoo" class="hidden peer" />
-    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-po-odoo').checked=false;"></div>
-    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
-        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
-          <div>
-            <p class="text-xs text-slate-500 uppercase">Purchase order import</p>
-            <h2 class="text-lg font-semibold">Upload Purchase Orders (Odoo)</h2>
-          </div>
-          <button class="text-slate-500" type="button" onclick="document.getElementById('upload-po-odoo').checked=false;">✕</button>
-        </div>
-        <form method="POST" action="{{ url_for('purchase_orders_upload_odoo') }}" enctype="multipart/form-data" class="p-5 space-y-4">
-          {{ csrf_field() }}
-          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Purchase Order (purchase.order).xlsx</span> export (.xlsx or .csv). The sheet must include columns: Billing Status, Buyer, Confirmation Date, Expected Arrival, Order Reference, Priority, Total, Vendor, Product. Source Document is optional.</p>
-          <label class="space-y-1 block">
-            <span class="text-sm text-slate-600">Upload file</span>
-            <input type="file" name="purchase_order_upload_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
-          </label>
-          <div class="flex items-center justify-end gap-3 pt-2">
-            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-po-odoo').checked=false;">Cancel</button>
-            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Purchase Orders</button>
-          </div>
-        </form>
-      </div>
+      <a href="{{ url_for('purchase_odoo_history') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50">Historical POs (Odoo)</a>
     </div>
   </div>
 
@@ -50,6 +23,7 @@
         <div>
           <p class="text-xs text-slate-500 uppercase">Purchase</p>
           <h2 class="text-lg font-semibold">Create purchase order</h2>
+          <p class="text-xs text-slate-500">This is an Eleva ERP Purchase Order. All new purchasing must be done here. Odoo POs are only for historical reference.</p>
         </div>
         <button class="text-slate-500" onclick="document.getElementById('new-po').checked=false;">✕</button>
       </div>
@@ -157,6 +131,7 @@
       <thead>
         <tr class="text-left text-slate-500">
           <th class="py-3 px-4">PO Number</th>
+          <th class="py-3 px-4">Source</th>
           <th class="py-3 px-4">Vendor</th>
           <th class="py-3 px-4">Project</th>
           <th class="py-3 px-4">Stage / BOM</th>
@@ -173,6 +148,7 @@
           <td class="py-3 px-4 font-semibold text-slate-800">
             <a href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}" class="hover:underline">{{ po.po_number }}</a>
           </td>
+          <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ (po.origin or 'erp')|upper }}</span></td>
           <td class="py-3 px-4">{{ po.vendor.name if po.vendor else 'No vendor' }}</td>
           <td class="py-3 px-4">{{ po.project.name if po.project else 'General' }}</td>
           <td class="py-3 px-4 text-slate-700">

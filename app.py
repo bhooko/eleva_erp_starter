@@ -52,6 +52,13 @@ def _get_timeout_env(name: str, default: int) -> int:
     return default
 
 
+def _is_odoo_import_enabled() -> bool:
+    try:
+        return bool(current_app.config.get("PURCHASE_ODOO_IMPORT_ENABLED", True))
+    except RuntimeError:
+        return True
+
+
 OPENPYXL_AVAILABLE = importlib.util.find_spec("openpyxl") is not None
 
 if OPENPYXL_AVAILABLE:
@@ -6143,6 +6150,7 @@ def purchase_orders():
             expected_delivery_date=expected_delivery_date,
             created_by_user_id=current_user.id,
             notes=notes,
+            origin="erp",
         )
         db.session.add(po)
         db.session.flush()
@@ -6447,6 +6455,7 @@ def generate_po_from_bom(bom_id):
                     order_date=date.today(),
                     created_by_user_id=current_user.id,
                     notes=notes_combined,
+                    origin="erp",
                 )
                 db.session.add(po)
                 db.session.flush()
@@ -6522,6 +6531,19 @@ def generate_po_from_bom(bom_id):
 @login_required
 def purchase_orders_upload_odoo():
     ensure_bootstrap()
+
+    if not _is_odoo_import_enabled():
+        return render_template(
+            "purchase_order_upload_result.html",
+            processed_rows=0,
+            created_count=0,
+            updated_count=0,
+            rows_with_errors=0,
+            row_errors=[],
+            fatal_error=(
+                "Odoo PO import is disabled. All new POs must be created directly in Eleva ERP."
+            ),
+        )
 
     def _render_result(
         *,
@@ -6756,14 +6778,80 @@ def purchase_orders_upload_odoo():
     )
 
 
+@app.route("/purchase/odoo-history")
+@login_required
+def purchase_odoo_history():
+    ensure_bootstrap()
+    order_ref = request.args.get("order_ref")
+    vendor = request.args.get("vendor")
+    product = request.args.get("product")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    query = PurchaseOrderLine.query.filter(PurchaseOrderLine.is_active.is_(True))
+    if order_ref:
+        query = query.filter(PurchaseOrderLine.order_ref.ilike(f"%{order_ref}%"))
+    if vendor:
+        query = query.filter(PurchaseOrderLine.vendor_name.ilike(f"%{vendor}%"))
+    if product:
+        query = query.filter(PurchaseOrderLine.product_name.ilike(f"%{product}%"))
+
+    def _parse_filter_date(value: str):
+        try:
+            return datetime.datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+
+    start_dt = _parse_filter_date(start_date)
+    end_dt = _parse_filter_date(end_date)
+
+    if start_dt:
+        query = query.filter(
+            PurchaseOrderLine.confirmation_date
+            >= datetime.datetime.combine(start_dt, datetime.time.min)
+        )
+    if end_dt:
+        query = query.filter(
+            PurchaseOrderLine.confirmation_date
+            <= datetime.datetime.combine(end_dt, datetime.time.max)
+        )
+
+    rows = (
+        query.order_by(
+            PurchaseOrderLine.confirmation_date.desc().nullslast(),
+            PurchaseOrderLine.id.desc(),
+        )
+        .limit(500)
+        .all()
+    )
+
+    return render_template(
+        "purchase_odoo_history.html",
+        rows=rows,
+        order_ref_filter=order_ref or "",
+        vendor_filter=vendor or "",
+        product_filter=product or "",
+        start_date=start_date or "",
+        end_date=end_date or "",
+        odoo_import_enabled=_is_odoo_import_enabled(),
+        go_live_date=current_app.config.get("ERP_PO_GO_LIVE_DATE"),
+    )
+
+
 @app.route("/purchase/reports")
 @login_required
 def purchase_reports():
     ensure_bootstrap()
     item_code = request.args.get("item_code")
-    vendor_id = request.args.get("vendor_id")
+    vendor_id_raw = request.args.get("vendor_id")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+    include_odoo = request.args.get("include_odoo") in {"1", "true", "on", "yes"}
+
+    try:
+        vendor_id = int(vendor_id_raw) if vendor_id_raw else None
+    except (TypeError, ValueError):
+        vendor_id = None
 
     history_query = (
         db.session.query(PurchaseOrderItem, PurchaseOrder, Vendor)
@@ -6779,13 +6867,17 @@ def purchase_reports():
             start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
             history_query = history_query.filter(PurchaseOrder.order_date >= start_dt)
         except ValueError:
-            pass
+            start_dt = None
+    else:
+        start_dt = None
     if end_date:
         try:
             end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
             history_query = history_query.filter(PurchaseOrder.order_date <= end_dt)
         except ValueError:
-            pass
+            end_dt = None
+    else:
+        end_dt = None
 
     history_rows = history_query.order_by(PurchaseOrder.order_date).all()
 
@@ -6806,22 +6898,112 @@ def purchase_reports():
     items = db.session.query(PurchaseOrderItem.item_code).distinct().all()
     vendors = Vendor.query.order_by(Vendor.name).all()
 
-    chart_labels = [
-        row.PurchaseOrder.order_date.strftime("%d %b") if row.PurchaseOrder.order_date else ""
+    combined_rows = [
+        {
+            "source": "ERP",
+            "po_number": row.PurchaseOrder.po_number,
+            "vendor": row.Vendor.name if row.Vendor else "—",
+            "date": row.PurchaseOrder.order_date,
+            "unit_price": row.PurchaseOrderItem.unit_price or 0,
+        }
         for row in history_rows
     ]
-    chart_values = [row.PurchaseOrderItem.unit_price or 0 for row in history_rows]
+
+    if include_odoo:
+        odoo_query = PurchaseOrderLine.query.filter(PurchaseOrderLine.is_active.is_(True))
+        if item_code:
+            odoo_query = odoo_query.filter(
+                PurchaseOrderLine.product_name.ilike(f"%{item_code}%")
+            )
+        if vendor_id:
+            vendor_record = Vendor.query.get(vendor_id)
+            if vendor_record and vendor_record.name:
+                odoo_query = odoo_query.filter(
+                    PurchaseOrderLine.vendor_name.ilike(
+                        f"%{vendor_record.name}%"
+                    )
+                )
+        if start_dt:
+            odoo_query = odoo_query.filter(
+                PurchaseOrderLine.confirmation_date
+                >= datetime.datetime.combine(start_dt, datetime.time.min)
+            )
+        if end_dt:
+            odoo_query = odoo_query.filter(
+                PurchaseOrderLine.confirmation_date
+                <= datetime.datetime.combine(end_dt, datetime.time.max)
+            )
+
+        odoo_rows = odoo_query.order_by(PurchaseOrderLine.confirmation_date).all()
+        combined_rows.extend(
+            [
+                {
+                    "source": "Odoo",
+                    "po_number": row.order_ref,
+                    "vendor": row.vendor_name,
+                    "date": row.confirmation_date.date() if row.confirmation_date else None,
+                    "unit_price": float(row.total_amount or 0),
+                }
+                for row in odoo_rows
+            ]
+        )
+
+    combined_rows.sort(key=lambda row: (row["date"] or date.min, row["po_number"]))
+
+    chart_label_keys = sorted(
+        {row["date"].strftime("%Y-%m-%d") for row in combined_rows if row["date"]}
+    )
+    chart_labels = [
+        datetime.datetime.strptime(label, "%Y-%m-%d").strftime("%d %b")
+        for label in chart_label_keys
+    ]
+
+    def _series(source_name: str):
+        grouped = defaultdict(list)
+        for row in combined_rows:
+            if row["source"] != source_name or not row["date"]:
+                continue
+            label = row["date"].strftime("%Y-%m-%d")
+            grouped[label].append(row["unit_price"] or 0)
+        return [
+            sum(grouped.get(label, []) or [0]) / max(len(grouped.get(label, [])) or 1, 1)
+            for label in chart_label_keys
+        ]
+
+    chart_datasets = [
+        {
+            "label": "ERP",
+            "data": _series("ERP"),
+            "borderColor": "#fb923c",
+            "backgroundColor": "rgba(251, 146, 60, 0.15)",
+            "tension": 0.35,
+            "fill": True,
+        }
+    ]
+
+    if include_odoo:
+        chart_datasets.append(
+            {
+                "label": "Odoo",
+                "data": _series("Odoo"),
+                "borderColor": "#475569",
+                "backgroundColor": "rgba(71, 85, 105, 0.15)",
+                "tension": 0.35,
+                "fill": True,
+            }
+        )
 
     return render_template(
         "purchase_reports.html",
-        history_rows=history_rows,
+        history_rows=combined_rows,
         vendor_summary=vendor_summary,
         project_summary=project_summary,
         items=items,
         vendors=vendors,
         selected_item=item_code,
         chart_labels=chart_labels,
-        chart_values=chart_values,
+        chart_datasets=chart_datasets,
+        include_odoo=include_odoo,
     )
 
 
