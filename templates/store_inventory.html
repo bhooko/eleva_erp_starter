@@ -180,7 +180,9 @@
         <tr class="text-left text-slate-500">
           <th class="py-2">Item code</th>
           <th class="py-2">Description</th>
-          <th class="py-2">Usable</th>
+          <th class="py-2">Physical stock</th>
+          <th class="py-2">Book stock</th>
+          <th class="py-2">Reserved</th>
           <th class="py-2">Quarantine</th>
           <th class="py-2">Location</th>
         </tr>
@@ -191,11 +193,13 @@
           <td class="py-2"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-900 font-semibold hover:underline">{{ item.item_code }}</a></td>
           <td class="py-2">{{ item.description }}</td>
           <td class="py-2">{{ item.current_stock }}</td>
+          <td class="py-2">{{ item.book_stock }}</td>
+          <td class="py-2">{{ (item.current_stock or 0) - (item.book_stock or 0) }}</td>
           <td class="py-2">{{ item.quarantined_stock }}</td>
           <td class="py-2">{{ item.location or 'Main Store' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="py-3 text-slate-500">No inventory captured yet.</td></tr>
+        <tr><td colspan="7" class="py-3 text-slate-500">No inventory captured yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

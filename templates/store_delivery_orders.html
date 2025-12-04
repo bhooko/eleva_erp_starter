@@ -38,8 +38,8 @@
           <td class="py-3 px-4">{{ order.project_or_site }}</td>
           <td class="py-3 px-4">{{ order.receiver_name }}</td>
           <td class="py-3 px-4">
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700' if order.status == 'Dispatched' else 'bg-slate-100 text-slate-700' }}">
-              {{ order.status or 'Created' }}
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if order.status in ['Confirmed', 'Completed'] else 'bg-amber-100 text-amber-700' if order.status == 'Partially Delivered' else 'bg-slate-100 text-slate-700' }}">
+              {{ order.status or 'Draft' }}
             </span>
           </td>
           <td class="py-3 px-4">{{ order.date_created.date() if order.date_created else '—' }}</td>

@@ -23,7 +23,7 @@
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
       <p class="text-xs text-slate-500">Status</p>
       <div class="flex items-center gap-2">
-        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700' if order.status == 'Dispatched' else 'bg-slate-100 text-slate-700' }}">{{ order.status }}</span>
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if order.status in ['Completed', 'Confirmed'] else 'bg-amber-100 text-amber-700' if order.status == 'Partially Delivered' else 'bg-slate-100 text-slate-700' }}">{{ order.status }}</span>
         {% if order.dispatched_by %}
           <span class="text-xs text-slate-500">by {{ order.dispatched_by.display_name }} on {{ order.dispatched_at.strftime('%Y-%m-%d %H:%M') if order.dispatched_at else '' }}</span>
         {% endif %}
@@ -56,7 +56,9 @@
         <thead>
           <tr class="text-left text-slate-500">
             <th class="py-2">Product</th>
-            <th class="py-2">Quantity</th>
+            <th class="py-2">Requested</th>
+            <th class="py-2">Reserved</th>
+            <th class="py-2">Delivered</th>
             <th class="py-2">UOM</th>
             <th class="py-2">Remarks</th>
           </tr>
@@ -65,7 +67,9 @@
           {% for item in order.items %}
           <tr>
             <td class="py-2">{{ item.product_name }}</td>
-            <td class="py-2">{{ '%.2f'|format(item.quantity or 0) }}</td>
+            <td class="py-2">{{ '%.2f'|format(item.requested_qty or 0) }}</td>
+            <td class="py-2">{{ '%.2f'|format(item.reserved_qty or item.requested_qty or 0) }}</td>
+            <td class="py-2">{{ '%.2f'|format(item.delivered_qty_total or 0) }}</td>
             <td class="py-2">{{ item.uom or '—' }}</td>
             <td class="py-2">{{ item.remarks or '—' }}</td>
           </tr>
@@ -77,11 +81,14 @@
     </div>
 
     {% if can_dispatch %}
-    <div class="flex justify-end">
-      <form method="POST" action="{{ url_for('dispatch_delivery_order', order_id=order.id) }}" onsubmit="return confirm('Mark this Delivery Order as dispatched?');">
+    <div class="flex justify-end gap-3">
+      {% if order.status in ['Draft', 'Created'] %}
+      <form method="POST" action="{{ url_for('confirm_delivery_order', order_id=order.id) }}" onsubmit="return confirm('Confirm this Delivery Order and reserve book stock?');">
         {{ csrf_field() }}
-        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition {{ 'opacity-50 cursor-not-allowed' if order.status == 'Dispatched' else '' }}" {% if order.status == 'Dispatched' %}disabled{% endif %}>Mark as Dispatched</button>
+        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Confirm Delivery Order</button>
       </form>
+      {% endif %}
+      <a href="{{ url_for('create_delivery_challan_from_do', order_id=order.id) }}" class="px-5 py-2 bg-orange-500 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create Delivery Challan</a>
     </div>
     {% endif %}
   </div>

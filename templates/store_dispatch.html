@@ -108,8 +108,8 @@
           <td class="py-3 px-4">{{ dispatch.vehicle_details or '—' }}</td>
           <td class="py-3 px-4">{{ dispatch.driver_name or '—' }}</td>
           <td class="py-3 px-4">
-            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700' if dispatch.is_completed else 'bg-amber-100 text-amber-700' }}">
-              {{ 'Completed' if dispatch.is_completed else 'Open' }}
+            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700' if dispatch.status == 'Delivered' else 'bg-amber-100 text-amber-700' }}">
+              {{ dispatch.status or 'Draft' }}
             </span>
           </td>
           <td class="py-3 px-4 text-right space-x-2">

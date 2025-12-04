@@ -2002,6 +2002,7 @@ class InventoryItem(db.Model):
     description = db.Column(db.String(255), nullable=True)
     unit = db.Column(db.String(20), nullable=True)
     current_stock = db.Column(db.Float, default=0)
+    book_stock = db.Column(db.Float, default=0)
     quarantined_stock = db.Column(db.Float, default=0)
     location = db.Column(db.String(120), nullable=True)
 
@@ -2059,14 +2060,21 @@ class InventoryReceiptItem(db.Model):
     purchase_order_item = db.relationship("PurchaseOrderItem")
 
 
-class Dispatch(db.Model):
+class DeliveryChallan(db.Model):
     __tablename__ = "dispatch"
 
     id = db.Column(db.Integer, primary_key=True)
+    delivery_order_id = db.Column(
+        db.Integer, db.ForeignKey("delivery_order.id"), nullable=True
+    )
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
-    dispatch_number = db.Column(db.String(80), nullable=False)
-    dispatch_date = db.Column(db.Date, nullable=True)
+    dc_number = db.Column("dispatch_number", db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    delivered_at = db.Column(db.DateTime, nullable=True)
     dispatched_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="Draft")
+    dispatch_date = db.Column(db.Date, nullable=True)
     vehicle_details = db.Column(db.String(150), nullable=True)
     driver_name = db.Column(db.String(120), nullable=True)
     notes = db.Column(db.Text, nullable=True)
@@ -2074,20 +2082,43 @@ class Dispatch(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
 
     project = db.relationship("Project")
-    dispatched_by = db.relationship("User")
+    dispatched_by = db.relationship("User", foreign_keys=[dispatched_by_user_id])
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id])
+    delivery_order = db.relationship("DeliveryOrder")
+
+    @property
+    def dispatch_number(self):
+        return self.dc_number
+
+    @dispatch_number.setter
+    def dispatch_number(self, value):
+        self.dc_number = value
 
 
-class DispatchItem(db.Model):
+class DeliveryChallanItem(db.Model):
     __tablename__ = "dispatch_item"
 
     id = db.Column(db.Integer, primary_key=True)
-    dispatch_id = db.Column(db.Integer, db.ForeignKey("dispatch.id"), nullable=False)
+    delivery_challan_id = db.Column(db.Integer, db.ForeignKey("dispatch.id"), nullable=False)
+    delivery_order_item_id = db.Column(
+        db.Integer, db.ForeignKey("delivery_order_item.id"), nullable=True
+    )
     item_code = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     unit = db.Column(db.String(20), nullable=True)
-    quantity_dispatched = db.Column(db.Float, nullable=False, default=0)
+    qty_delivered = db.Column("quantity_dispatched", db.Float, nullable=False, default=0)
 
-    dispatch = db.relationship("Dispatch", backref="items")
+    delivery_challan = db.relationship(
+        "DeliveryChallan", backref=db.backref("items", cascade="all, delete-orphan")
+    )
+
+    @property
+    def quantity_dispatched(self):
+        return self.qty_delivered
+
+    @quantity_dispatched.setter
+    def quantity_dispatched(self, value):
+        self.qty_delivered = value
 
 
 class DeliveryOrder(db.Model):
@@ -2095,12 +2126,15 @@ class DeliveryOrder(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     do_number = db.Column(db.String(120), nullable=False, unique=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    related_po_id = db.Column(db.Integer, db.ForeignKey("purchase_order.id"), nullable=True)
+    stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
     date_created = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     project_or_site = db.Column(db.String(255), nullable=False)
     receiver_name = db.Column(db.String(255), nullable=False)
     remarks = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(40), nullable=False, default="Created")
+    status = db.Column(db.String(40), nullable=False, default="Draft")
     dispatched_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     dispatched_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
@@ -2110,6 +2144,9 @@ class DeliveryOrder(db.Model):
 
     created_by = db.relationship("User", foreign_keys=[created_by_user_id])
     dispatched_by = db.relationship("User", foreign_keys=[dispatched_by_user_id])
+    project = db.relationship("Project")
+    related_po = db.relationship("PurchaseOrder")
+    stage = db.relationship("ProcurementStage")
 
 
 class DeliveryOrderItem(db.Model):
@@ -2119,10 +2156,21 @@ class DeliveryOrderItem(db.Model):
     delivery_order_id = db.Column(
         db.Integer, db.ForeignKey("delivery_order.id"), nullable=False
     )
+    item_code = db.Column(db.String(255), nullable=False)
     product_name = db.Column(db.String(255), nullable=False)
-    quantity = db.Column(db.Float, nullable=False)
+    requested_qty = db.Column("quantity", db.Float, nullable=False)
+    reserved_qty = db.Column(db.Float, nullable=False, default=0)
+    delivered_qty_total = db.Column(db.Float, nullable=False, default=0)
     uom = db.Column(db.String(80), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
+
+    @property
+    def quantity(self):
+        return self.requested_qty
+
+    @quantity.setter
+    def quantity(self, value):
+        self.requested_qty = value
 
     delivery_order = db.relationship(
         "DeliveryOrder", backref=db.backref("items", cascade="all, delete-orphan")

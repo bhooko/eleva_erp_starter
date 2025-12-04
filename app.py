@@ -4909,8 +4909,8 @@ from eleva_app.models import (
     DesignTask,
     DesignTaskComment,
     Notification,
-    Dispatch,
-    DispatchItem,
+    DeliveryChallan,
+    DeliveryChallanItem,
     InventoryItem,
     InventoryStock,
     InventoryReceipt,
@@ -6133,6 +6133,17 @@ def purchase_orders():
             )
             db.session.add(poi)
 
+            inv = InventoryItem.query.filter_by(item_code=item_code).first()
+            if not inv:
+                inv = InventoryItem(
+                    item_code=item_code,
+                    description=request.form.get("description"),
+                    unit=request.form.get("unit"),
+                )
+                db.session.add(inv)
+            _initialize_book_stock(inv)
+            inv.book_stock = (inv.book_stock or inv.current_stock or 0) + quantity
+
             book = BookInventory.query.filter_by(item_code=item_code).first()
             if not book:
                 book = BookInventory(item_code=item_code)
@@ -7052,6 +7063,13 @@ def _sync_inventory_with_products():
         preferred_unit = product.uom or product.purchase_uom
         target_stock = product.qty_on_hand or 0
 
+        if inventory_item.book_stock is None:
+            inventory_item.book_stock = target_stock
+            updates_made = True
+        elif inventory_item.book_stock == 0 and target_stock and not inventory_item.id:
+            inventory_item.book_stock = target_stock
+            updates_made = True
+
         if inventory_item.description != product.name:
             inventory_item.description = product.name
             updates_made = True
@@ -7072,6 +7090,18 @@ def _sync_inventory_with_products():
             current_app.logger.exception(
                 "Failed to sync products into inventory records"
             )
+
+
+def _initialize_book_stock(inventory_item):
+    updated = False
+    physical = inventory_item.current_stock or 0
+    if inventory_item.book_stock is None:
+        inventory_item.book_stock = physical
+        updated = True
+    elif inventory_item.book_stock == 0 and physical:
+        inventory_item.book_stock = physical
+        updated = True
+    return updated
 
 
 def _normalize_inventory_header(header: str) -> str:
@@ -7606,6 +7636,7 @@ def _parse_delivery_order_items(form):
 
         items.append(
             {
+                "item_code": product_name,
                 "product_name": product_name,
                 "quantity": quantity_value,
                 "uom": uom,
@@ -7663,7 +7694,7 @@ def create_delivery_order():
             project_or_site=project_or_site,
             receiver_name=receiver_name,
             remarks=remarks,
-            status="Created",
+            status="Draft",
         )
         db.session.add(order)
         db.session.flush()
@@ -7674,8 +7705,11 @@ def create_delivery_order():
             db.session.add(
                 DeliveryOrderItem(
                     delivery_order_id=order.id,
+                    item_code=item.get("item_code") or item.get("product_name"),
                     product_name=item.get("product_name"),
-                    quantity=item.get("quantity") or 0,
+                    requested_qty=item.get("quantity") or 0,
+                    reserved_qty=item.get("quantity") or 0,
+                    delivered_qty_total=0,
                     uom=item.get("uom"),
                     remarks=item.get("remarks"),
                 )
@@ -7717,26 +7751,163 @@ def delivery_order_detail(order_id):
     )
 
 
+@app.route(
+    "/store/delivery-orders/<int:order_id>/delivery-challans/new",
+    methods=["GET", "POST"],
+)
+@login_required
+def create_delivery_challan_from_do(order_id):
+    ensure_bootstrap()
+    _require_delivery_order_permission("dispatch")
+
+    order = (
+        DeliveryOrder.query.options(subqueryload(DeliveryOrder.items))
+        .filter_by(id=order_id)
+        .first_or_404()
+    )
+
+    items_context = []
+    for item in order.items:
+        reserved = item.reserved_qty or item.requested_qty or 0
+        delivered = item.delivered_qty_total or 0
+        remaining = max(reserved - delivered, 0)
+        items_context.append(
+            {
+                "record": item,
+                "reserved": reserved,
+                "delivered": delivered,
+                "remaining": remaining,
+            }
+        )
+
+    if request.method == "POST":
+        selections = []
+        for ctx in items_context:
+            key = f"item_{ctx['record'].id}_qty"
+            try:
+                qty_value = float(request.form.get(key) or 0)
+            except (TypeError, ValueError):
+                qty_value = 0
+            if qty_value > 0:
+                selections.append((ctx["record"], qty_value))
+
+        if not selections:
+            flash("Enter at least one quantity to include in the Delivery Challan.", "danger")
+            return render_template(
+                "store_delivery_challan_new.html",
+                order=order,
+                items=items_context,
+            )
+
+        challan = DeliveryChallan(
+            dc_number="DC-PENDING",
+            delivery_order_id=order.id,
+            project_id=order.project_id,
+            dispatch_date=datetime.date.today(),
+            created_by_user_id=current_user.id,
+            dispatched_by_user_id=current_user.id,
+            status="Draft",
+        )
+        db.session.add(challan)
+        db.session.flush()
+        challan.dc_number = f"DC-{challan.id:04d}"
+
+        for record, qty in selections:
+            db.session.add(
+                DeliveryChallanItem(
+                    delivery_challan_id=challan.id,
+                    delivery_order_item_id=record.id,
+                    item_code=record.item_code,
+                    description=record.product_name,
+                    unit=record.uom,
+                    qty_delivered=qty,
+                )
+            )
+
+        for record, qty in selections:
+            inv = InventoryItem.query.filter_by(item_code=record.item_code).first()
+            if not inv:
+                inv = InventoryItem(
+                    item_code=record.item_code,
+                    description=record.product_name,
+                    unit=record.uom,
+                )
+                db.session.add(inv)
+            _initialize_book_stock(inv)
+            inv.current_stock = (inv.current_stock or 0) - qty
+            record.delivered_qty_total = (record.delivered_qty_total or 0) + qty
+
+        all_fulfilled = True
+        for record in order.items:
+            reserved = record.reserved_qty or record.requested_qty or 0
+            delivered = record.delivered_qty_total or 0
+            if delivered < reserved:
+                all_fulfilled = False
+        order.status = "Completed" if all_fulfilled else "Partially Delivered"
+
+        challan.status = "Delivered"
+        challan.delivered_at = datetime.datetime.utcnow()
+        challan.is_completed = True
+        challan.completed_at = challan.delivered_at
+
+        db.session.commit()
+        flash("Delivery challan created and stock updated.", "success")
+        return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+    return render_template(
+        "store_delivery_challan_new.html",
+        order=order,
+        items=items_context,
+    )
+
+
+@app.route("/store/delivery-orders/<int:order_id>/confirm", methods=["POST"])
+@login_required
+def confirm_delivery_order(order_id):
+    ensure_bootstrap()
+    _require_delivery_order_permission("dispatch")
+
+    order = DeliveryOrder.query.options(subqueryload(DeliveryOrder.items)).filter_by(id=order_id).first_or_404()
+
+    if order.status not in {"Draft", "Created"}:
+        flash("This Delivery Order has already been confirmed.", "info")
+        return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+    warnings = []
+
+    for item in order.items:
+        item.reserved_qty = item.reserved_qty or item.requested_qty or 0
+        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+        if not inv:
+            inv = InventoryItem(item_code=item.item_code, description=item.product_name, unit=item.uom)
+            db.session.add(inv)
+        _initialize_book_stock(inv)
+        available_book = inv.book_stock if inv.book_stock is not None else inv.current_stock or 0
+        if item.reserved_qty > (available_book or 0):
+            warnings.append(f"Book stock shortfall for {item.item_code} ({item.reserved_qty} requested, {available_book or 0} available).")
+        inv.book_stock = (inv.book_stock or inv.current_stock or 0) - item.reserved_qty
+
+    order.status = "Confirmed" if not any((item.delivered_qty_total or 0) > 0 for item in order.items) else "Partially Delivered"
+    order.updated_at = datetime.datetime.utcnow()
+
+    db.session.commit()
+
+    if warnings:
+        for warn in warnings:
+            flash(warn, "warning")
+    flash("Delivery Order confirmed and stock reserved (book).", "success")
+    return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+
 @app.route("/store/delivery-orders/<int:order_id>/dispatch", methods=["POST"])
 @login_required
 def dispatch_delivery_order(order_id):
     ensure_bootstrap()
     _require_delivery_order_permission("dispatch")
 
-    order = DeliveryOrder.query.filter_by(id=order_id).first_or_404()
-
-    if order.status == "Dispatched":
-        flash("This Delivery Order is already dispatched.", "info")
-        return redirect(url_for("delivery_order_detail", order_id=order.id))
-
-    order.status = "Dispatched"
-    order.updated_at = datetime.datetime.utcnow()
-    order.dispatched_by_user_id = current_user.id
-    order.dispatched_at = datetime.datetime.utcnow()
-
-    db.session.commit()
-    flash("Delivery Order marked as dispatched.", "success")
-    return redirect(url_for("delivery_order_detail", order_id=order.id))
+    DeliveryOrder.query.filter_by(id=order_id).first_or_404()
+    flash("Please use Delivery Challans to record dispatches.", "info")
+    return redirect(url_for("delivery_order_detail", order_id=order_id))
 
 
 @app.route("/store/receive", methods=["GET", "POST"])
@@ -7799,6 +7970,7 @@ def store_receive():
                     inv.current_stock = (inv.current_stock or 0) + qty
                 else:
                     inv.quarantined_stock = (inv.quarantined_stock or 0) + qty
+                _initialize_book_stock(inv)
                 book = BookInventory.query.filter_by(item_code=receipt_item.item_code).first()
                 if book:
                     book.quantity_received_total = (book.quantity_received_total or 0) + qty
@@ -7828,6 +8000,9 @@ def store_inventory():
     ensure_bootstrap()
     _sync_inventory_with_products()
     items = InventoryItem.query.order_by(InventoryItem.item_code).all()
+    for item in items:
+        if item.book_stock is None:
+            item.book_stock = item.current_stock or 0
     total_items = len(items)
     quarantined_items = [item for item in items if (item.quarantined_stock or 0) > 0]
     quarantined_count = len(quarantined_items)
@@ -7868,7 +8043,7 @@ def store_dispatch():
 
         if not item_code or quantity <= 0:
             flash(
-                "Please select an item and enter a quantity before creating a dispatch.",
+                "Please select an item and enter a quantity before creating a delivery challan.",
                 "warning",
             )
             return redirect(url_for("store_dispatch"))
@@ -7884,7 +8059,7 @@ def store_dispatch():
             flash("Insufficient stock available for this dispatch quantity.", "danger")
             return redirect(url_for("store_dispatch"))
 
-        dispatch_number = request.form.get("dispatch_number") or f"DP-{uuid.uuid4().hex[:6].upper()}"
+        dispatch_number = request.form.get("dispatch_number") or f"DC-{uuid.uuid4().hex[:6].upper()}"
         project_id = request.form.get("project_id") or None
         dispatch_date_raw = request.form.get("dispatch_date")
         try:
@@ -7892,40 +8067,45 @@ def store_dispatch():
         except ValueError:
             dispatch_date = None
 
-        dispatch = Dispatch(
+        dispatch = DeliveryChallan(
             project_id=project_id,
-            dispatch_number=dispatch_number,
+            dc_number=dispatch_number,
             dispatch_date=dispatch_date,
             dispatched_by_user_id=current_user.id,
+            created_by_user_id=current_user.id,
             vehicle_details=request.form.get("vehicle_details"),
             driver_name=request.form.get("driver_name"),
             notes=request.form.get("notes"),
-            is_completed=False,
-            completed_at=None,
+            status="Delivered",
+            delivered_at=datetime.datetime.utcnow(),
+            is_completed=True,
+            completed_at=datetime.datetime.utcnow(),
         )
         db.session.add(dispatch)
         db.session.flush()
 
-        dispatch_item = DispatchItem(
-            dispatch_id=dispatch.id,
+        dispatch_item = DeliveryChallanItem(
+            delivery_challan_id=dispatch.id,
             item_code=item_code,
             description=request.form.get("description"),
             unit=request.form.get("unit"),
-            quantity_dispatched=quantity,
+            qty_delivered=quantity,
         )
         db.session.add(dispatch_item)
+        _initialize_book_stock(inv)
         inv.current_stock = (inv.current_stock or 0) - quantity
+        inv.book_stock = (inv.book_stock or inv.current_stock or 0) - quantity
 
         db.session.commit()
-        flash("Dispatch recorded.", "success")
+        flash("Delivery challan recorded and stock updated.", "success")
         return redirect(url_for("store_dispatch"))
 
     dispatches = (
-        Dispatch.query.options(
-            joinedload(Dispatch.project),
-            subqueryload(Dispatch.items),
+        DeliveryChallan.query.options(
+            joinedload(DeliveryChallan.project),
+            subqueryload(DeliveryChallan.items),
         )
-        .order_by(Dispatch.id.desc())
+        .order_by(DeliveryChallan.id.desc())
         .all()
     )
     return render_template(
@@ -7941,7 +8121,7 @@ def store_dispatch():
 def edit_dispatch(dispatch_id):
     ensure_bootstrap()
     dispatch = (
-        Dispatch.query.options(subqueryload(Dispatch.items))
+        DeliveryChallan.query.options(subqueryload(DeliveryChallan.items))
         .filter_by(id=dispatch_id)
         .first_or_404()
     )
@@ -7990,6 +8170,7 @@ def edit_dispatch(dispatch_id):
 
     if prev_inv:
         prev_inv.current_stock = (prev_inv.current_stock or 0) + prev_quantity
+        prev_inv.book_stock = (prev_inv.book_stock or prev_inv.current_stock or 0) + prev_quantity
 
     dispatch.project_id = request.form.get("project_id") or None
     dispatch.dispatch_number = request.form.get("dispatch_number") or dispatch.dispatch_number
@@ -7999,9 +8180,10 @@ def edit_dispatch(dispatch_id):
     dispatch.notes = request.form.get("notes")
     dispatch.is_completed = False
     dispatch.completed_at = None
+    dispatch.status = "Draft"
 
     if not existing_item:
-        existing_item = DispatchItem(dispatch_id=dispatch.id)
+        existing_item = DeliveryChallanItem(delivery_challan_id=dispatch.id)
         db.session.add(existing_item)
 
     existing_item.item_code = item_code
@@ -8009,10 +8191,12 @@ def edit_dispatch(dispatch_id):
     existing_item.unit = request.form.get("unit")
     existing_item.quantity_dispatched = quantity
 
+    _initialize_book_stock(target_inv)
     target_inv.current_stock = (target_inv.current_stock or 0) - quantity
+    target_inv.book_stock = (target_inv.book_stock or target_inv.current_stock or 0) - quantity
 
     db.session.commit()
-    flash("Dispatch updated.", "success")
+    flash("Delivery challan updated.", "success")
     return redirect(url_for("store_dispatch"))
 
 
@@ -8020,15 +8204,44 @@ def edit_dispatch(dispatch_id):
 @login_required
 def complete_dispatch(dispatch_id):
     ensure_bootstrap()
-    dispatch = Dispatch.query.filter_by(id=dispatch_id).first_or_404()
+    dispatch = DeliveryChallan.query.options(subqueryload(DeliveryChallan.items)).filter_by(id=dispatch_id).first_or_404()
 
-    if dispatch.is_completed:
-        flash("Dispatch already marked as complete.", "info")
-    else:
-        dispatch.is_completed = True
-        dispatch.completed_at = datetime.datetime.utcnow()
-        db.session.commit()
-        flash("Dispatch marked as complete.", "success")
+    if dispatch.status == "Delivered" or dispatch.is_completed:
+        flash("Delivery challan already marked as delivered.", "info")
+        return redirect(url_for("store_dispatch"))
+
+    for item in dispatch.items:
+        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+        if not inv:
+            continue
+        _initialize_book_stock(inv)
+        inv.current_stock = (inv.current_stock or 0) - (item.qty_delivered or 0)
+        if not dispatch.delivery_order_id:
+            inv.book_stock = (inv.book_stock or inv.current_stock or 0) - (item.qty_delivered or 0)
+
+        if dispatch.delivery_order_id and item.delivery_order_item_id:
+            doi = DeliveryOrderItem.query.filter_by(id=item.delivery_order_item_id).first()
+            if doi:
+                doi.delivered_qty_total = (doi.delivered_qty_total or 0) + (item.qty_delivered or 0)
+
+    if dispatch.delivery_order_id:
+        order = DeliveryOrder.query.options(subqueryload(DeliveryOrder.items)).filter_by(id=dispatch.delivery_order_id).first()
+        if order:
+            all_fulfilled = True
+            for order_item in order.items:
+                reserved = order_item.reserved_qty or order_item.requested_qty or 0
+                delivered = order_item.delivered_qty_total or 0
+                if delivered < reserved:
+                    all_fulfilled = False
+            order.status = "Completed" if all_fulfilled else "Partially Delivered"
+
+    dispatch.status = "Delivered"
+    dispatch.delivered_at = datetime.datetime.utcnow()
+    dispatch.is_completed = True
+    dispatch.completed_at = dispatch.delivered_at
+
+    db.session.commit()
+    flash("Delivery challan marked as delivered.", "success")
 
     return redirect(url_for("store_dispatch"))
 
@@ -8691,8 +8904,8 @@ def ensure_tables():
         InventoryStock.__table__,
         InventoryReceipt.__table__,
         InventoryReceiptItem.__table__,
-        Dispatch.__table__,
-        DispatchItem.__table__,
+        DeliveryChallan.__table__,
+        DeliveryChallanItem.__table__,
         DeliveryOrder.__table__,
         DeliveryOrderItem.__table__,
     ]
@@ -8768,16 +8981,116 @@ def ensure_project_columns():
         print("✔️ project OK")
 
 
-def ensure_dispatch_columns():
+def ensure_inventory_item_columns():
     conn, db_path = _connect_sqlite_db()
     if not conn:
-        print("⚠️ Skipping ensure_dispatch_columns: database is not a SQLite file.")
+        print("⚠️ Skipping ensure_inventory_item_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(inventory_item)")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+
+    if "book_stock" not in cols:
+        cur.execute("ALTER TABLE inventory_item ADD COLUMN book_stock REAL DEFAULT 0;")
+        cur.execute("UPDATE inventory_item SET book_stock = current_stock WHERE book_stock IS NULL OR book_stock = 0;")
+        added.append("book_stock")
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in inventory_item: {', '.join(added)}")
+    else:
+        print("✔️ inventory_item OK")
+
+
+def ensure_delivery_order_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_delivery_order_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(delivery_order)")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+
+    additions = [
+        ("project_id", "INTEGER"),
+        ("related_po_id", "INTEGER"),
+        ("stage_id", "INTEGER"),
+    ]
+    for column, ctype in additions:
+        if column not in cols:
+            cur.execute(f"ALTER TABLE delivery_order ADD COLUMN {column} {ctype};")
+            added.append(column)
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in delivery_order: {', '.join(added)}")
+    else:
+        print("✔️ delivery_order OK")
+
+
+def ensure_delivery_order_item_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_delivery_order_item_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(delivery_order_item)")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+
+    if "item_code" not in cols:
+        cur.execute("ALTER TABLE delivery_order_item ADD COLUMN item_code TEXT;")
+        cur.execute("UPDATE delivery_order_item SET item_code = product_name WHERE item_code IS NULL;")
+        added.append("item_code")
+    if "reserved_qty" not in cols:
+        cur.execute("ALTER TABLE delivery_order_item ADD COLUMN reserved_qty REAL DEFAULT 0;")
+        cur.execute("UPDATE delivery_order_item SET reserved_qty = quantity WHERE reserved_qty = 0;")
+        added.append("reserved_qty")
+    if "delivered_qty_total" not in cols:
+        cur.execute("ALTER TABLE delivery_order_item ADD COLUMN delivered_qty_total REAL DEFAULT 0;")
+        added.append("delivered_qty_total")
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in delivery_order_item: {', '.join(added)}")
+    else:
+        print("✔️ delivery_order_item OK")
+
+
+def ensure_delivery_challan_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_delivery_challan_columns: database is not a SQLite file.")
         return
 
     cur = conn.cursor()
     cur.execute("PRAGMA table_info(dispatch)")
     dispatch_cols = {row[1] for row in cur.fetchall()}
     added_cols = []
+
+    column_defs = [
+        ("delivery_order_id", "INTEGER"),
+        ("created_by_user_id", "INTEGER"),
+        ("delivered_at", "DATETIME"),
+        ("status", "TEXT"),
+        ("created_at", "DATETIME"),
+    ]
+
+    for column_name, column_type in column_defs:
+        if column_name not in dispatch_cols:
+            cur.execute(f"ALTER TABLE dispatch ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
 
     if "is_completed" not in dispatch_cols:
         cur.execute("ALTER TABLE dispatch ADD COLUMN is_completed INTEGER DEFAULT 0;")
@@ -8787,6 +9100,13 @@ def ensure_dispatch_columns():
         cur.execute("ALTER TABLE dispatch ADD COLUMN completed_at DATETIME;")
         added_cols.append("completed_at")
 
+    cur.execute("PRAGMA table_info(dispatch_item)")
+    item_cols = {row[1] for row in cur.fetchall()}
+    item_added = []
+    if "delivery_order_item_id" not in item_cols:
+        cur.execute("ALTER TABLE dispatch_item ADD COLUMN delivery_order_item_id INTEGER;")
+        item_added.append("delivery_order_item_id")
+
     conn.commit()
     conn.close()
 
@@ -8794,6 +9114,8 @@ def ensure_dispatch_columns():
         print(f"✅ Auto-added in dispatch: {', '.join(added_cols)}")
     else:
         print("✔️ dispatch OK")
+    if item_added:
+        print(f"✅ Auto-added in dispatch_item: {', '.join(item_added)}")
 
 
 def ensure_design_task_columns():
@@ -8964,10 +9286,13 @@ def migrate_plaintext_passwords():
 
 def bootstrap_db():
     ensure_tables()
+    ensure_inventory_item_columns()
     ensure_user_columns()
     ensure_project_comment_table()
     ensure_project_columns()
-    ensure_dispatch_columns()
+    ensure_delivery_order_columns()
+    ensure_delivery_order_item_columns()
+    ensure_delivery_challan_columns()
     ensure_design_task_columns()
     ensure_bom_columns()
     ensure_qc_columns()    # adds missing columns safely
