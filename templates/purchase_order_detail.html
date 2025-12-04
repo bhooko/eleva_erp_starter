@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Purchase Order {{ po.po_number }} · Eleva ERP{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs uppercase text-slate-500">Purchase</p>
+      <h1 class="text-2xl font-semibold">Purchase Order {{ po.po_number }}</h1>
+      <p class="text-sm text-slate-600">Detailed view with linked BOM and stage information.</p>
+    </div>
+    <a href="{{ url_for('purchase_orders') }}" class="px-3 py-1.5 rounded-lg border text-sm">Back to list</a>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Vendor</p>
+        <p class="text-base font-semibold">{{ po.vendor.name if po.vendor else 'Not set' }}</p>
+        {% if po.vendor %}
+        <p class="text-slate-500">{{ po.vendor.contact_person or '' }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Project / Site</p>
+        <p class="text-base font-semibold">{{ po.project.name if po.project else 'General' }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Status</p>
+        <p class="px-2 py-1 inline-block rounded-full bg-slate-100 text-slate-800">{{ po.status|title }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Order Date</p>
+        <p class="text-base font-semibold">{{ po.order_date or '—' }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Expected Delivery</p>
+        <p class="text-base font-semibold">{{ po.expected_delivery_date or '—' }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Notes</p>
+        <p class="text-base text-slate-700 whitespace-pre-line">{{ po.notes or '—' }}</p>
+      </div>
+    </div>
+    {% if po.bom %}
+    <div class="text-sm text-slate-700 bg-slate-50 border rounded-lg p-3">
+      Generated from BOM <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="text-orange-600 hover:underline">{{ po.bom.bom_name }}</a>
+      {% if po.stage %}– Stage <strong>{{ po.stage.name }}</strong>{% endif %}.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Line items</p>
+        <h2 class="text-lg font-semibold">{{ po.items|length }} item(s)</h2>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2 px-3">Item Code</th>
+            <th class="py-2 px-3">Description</th>
+            <th class="py-2 px-3">Stage</th>
+            <th class="py-2 px-3">Qty</th>
+            <th class="py-2 px-3">Unit</th>
+            <th class="py-2 px-3">Unit Price</th>
+            <th class="py-2 px-3">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for item in po.items %}
+          <tr>
+            <td class="py-2 px-3 font-semibold">{{ item.item_code }}</td>
+            <td class="py-2 px-3">{{ item.description }}</td>
+            <td class="py-2 px-3 text-slate-600">{{ item.bom_item.stage.name if item.bom_item and item.bom_item.stage else (po.stage.name if po.stage else '—') }}</td>
+            <td class="py-2 px-3">{{ item.quantity_ordered }}</td>
+            <td class="py-2 px-3">{{ item.unit }}</td>
+            <td class="py-2 px-3">{{ item.unit_price if item.unit_price is not none else '—' }}</td>
+            <td class="py-2 px-3">{{ item.total_amount if item.total_amount is not none else '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-3 px-3 text-slate-500">No items yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

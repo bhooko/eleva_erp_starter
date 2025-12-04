@@ -170,7 +170,9 @@
       <tbody class="divide-y">
         {% for po in pos %}
         <tr>
-          <td class="py-3 px-4 font-semibold text-slate-800">{{ po.po_number }}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800">
+            <a href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}" class="hover:underline">{{ po.po_number }}</a>
+          </td>
           <td class="py-3 px-4">{{ po.vendor.name if po.vendor else 'No vendor' }}</td>
           <td class="py-3 px-4">{{ po.project.name if po.project else 'General' }}</td>
           <td class="py-3 px-4 text-slate-700">

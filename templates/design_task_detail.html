@@ -139,7 +139,7 @@
             <select name="stage_id" class="w-full rounded-lg border-slate-200">
               <option value="">Default{% if stage_options %} (Stage 1 if available){% endif %}</option>
               {% for stage in stage_options %}
-              <option value="{{ stage.id }}" {% if stage.name|lower == 'stage 1' %}selected{% endif %}>{{ stage.name }}</option>
+              <option value="{{ stage.id }}" {% if default_stage and default_stage.id == stage.id %}selected{% endif %}>{{ stage.name }}</option>
               {% endfor %}
             </select>
           </label>
@@ -211,7 +211,24 @@
                   <tr data-stage-id="{{ item.stage_id or '' }}">
                     <td class="py-1">{{ item.item_code }}</td>
                     <td class="py-1">{{ item.description }}</td>
-                    <td class="py-1">{{ item.stage.name if item.stage else '—' }}</td>
+                    <td class="py-1">
+                      {% if can_edit_bom %}
+                      <form method="POST" action="{{ url_for('update_bom_item_stage', item_id=item.id) }}" class="flex items-center gap-2">
+                        {{ csrf_field() }}
+                        <input type="hidden" name="redirect_url" value="{{ request.path }}" />
+                        {% set selected_stage = item.stage_id or (default_stage.id if default_stage else None) %}
+                        <select name="stage_id" class="rounded-lg border-slate-200 text-xs">
+                          <option value="">—</option>
+                          {% for stage in stage_options %}
+                          <option value="{{ stage.id }}" {% if selected_stage and selected_stage == stage.id %}selected{% endif %}>{{ stage.name }}</option>
+                          {% endfor %}
+                        </select>
+                        <button type="submit" class="px-2 py-1 rounded border text-xs">Save</button>
+                      </form>
+                      {% else %}
+                      {{ item.stage.name if item.stage else (default_stage.name if default_stage else '—') }}
+                      {% endif %}
+                    </td>
                     <td class="py-1">{{ item.quantity_required }}</td>
                     <td class="py-1">{{ item.unit }}</td>
                     <td class="py-1">{{ item.category }}</td>
