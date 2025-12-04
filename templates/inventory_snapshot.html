@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Inventory · Odoo Snapshot{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
+      <h1 class="text-2xl font-semibold">Odoo Inventory Snapshot</h1>
+      <p class="text-sm text-slate-600">Historical view of the latest imported Odoo Quants file.</p>
+    </div>
+    <a href="{{ url_for('store_inventory') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-sm hover:shadow-lg">← Back to Inventory</a>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    {% set baseline_done = inventory_flags.get('INVENTORY_BASELINE_COMPLETED') %}
+    {% if baseline_done %}
+    <p class="text-sm text-slate-800">Odoo data is read-only and kept for reference only. Inventory changes must be done inside Eleva ERP.</p>
+    {% else %}
+    <p class="text-sm text-slate-800">Use this snapshot to verify your baseline before locking imports.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-2">Product</th>
+          <th class="py-2">Location</th>
+          <th class="py-2">Quantity</th>
+          <th class="py-2">UoM</th>
+          <th class="py-2">Value</th>
+          <th class="py-2">Company</th>
+          <th class="py-2">Last updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for record in records %}
+        <tr>
+          <td class="py-2">{{ record.product_name }}</td>
+          <td class="py-2">{{ record.location }}</td>
+          <td class="py-2">{{ record.quantity }}</td>
+          <td class="py-2">{{ record.uom or '—' }}</td>
+          <td class="py-2">{{ record.on_hand_value if record.on_hand_value is not none else '—' }}</td>
+          <td class="py-2">{{ record.company or '—' }}</td>
+          <td class="py-2">{{ record.last_updated.strftime('%Y-%m-%d %H:%M') if record.last_updated else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="py-3 text-slate-500">No Odoo inventory uploaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

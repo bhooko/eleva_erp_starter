@@ -2026,6 +2026,24 @@ class InventoryStock(db.Model):
     )
 
 
+class StockAdjustment(db.Model):
+    __tablename__ = "stock_adjustment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    inventory_item_id = db.Column(db.Integer, db.ForeignKey("inventory_item.id"), nullable=False)
+    old_physical_stock = db.Column(db.Float, nullable=True)
+    new_physical_stock = db.Column(db.Float, nullable=True)
+    old_book_stock = db.Column(db.Float, nullable=True)
+    new_book_stock = db.Column(db.Float, nullable=True)
+    reason = db.Column(db.Text, nullable=False)
+    adjustment_type = db.Column(db.String(20), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    inventory_item = db.relationship("InventoryItem")
+    created_by = db.relationship("User")
+
+
 class InventoryReceipt(db.Model):
     __tablename__ = "inventory_receipt"
 

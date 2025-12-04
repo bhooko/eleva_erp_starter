@@ -1134,7 +1134,7 @@
           {% endif %}
 
           {% if store_visible %}
-          {% set store_endpoints = ['store_receive','store_inventory','store_dispatch','store_delivery_orders','create_delivery_order','delivery_order_detail'] %}
+          {% set store_endpoints = ['store_receive','store_inventory','store_dispatch','store_delivery_orders','create_delivery_order','delivery_order_detail','inventory_item_movements','adjust_inventory_item','inventory_snapshot'] %}
           <div class="space-y-1">
             <a href="{{ url_for('store_inventory') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in store_endpoints else '' }}">
@@ -1151,7 +1151,7 @@
                 <span class="label">Receive Material</span>
               </a>
               <a href="{{ url_for('store_inventory') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'store_inventory' else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['store_inventory','inventory_item_movements','adjust_inventory_item','inventory_snapshot'] else '' }}">
                 <span class="label">Inventory Overview</span>
               </a>
               <a href="{{ url_for('store_delivery_orders') }}"

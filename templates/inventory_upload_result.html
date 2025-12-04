@@ -6,7 +6,7 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Inventory upload summary</h1>
-      <p class="text-sm text-slate-600">Review the results of the Odoo inventory/quant import.</p>
+      <p class="text-sm text-slate-600">Review the results of the Odoo inventory baseline import.</p>
     </div>
     <a href="{{ url_for('store_inventory') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
       ← Back to Inventory
@@ -25,16 +25,16 @@
       <p class="text-3xl font-semibold text-slate-900">{{ processed_rows }}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="text-xs uppercase text-slate-500">Rows uploaded</p>
-      <p class="text-3xl font-semibold text-emerald-600">{{ rows_uploaded }}</p>
+      <p class="text-xs uppercase text-slate-500">Rows imported</p>
+      <p class="text-3xl font-semibold text-emerald-600">{{ imported_rows }}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs uppercase text-slate-500">Rows skipped</p>
       <p class="text-3xl font-semibold text-amber-600">{{ rows_skipped }}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="text-xs uppercase text-slate-500">Missing products</p>
-      <p class="text-3xl font-semibold text-blue-600">{{ rows_missing_products }}</p>
+      <p class="text-xs uppercase text-slate-500">Total errors</p>
+      <p class="text-3xl font-semibold text-blue-600">{{ total_errors }}</p>
     </div>
   </div>
   {% endif %}
@@ -46,7 +46,7 @@
         <p class="text-xs uppercase tracking-wide">Products Missing in Parts — Not Uploaded</p>
         <p class="text-sm text-blue-700">Inventory lines were skipped because the product is not in the Parts master.</p>
       </div>
-      <span class="inline-flex items-center justify-center rounded-full bg-blue-600 text-white text-xs w-8 h-8 font-semibold">{{ rows_missing_products }}</span>
+      <span class="inline-flex items-center justify-center rounded-full bg-blue-600 text-white text-xs w-8 h-8 font-semibold">{{ missing_products|length }}</span>
     </div>
     <ul class="list-disc pl-6 space-y-1 text-sm">
       {% for message in missing_products %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Inventory · Movements{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
+      <h1 class="text-2xl font-semibold">Movement History</h1>
+      <p class="text-sm text-slate-600">Trace physical and book changes for this item.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('store_inventory') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-sm hover:shadow-lg">← Back to Inventory</a>
+      {% if can_adjust %}
+      <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg">Adjust stock</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <p class="text-xs uppercase text-slate-500">Item code</p>
+        <p class="text-lg font-semibold text-slate-900">{{ item.item_code }}</p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <p class="text-xs uppercase text-slate-500">Description</p>
+        <p class="text-lg font-semibold text-slate-900">{{ item.description }}</p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <p class="text-xs uppercase text-slate-500">Current physical</p>
+        <p class="text-lg font-semibold text-slate-900">{{ item.current_stock }}</p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <p class="text-xs uppercase text-slate-500">Book stock</p>
+        <p class="text-lg font-semibold text-slate-900">{{ item.book_stock }}</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Date</th>
+            <th class="py-2">Movement Type</th>
+            <th class="py-2">Physical Δ</th>
+            <th class="py-2">Book Δ</th>
+            <th class="py-2">Updated Physical</th>
+            <th class="py-2">Source</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for move in movements %}
+          <tr>
+            <td class="py-2">{{ move.timestamp.strftime('%Y-%m-%d %H:%M') if move.timestamp else '—' }}</td>
+            <td class="py-2">{{ move.movement_type }}</td>
+            <td class="py-2 font-semibold {{ 'text-emerald-700' if move.physical_delta > 0 else 'text-rose-700' if move.physical_delta < 0 else 'text-slate-700' }}">{{ '%+.2f'|format(move.physical_delta) }}</td>
+            <td class="py-2 {{ 'text-emerald-700' if move.book_delta > 0 else 'text-rose-700' if move.book_delta < 0 else 'text-slate-700' }}">{{ '%+.2f'|format(move.book_delta) }}</td>
+            <td class="py-2">{{ move.updated_physical }}</td>
+            <td class="py-2">
+              {% if move.source_url %}
+              <a href="{{ move.source_url }}" class="text-blue-700 hover:underline">{{ move.reference or 'View source' }}</a>
+              {% else %}
+              <span class="text-slate-600">{{ move.reference or '—' }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-3 text-slate-500">No movement records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
