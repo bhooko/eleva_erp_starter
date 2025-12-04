@@ -110,7 +110,7 @@
         </div>
 
         <div class="overflow-x-auto border rounded-xl">
-          <table class="w-full text-sm">
+          <table class="w-full text-sm" id="site-bom-table">
             <thead>
               <tr class="text-left text-slate-500">
                 <th class="py-3 px-4">Drawing No.</th>
@@ -306,6 +306,15 @@
             <span class="text-sm">Category</span>
             <input type="text" name="category" class="w-full rounded-lg border-slate-200" placeholder="Category" />
           </label>
+          <label class="space-y-1">
+            <span class="text-sm">Stage</span>
+            <select name="stage_id" class="w-full rounded-lg border-slate-200">
+              <option value="">Default{% if stage_options %} (Stage 1 if available){% endif %}</option>
+              {% for stage in stage_options %}
+              <option value="{{ stage.id }}" {% if stage.name|lower == 'stage 1' %}selected{% endif %}>{{ stage.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
           <label class="space-y-1 md:col-span-2">
             <span class="text-sm">Remarks</span>
             <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
@@ -314,12 +323,31 @@
             <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Add item</button>
           </div>
         </form>
+        <div class="flex items-center justify-between mt-3">
+          <div class="flex items-center gap-2 text-sm text-slate-600">
+            <span>Filter by stage:</span>
+            <select class="rounded-lg border-slate-200" onchange="filterSiteBomStage(this.value)">
+              <option value="">All</option>
+              {% for stage in stage_options %}
+              <option value="{{ stage.id }}">{{ stage.name }}</option>
+              {% endfor %}
+              <option value="none">Unassigned</option>
+            </select>
+          </div>
+          <a
+            href="{{ url_for('generate_po_from_bom', bom_id=bom.id) }}"
+            class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+          >
+            Generate PO from BOM
+          </a>
+        </div>
         <div class="mt-3 overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-slate-500">
                 <th class="py-1">Item</th>
                 <th class="py-1">Description</th>
+                <th class="py-1">Stage</th>
                 <th class="py-1">Qty</th>
                 <th class="py-1">Unit</th>
                 <th class="py-1">Category</th>
@@ -327,9 +355,10 @@
             </thead>
             <tbody class="divide-y">
               {% for item in bom.items %}
-              <tr>
+              <tr data-stage-id="{{ item.stage_id or '' }}">
                 <td class="py-1">{{ item.item_code }}</td>
                 <td class="py-1">{{ item.description }}</td>
+                <td class="py-1">{{ item.stage.name if item.stage else '—' }}</td>
                 <td class="py-1">{{ item.quantity_required }}</td>
                 <td class="py-1">{{ item.unit }}</td>
                 <td class="py-1">{{ item.category }}</td>
@@ -379,5 +408,16 @@
       toggleSiteBomDuplicate(false);
     }
   });
+
+  function filterSiteBomStage(stageId){
+    const table = document.getElementById('site-bom-table');
+    if(!table) return;
+    const rows = table.querySelectorAll('tbody tr[data-stage-id]');
+    rows.forEach(row => {
+      const value = row.getAttribute('data-stage-id') || '';
+      const matches = !stageId || (stageId === 'none' ? !value : value === stageId);
+      row.classList.toggle('hidden', !matches);
+    });
+  }
 </script>
 {% endblock %}

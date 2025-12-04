@@ -4929,6 +4929,7 @@ from eleva_app.models import (
     DeliveryOrder,
     DeliveryOrderItem,
     Product,
+    ProcurementStage,
     PurchaseOrderLine,
     Vendor,
     PurchaseOrder,
@@ -5507,6 +5508,8 @@ def design_task_detail(task_id):
     can_edit_bom = current_user.is_admin or any(
         keyword in role for keyword in ["design", "purchase", "project", "installation"]
     )
+    stage_options = _get_active_procurement_stages()
+    default_stage = _get_default_procurement_stage()
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -5561,6 +5564,10 @@ def design_task_detail(task_id):
             bom_id = request.form.get("bom_id")
             bom_status = request.form.get("bom_status") or "draft"
             bom_name = request.form.get("bom_name") or "Task BOM"
+            stage_id_value = request.form.get("stage_id") or (
+                default_stage.id if default_stage else None
+            )
+            stage_id = int(stage_id_value) if stage_id_value else None
             if bom_id:
                 bom = BillOfMaterials.query.get(bom_id)
             else:
@@ -5580,6 +5587,7 @@ def design_task_detail(task_id):
                 category=request.form.get("category"),
                 unit=request.form.get("unit"),
                 quantity_required=float(request.form.get("quantity_required") or 0),
+                stage_id=stage_id,
                 remarks=request.form.get("remarks"),
             )
             db.session.add(item)
@@ -5645,6 +5653,7 @@ def design_task_detail(task_id):
         can_edit_bom=can_edit_bom,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
+        stage_options=stage_options,
     )
 
 
@@ -5773,6 +5782,8 @@ def design_drawing_site_detail(site_id: int):
     can_edit_bom = current_user.is_admin or any(
         keyword in role for keyword in ["design", "purchase", "project", "installation"]
     )
+    stage_options = _get_active_procurement_stages()
+    default_stage = _get_default_procurement_stage()
 
     bom = (
         BillOfMaterials.query.filter_by(drawing_site_id=site.id)
@@ -5903,6 +5914,10 @@ def design_drawing_site_detail(site_id: int):
             return redirect(url_for("design_drawing_site_detail", site_id=site.id))
 
         if action == "bom_item" and bom:
+            stage_id_value = request.form.get("stage_id") or (
+                default_stage.id if default_stage else None
+            )
+            stage_id = int(stage_id_value) if stage_id_value else None
             item = BOMItem(
                 bom_id=bom.id,
                 item_code=request.form.get("item_code"),
@@ -5910,6 +5925,7 @@ def design_drawing_site_detail(site_id: int):
                 category=request.form.get("category"),
                 unit=request.form.get("unit"),
                 quantity_required=float(request.form.get("quantity_required") or 0),
+                stage_id=stage_id,
                 remarks=request.form.get("remarks"),
             )
             db.session.add(item)
@@ -5945,6 +5961,7 @@ def design_drawing_site_detail(site_id: int):
         bom=bom,
         related_tasks=related_tasks,
         can_edit_bom=can_edit_bom,
+        stage_options=stage_options,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
     )
@@ -6033,6 +6050,7 @@ def duplicate_bom(bom_id: int):
                     category=item.category,
                     unit=item.unit,
                     quantity_required=item.quantity_required,
+                    stage_id=item.stage_id,
                     remarks=item.remarks,
                 )
             )
@@ -6065,6 +6083,8 @@ def purchase_orders():
         po_number = request.form.get("po_number") or f"PO-{uuid.uuid4().hex[:6].upper()}"
         project_id = request.form.get("project_id") or None
         vendor_id = request.form.get("vendor_id") or None
+        bom_id_raw = request.form.get("bom_id") or None
+        stage_id_raw = request.form.get("stage_id") or None
         order_date_raw = request.form.get("order_date")
         expected_raw = request.form.get("expected_delivery_date")
         status_value = request.form.get("status") or "draft"
@@ -6084,6 +6104,8 @@ def purchase_orders():
             po_number=po_number,
             project_id=project_id,
             vendor_id=vendor_id,
+            bom_id=int(bom_id_raw) if bom_id_raw else None,
+            stage_id=int(stage_id_raw) if stage_id_raw else None,
             status=status_value,
             order_date=order_date,
             expected_delivery_date=expected_delivery_date,
@@ -6126,6 +6148,8 @@ def purchase_orders():
         PurchaseOrder.query.options(
             joinedload(PurchaseOrder.vendor),
             joinedload(PurchaseOrder.project),
+            joinedload(PurchaseOrder.stage),
+            joinedload(PurchaseOrder.bom),
             subqueryload(PurchaseOrder.items),
         )
         .order_by(PurchaseOrder.id.desc())
@@ -6134,6 +6158,12 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
+    stage_options = _get_active_procurement_stages(include_inactive=True)
+    bom_options = (
+        BillOfMaterials.query.order_by(BillOfMaterials.created_at.desc().nullslast())
+        .limit(200)
+        .all()
+    )
 
     return render_template(
         "purchase_orders.html",
@@ -6141,6 +6171,272 @@ def purchase_orders():
         vendors=vendors,
         projects=projects,
         bom_items=bom_items,
+        stage_options=stage_options,
+        bom_options=bom_options,
+    )
+
+
+@app.route("/purchase/procurement-stages", methods=["GET", "POST"])
+@login_required
+def purchase_procurement_stages():
+    ensure_bootstrap()
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "create").strip().lower()
+        name = (request.form.get("name") or "").strip()
+        code = (request.form.get("code") or "").strip() or None
+        sequence_raw = request.form.get("sequence") or None
+        is_active = bool(request.form.get("is_active")) or action == "create"
+
+        try:
+            sequence_value = int(sequence_raw) if sequence_raw is not None else 10
+        except (TypeError, ValueError):
+            sequence_value = 10
+
+        if action == "create":
+            if not name:
+                flash("Stage name is required.", "danger")
+                return redirect(url_for("purchase_procurement_stages"))
+
+            existing_code = None
+            if code:
+                existing_code = ProcurementStage.query.filter(
+                    ProcurementStage.code == code
+                ).first()
+            if existing_code:
+                flash("Code already in use for another stage.", "danger")
+                return redirect(url_for("purchase_procurement_stages"))
+
+            db.session.add(
+                ProcurementStage(
+                    name=name,
+                    code=code,
+                    sequence=sequence_value,
+                    is_active=is_active,
+                )
+            )
+            db.session.commit()
+            flash("Procurement stage added.", "success")
+            return redirect(url_for("purchase_procurement_stages"))
+
+        if action in {"update", "deactivate"}:
+            stage_id = request.form.get("stage_id")
+            stage = ProcurementStage.query.get(stage_id)
+            if not stage:
+                flash("Stage not found.", "danger")
+                return redirect(url_for("purchase_procurement_stages"))
+
+            if action == "deactivate":
+                stage.is_active = False
+                db.session.commit()
+                flash("Stage deactivated.", "info")
+                return redirect(url_for("purchase_procurement_stages"))
+
+            if not name:
+                flash("Stage name is required.", "danger")
+                return redirect(url_for("purchase_procurement_stages"))
+
+            if code:
+                conflict = (
+                    ProcurementStage.query.filter(ProcurementStage.code == code)
+                    .filter(ProcurementStage.id != stage.id)
+                    .first()
+                )
+                if conflict:
+                    flash("Code already in use for another stage.", "danger")
+                    return redirect(url_for("purchase_procurement_stages"))
+
+            stage.name = name
+            stage.code = code
+            stage.sequence = sequence_value
+            stage.is_active = bool(request.form.get("is_active"))
+            db.session.commit()
+            flash("Stage updated.", "success")
+            return redirect(url_for("purchase_procurement_stages"))
+
+    stages = (
+        ProcurementStage.query.order_by(
+            ProcurementStage.sequence.asc(), ProcurementStage.name.asc()
+        ).all()
+    )
+    return render_template("purchase_procurement_stages.html", stages=stages)
+
+
+@app.route("/purchase/bom/<int:bom_id>/generate-po", methods=["GET", "POST"])
+@login_required
+def generate_po_from_bom(bom_id):
+    ensure_bootstrap()
+    bom = BillOfMaterials.query.get_or_404(bom_id)
+    stage_options = _get_active_procurement_stages()
+    default_stage = _get_default_procurement_stage()
+    vendor_options = (
+        Vendor.query.filter(Vendor.is_active.is_(True))
+        .order_by(Vendor.name.asc())
+        .all()
+    )
+    project_options = Project.query.order_by(Project.name.asc()).all()
+
+    selected_stage_id = request.values.get("stage_id") or (
+        default_stage.id if default_stage else None
+    )
+    selected_vendor_id = request.values.get("vendor_id") or None
+    project_id_value = request.values.get("project_id") or bom.project_id
+    pending_only = request.values.get("pending_only") is not None
+    preview_items = None
+    selected_stage_name = next(
+        (
+            stage.name
+            for stage in stage_options
+            if str(stage.id) == str(selected_stage_id)
+        ),
+        None,
+    )
+    if not selected_stage_name and selected_stage_id:
+        stage_record = ProcurementStage.query.get(selected_stage_id)
+        selected_stage_name = stage_record.name if stage_record else None
+
+    def _stage_for_item(item: BOMItem):
+        if item.stage_id:
+            return item.stage_id
+        return default_stage.id if default_stage else None
+
+    if request.method == "POST":
+        step = (request.form.get("step") or "select").strip().lower()
+        if step == "select":
+            if not selected_stage_id:
+                flash("Please select a procurement stage to continue.", "danger")
+            elif not selected_vendor_id:
+                flash("Please select a vendor for this purchase order.", "danger")
+            else:
+                try:
+                    target_stage_id = int(selected_stage_id)
+                except (TypeError, ValueError):
+                    target_stage_id = None
+                preview_items = []
+                for item in bom.items:
+                    item_stage_id = _stage_for_item(item)
+                    if target_stage_id and item_stage_id != target_stage_id:
+                        continue
+                    bom_qty = item.quantity_required or 0
+                    book = BookInventory.query.filter_by(item_code=item.item_code).first()
+                    ordered_qty = book.quantity_ordered_total if book else 0
+                    suggested_qty = max(bom_qty - (ordered_qty or 0), 0)
+                    quantity_to_order = suggested_qty if suggested_qty > 0 else 0
+                    if pending_only and suggested_qty <= 0:
+                        continue
+                    preview_items.append(
+                        {
+                            "item": item,
+                            "bom_qty": bom_qty,
+                            "ordered_qty": ordered_qty or 0,
+                            "quantity_to_order": quantity_to_order if book else bom_qty,
+                            "stage_name": item.stage.name if item.stage else (default_stage.name if default_stage else "—"),
+                        }
+                    )
+
+        elif step == "confirm":
+            selected_stage_id = request.form.get("stage_id") or None
+            selected_vendor_id = request.form.get("vendor_id") or None
+            project_id_value = request.form.get("project_id") or bom.project_id
+            pending_only = request.form.get("pending_only") is not None
+
+            if not selected_stage_id or not selected_vendor_id:
+                flash("Stage and vendor are required to create a purchase order.", "danger")
+            else:
+                try:
+                    stage_id_int = int(selected_stage_id)
+                except (TypeError, ValueError):
+                    stage_id_int = None
+                vendor_id_int = int(selected_vendor_id) if selected_vendor_id else None
+                project_id_parsed = int(project_id_value) if project_id_value else None
+                stage_record = ProcurementStage.query.get(stage_id_int) if stage_id_int else None
+                vendor_record = Vendor.query.get(vendor_id_int) if vendor_id_int else None
+
+                po = PurchaseOrder(
+                    po_number=f"PO-{uuid.uuid4().hex[:6].upper()}",
+                    project_id=project_id_parsed,
+                    vendor_id=vendor_id_int,
+                    bom_id=bom.id,
+                    stage_id=stage_id_int,
+                    status="draft",
+                    order_date=date.today(),
+                    created_by_user_id=current_user.id,
+                    notes=f"Generated from BOM {bom.bom_name} (ID {bom.id}) – Stage {stage_record.name if stage_record else 'N/A'}",
+                )
+                db.session.add(po)
+                db.session.flush()
+
+                item_ids = request.form.getlist("item_id")
+                created_items = 0
+                for item_id in item_ids:
+                    try:
+                        parsed_id = int(item_id)
+                    except (TypeError, ValueError):
+                        continue
+                    bom_item = BOMItem.query.get(parsed_id)
+                    if not bom_item or bom_item.bom_id != bom.id:
+                        continue
+
+                    qty_raw = request.form.get(f"quantity_to_order_{parsed_id}") or "0"
+                    try:
+                        qty_value = float(qty_raw)
+                    except (TypeError, ValueError):
+                        qty_value = 0
+                    if qty_value <= 0:
+                        continue
+
+                    product = None
+                    if bom_item.item_code:
+                        product = Product.query.filter(
+                            func.lower(Product.name) == (bom_item.item_code or "").lower()
+                        ).first()
+                    unit_price = product.cost if product else None
+                    total_amount = qty_value * unit_price if unit_price is not None else None
+
+                    db.session.add(
+                        PurchaseOrderItem(
+                            purchase_order_id=po.id,
+                            bom_item_id=bom_item.id,
+                            item_code=bom_item.item_code,
+                            description=bom_item.description,
+                            unit=bom_item.unit,
+                            quantity_ordered=qty_value,
+                            unit_price=unit_price,
+                            total_amount=total_amount,
+                        )
+                    )
+
+                    book = BookInventory.query.filter_by(item_code=bom_item.item_code).first()
+                    if not book:
+                        book = BookInventory(item_code=bom_item.item_code)
+                        db.session.add(book)
+                    book.quantity_ordered_total = (book.quantity_ordered_total or 0) + qty_value
+                    book.last_po_id = po.id
+                    created_items += 1
+
+                if created_items == 0:
+                    db.session.rollback()
+                    flash("No line items were selected for ordering.", "danger")
+                else:
+                    db.session.commit()
+                    flash(
+                        f"Purchase Order {po.po_number} created for stage {stage_record.name if stage_record else selected_stage_id} and vendor {vendor_record.name if vendor_record else selected_vendor_id}.",
+                        "success",
+                    )
+                    return redirect(url_for("purchase_orders"))
+
+    return render_template(
+        "purchase_generate_po_from_bom.html",
+        bom=bom,
+        stage_options=stage_options,
+        vendor_options=vendor_options,
+        project_options=project_options,
+        selected_stage_id=str(selected_stage_id or ""),
+        selected_vendor_id=str(selected_vendor_id or ""),
+        project_id_value=project_id_value,
+        pending_only=pending_only,
+        preview_items=preview_items,
+        selected_stage_name=selected_stage_name,
     )
 
 
@@ -8383,6 +8679,7 @@ def ensure_tables():
         DrawingVersion.__table__,
         DrawingComment.__table__,
         DrawingHistory.__table__,
+        ProcurementStage.__table__,
         BillOfMaterials.__table__,
         BOMItem.__table__,
         Product.__table__,
@@ -8567,13 +8864,90 @@ def ensure_bom_columns():
     if added_cols:
         cur.execute("CREATE INDEX IF NOT EXISTS ix_bill_of_materials_drawing_site_id ON bill_of_materials (drawing_site_id);")
 
+    cur.execute("PRAGMA table_info(bom_item)")
+    bom_item_cols = {row[1] for row in cur.fetchall()}
+
+    if "stage_id" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN stage_id INTEGER;")
+        added_cols.append("stage_id")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_bom_item_stage_id ON bom_item (stage_id);"
+        )
+
+    cur.execute("PRAGMA table_info(purchase_order)")
+    po_cols = {row[1] for row in cur.fetchall()}
+
+    po_added = []
+    if "bom_id" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN bom_id INTEGER;")
+        po_added.append("bom_id")
+    if "stage_id" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN stage_id INTEGER;")
+        po_added.append("stage_id")
+
+    if po_added:
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_purchase_order_bom_stage ON purchase_order (bom_id, stage_id);"
+        )
+
     conn.commit()
     conn.close()
 
     if added_cols:
-        print(f"✅ Auto-added in bill_of_materials: {', '.join(added_cols)}")
-    else:
+        print(f"✅ Auto-added in bill_of_materials/bom_item: {', '.join(added_cols)}")
+    if po_added:
+        print(f"✅ Auto-added in purchase_order: {', '.join(po_added)}")
+    if not added_cols and not po_added:
         print("✔️ bill_of_materials OK")
+
+
+def ensure_procurement_stage_seed():
+    defaults = [
+        ("Stage 1", "STAGE_1"),
+        ("Stage 2", "STAGE_2"),
+        ("Stage 3", "STAGE_3"),
+        ("Structural", "STRUCTURAL"),
+        ("Cladding", "CLADDING"),
+        ("Scaffolding", "SCAFFOLDING"),
+    ]
+
+    added = []
+    existing_names = {
+        (stage.name or "").strip().lower(): stage
+        for stage in ProcurementStage.query.all()
+    }
+
+    for idx, (name, code) in enumerate(defaults, start=1):
+        key = (name or "").strip().lower()
+        if key in existing_names:
+            continue
+        stage = ProcurementStage(
+            name=name,
+            code=code,
+            sequence=idx * 10,
+            is_active=True,
+        )
+        db.session.add(stage)
+        added.append(name)
+
+    if added:
+        db.session.commit()
+        print(f"✅ Seeded procurement stages: {', '.join(added)}")
+
+
+def _get_active_procurement_stages(include_inactive=False):
+    query = ProcurementStage.query
+    if not include_inactive:
+        query = query.filter(ProcurementStage.is_active.is_(True))
+    return query.order_by(ProcurementStage.sequence.asc(), ProcurementStage.name.asc()).all()
+
+
+def _get_default_procurement_stage():
+    return (
+        ProcurementStage.query.filter(func.lower(ProcurementStage.name) == "stage 1")
+        .order_by(ProcurementStage.sequence.asc())
+        .first()
+    )
 
 
 def migrate_plaintext_passwords():
@@ -8605,6 +8979,7 @@ def bootstrap_db():
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
+    ensure_procurement_stage_seed()
     ensure_dropdown_options_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
