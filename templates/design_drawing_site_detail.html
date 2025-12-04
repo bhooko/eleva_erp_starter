@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Drawing Site · {{ site.project_no or site.client_name or 'Site' }}{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Design · Drawing Site</p>
+      <h1 class="text-2xl font-semibold">{{ site.project_no or site.client_name or 'Drawing Site' }}</h1>
+      <p class="text-sm text-slate-600">Central record for drawings, revisions, comments, and BOM.</p>
+    </div>
+    <a href="{{ url_for('design_drawing_history') }}" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">← Back to Drawing History</a>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="lg:col-span-2 space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Site / Lift Summary</p>
+            <h2 class="text-lg font-semibold">{{ site.client_name or 'Client' }} · {{ site.site_location or 'Location' }}</h2>
+          </div>
+          {% if site.approval_status %}
+          <span class="px-3 py-1 rounded-full text-sm {{ 'bg-emerald-100 text-emerald-700' if site.approval_status|lower == 'approved' else ('bg-amber-100 text-amber-700' if site.approval_status|lower == 'pending' else 'bg-red-100 text-red-700') }}">{{ site.approval_status }}</span>
+          {% endif %}
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-700">
+          <div class="p-3 bg-slate-50 rounded-xl">Project No.: <strong>{{ site.project_no or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Lift Type: <strong>{{ site.lift_type or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Lift Identifier: <strong>{{ site.lift_identifier or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Latest Drawing: <strong>{{ site.latest_drawing_number or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Latest Revision: <strong>{{ site.latest_revision or '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Last Updated: <strong>{{ site.last_updated.strftime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</strong></div>
+        </div>
+        {% if related_tasks %}
+        <div class="border-t pt-3">
+          <p class="text-xs uppercase text-slate-500">Related Design Tasks</p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            {% for task in related_tasks %}
+            <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-sm hover:bg-slate-200">Task #{{ task.id }} · {{ task.description or task.project_label }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Drawing Versions & History</p>
+            <h2 class="text-lg font-semibold">Revisions</h2>
+          </div>
+          <label for="upload-version" class="px-4 py-2 rounded-xl bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload New Drawing / Revision</label>
+        </div>
+
+        <input type="checkbox" id="upload-version" class="hidden peer" />
+        <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-version').checked=false;"></div>
+        <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+          <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+            <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+              <div>
+                <p class="text-xs text-slate-500 uppercase">Upload revision</p>
+                <h2 class="text-lg font-semibold">New Drawing / Revision</h2>
+              </div>
+              <button class="text-slate-500" type="button" onclick="document.getElementById('upload-version').checked=false;">✕</button>
+            </div>
+            <form method="POST" enctype="multipart/form-data" class="p-5 space-y-3">
+              {{ csrf_field() }}
+              <input type="hidden" name="action" value="new_version" />
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Drawing Number</span>
+                  <input type="text" name="drawing_number" required class="w-full rounded-lg border-slate-200" placeholder="GA / Layout" />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Revision No.</span>
+                  <input type="text" name="revision_no" class="w-full rounded-lg border-slate-200" placeholder="e.g. A1" />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Approval Status</span>
+                  <select name="approval_status" class="w-full rounded-lg border-slate-200">
+                    <option value="">Select status</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Revision reason</span>
+                  <input type="text" name="revision_reason" class="w-full rounded-lg border-slate-200" placeholder="Reason / notes" />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Submitted Date</span>
+                  <input type="date" name="submitted_date" class="w-full rounded-lg border-slate-200" />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Approved Date</span>
+                  <input type="date" name="approved_date" class="w-full rounded-lg border-slate-200" />
+                </label>
+                <label class="space-y-1 block md:col-span-2">
+                  <span class="text-sm text-slate-600">Attach file</span>
+                  <input type="file" name="version_file" class="w-full text-sm" />
+                </label>
+              </div>
+              <div class="flex items-center justify-end gap-3 pt-2">
+                <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-version').checked=false;">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Save Version</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto border rounded-xl">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-3 px-4">Drawing No.</th>
+                <th class="py-3 px-4">Revision No.</th>
+                <th class="py-3 px-4">Created On</th>
+                <th class="py-3 px-4">Submitted</th>
+                <th class="py-3 px-4">Approved</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">Reason</th>
+                <th class="py-3 px-4">File</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% for version in versions %}
+              <tr>
+                <td class="py-3 px-4 font-semibold">{{ version.drawing_number or '—' }}</td>
+                <td class="py-3 px-4">{{ version.revision_no or '—' }}</td>
+                <td class="py-3 px-4">{{ version.created_at.strftime('%d %b %Y, %I:%M %p') if version.created_at else '—' }}</td>
+                <td class="py-3 px-4">{{ version.submitted_date.strftime('%d %b %Y') if version.submitted_date else '—' }}</td>
+                <td class="py-3 px-4">{{ version.approved_date.strftime('%d %b %Y') if version.approved_date else '—' }}</td>
+                <td class="py-3 px-4">{{ version.approval_status or '—' }}</td>
+                <td class="py-3 px-4">{{ version.revision_reason or '—' }}</td>
+                <td class="py-3 px-4">
+                  {% if version.file_path %}
+                  <a href="{{ url_for('static', filename=version.file_path) }}" class="text-orange-600" download>Download</a>
+                  {% else %}
+                  —
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="8" class="py-4 px-4 text-slate-500">No drawings uploaded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase text-slate-500">Comments / Notes</p>
+            <h2 class="text-lg font-semibold">Discussion thread</h2>
+          </div>
+        </div>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 border rounded-xl p-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="comment" />
+          <label class="space-y-1 md:col-span-3">
+            <span class="text-sm">Comment</span>
+            <textarea name="body" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Add your note"></textarea>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Link to version</span>
+            <select name="drawing_version_id" class="w-full rounded-lg border-slate-200">
+              <option value="">General</option>
+              {% for version in versions %}
+              <option value="{{ version.id }}">{{ version.drawing_number or 'Drawing' }} · Rev {{ version.revision_no or '—' }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="md:col-span-4 flex justify-end">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Add comment</button>
+          </div>
+        </form>
+        <div class="space-y-2">
+          {% for comment in comments %}
+          <div class="p-3 bg-slate-50 rounded-xl text-sm">
+            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at.strftime('%d %b %Y, %I:%M %p') if comment.created_at else '' }}</span></p>
+            {% if comment.version %}
+            <p class="text-xs text-slate-500 mb-1">Linked to {{ comment.version.drawing_number or 'Drawing' }} {{ comment.version.revision_no or '' }}</p>
+            {% endif %}
+            <p class="text-slate-700">{{ comment.body }}</p>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No comments yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">BOM linked to site</h3>
+          <button class="px-3 py-1 text-xs rounded-full bg-slate-100 text-slate-600" disabled>Generate PO (Stage-wise)</button>
+        </div>
+        {% if bom %}
+        <div class="grid grid-cols-2 gap-3 text-sm text-slate-700">
+          <div class="p-3 bg-slate-50 rounded-xl">Name: <strong>{{ bom.bom_name }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Status: <strong>{{ bom.status.title() }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Created: <strong>{{ bom.created_at.strftime('%d %b %Y') if bom.created_at else '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Items: <strong>{{ bom.items|length }}</strong></div>
+        </div>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border rounded-xl p-3 mt-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="bom_item" />
+          <label class="space-y-1">
+            <span class="text-sm">Item code</span>
+            <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" placeholder="Item code" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Description</span>
+            <input type="text" name="item_description" class="w-full rounded-lg border-slate-200" placeholder="Description" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Quantity</span>
+            <input type="number" step="0.01" name="quantity_required" class="w-full rounded-lg border-slate-200" value="1" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Unit</span>
+            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Category</span>
+            <input type="text" name="category" class="w-full rounded-lg border-slate-200" placeholder="Category" />
+          </label>
+          <label class="space-y-1 md:col-span-2">
+            <span class="text-sm">Remarks</span>
+            <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <div class="md:col-span-2 flex justify-end">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Add item</button>
+          </div>
+        </form>
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-1">Item</th>
+                <th class="py-1">Description</th>
+                <th class="py-1">Qty</th>
+                <th class="py-1">Unit</th>
+                <th class="py-1">Category</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% for item in bom.items %}
+              <tr>
+                <td class="py-1">{{ item.item_code }}</td>
+                <td class="py-1">{{ item.description }}</td>
+                <td class="py-1">{{ item.quantity_required }}</td>
+                <td class="py-1">{{ item.unit }}</td>
+                <td class="py-1">{{ item.category }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="py-2 text-slate-500">No items yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-600">No BOM exists for this site yet.</p>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border rounded-xl p-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="create_bom" />
+          <label class="space-y-1">
+            <span class="text-sm">BOM name</span>
+            <input type="text" name="bom_name" class="w-full rounded-lg border-slate-200" placeholder="Main lift BOM" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Status</span>
+            <select name="bom_status" class="w-full rounded-lg border-slate-200">
+              <option value="draft">Draft</option>
+              <option value="in_progress">In Progress</option>
+              <option value="final">Final</option>
+            </select>
+          </label>
+          <div class="md:col-span-2 flex justify-end">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Create BOM for this Site</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

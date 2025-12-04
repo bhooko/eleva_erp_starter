@@ -1,3 +1,4 @@
+import datetime
 import importlib
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -5,7 +6,7 @@ from typing import List, Optional
 from flask import current_app
 
 from eleva_app import db
-from eleva_app.models import DrawingHistory
+from eleva_app.models import DrawingSite, DrawingVersion
 from eleva_app.uploads import _extract_tabular_upload
 from app import (
     MissingDependencyError,
@@ -117,6 +118,36 @@ def _extract_drawing_history_upload(upload):
     return _extract_tabular_upload(upload)
 
 
+def _find_or_create_site(project_no, client_name, site_location, lift_type):
+    existing_site = (
+        DrawingSite.query.filter(
+            DrawingSite.project_no == project_no,
+            DrawingSite.client_name == client_name,
+            DrawingSite.site_location == site_location,
+            DrawingSite.lift_type == lift_type,
+        )
+        .order_by(DrawingSite.id.asc())
+        .first()
+    )
+
+    if existing_site:
+        return existing_site, False
+
+    site = DrawingSite(
+        project_no=project_no,
+        client_name=client_name,
+        site_location=site_location,
+        lift_type=lift_type,
+    )
+    db.session.add(site)
+    db.session.flush()
+    return site, True
+
+
+def _apply_latest_version(site: DrawingSite):
+    site.apply_latest_version()
+
+
 def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
     result = DrawingHistoryUploadResult()
 
@@ -188,26 +219,52 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
             result.row_errors.append(f"Row {row_index}: {'; '.join(issues)}")
             continue
 
-        existing = (
-            DrawingHistory.query.filter(
-                DrawingHistory.project_no == project_no,
-                DrawingHistory.drg_number == drg_number,
-                DrawingHistory.rev_no == rev_no,
+        site, site_created = _find_or_create_site(
+            project_no,
+            mapped_values.get("client_name"),
+            mapped_values.get("site_location"),
+            mapped_values.get("lift_type"),
+        )
+
+        # Keep the site record aligned with the latest metadata from the sheet.
+        site.project_no = project_no or site.project_no
+        site.client_name = mapped_values.get("client_name") or site.client_name
+        site.site_location = mapped_values.get("site_location") or site.site_location
+        site.lift_type = mapped_values.get("lift_type") or site.lift_type
+
+        version = (
+            DrawingVersion.query.filter(
+                DrawingVersion.drawing_site_id == site.id,
+                DrawingVersion.drawing_number == drg_number,
+                DrawingVersion.revision_no == rev_no,
             ).first()
         )
 
-        is_new = existing is None
-        record = existing or DrawingHistory()
+        is_new_version = version is None
+        if not version:
+            version = DrawingVersion(
+                drawing_site_id=site.id,
+                drawing_number=drg_number,
+                revision_no=rev_no,
+            )
+            db.session.add(version)
+            try:
+                site.versions.append(version)
+            except Exception:
+                pass
 
-        for field_name, value in mapped_values.items():
-            setattr(record, field_name, value or None)
-        record.is_active = True if record.is_active is None else record.is_active
+        version.approval_status = mapped_values.get("drg_approval")
+        version.revision_reason = mapped_values.get("remarks")
+        if not version.created_at:
+            version.created_at = datetime.datetime.utcnow()
 
-        if is_new:
-            db.session.add(record)
+        if is_new_version:
             result.created_count += 1
-        else:
+        elif not site_created:
             result.updated_count += 1
+
+        _apply_latest_version(site)
+        site.last_updated = datetime.datetime.utcnow()
 
     try:
         db.session.commit()

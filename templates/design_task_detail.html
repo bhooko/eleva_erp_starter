@@ -190,6 +190,21 @@
     </div>
 
     <div class="space-y-4">
+      {% if related_drawing_sites %}
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <h3 class="text-lg font-semibold mb-2">Drawing Site Records</h3>
+        <p class="text-sm text-slate-600 mb-2">Jump to the site repository for BOM and drawing versions.</p>
+        <div class="space-y-2">
+          {% for site in related_drawing_sites %}
+          <a href="{{ url_for('design_drawing_site_detail', site_id=site.id) }}" class="block px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">
+            <p class="font-semibold">{{ site.project_no or site.client_name or 'Drawing Site' }}</p>
+            <p class="text-xs text-slate-500">{{ site.client_name or 'Client' }} · {{ site.site_location or 'Location' }}</p>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <h3 class="text-lg font-semibold mb-2">Comments</h3>
         <form method="POST" class="space-y-2">

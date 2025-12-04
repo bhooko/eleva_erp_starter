@@ -4900,7 +4900,10 @@ from eleva_app.models import (
     BillOfMaterials,
     BOMItem,
     BookInventory,
+    DrawingComment,
     DrawingHistory,
+    DrawingSite,
+    DrawingVersion,
     DesignDrawing,
     DesignDrawingRevision,
     DesignTask,
@@ -5611,12 +5614,22 @@ def design_task_detail(task_id):
 
     drawings = DesignDrawing.query.filter_by(design_task_id=task.id).all()
     bom_list = BillOfMaterials.query.filter_by(design_task_id=task.id).all()
+    related_drawing_sites = []
+    if task.project_id:
+        related_drawing_sites = DrawingSite.query.filter(
+            DrawingSite.project_id == task.project_id
+        ).all()
+    elif task.project_name:
+        related_drawing_sites = DrawingSite.query.filter(
+            DrawingSite.project_no.ilike(f"%{task.project_name}%")
+        ).all()
 
     return render_template(
         "design_task_detail.html",
         task=task,
         drawings=drawings,
         boms=bom_list,
+        related_drawing_sites=related_drawing_sites,
     )
 
 
@@ -5634,65 +5647,62 @@ def mark_notifications_read():
 @login_required
 def design_drawing_history():
     ensure_bootstrap()
-    query = DrawingHistory.query
+    query = DrawingSite.query
 
     project_no = (request.args.get("project_no") or "").strip()
     client_name = (request.args.get("client_name") or "").strip()
+    site_location = (request.args.get("site_location") or "").strip()
     lift_type = (request.args.get("lift_type") or "").strip()
-    date_from_raw = (request.args.get("date_from") or "").strip()
-    date_to_raw = (request.args.get("date_to") or "").strip()
+    approval_status = (request.args.get("approval_status") or "").strip()
 
     if project_no:
-        query = query.filter(DrawingHistory.project_no.ilike(f"%{project_no}%"))
+        query = query.filter(DrawingSite.project_no.ilike(f"%{project_no}%"))
     if client_name:
-        query = query.filter(DrawingHistory.client_name.ilike(f"%{client_name}%"))
+        query = query.filter(DrawingSite.client_name.ilike(f"%{client_name}%"))
+    if site_location:
+        query = query.filter(DrawingSite.site_location.ilike(f"%{site_location}%"))
     if lift_type:
-        query = query.filter(DrawingHistory.lift_type.ilike(f"%{lift_type}%"))
-
-    try:
-        date_from = (
-            datetime.datetime.strptime(date_from_raw, "%Y-%m-%d") if date_from_raw else None
-        )
-    except ValueError:
-        date_from = None
-
-    try:
-        date_to = datetime.datetime.strptime(date_to_raw, "%Y-%m-%d") if date_to_raw else None
-    except ValueError:
-        date_to = None
-
-    if date_from:
-        query = query.filter(DrawingHistory.created_at >= date_from)
-    if date_to:
-        day_end = date_to + datetime.timedelta(days=1)
-        query = query.filter(DrawingHistory.created_at < day_end)
+        query = query.filter(DrawingSite.lift_type.ilike(f"%{lift_type}%"))
+    if approval_status and approval_status.lower() != "all":
+        query = query.filter(DrawingSite.approval_status == approval_status)
 
     page = max(int(request.args.get("page", 1) or 1), 1)
     per_page = 20
     total_records = query.count()
     total_pages = max(1, math.ceil(total_records / per_page)) if total_records else 1
-    records = (
-        query.order_by(DrawingHistory.updated_at.desc().nullslast())
+    sites = (
+        query.order_by(DrawingSite.last_updated.desc().nullslast())
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
     )
 
+    lift_type_options = [
+        row[0]
+        for row in db.session.query(DrawingSite.lift_type)
+        .filter(DrawingSite.lift_type.isnot(None))
+        .distinct()
+        .order_by(DrawingSite.lift_type)
+        .all()
+        if row[0]
+    ]
+
     return render_template(
         "design_drawing_history.html",
-        records=records,
+        sites=sites,
         filters={
             "project_no": project_no,
             "client_name": client_name,
+            "site_location": site_location,
             "lift_type": lift_type,
-            "date_from": date_from_raw,
-            "date_to": date_to_raw,
+            "approval_status": approval_status or "all",
         },
         page=page,
         total_pages=total_pages,
         total_records=total_records,
         per_page=per_page,
         required_headers=sorted(DRAWING_REQUIRED_HEADERS),
+        lift_type_options=lift_type_options,
     )
 
 
@@ -5727,6 +5737,186 @@ def design_drawing_history_upload():
 
     result = process_drawing_history_upload(upload)
     return _render_result(result)
+
+
+def _parse_date_field(raw_value: str):
+    raw_value = (raw_value or "").strip()
+    if not raw_value:
+        return None
+    try:
+        return datetime.datetime.strptime(raw_value, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+@app.route("/design/drawing-site/<int:site_id>", methods=["GET", "POST"])
+@login_required
+def design_drawing_site_detail(site_id: int):
+    ensure_bootstrap()
+    site = DrawingSite.query.get_or_404(site_id)
+
+    bom = (
+        BillOfMaterials.query.filter_by(drawing_site_id=site.id)
+        .order_by(BillOfMaterials.created_at.desc().nullslast())
+        .first()
+    )
+
+    related_tasks = []
+    if site.project_id:
+        related_tasks = (
+            DesignTask.query.filter(DesignTask.project_id == site.project_id)
+            .order_by(DesignTask.created_at.desc())
+            .all()
+        )
+    elif site.project_no:
+        related_tasks = (
+            DesignTask.query.filter(
+                DesignTask.project_name.ilike(f"%{site.project_no}%")
+            )
+            .order_by(DesignTask.created_at.desc())
+            .all()
+        )
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "new_version":
+            drawing_number = (request.form.get("drawing_number") or "").strip()
+            revision_no = (request.form.get("revision_no") or "").strip() or None
+            approval_status = (request.form.get("approval_status") or "").strip()
+            revision_reason = (request.form.get("revision_reason") or "").strip()
+            submitted_date = _parse_date_field(request.form.get("submitted_date"))
+            approved_date = _parse_date_field(request.form.get("approved_date"))
+
+            if not drawing_number:
+                flash("Please provide a drawing number for this version.", "danger")
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+
+            file = request.files.get("version_file")
+            file_path = None
+            if file and file.filename:
+                fname = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
+                save_path = os.path.join(app.config["UPLOAD_FOLDER"], fname)
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                file.save(save_path)
+                file_path = os.path.join("uploads", fname)
+
+            version = (
+                DrawingVersion.query.filter(
+                    DrawingVersion.drawing_site_id == site.id,
+                    DrawingVersion.drawing_number == drawing_number,
+                    DrawingVersion.revision_no == revision_no,
+                ).first()
+            )
+
+            created_now = False
+            if not version:
+                version = DrawingVersion(
+                    drawing_site_id=site.id,
+                    drawing_number=drawing_number,
+                    revision_no=revision_no,
+                )
+                db.session.add(version)
+                created_now = True
+                try:
+                    site.versions.append(version)
+                except Exception:
+                    pass
+
+            if file_path:
+                version.file_path = file_path
+            version.approval_status = approval_status or version.approval_status
+            version.revision_reason = revision_reason or version.revision_reason
+            version.submitted_date = submitted_date or version.submitted_date
+            version.approved_date = approved_date or version.approved_date
+            version.created_by_user_id = (
+                version.created_by_user_id
+                or (current_user.id if current_user else None)
+            )
+            version.created_at = version.created_at or datetime.datetime.utcnow()
+
+            site.latest_drawing_number = drawing_number or site.latest_drawing_number
+            site.latest_revision = revision_no or site.latest_revision
+            site.approval_status = approval_status or site.approval_status
+            site.last_updated = datetime.datetime.utcnow()
+            site.apply_latest_version()
+
+            db.session.commit()
+            flash(
+                "Drawing version saved." if created_now else "Drawing version updated.",
+                "success",
+            )
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+
+        if action == "comment":
+            body = (request.form.get("body") or "").strip()
+            version_id_raw = request.form.get("drawing_version_id")
+            version_id = int(version_id_raw) if version_id_raw else None
+            if not body:
+                flash("Please enter a comment before posting.", "danger")
+            else:
+                db.session.add(
+                    DrawingComment(
+                        drawing_site_id=site.id,
+                        drawing_version_id=version_id,
+                        body=body,
+                        author_id=current_user.id,
+                    )
+                )
+                db.session.commit()
+                flash("Comment added.", "success")
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+
+        if action == "create_bom":
+            bom_name = request.form.get("bom_name") or (
+                f"BOM - {site.project_no or site.client_name or 'Site'}"
+            )
+            bom_status = request.form.get("bom_status") or "draft"
+            bom = BillOfMaterials(
+                bom_name=bom_name,
+                status=bom_status,
+                drawing_site_id=site.id,
+                project_id=site.project_id,
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(bom)
+            db.session.commit()
+            flash("BOM created for this site.", "success")
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+
+        if action == "bom_item" and bom:
+            item = BOMItem(
+                bom_id=bom.id,
+                item_code=request.form.get("item_code"),
+                description=request.form.get("item_description"),
+                category=request.form.get("category"),
+                unit=request.form.get("unit"),
+                quantity_required=float(request.form.get("quantity_required") or 0),
+                remarks=request.form.get("remarks"),
+            )
+            db.session.add(item)
+            db.session.commit()
+            flash("BOM item added.", "success")
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+
+    versions = sorted(
+        site.versions or [],
+        key=lambda v: (v.created_at or datetime.datetime.min, v.id or 0),
+        reverse=True,
+    )
+    comments = sorted(
+        site.comments or [],
+        key=lambda c: c.created_at or datetime.datetime.min,
+        reverse=True,
+    )
+
+    return render_template(
+        "design_drawing_site_detail.html",
+        site=site,
+        versions=versions,
+        comments=comments,
+        bom=bom,
+        related_tasks=related_tasks,
+    )
 
 
 @app.route("/purchase/orders", methods=["GET", "POST"])
@@ -8051,6 +8241,9 @@ def ensure_tables():
         DesignTaskComment.__table__,
         DesignDrawing.__table__,
         DesignDrawingRevision.__table__,
+        DrawingSite.__table__,
+        DrawingVersion.__table__,
+        DrawingComment.__table__,
         DrawingHistory.__table__,
         BillOfMaterials.__table__,
         BOMItem.__table__,
@@ -8216,6 +8409,35 @@ def ensure_design_task_columns():
         print("✔️ design_task OK")
 
 
+def ensure_bom_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_bom_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(bill_of_materials)")
+    bom_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "drawing_site_id" not in bom_cols:
+        cur.execute(
+            "ALTER TABLE bill_of_materials ADD COLUMN drawing_site_id INTEGER;"
+        )
+        added_cols.append("drawing_site_id")
+
+    if added_cols:
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_bill_of_materials_drawing_site_id ON bill_of_materials (drawing_site_id);")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in bill_of_materials: {', '.join(added_cols)}")
+    else:
+        print("✔️ bill_of_materials OK")
+
+
 def migrate_plaintext_passwords():
     migrated = 0
     for user in User.query.all():
@@ -8235,6 +8457,7 @@ def bootstrap_db():
     ensure_project_columns()
     ensure_dispatch_columns()
     ensure_design_task_columns()
+    ensure_bom_columns()
     ensure_qc_columns()    # adds missing columns safely
     ensure_lift_columns()
     ensure_service_route_columns()
