@@ -56,6 +56,43 @@
     </form>
   </div>
 
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-sm text-slate-500">Existing links</p>
+        <h2 class="text-lg font-semibold">Purchase Orders from this BOM</h2>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2 px-3">PO Number</th>
+            <th class="py-2 px-3">Vendor</th>
+            <th class="py-2 px-3">Stage</th>
+            <th class="py-2 px-3">Status</th>
+            <th class="py-2 px-3">Order Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for po in related_pos %}
+          <tr>
+            <td class="py-2 px-3 font-semibold">
+              <a href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}" class="text-orange-600 hover:underline">{{ po.po_number }}</a>
+            </td>
+            <td class="py-2 px-3">{{ po.vendor.name if po.vendor else '—' }}</td>
+            <td class="py-2 px-3">{{ po.stage.name if po.stage else '—' }}</td>
+            <td class="py-2 px-3">{{ po.status|title }}</td>
+            <td class="py-2 px-3">{{ po.order_date.strftime('%d %b %Y') if po.order_date else '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-3 px-3 text-slate-500">No purchase orders generated from this BOM yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   {% if preview_items is not none %}
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
     <div class="flex items-center justify-between">

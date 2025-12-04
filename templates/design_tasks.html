@@ -9,7 +9,11 @@
       <h1 class="text-2xl font-semibold">Design Tasks</h1>
       <p class="text-sm text-slate-600">Track requests across stages on a Kanban board.</p>
     </div>
-    <button id="openTaskModal" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
+    <button
+      type="button"
+      data-design-task-modal="designTaskModal"
+      class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition"
+    >
       <span class="text-lg">+</span> New Task
     </button>
   </div>
@@ -19,107 +23,22 @@
   </div>
 </div>
 
-<div id="taskModal" class="fixed inset-0 z-50 hidden items-center justify-center">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur" onclick="toggleTaskModal(false)"></div>
-  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-fade-in">
-    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
-      <div>
-        <p class="text-xs text-slate-500 uppercase">Design intake</p>
-        <h2 class="text-lg font-semibold">Create design task</h2>
-      </div>
-      <button class="text-slate-500" onclick="toggleTaskModal(false)">✕</button>
-    </div>
-    <form method="POST" class="p-5 space-y-4">
-      {{ csrf_field() }}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Task type</span>
-          <select name="task_type" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
-            <option value="sales_query">Sales Query</option>
-            <option value="drawing">Drawing</option>
-            <option value="bom">BOM</option>
-            <option value="general">General</option>
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Title</span>
-          <input type="text" name="description" class="w-full rounded-lg border-slate-200" placeholder="Task title" required />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Project</span>
-          <select name="project_id" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
-            <option value="">Unlinked</option>
-            {% for project in projects %}
-            <option value="{{ project.id }}">{{ project.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Project / Site (text)</span>
-          <input type="text" name="project_name" class="w-full rounded-lg border-slate-200" placeholder="If project not in list" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Type</span>
-          <select name="origin_type" class="w-full rounded-lg border-slate-200">
-            <option value="sales">Sales Opportunity</option>
-            <option value="installation">New Installation</option>
-            <option value="service">Service</option>
-            <option value="manual" selected>Manual</option>
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Reference ID</span>
-          <input type="text" name="origin_id" class="w-full rounded-lg border-slate-200" placeholder="Optional" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Notes</span>
-          <input type="text" name="origin_reference" class="w-full rounded-lg border-slate-200" placeholder="Links or notes" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Assigned designer</span>
-          <select name="assigned_to_user_id" class="w-full rounded-lg border-slate-200">
-            <option value="">Unassigned</option>
-            {% for user in users %}
-              <option value="{{ user.id }}">{{ user.display_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Priority</span>
-          <select name="priority" class="w-full rounded-lg border-slate-200">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Due date</span>
-          <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" />
-        </label>
-        <label class="space-y-1 md:col-span-2">
-          <span class="text-sm text-slate-600">Notes</span>
-          <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context or attachments link"></textarea>
-        </label>
-      </div>
-      <div class="flex items-center justify-end gap-3 pt-2">
-        <button type="button" class="px-4 py-2 rounded-lg border" onclick="toggleTaskModal(false)">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Create</button>
-      </div>
-    </form>
-  </div>
-</div>
+{% with
+  modal_id='designTaskModal',
+  modal_title='Create design task',
+  submit_label='Create',
+  projects=projects,
+  users=users,
+  default_origin_type='manual',
+  default_priority='medium'
+%}
+  {% include 'partials/design_task_modal.html' %}
+{% endwith %}
 
 <script>
   const canMove = {{ 'true' if can_move_cards else 'false' }};
   const kanbanBoard = document.getElementById('kanbanBoard');
   let isDragging = false;
-
-  function toggleTaskModal(state){
-    const modal = document.getElementById('taskModal');
-    modal.classList.toggle('hidden', state === false);
-    modal.classList.toggle('flex', state !== false);
-  }
-  document.getElementById('openTaskModal').addEventListener('click', ()=>toggleTaskModal(true));
 
   function initDragAndDrop(){
     if (!canMove || !kanbanBoard) return;

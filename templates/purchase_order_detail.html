@@ -10,6 +10,13 @@
         <p class="text-sm text-slate-600">Detailed view with linked BOM and stage information.</p>
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ (po.origin or 'ERP')|upper }}</span>
       </div>
+      {% if po.bom %}
+      <p class="mt-2 text-sm text-amber-700">
+        Generated from BOM
+        <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="font-semibold text-amber-800 hover:underline">{{ po.bom.bom_name }}</a>
+        {% if po.stage %} – Stage <strong>{{ po.stage.name }}</strong>{% endif %}
+      </p>
+      {% endif %}
     </div>
     <a href="{{ url_for('purchase_orders') }}" class="px-3 py-1.5 rounded-lg border text-sm">Back to list</a>
   </div>
