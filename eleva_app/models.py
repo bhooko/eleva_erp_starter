@@ -1556,18 +1556,17 @@ class DesignTask(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
     project_name = db.Column(db.String(150), nullable=True)
     task_type = db.Column(db.String(50), nullable=False)
+    subtype = db.Column(db.String(50), nullable=True)
     requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     assigned_to_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     status = db.Column(db.String(50), nullable=False, default="new")
     priority = db.Column(db.String(50), nullable=False, default="medium")
     due_date = db.Column(db.Date, nullable=True)
     description = db.Column(db.Text, nullable=True)
-    site_visit_date = db.Column(db.Date, nullable=True)
-    site_visit_address = db.Column(db.String(255), nullable=True)
-    site_visit_contact = db.Column(db.String(120), nullable=True)
-    site_visit_phone = db.Column(db.String(50), nullable=True)
-    site_visit_notes = db.Column(db.Text, nullable=True)
-    site_visit_status = db.Column(db.String(50), nullable=True)
+    origin_type = db.Column(db.String(50), nullable=True)
+    origin_id = db.Column(db.Integer, nullable=True)
+    origin_reference = db.Column(db.String(150), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
@@ -1582,26 +1581,6 @@ class DesignTask(db.Model):
         if self.project:
             return self.project.name
         return self.project_name or "Unlinked"
-
-
-class DesignShaftSuggestion(db.Model):
-    __tablename__ = "design_shaft_suggestion"
-
-    id = db.Column(db.Integer, primary_key=True)
-    design_task_id = db.Column(
-        db.Integer, db.ForeignKey("design_task.id"), nullable=False, index=True
-    )
-    shaft_width_mm = db.Column(db.Integer, nullable=True)
-    shaft_depth_mm = db.Column(db.Integer, nullable=True)
-    pit_depth_mm = db.Column(db.Integer, nullable=True)
-    headroom_mm = db.Column(db.Integer, nullable=True)
-    machine_room_required = db.Column(db.Boolean, default=False)
-    notes = db.Column(db.Text, nullable=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-
-    design_task = db.relationship("DesignTask", backref="shaft_suggestions")
-    created_by = db.relationship("User")
 
 
 class DesignTaskComment(db.Model):

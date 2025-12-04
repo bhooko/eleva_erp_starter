@@ -4903,7 +4903,6 @@ from eleva_app.models import (
     DrawingHistory,
     DesignDrawing,
     DesignDrawingRevision,
-    DesignShaftSuggestion,
     DesignTask,
     DesignTaskComment,
     Dispatch,
@@ -5294,7 +5293,12 @@ def _design_default_filters(query):
 def design_tasks():
     ensure_bootstrap()
     if request.method == "POST":
-        task_type = request.form.get("task_type") or "quotation_check"
+        allowed_creators = ["admin", "design", "sales", "installation", "service"]
+        role = (current_user.role or "").lower()
+        if (not current_user.is_admin) and role not in allowed_creators:
+            abort(403)
+
+        task_type = request.form.get("task_type") or "general"
         project_id = request.form.get("project_id") or None
         project_name = request.form.get("project_name") or None
         requested_by = request.form.get("requested_by_user_id") or None
@@ -5303,22 +5307,11 @@ def design_tasks():
         priority = request.form.get("priority") or "medium"
         due_date_raw = request.form.get("due_date")
         description = request.form.get("description")
-        site_visit_date_raw = request.form.get("site_visit_date")
-        site_visit_status = request.form.get("site_visit_status") or None
 
         try:
             due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date() if due_date_raw else None
         except ValueError:
             due_date = None
-
-        try:
-            site_visit_date = (
-                datetime.datetime.strptime(site_visit_date_raw, "%Y-%m-%d").date()
-                if site_visit_date_raw
-                else None
-            )
-        except ValueError:
-            site_visit_date = None
 
         task = DesignTask(
             task_type=task_type,
@@ -5330,12 +5323,11 @@ def design_tasks():
             priority=priority,
             due_date=due_date,
             description=description,
-            site_visit_date=site_visit_date,
-            site_visit_status=site_visit_status,
-            site_visit_address=request.form.get("site_visit_address") or None,
-            site_visit_contact=request.form.get("site_visit_contact") or None,
-            site_visit_phone=request.form.get("site_visit_phone") or None,
-            site_visit_notes=request.form.get("site_visit_notes") or None,
+            origin_type=request.form.get("origin_type") or None,
+            origin_id=request.form.get("origin_id") or None,
+            origin_reference=request.form.get("origin_reference") or None,
+            notes=request.form.get("notes") or None,
+            subtype=request.form.get("subtype") or None,
         )
         db.session.add(task)
         db.session.commit()
@@ -5347,7 +5339,7 @@ def design_tasks():
     statuses = {
         "new": "New",
         "in_progress": "In Progress",
-        "waiting_info": "Waiting for Info",
+        "waiting_info": "Waiting on Info",
         "completed": "Completed",
         "on_hold": "On Hold",
     }
@@ -5357,12 +5349,15 @@ def design_tasks():
             DesignTask.query.filter(DesignTask.status == key)
         ).order_by(DesignTask.due_date.nullsfirst()).all()
 
+    can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
+
     return render_template(
         "design_tasks.html",
         tasks_by_status=tasks_by_status,
         statuses=statuses,
         users=users,
         projects=projects,
+        can_move_cards=can_move_cards,
     )
 
 
@@ -5370,10 +5365,29 @@ def design_tasks():
 @login_required
 def design_task_status(task_id):
     task = DesignTask.query.get_or_404(task_id)
-    new_status = request.form.get("status") or task.status
-    task.status = new_status
+    role = (current_user.role or "").lower()
+    if not (current_user.is_admin or "design" in role):
+        abort(403)
+
+    allowed_statuses = {
+        "new",
+        "in_progress",
+        "waiting_info",
+        "completed",
+        "on_hold",
+    }
+    status_value = None
+    if request.is_json:
+        status_value = request.json.get("status")
+    else:
+        status_value = request.form.get("status")
+    if status_value not in allowed_statuses:
+        return ("Invalid status", 400)
+    task.status = status_value
     task.updated_at = datetime.datetime.utcnow()
     db.session.commit()
+    if request.is_json:
+        return {"ok": True, "status": status_value}
     flash("Task status updated.", "success")
     return redirect(url_for("design_tasks"))
 
@@ -5397,20 +5411,6 @@ def design_task_detail(task_id):
                 )
                 db.session.commit()
                 flash("Comment added.", "success")
-        elif action == "shaft":
-            suggestion = DesignShaftSuggestion(
-                design_task_id=task.id,
-                shaft_width_mm=request.form.get("shaft_width_mm") or None,
-                shaft_depth_mm=request.form.get("shaft_depth_mm") or None,
-                pit_depth_mm=request.form.get("pit_depth_mm") or None,
-                headroom_mm=request.form.get("headroom_mm") or None,
-                machine_room_required=bool(request.form.get("machine_room_required")),
-                notes=request.form.get("notes"),
-                created_by_user_id=current_user.id,
-            )
-            db.session.add(suggestion)
-            db.session.commit()
-            flash("Shaft suggestion saved.", "success")
         elif action == "revision":
             drawing_id = request.form.get("drawing_id")
             drawing_name = request.form.get("drawing_name") or "Untitled Drawing"
@@ -7904,7 +7904,6 @@ def ensure_tables():
         QCWorkComment.__table__,
         QCWorkLog.__table__,
         DesignTask.__table__,
-        DesignShaftSuggestion.__table__,
         DesignTaskComment.__table__,
         DesignDrawing.__table__,
         DesignDrawingRevision.__table__,
