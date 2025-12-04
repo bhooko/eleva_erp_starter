@@ -205,6 +205,84 @@
           <div class="p-3 bg-slate-50 rounded-xl">Created: <strong>{{ bom.created_at.strftime('%d %b %Y') if bom.created_at else '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Items: <strong>{{ bom.items|length }}</strong></div>
         </div>
+        {% if can_edit_bom %}
+        <div class="flex justify-end mt-2">
+          <button
+            type="button"
+            class="px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+            onclick="toggleSiteBomDuplicate(true)"
+          >
+            Duplicate BOM to Another Project/Site
+          </button>
+        </div>
+        <div
+          id="siteDuplicateBomModal"
+          class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur"
+        >
+          <div
+            class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            onclick="event.stopPropagation()"
+          >
+            <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+              <div>
+                <p class="text-xs text-slate-500 uppercase">Duplicate BOM</p>
+                <h2 class="text-lg font-semibold">Send BOM to another project/site</h2>
+              </div>
+              <button class="text-slate-500" type="button" onclick="toggleSiteBomDuplicate(false)">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('duplicate_bom', bom_id=bom.id) }}" class="p-5 space-y-4">
+              {{ csrf_field() }}
+              <input type="hidden" name="redirect_url" value="{{ request.path }}" />
+              <label class="space-y-1 block">
+                <span class="text-sm text-slate-600">Target Project / Site</span>
+                <select name="target_reference" required class="w-full rounded-lg border-slate-200">
+                  <option value="">Select where to duplicate</option>
+                  {% if drawing_site_options %}
+                  <optgroup label="Drawing Sites">
+                    {% for option in drawing_site_options %}
+                    <option value="drawing_site:{{ option.id }}">
+                      {{ option.project_no or option.client_name or 'Drawing Site' }}{% if option.site_location %} · {{ option.site_location }}{% endif %}
+                    </option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                  {% if project_options %}
+                  <optgroup label="Projects">
+                    {% for project in project_options %}
+                    <option value="project:{{ project.id }}">{{ project.name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                </select>
+              </label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Target Lift Identifier (optional)</span>
+                  <input
+                    type="text"
+                    name="target_lift_identifier"
+                    class="w-full rounded-lg border-slate-200"
+                    placeholder="Lift-2"
+                  />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">New BOM name or code (optional)</span>
+                  <input
+                    type="text"
+                    name="new_bom_name"
+                    class="w-full rounded-lg border-slate-200"
+                    placeholder="{{ bom.bom_name }} (Copy)"
+                  />
+                </label>
+              </div>
+              <div class="flex items-center justify-end gap-3 pt-2">
+                <button type="button" class="px-4 py-2 rounded-lg border" onclick="toggleSiteBomDuplicate(false)">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Duplicate BOM</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
         <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border rounded-xl p-3 mt-3">
           {{ csrf_field() }}
           <input type="hidden" name="action" value="bom_item" />
@@ -288,4 +366,18 @@
     </div>
   </div>
 </div>
+<script>
+  function toggleSiteBomDuplicate(state){
+    const modal = document.getElementById('siteDuplicateBomModal');
+    if(!modal) return;
+    const shouldShow = state !== false;
+    modal.classList.toggle('hidden', !shouldShow);
+    modal.classList.toggle('flex', shouldShow);
+  }
+  document.getElementById('siteDuplicateBomModal')?.addEventListener('click', (event) => {
+    if(event.target.id === 'siteDuplicateBomModal'){
+      toggleSiteBomDuplicate(false);
+    }
+  });
+</script>
 {% endblock %}

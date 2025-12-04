@@ -5503,6 +5503,10 @@ def design_task_status(task_id):
 @login_required
 def design_task_detail(task_id):
     task = DesignTask.query.get_or_404(task_id)
+    role = (current_user.role or "").lower()
+    can_edit_bom = current_user.is_admin or any(
+        keyword in role for keyword in ["design", "purchase", "project", "installation"]
+    )
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -5615,6 +5619,14 @@ def design_task_detail(task_id):
     drawings = DesignDrawing.query.filter_by(design_task_id=task.id).all()
     bom_list = BillOfMaterials.query.filter_by(design_task_id=task.id).all()
     related_drawing_sites = []
+    project_options = (
+        Project.query.order_by(Project.created_at.desc().nullslast()).limit(100).all()
+    )
+    drawing_site_options = (
+        DrawingSite.query.order_by(DrawingSite.last_updated.desc().nullslast())
+        .limit(100)
+        .all()
+    )
     if task.project_id:
         related_drawing_sites = DrawingSite.query.filter(
             DrawingSite.project_id == task.project_id
@@ -5630,6 +5642,9 @@ def design_task_detail(task_id):
         drawings=drawings,
         boms=bom_list,
         related_drawing_sites=related_drawing_sites,
+        can_edit_bom=can_edit_bom,
+        project_options=project_options,
+        drawing_site_options=drawing_site_options,
     )
 
 
@@ -5754,6 +5769,10 @@ def _parse_date_field(raw_value: str):
 def design_drawing_site_detail(site_id: int):
     ensure_bootstrap()
     site = DrawingSite.query.get_or_404(site_id)
+    role = (current_user.role or "").lower()
+    can_edit_bom = current_user.is_admin or any(
+        keyword in role for keyword in ["design", "purchase", "project", "installation"]
+    )
 
     bom = (
         BillOfMaterials.query.filter_by(drawing_site_id=site.id)
@@ -5909,6 +5928,15 @@ def design_drawing_site_detail(site_id: int):
         reverse=True,
     )
 
+    project_options = (
+        Project.query.order_by(Project.created_at.desc().nullslast()).limit(100).all()
+    )
+    drawing_site_options = (
+        DrawingSite.query.order_by(DrawingSite.last_updated.desc().nullslast())
+        .limit(100)
+        .all()
+    )
+
     return render_template(
         "design_drawing_site_detail.html",
         site=site,
@@ -5916,7 +5944,117 @@ def design_drawing_site_detail(site_id: int):
         comments=comments,
         bom=bom,
         related_tasks=related_tasks,
+        can_edit_bom=can_edit_bom,
+        project_options=project_options,
+        drawing_site_options=drawing_site_options,
     )
+
+
+@app.route("/bom/<int:bom_id>/duplicate", methods=["POST"])
+@login_required
+def duplicate_bom(bom_id: int):
+    ensure_bootstrap()
+    source_bom = BillOfMaterials.query.get_or_404(bom_id)
+
+    role = (current_user.role or "").lower()
+    can_edit_bom = current_user.is_admin or any(
+        keyword in role for keyword in ["design", "purchase", "project", "installation"]
+    )
+    if not can_edit_bom:
+        abort(403)
+
+    target_reference = (request.form.get("target_reference") or "").strip()
+    lift_identifier = (request.form.get("target_lift_identifier") or "").strip()
+    new_bom_name = (request.form.get("new_bom_name") or "").strip()
+    redirect_url = request.form.get("redirect_url")
+
+    if not target_reference or ":" not in target_reference:
+        flash("Please select a target project or site for duplication.", "danger")
+        return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+
+    target_type, target_id_value = target_reference.split(":", 1)
+    try:
+        target_id = int(target_id_value)
+    except ValueError:
+        flash("Invalid target selected for duplication.", "danger")
+        return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+
+    target_project_id = None
+    target_drawing_site_id = None
+    target_label = "Selected location"
+
+    if target_type == "drawing_site":
+        target_site = DrawingSite.query.get(target_id)
+        if not target_site:
+            flash("Target drawing site not found.", "danger")
+            return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+        target_drawing_site_id = target_site.id
+        target_project_id = target_site.project_id or None
+        target_label = (
+            target_site.project_no
+            or target_site.client_name
+            or target_site.site_location
+            or f"Site #{target_site.id}"
+        )
+    elif target_type == "project":
+        target_project = Project.query.get(target_id)
+        if not target_project:
+            flash("Target project not found.", "danger")
+            return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+        target_project_id = target_project.id
+        target_label = target_project.name or f"Project #{target_project.id}"
+    else:
+        flash("Unsupported target type for duplication.", "danger")
+        return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+
+    bom_name = new_bom_name or f"{source_bom.bom_name} (Copy)"
+    if lift_identifier and not new_bom_name:
+        bom_name = f"{bom_name} - {lift_identifier}"
+
+    new_bom = BillOfMaterials(
+        bom_name=bom_name,
+        status=source_bom.status,
+        project_id=target_project_id,
+        design_task_id=None,
+        drawing_site_id=target_drawing_site_id,
+        created_by_user_id=current_user.id,
+    )
+
+    try:
+        db.session.add(new_bom)
+        db.session.flush()
+
+        for item in source_bom.items:
+            db.session.add(
+                BOMItem(
+                    bom_id=new_bom.id,
+                    item_code=item.item_code,
+                    description=item.description,
+                    category=item.category,
+                    unit=item.unit,
+                    quantity_required=item.quantity_required,
+                    remarks=item.remarks,
+                )
+            )
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to duplicate BOM")
+        flash("Could not duplicate BOM. Please try again.", "danger")
+        return redirect(redirect_url or request.referrer or url_for("design_tasks"))
+
+    flash(f"BOM duplicated successfully to Project/Site: {target_label}", "success")
+
+    if new_bom.drawing_site_id:
+        return redirect(
+            url_for("design_drawing_site_detail", site_id=new_bom.drawing_site_id)
+        )
+    if redirect_url:
+        return redirect(redirect_url)
+    if new_bom.project_id:
+        return redirect(url_for("project_detail", project_id=new_bom.project_id))
+    return redirect(request.referrer or url_for("design_tasks"))
 
 
 @app.route("/purchase/orders", methods=["GET", "POST"])
