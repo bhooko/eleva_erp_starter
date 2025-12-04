@@ -5376,11 +5376,13 @@ def _design_status_map():
 def _get_design_board_payload():
     statuses = _design_status_map()
     tasks_by_status = {}
+    ordered_tasks = []
     for key in statuses:
         tasks_by_status[key] = _design_default_filters(
             DesignTask.query.filter(DesignTask.status == key)
         ).order_by(DesignTask.due_date.nullsfirst()).all()
-    return statuses, tasks_by_status
+        ordered_tasks.extend(tasks_by_status[key])
+    return statuses, tasks_by_status, ordered_tasks
 
 
 def _create_notification(user_id, message, link_url=None):
@@ -5491,13 +5493,14 @@ def design_tasks():
 
     projects = Project.query.order_by(Project.name).all()
     users = User.query.order_by(User.first_name, User.username).all()
-    statuses, tasks_by_status = _get_design_board_payload()
+    statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
 
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
 
     return render_template(
         "design_tasks.html",
         tasks_by_status=tasks_by_status,
+        ordered_tasks=ordered_tasks,
         statuses=statuses,
         users=users,
         projects=projects,
@@ -5509,11 +5512,12 @@ def design_tasks():
 @login_required
 def design_tasks_json():
     ensure_bootstrap()
-    statuses, tasks_by_status = _get_design_board_payload()
+    statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
     board_html = render_template(
         "partials/design_tasks_board.html",
         tasks_by_status=tasks_by_status,
+        ordered_tasks=ordered_tasks,
         statuses=statuses,
         can_move_cards=can_move_cards,
     )

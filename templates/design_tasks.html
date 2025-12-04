@@ -37,12 +37,31 @@
 
 <script>
   const canMove = {{ 'true' if can_move_cards else 'false' }};
+  const statusLabels = {{ statuses|tojson }};
   const kanbanBoard = document.getElementById('kanbanBoard');
   let isDragging = false;
+
+  function formatStatusLabel(status){
+    if (statusLabels[status]) return statusLabels[status];
+    return status
+      .split('_')
+      .map((word)=> word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  function updateCardStatus(card, status){
+    if (!card) return;
+    card.dataset.status = status;
+    const badge = card.querySelector('[data-status-label]');
+    if (badge){
+      badge.textContent = formatStatusLabel(status);
+    }
+  }
 
   function initDragAndDrop(){
     if (!canMove || !kanbanBoard) return;
     let dragged = null;
+    const cardsGrid = kanbanBoard.querySelector('[data-cards-grid]');
     kanbanBoard.querySelectorAll('[draggable="true"]').forEach(card => {
       card.addEventListener('dragstart', ()=>{
         dragged = card;
@@ -63,7 +82,10 @@
         zone.classList.remove('ring','ring-orange-200');
         if(!dragged) return;
         const status = zone.dataset.status;
-        zone.appendChild(dragged);
+        if (cardsGrid){
+          cardsGrid.prepend(dragged);
+        }
+        updateCardStatus(dragged, status);
         fetch(`/design/tasks/${dragged.dataset.taskId}/status`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
