@@ -8047,6 +8047,18 @@ def ensure_design_task_columns():
         cur.execute("ALTER TABLE design_task ADD COLUMN subtype TEXT;")
         added_cols.append("subtype")
 
+    if "origin_type" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN origin_type TEXT;")
+        added_cols.append("origin_type")
+
+    if "origin_id" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN origin_id INTEGER;")
+        added_cols.append("origin_id")
+
+    if "origin_reference" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN origin_reference TEXT;")
+        added_cols.append("origin_reference")
+
     conn.commit()
     conn.close()
 
