@@ -9443,6 +9443,7 @@ def ensure_tables():
         Product.__table__,
         Vendor.__table__,
         PurchaseOrder.__table__,
+        PurchaseOrderLine.__table__,
         PurchaseOrderItem.__table__,
         BookInventory.__table__,
         InventoryItem.__table__,
