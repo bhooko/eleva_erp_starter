@@ -26,9 +26,9 @@ from collections import OrderedDict, Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Integer, case, inspect, func, or_, and_
+from sqlalchemy import Integer, case, inspect, func, or_, and_, event
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import joinedload, subqueryload, load_only
+from sqlalchemy.orm import joinedload, subqueryload, load_only, object_session
 from sqlalchemy.engine.url import make_url
 
 from eleva_app import create_app, csrf, db, login_manager
@@ -4905,6 +4905,7 @@ from eleva_app.models import (
     DesignDrawingRevision,
     DesignTask,
     DesignTaskComment,
+    Notification,
     Dispatch,
     DispatchItem,
     InventoryItem,
@@ -5153,6 +5154,25 @@ def inject_switchable_users():
     return {"switchable_users": users}
 
 
+@app.context_processor
+def inject_notifications():
+    if not current_user or not getattr(current_user, "is_authenticated", False):
+        return {}
+    notifications = (
+        Notification.query.filter_by(user_id=current_user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    unread_count = (
+        Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+    )
+    return {
+        "recent_notifications": notifications,
+        "unread_notification_count": unread_count,
+    }
+
+
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
 
 @login_manager.user_loader
@@ -5288,6 +5308,86 @@ def _design_default_filters(query):
     return query
 
 
+def _design_status_map():
+    return {
+        "new": "New",
+        "in_progress": "In Progress",
+        "waiting_info": "Waiting on Info",
+        "completed": "Completed",
+        "on_hold": "On Hold",
+    }
+
+
+def _get_design_board_payload():
+    statuses = _design_status_map()
+    tasks_by_status = {}
+    for key in statuses:
+        tasks_by_status[key] = _design_default_filters(
+            DesignTask.query.filter(DesignTask.status == key)
+        ).order_by(DesignTask.due_date.nullsfirst()).all()
+    return statuses, tasks_by_status
+
+
+def _create_notification(user_id, message, link_url=None):
+    if not user_id or not message:
+        return None
+    note = Notification(user_id=user_id, message=message, link_url=link_url)
+    db.session.add(note)
+    return note
+
+
+@event.listens_for(DesignTask, "after_insert")
+def _notify_design_task_assignee(mapper, connection, target):
+    if not target.assigned_to_user_id:
+        return
+    connection.execute(
+        Notification.__table__.insert().values(
+            user_id=target.assigned_to_user_id,
+            message=f"You have been assigned a new design task: {target.description or target.project_label}",
+            link_url=f"/design/tasks/{target.id}",
+            created_at=datetime.datetime.utcnow(),
+            is_read=False,
+        )
+    )
+
+
+@event.listens_for(DesignTask, "after_update")
+def _notify_design_task_reassignment(mapper, connection, target):
+    history = inspect(target).attrs.assigned_to_user_id.history
+    if not history.has_changes():
+        return
+
+    previous = history.deleted[0] if history.deleted else None
+    current = history.added[0] if history.added else None
+    now = datetime.datetime.utcnow()
+    link_url = f"/design/tasks/{target.id}"
+    payload = []
+
+    if previous and previous != current:
+        payload.append(
+            {
+                "user_id": previous,
+                "message": f"Task reassigned: {target.description or target.project_label}",
+                "link_url": link_url,
+                "created_at": now,
+                "is_read": False,
+            }
+        )
+    if current and current != previous:
+        payload.append(
+            {
+                "user_id": current,
+                "message": f"You have been assigned a new design task: {target.description or target.project_label}",
+                "link_url": link_url,
+                "created_at": now,
+                "is_read": False,
+            }
+        )
+
+    if payload:
+        connection.execute(Notification.__table__.insert(), payload)
+
+
 @app.route("/design/tasks", methods=["GET", "POST"])
 @login_required
 def design_tasks():
@@ -5336,18 +5436,7 @@ def design_tasks():
 
     projects = Project.query.order_by(Project.name).all()
     users = User.query.order_by(User.first_name, User.username).all()
-    statuses = {
-        "new": "New",
-        "in_progress": "In Progress",
-        "waiting_info": "Waiting on Info",
-        "completed": "Completed",
-        "on_hold": "On Hold",
-    }
-    tasks_by_status = {}
-    for key in statuses:
-        tasks_by_status[key] = _design_default_filters(
-            DesignTask.query.filter(DesignTask.status == key)
-        ).order_by(DesignTask.due_date.nullsfirst()).all()
+    statuses, tasks_by_status = _get_design_board_payload()
 
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
 
@@ -5359,6 +5448,21 @@ def design_tasks():
         projects=projects,
         can_move_cards=can_move_cards,
     )
+
+
+@app.route("/design/tasks/json")
+@login_required
+def design_tasks_json():
+    ensure_bootstrap()
+    statuses, tasks_by_status = _get_design_board_payload()
+    can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
+    board_html = render_template(
+        "partials/design_tasks_board.html",
+        tasks_by_status=tasks_by_status,
+        statuses=statuses,
+        can_move_cards=can_move_cards,
+    )
+    return jsonify({"html": board_html})
 
 
 @app.route("/design/tasks/<int:task_id>/status", methods=["POST"])
@@ -5474,6 +5578,35 @@ def design_task_detail(task_id):
             db.session.add(item)
             db.session.commit()
             flash("BOM item added.", "success")
+        elif action == "clarification":
+            detail = (request.form.get("clarification_body") or "").strip()
+            if not detail:
+                flash("Please provide clarification details.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+
+            task.status = "waiting_info"
+            db.session.add(
+                DesignTaskComment(
+                    design_task_id=task.id,
+                    body=f"Designer requested clarification: {detail}",
+                    author_id=current_user.id,
+                )
+            )
+
+            sales_user_id = None
+            if task.origin_type == "sales" and task.origin_id:
+                opportunity = SalesOpportunity.query.get(task.origin_id)
+                sales_user_id = opportunity.owner_id if opportunity else None
+
+            if sales_user_id:
+                _create_notification(
+                    sales_user_id,
+                    f"Designer requested clarification on task {task.description or task.project_label}",
+                    url_for("design_task_detail", task_id=task.id),
+                )
+
+            db.session.commit()
+            flash("Clarification request sent to sales.", "success")
         return redirect(url_for("design_task_detail", task_id=task.id))
 
     drawings = DesignDrawing.query.filter_by(design_task_id=task.id).all()
@@ -5485,6 +5618,16 @@ def design_task_detail(task_id):
         drawings=drawings,
         boms=bom_list,
     )
+
+
+@app.route("/notifications/mark-read", methods=["POST"])
+@login_required
+def mark_notifications_read():
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update(
+        {"is_read": True}
+    )
+    db.session.commit()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/design/drawing-history")
@@ -7903,6 +8046,7 @@ def ensure_tables():
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
         QCWorkLog.__table__,
+        Notification.__table__,
         DesignTask.__table__,
         DesignTaskComment.__table__,
         DesignDrawing.__table__,

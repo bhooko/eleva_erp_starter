@@ -1544,6 +1544,25 @@ class DropdownOption(db.Model):
         return {"id": self.id, "value": option_value, "label": self.label}
 
 
+class Notification(db.Model):
+    __tablename__ = "notification"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    message = db.Column(db.Text, nullable=False)
+    link_url = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+
+    user = db.relationship("User")
+
+    @property
+    def created_display(self):
+        if not self.created_at:
+            return "—"
+        return self.created_at.strftime("%d %b %Y, %I:%M %p")
+
+
 # ----------------------------
 # Design module models
 # ----------------------------

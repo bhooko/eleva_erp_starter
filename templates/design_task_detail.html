@@ -15,7 +15,12 @@
         {% endif %}
       </div>
     </div>
-    <a href="{{ url_for('design_tasks') }}" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Back to board</a>
+    <div class="flex items-center gap-2">
+      {% if task.task_type == 'sales_query' or task.origin_type == 'sales' %}
+      <button id="openClarificationModal" class="px-4 py-2 rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100">Request Clarification from Sales</button>
+      {% endif %}
+      <a href="{{ url_for('design_tasks') }}" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Back to board</a>
+    </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -207,4 +212,42 @@
     </div>
   </div>
 </div>
+
+<div id="clarificationModal" class="fixed inset-0 z-40 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur" onclick="toggleClarification(false)"></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <div>
+        <p class="text-xs text-slate-500 uppercase">Sales Clarification</p>
+        <h2 class="text-lg font-semibold">Request clarification</h2>
+      </div>
+      <button class="text-slate-500" type="button" onclick="toggleClarification(false)">✕</button>
+    </div>
+    <form method="POST" class="p-5 space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="clarification" />
+      <label class="space-y-1 block">
+        <span class="text-sm text-slate-600">Clarification details</span>
+        <textarea name="clarification_body" rows="4" class="w-full rounded-lg border-slate-200" placeholder="Provide specific questions or missing information" required></textarea>
+      </label>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-lg border" onclick="toggleClarification(false)">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Send request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const clarificationModal = document.getElementById('clarificationModal');
+  function toggleClarification(state){
+    if(!clarificationModal) return;
+    clarificationModal.classList.toggle('hidden', state === false);
+    clarificationModal.classList.toggle('flex', state !== false);
+  }
+  const openClarificationBtn = document.getElementById('openClarificationModal');
+  if (openClarificationBtn){
+    openClarificationBtn.addEventListener('click', ()=>toggleClarification(true));
+  }
+</script>
 {% endblock %}
