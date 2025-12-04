@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Procurement Stages · Eleva ERP{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Purchase · Settings</p>
+      <h1 class="text-2xl font-semibold">Procurement Stages</h1>
+      <p class="text-sm text-slate-600">Manage stage labels used to tag BOM items and purchase orders.</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <h2 class="text-lg font-semibold mb-3">Add new stage</h2>
+    <form method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="create" />
+      <label class="space-y-1">
+        <span class="text-sm">Name</span>
+        <input type="text" name="name" required class="w-full rounded-lg border-slate-200" placeholder="Stage 1" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Code (optional)</span>
+        <input type="text" name="code" class="w-full rounded-lg border-slate-200" placeholder="STAGE_1" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm">Sequence</span>
+        <input type="number" name="sequence" class="w-full rounded-lg border-slate-200" value="10" />
+      </label>
+      <label class="flex items-center gap-2 pt-6">
+        <input type="checkbox" name="is_active" checked class="rounded border-slate-300" />
+        <span class="text-sm">Active</span>
+      </label>
+      <div class="md:col-span-4 flex justify-end">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Add Stage</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Name</th>
+          <th class="py-3 px-4">Code</th>
+          <th class="py-3 px-4">Sequence</th>
+          <th class="py-3 px-4">Active</th>
+          <th class="py-3 px-4">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for stage in stages %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-800">{{ stage.name }}</td>
+          <td class="py-3 px-4">{{ stage.code or '—' }}</td>
+          <td class="py-3 px-4">{{ stage.sequence }}</td>
+          <td class="py-3 px-4">{{ 'Yes' if stage.is_active else 'No' }}</td>
+          <td class="py-3 px-4">
+            <form method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+              {{ csrf_field() }}
+              <input type="hidden" name="action" value="update" />
+              <input type="hidden" name="stage_id" value="{{ stage.id }}" />
+              <input type="text" name="name" value="{{ stage.name }}" class="rounded-lg border-slate-200 px-3 py-1.5" required />
+              <input type="text" name="code" value="{{ stage.code or '' }}" class="rounded-lg border-slate-200 px-3 py-1.5" placeholder="Code" />
+              <input type="number" name="sequence" value="{{ stage.sequence or 10 }}" class="rounded-lg border-slate-200 px-3 py-1.5" />
+              <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200">
+                <input type="checkbox" name="is_active" value="1" {% if stage.is_active %}checked{% endif %} />
+                <span class="text-xs">Active</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs">Save</button>
+                {% if stage.is_active %}
+                <button type="submit" name="action" value="deactivate" class="px-3 py-1.5 rounded-lg border text-xs">Deactivate</button>
+                {% endif %}
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-4 px-4 text-slate-500">No stages defined yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

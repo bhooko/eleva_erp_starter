@@ -75,6 +75,15 @@
             </select>
           </label>
           <label class="space-y-1">
+            <span class="text-sm">Stage</span>
+            <select name="stage_id" class="w-full rounded-lg border-slate-200">
+              <option value="">—</option>
+              {% for stage in stage_options %}
+              <option value="{{ stage.id }}">{{ stage.name }}{% if not stage.is_active %} (Inactive){% endif %}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1">
             <span class="text-sm">Order date</span>
             <input type="date" name="order_date" class="w-full rounded-lg border-slate-200" />
           </label>
@@ -89,6 +98,15 @@
               <option value="sent">Sent</option>
               <option value="partially_received">Partially Received</option>
               <option value="closed">Closed</option>
+            </select>
+          </label>
+          <label class="space-y-1 md:col-span-3">
+            <span class="text-sm">Linked BOM</span>
+            <select name="bom_id" class="w-full rounded-lg border-slate-200">
+              <option value="">—</option>
+              {% for bom in bom_options %}
+              <option value="{{ bom.id }}">{{ bom.bom_name }} (ID {{ bom.id }})</option>
+              {% endfor %}
             </select>
           </label>
         </div>
@@ -141,6 +159,7 @@
           <th class="py-3 px-4">PO Number</th>
           <th class="py-3 px-4">Vendor</th>
           <th class="py-3 px-4">Project</th>
+          <th class="py-3 px-4">Stage / BOM</th>
           <th class="py-3 px-4">Status</th>
           <th class="py-3 px-4">Order Date</th>
           <th class="py-3 px-4">Expected</th>
@@ -154,6 +173,10 @@
           <td class="py-3 px-4 font-semibold text-slate-800">{{ po.po_number }}</td>
           <td class="py-3 px-4">{{ po.vendor.name if po.vendor else 'No vendor' }}</td>
           <td class="py-3 px-4">{{ po.project.name if po.project else 'General' }}</td>
+          <td class="py-3 px-4 text-slate-700">
+            {% if po.stage %}<div class="text-sm">Stage: {{ po.stage.name }}</div>{% endif %}
+            {% if po.bom %}<div class="text-xs text-slate-500">BOM: {{ po.bom.bom_name }} (ID {{ po.bom.id }})</div>{% else %}<div class="text-xs text-slate-500">No BOM link</div>{% endif %}
+          </td>
           <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ po.status|title }}</span></td>
           <td class="py-3 px-4">{{ po.order_date or '—' }}</td>
           <td class="py-3 px-4">{{ po.expected_delivery_date or '—' }}</td>
@@ -161,7 +184,7 @@
           <td class="py-3 px-4 text-slate-600">{{ po.notes or '—' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No purchase orders yet.</td></tr>
+        <tr><td colspan="9" class="py-4 px-4 text-slate-500">No purchase orders yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

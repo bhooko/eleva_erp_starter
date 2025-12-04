@@ -1093,7 +1093,7 @@
           {% endif %}
 
           {% if purchase_visible %}
-          {% set purchase_endpoints = ['purchase_orders','purchase_reports','purchase_parts','purchase_vendors'] %}
+          {% set purchase_endpoints = ['purchase_orders','purchase_reports','purchase_parts','purchase_vendors','purchase_procurement_stages','generate_po_from_bom'] %}
           <div class="space-y-1">
             <a href="{{ url_for('purchase_orders') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in purchase_endpoints else '' }}">
@@ -1116,6 +1116,10 @@
               <a href="{{ url_for('purchase_vendors') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_vendors' else '' }}">
                 <span class="label">Vendors</span>
+              </a>
+              <a href="{{ url_for('purchase_procurement_stages') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_procurement_stages' else '' }}">
+                <span class="label">Procurement Stages</span>
               </a>
               <a href="{{ url_for('purchase_reports') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_reports' else '' }}">

@@ -1798,6 +1798,20 @@ class DrawingHistory(db.Model):
 # ----------------------------
 
 
+class ProcurementStage(db.Model):
+    __tablename__ = "procurement_stage"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    code = db.Column(db.String(80), unique=True, nullable=True)
+    sequence = db.Column(db.Integer, default=10)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 class BillOfMaterials(db.Model):
     __tablename__ = "bill_of_materials"
 
@@ -1826,6 +1840,7 @@ class BOMItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=False)
+    stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
     item_code = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     category = db.Column(db.String(80), nullable=True)
@@ -1834,6 +1849,7 @@ class BOMItem(db.Model):
     remarks = db.Column(db.Text, nullable=True)
 
     bom = db.relationship("BillOfMaterials", backref="items")
+    stage = db.relationship("ProcurementStage")
 
 
 class Vendor(db.Model):
@@ -1870,6 +1886,8 @@ class PurchaseOrder(db.Model):
     po_number = db.Column(db.String(80), unique=True, nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
     vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True)
+    bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=True)
+    stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
     status = db.Column(db.String(50), nullable=False, default="draft")
     order_date = db.Column(db.Date, nullable=True)
     expected_delivery_date = db.Column(db.Date, nullable=True)
@@ -1880,6 +1898,8 @@ class PurchaseOrder(db.Model):
     project = db.relationship("Project")
     vendor = db.relationship("Vendor")
     created_by = db.relationship("User")
+    bom = db.relationship("BillOfMaterials")
+    stage = db.relationship("ProcurementStage")
 
 
 class PurchaseOrderLine(db.Model):
