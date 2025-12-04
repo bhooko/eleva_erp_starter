@@ -9455,6 +9455,11 @@ def ensure_bom_columns():
     if "stage_id" not in po_cols:
         cur.execute("ALTER TABLE purchase_order ADD COLUMN stage_id INTEGER;")
         po_added.append("stage_id")
+    if "origin" not in po_cols:
+        cur.execute(
+            "ALTER TABLE purchase_order ADD COLUMN origin TEXT DEFAULT 'erp';"
+        )
+        po_added.append("origin")
 
     if po_added:
         cur.execute(
