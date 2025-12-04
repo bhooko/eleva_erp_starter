@@ -5460,7 +5460,7 @@ def design_tasks():
         project_name = request.form.get("project_name") or None
         requested_by = request.form.get("requested_by_user_id") or None
         assigned_to = request.form.get("assigned_to_user_id") or None
-        status_value = request.form.get("status") or "new"
+        status_value = "new"
         priority = request.form.get("priority") or "medium"
         due_date_raw = request.form.get("due_date")
         description = request.form.get("description")
