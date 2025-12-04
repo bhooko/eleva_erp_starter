@@ -71,6 +71,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DEFAULT_MAX_UPLOAD_SIZE_MB = 45
 DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
+INVENTORY_CONTROL_PATH = os.path.join(BASE_DIR, "instance", "inventory_control.json")
 
 
 def _default_admin_settings():
@@ -97,6 +98,47 @@ def _save_admin_settings(settings):
     with open(ADMIN_SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(merged, f, indent=2)
     return merged
+
+
+def _default_inventory_control():
+    return {
+        "ODOO_INVENTORY_IMPORT_ENABLED": True,
+        "INVENTORY_BASELINE_COMPLETED": False,
+    }
+
+
+def _load_inventory_control():
+    settings = _default_inventory_control()
+    try:
+        with open(INVENTORY_CONTROL_PATH, "r", encoding="utf-8") as f:
+            file_data = json.load(f)
+        if isinstance(file_data, dict):
+            for key, default in settings.items():
+                if key in file_data:
+                    settings[key] = bool(file_data.get(key))
+    except FileNotFoundError:
+        pass
+    except (OSError, json.JSONDecodeError):
+        pass
+    return settings
+
+
+def _save_inventory_control(settings):
+    merged = {**_default_inventory_control(), **(settings or {})}
+    os.makedirs(os.path.dirname(INVENTORY_CONTROL_PATH), exist_ok=True)
+    with open(INVENTORY_CONTROL_PATH, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2)
+    return merged
+
+
+def _get_inventory_control():
+    settings = _load_inventory_control()
+    try:
+        current_app.config["INVENTORY_CONTROL"] = settings
+    except RuntimeError:
+        # Outside an application context
+        pass
+    return settings
 
 
 def _get_max_upload_size_bytes(settings=None):
@@ -4920,6 +4962,7 @@ from eleva_app.models import (
     DeliveryChallanItem,
     InventoryItem,
     InventoryStock,
+    StockAdjustment,
     InventoryReceipt,
     InventoryReceiptItem,
     SalesActivity,
@@ -7412,13 +7455,10 @@ def _process_inventory_upload(upload, extension):
     if not header_row:
         return {
             "processed_rows": 0,
-            "created_count": 0,
-            "updated_count": 0,
+            "imported_rows": 0,
             "row_errors": ["The uploaded file does not contain any data."],
-            "rows_with_errors": 1,
-            "rows_uploaded": 0,
+            "total_errors": 1,
             "rows_skipped": 1,
-            "rows_missing_products": 0,
             "missing_products": [],
             "fatal_error": None,
         }
@@ -7429,27 +7469,41 @@ def _process_inventory_upload(upload, extension):
         if canonical and canonical not in header_map:
             header_map[canonical] = idx
 
-    missing = [col for col in ("product", "quantity", "location") if col not in header_map]
+    missing = [col for col in ("product", "quantity") if col not in header_map]
     if missing:
         return {
             "processed_rows": 0,
-            "created_count": 0,
-            "updated_count": 0,
-            "row_errors": [
-                "Missing required column(s): " + ", ".join(missing).title()
-            ],
-            "rows_with_errors": 1,
-            "rows_uploaded": 0,
+            "imported_rows": 0,
+            "row_errors": ["Missing required column(s): " + ", ".join(missing).title()],
+            "total_errors": 1,
             "rows_skipped": 1,
-            "rows_missing_products": 0,
             "missing_products": [],
             "fatal_error": None,
         }
 
-    processed_rows = created_count = updated_count = 0
+    processed_rows = 0
+    imported_rows = 0
     row_errors = []
     missing_products = []
     now = datetime.datetime.utcnow()
+    product_totals = {}
+    product_records = {}
+
+    # Clear historical snapshot so we only keep the latest upload
+    try:
+        db.session.query(InventoryStock).delete()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to reset previous inventory snapshot")
+        return {
+            "processed_rows": 0,
+            "imported_rows": 0,
+            "row_errors": ["Could not reset previous inventory snapshot."],
+            "total_errors": 1,
+            "rows_skipped": 1,
+            "missing_products": [],
+            "fatal_error": "Could not reset previous inventory snapshot before import.",
+        }
 
     for row_index, row in enumerate(rows, start=2):
         row_values = {}
@@ -7472,22 +7526,18 @@ def _process_inventory_upload(upload, extension):
             row_errors.append(f"Row {row_index}: Missing Product")
             continue
 
-        product_in_master = (
-            Product.query.filter(func.lower(Product.name) == product.lower()).first()
-        )
+        product_in_master = Product.query.filter(
+            func.lower(Product.name) == product.lower()
+        ).first()
         if not product_in_master:
             message = (
-                f"Row {row_index}: Product '{product}' does not exist in Parts master. Skipped."
+                f"Row {row_index}: Product '{product}' not found in Parts master. Row ignored."
             )
             missing_products.append(message)
             continue
 
-        location = clean_str(row_values.get("location"))
         quantity_raw = row_values.get("quantity")
         issues = []
-
-        if not location:
-            issues.append("Missing Location")
 
         try:
             quantity = float(quantity_raw)
@@ -7520,59 +7570,65 @@ def _process_inventory_upload(upload, extension):
             row_errors.append(f"Row {row_index}: " + "; ".join(issues))
             continue
 
-        record = (
-            InventoryStock.query.filter(
-                func.lower(InventoryStock.product_name) == product.lower(),
-                func.lower(InventoryStock.location) == location.lower(),
-            ).first()
+        product_key = product.lower()
+        product_totals[product_key] = product_totals.get(product_key, 0) + quantity
+        product_records[product_key] = product_in_master
+
+        location = clean_str(row_values.get("location")) or "Main Store"
+        record = InventoryStock(
+            product_name=product,
+            location=location,
+            quantity=quantity,
+            uom=clean_str(row_values.get("uom")) or None,
+            on_hand_value=on_hand_value,
+            company=clean_str(row_values.get("company")) or None,
+            last_updated=now,
+            is_active=True,
         )
+        db.session.add(record)
+        imported_rows += 1
 
-        if record:
-            updated_count += 1
-        else:
-            record = InventoryStock(product_name=product, location=location)
-            record.is_active = True
-            db.session.add(record)
-            created_count += 1
-
-        record.product_name = product
-        record.location = location
-        record.quantity = quantity
-        record.uom = clean_str(row_values.get("uom")) or None
-        record.company = clean_str(row_values.get("company")) or None
-        record.on_hand_value = on_hand_value
-        record.last_updated = now
-        record.is_active = record.is_active if record.is_active is not None else True
+    for key, total_qty in product_totals.items():
+        product_ref = product_records.get(key)
+        inventory_item = InventoryItem.query.filter(
+            func.lower(InventoryItem.item_code) == key
+        ).first()
+        if not inventory_item:
+            inventory_item = InventoryItem(
+                item_code=product_ref.name if product_ref else key,
+                description=product_ref.name if product_ref else key,
+                unit=(product_ref.uom or product_ref.purchase_uom) if product_ref else None,
+            )
+            db.session.add(inventory_item)
+        if product_ref:
+            preferred_unit = product_ref.uom or product_ref.purchase_uom
+            if preferred_unit:
+                inventory_item.unit = preferred_unit
+            inventory_item.description = inventory_item.description or product_ref.name
+        inventory_item.current_stock = total_qty
+        inventory_item.book_stock = total_qty
 
     try:
         db.session.commit()
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Failed to save inventory upload changes")
-        row_issue_count = len(row_errors) + len(missing_products)
         return {
             "processed_rows": processed_rows,
-            "created_count": created_count,
-            "updated_count": updated_count,
+            "imported_rows": imported_rows,
             "row_errors": row_errors,
-            "rows_with_errors": row_issue_count,
-            "rows_uploaded": created_count + updated_count,
-            "rows_skipped": row_issue_count,
-            "rows_missing_products": len(missing_products),
+            "total_errors": len(row_errors) + len(missing_products),
+            "rows_skipped": len(row_errors) + len(missing_products),
             "missing_products": missing_products,
             "fatal_error": "Could not save inventory records due to a database error.",
         }
 
-    row_issue_count = len(row_errors) + len(missing_products)
     return {
         "processed_rows": processed_rows,
-        "created_count": created_count,
-        "updated_count": updated_count,
+        "imported_rows": imported_rows,
         "row_errors": row_errors,
-        "rows_with_errors": row_issue_count,
-        "rows_uploaded": created_count + updated_count,
-        "rows_skipped": row_issue_count,
-        "rows_missing_products": len(missing_products),
+        "total_errors": len(row_errors) + len(missing_products),
+        "rows_skipped": len(row_errors) + len(missing_products),
         "missing_products": missing_products,
         "fatal_error": None,
     }
@@ -7586,18 +7642,23 @@ def inventory_upload():
     def _render_result(**kwargs):
         defaults = {
             "processed_rows": 0,
-            "created_count": 0,
-            "updated_count": 0,
+            "imported_rows": 0,
             "row_errors": [],
-            "rows_with_errors": 0,
-            "rows_uploaded": 0,
+            "total_errors": 0,
             "rows_skipped": 0,
-            "rows_missing_products": 0,
             "missing_products": [],
             "fatal_error": None,
         }
         defaults.update(kwargs)
         return render_template("inventory_upload_result.html", **defaults)
+
+    inventory_flags = _get_inventory_control()
+    if not inventory_flags.get("ODOO_INVENTORY_IMPORT_ENABLED", True):
+        return _render_result(
+            fatal_error=(
+                "Odoo inventory import is disabled. ERP inventory is now the single source of truth."
+            )
+        )
 
     upload = request.files.get("inventory_file")
     try:
@@ -8252,10 +8313,111 @@ def store_receive():
     )
 
 
+def _build_inventory_movements(item):
+    movements = []
+    item_code = (item.item_code or "").lower()
+
+    receipts = (
+        db.session.query(InventoryReceiptItem, InventoryReceipt)
+        .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
+        .filter(func.lower(InventoryReceiptItem.item_code) == item_code)
+        .all()
+    )
+    for receipt_item, receipt in receipts:
+        qc_status = (receipt_item.qc_status or "").strip().lower()
+        if qc_status and qc_status != "ok":
+            continue
+        qty = receipt_item.quantity_received or 0
+        timestamp = receipt.received_date
+        if isinstance(timestamp, datetime.date) and not isinstance(timestamp, datetime.datetime):
+            timestamp = datetime.datetime.combine(
+                timestamp, datetime.datetime.min.time()
+            )
+        timestamp = timestamp or datetime.datetime.min
+        movements.append(
+            {
+                "timestamp": timestamp,
+                "movement_type": "GRN",
+                "physical_delta": qty,
+                "book_delta": 0,
+                "reference": receipt.receipt_number if receipt else None,
+                "source_url": url_for("store_receive"),
+            }
+        )
+
+    dispatches = (
+        db.session.query(DeliveryChallanItem, DeliveryChallan)
+        .join(DeliveryChallan, DeliveryChallan.id == DeliveryChallanItem.delivery_challan_id)
+        .filter(func.lower(DeliveryChallanItem.item_code) == item_code)
+        .filter(DeliveryChallan.is_completed.is_(True))
+        .all()
+    )
+    for dispatch_item, dispatch in dispatches:
+        qty = -(dispatch_item.qty_delivered or 0)
+        timestamp = (
+            dispatch.delivered_at
+            or dispatch.completed_at
+            or (
+                datetime.datetime.combine(
+                    dispatch.dispatch_date, datetime.datetime.min.time()
+                )
+                if dispatch.dispatch_date
+                else None
+            )
+            or dispatch.created_at
+            or datetime.datetime.min
+        )
+        book_delta = qty if not dispatch.delivery_order_id else 0
+        movements.append(
+            {
+                "timestamp": timestamp,
+                "movement_type": "Delivery Challan",
+                "physical_delta": qty,
+                "book_delta": book_delta,
+                "reference": dispatch.dc_number,
+                "source_url": url_for("store_dispatch"),
+            }
+        )
+
+    adjustments = (
+        StockAdjustment.query.filter_by(inventory_item_id=item.id)
+        .order_by(StockAdjustment.created_at)
+        .all()
+    )
+    for adjustment in adjustments:
+        physical_delta = (adjustment.new_physical_stock or 0) - (
+            adjustment.old_physical_stock or 0
+        )
+        book_delta = (adjustment.new_book_stock or 0) - (
+            adjustment.old_book_stock or 0
+        )
+        movements.append(
+            {
+                "timestamp": adjustment.created_at or datetime.datetime.min,
+                "movement_type": f"Stock Adjustment ({adjustment.adjustment_type})",
+                "physical_delta": physical_delta,
+                "book_delta": book_delta,
+                "reference": adjustment.reason,
+                "source_url": None,
+            }
+        )
+
+    movements.sort(key=lambda entry: entry["timestamp"])
+    running_physical = (item.current_stock or 0) - sum(
+        move.get("physical_delta", 0) for move in movements
+    )
+    for move in movements:
+        running_physical += move.get("physical_delta", 0)
+        move["updated_physical"] = running_physical
+
+    return movements
+
+
 @app.route("/store/inventory")
 @login_required
 def store_inventory():
     ensure_bootstrap()
+    inventory_flags = _get_inventory_control()
     _sync_inventory_with_products()
     items = InventoryItem.query.order_by(InventoryItem.item_code).all()
     for item in items:
@@ -8267,11 +8429,8 @@ def store_inventory():
     usable_items = [item for item in items if (item.current_stock or 0) > 0]
     usable_count = len(usable_items)
     low_stock = [item for item in items if (item.current_stock or 0) < 1]
-    inventory_records = (
-        InventoryStock.query.order_by(
-            InventoryStock.product_name, InventoryStock.location
-        ).all()
-    )
+    snapshot_available = InventoryStock.query.count() > 0
+    can_adjust = _current_role_key() in {"admin", "store"}
     return render_template(
         "store_inventory.html",
         items=items,
@@ -8281,7 +8440,120 @@ def store_inventory():
         usable=usable_count,
         usable_items=usable_items,
         low_stock=low_stock,
-        inventory_records=inventory_records,
+        inventory_flags=inventory_flags,
+        snapshot_available=snapshot_available,
+        can_adjust=can_adjust,
+    )
+
+
+@app.route("/inventory/item/<int:item_id>/adjust", methods=["GET", "POST"])
+@login_required
+def adjust_inventory_item(item_id):
+    ensure_bootstrap()
+    _require_inventory_adjust_permission()
+    item = InventoryItem.query.filter_by(id=item_id).first_or_404()
+
+    if request.method == "POST":
+        reason = (request.form.get("reason") or "").strip()
+        if not reason:
+            flash("A reason is required for stock adjustments.", "warning")
+            return redirect(url_for("adjust_inventory_item", item_id=item.id))
+
+        def _parse_value(raw_value, fallback):
+            if raw_value in (None, ""):
+                return fallback
+            try:
+                return float(raw_value)
+            except (TypeError, ValueError):
+                return None
+
+        new_physical = _parse_value(
+            request.form.get("new_physical_stock"), item.current_stock or 0
+        )
+        new_book = _parse_value(
+            request.form.get("new_book_stock"),
+            item.book_stock if item.book_stock is not None else item.current_stock or 0,
+        )
+
+        if new_physical is None or new_book is None:
+            flash("Stock values must be numeric.", "danger")
+            return redirect(url_for("adjust_inventory_item", item_id=item.id))
+
+        if (
+            new_physical == (item.current_stock or 0)
+            and new_book == (item.book_stock if item.book_stock is not None else item.current_stock or 0)
+        ):
+            flash("No changes detected for this item.", "info")
+            return redirect(url_for("adjust_inventory_item", item_id=item.id))
+
+        if new_physical < 0 or new_book < 0:
+            flash("Stock values cannot be negative.", "warning")
+            return redirect(url_for("adjust_inventory_item", item_id=item.id))
+
+        adjustment_type = "both"
+        if new_physical == (item.current_stock or 0):
+            adjustment_type = "book"
+        elif new_book == (item.book_stock if item.book_stock is not None else item.current_stock or 0):
+            adjustment_type = "physical"
+
+        adjustment = StockAdjustment(
+            inventory_item_id=item.id,
+            old_physical_stock=item.current_stock or 0,
+            new_physical_stock=new_physical,
+            old_book_stock=item.book_stock if item.book_stock is not None else item.current_stock or 0,
+            new_book_stock=new_book,
+            reason=reason,
+            adjustment_type=adjustment_type,
+            created_by_user_id=current_user.id,
+            created_at=datetime.datetime.utcnow(),
+        )
+        db.session.add(adjustment)
+
+        item.current_stock = new_physical
+        item.book_stock = new_book
+
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Failed to record stock adjustment")
+            flash("Could not save the stock adjustment. Please try again.", "danger")
+            return redirect(url_for("adjust_inventory_item", item_id=item.id))
+
+        flash("Stock adjusted with audit trail recorded.", "success")
+        return redirect(url_for("inventory_item_movements", item_id=item.id))
+
+    return render_template("stock_adjustment_form.html", item=item)
+
+
+@app.route("/inventory/item/<int:item_id>/movements")
+@login_required
+def inventory_item_movements(item_id):
+    ensure_bootstrap()
+    item = InventoryItem.query.filter_by(id=item_id).first_or_404()
+    movements = _build_inventory_movements(item)
+    can_adjust = _current_role_key() in {"admin", "store"}
+    return render_template(
+        "inventory_movements.html",
+        item=item,
+        movements=movements,
+        can_adjust=can_adjust,
+    )
+
+
+@app.route("/inventory/odoo-snapshot")
+@login_required
+def inventory_snapshot():
+    ensure_bootstrap()
+    records = (
+        InventoryStock.query.order_by(
+            InventoryStock.product_name, InventoryStock.location
+        ).all()
+    )
+    return render_template(
+        "inventory_snapshot.html",
+        records=records,
+        inventory_flags=_get_inventory_control(),
     )
 
 
@@ -9143,6 +9415,7 @@ def ensure_tables():
         BookInventory.__table__,
         InventoryItem.__table__,
         InventoryStock.__table__,
+        StockAdjustment.__table__,
         InventoryReceipt.__table__,
         InventoryReceiptItem.__table__,
         DeliveryChallan.__table__,
@@ -9189,6 +9462,13 @@ def _require_delivery_order_permission(action: str):
     if role == "store" and action in {"view", "create", "dispatch"}:
         return "limited"
 
+    abort(403)
+
+
+def _require_inventory_adjust_permission():
+    role = _current_role_key()
+    if role in {"admin", "store"}:
+        return
     abort(403)
 
 

@@ -25,6 +25,8 @@ def create_app():
         BASE_DIR,
         _get_max_upload_size_bytes,
         _load_admin_settings,
+        _load_inventory_control,
+        _save_inventory_control,
     )
 
     template_dir = os.path.join(BASE_DIR, "templates")
@@ -45,6 +47,8 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
     app.config["ADMIN_SETTINGS"] = _load_admin_settings()
+    app.config["INVENTORY_CONTROL"] = _load_inventory_control()
+    _save_inventory_control(app.config["INVENTORY_CONTROL"])
     app.config["MAX_CONTENT_LENGTH"] = _get_max_upload_size_bytes(
         app.config["ADMIN_SETTINGS"]
     )
