@@ -212,6 +212,7 @@
         <div class="space-y-3" data-schema-tabs>
           <div class="inline-flex rounded-xl border border-slate-800/80 bg-slate-900/50 p-1 text-sm">
             <button type="button" data-schema-tab="builder" class="px-4 py-2 rounded-lg font-medium text-emerald-100 bg-slate-800 border border-slate-700/80 shadow-inner shadow-black/10">Form Builder</button>
+            <button type="button" data-schema-tab="preview" class="px-4 py-2 rounded-lg font-medium text-slate-300 hover:text-white transition">Preview</button>
             <button type="button" data-schema-tab="json" class="px-4 py-2 rounded-lg font-medium text-slate-300 hover:text-white transition">Schema JSON</button>
           </div>
 
@@ -241,6 +242,19 @@
               <span class="text-xs text-slate-400">Sections and field IDs auto-slugify; keep them stable to preserve saved responses.</span>
             </div>
             <p class="text-xs text-slate-400" data-schema-feedback></p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-3 hidden" data-schema-pane="preview">
+            <div class="flex items-center gap-2">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-emerald-200">Form preview</p>
+                <p class="text-sm text-slate-300">What end users see when filling out this template.</p>
+              </div>
+              <span class="ml-auto inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-[11px] font-semibold text-slate-200 border border-slate-700/80">Read-only preview</span>
+            </div>
+            <div class="space-y-4" data-schema-preview-form>
+              <!-- Rendered via JS -->
+            </div>
           </div>
 
           <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-2 hidden" data-schema-pane="json">
@@ -430,10 +444,82 @@
       suppressJsonListener = true;
       const serialized = serializeSchema();
       schemaInput.value = serialized;
-      if (previewEl) {
-        previewEl.textContent = serialized;
+      if (jsonPreviewEl) {
+        jsonPreviewEl.textContent = serialized;
       }
       suppressJsonListener = false;
+    };
+
+    const renderPreview = () => {
+      if (!previewFormEl) return;
+      const sectionMarkup = schemaState
+        .map((section) => {
+          const fieldsMarkup = Array.isArray(section.fields)
+            ? section.fields
+                .map((field) => {
+                  const labelHtml = `<label class="block text-sm font-semibold text-slate-100">${field.label || ''}${
+                    field.required ? ' <span class="text-rose-200">*</span>' : ''
+                  }</label>`;
+                  const helpText = field.type === 'select' && !field.options.length
+                    ? '<p class="text-xs text-amber-200">Add options to populate this dropdown.</p>'
+                    : '';
+                  const commonClasses = 'w-full rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm text-slate-100';
+                  let controlHtml = '';
+
+                  if (field.type === 'textarea') {
+                    controlHtml = `<textarea rows="3" class="${commonClasses}" disabled placeholder="Enter ${
+                      field.label || 'details'
+                    }..."></textarea>`;
+                  } else if (field.type === 'number') {
+                    controlHtml = `<input type="number" class="${commonClasses}" disabled placeholder="0">`;
+                  } else if (field.type === 'date') {
+                    controlHtml = `<input type="date" class="${commonClasses}" disabled>`;
+                  } else if (field.type === 'select' || field.type === 'if_else') {
+                    const optionsHtml = (field.options || [])
+                      .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
+                      .join('');
+                    controlHtml = `<select class="${commonClasses}" disabled><option value="">Select...</option>${optionsHtml}</select>${helpText}`;
+                  } else if (field.type === 'table') {
+                    const columns = field.columns || [];
+                    const headerCells = columns
+                      .map((col) => `<th class="px-3 py-2 text-left text-xs text-slate-300">${col.label || 'Column'}</th>`)
+                      .join('');
+                    const rowCells = columns
+                      .map((col) => {
+                        if (col.type === 'select') {
+                          const opts = (col.options || [])
+                            .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
+                            .join('');
+                          return `<td class="px-3 py-2"><select class="${commonClasses}" disabled><option value="">Select...</option>${opts}</select></td>`;
+                        }
+                        const type = col.type === 'number' ? 'number' : 'text';
+                        return `<td class="px-3 py-2"><input type="${type}" class="${commonClasses}" disabled></td>`;
+                      })
+                      .join('');
+                    controlHtml = `<div class="overflow-x-auto border border-slate-800 rounded-xl"><table class="min-w-full divide-y divide-slate-800 text-sm text-slate-200"><thead class="bg-slate-900/80">${
+                      headerCells ? `<tr>${headerCells}</tr>` : ''
+                    }</thead><tbody><tr>${rowCells || '<td class="px-3 py-2 text-slate-400">Add columns to preview the table.</td>'}</tr></tbody></table></div>`;
+                  } else if (field.type === 'checkbox') {
+                    controlHtml = `<label class="inline-flex items-center gap-2 text-sm text-slate-100"><input type="checkbox" disabled class="rounded border-slate-700 bg-slate-900 text-emerald-500"> <span>${field.label || 'Checkbox'}</span></label>`;
+                  } else {
+                    controlHtml = `<input type="text" class="${commonClasses}" disabled placeholder="Enter ${field.label || 'value'}">`;
+                  }
+
+                  return `<div class="space-y-2"><div class="flex items-start justify-between gap-2">${labelHtml}<span class="text-[11px] uppercase tracking-wide text-slate-400">${
+                    field.type
+                  }</span></div>${controlHtml}</div>`;
+                })
+                .join('')
+            : '';
+
+          return `<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-4"><div class="flex items-start justify-between gap-3"><div><p class="text-xs uppercase tracking-wide text-slate-400">${
+            section.id || 'section'
+          }</p><h4 class="text-lg font-semibold text-slate-100">${section.title || 'Untitled section'}</h4>${
+            section.role ? `<p class="text-xs text-slate-400 mt-1">Owned by: ${section.role}</p>` : ''
+          }</div></div><div class="space-y-3">${fieldsMarkup || '<p class="text-sm text-slate-400">No fields to display.</p>'}</div></div>`;
+        })
+        .join('');
+      previewFormEl.innerHTML = sectionMarkup || '<p class="text-sm text-slate-400">Nothing to preview yet.</p>';
     };
 
     const renderBuilder = () => {
@@ -575,6 +661,7 @@
         <button type="button" class="px-4 py-2 text-sm rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-section">+ Add section</button>
       </div>`}`;
       syncJsonOutput();
+      renderPreview();
     };
 
     const setActiveTab = (target) => {
@@ -592,6 +679,8 @@
       });
       if (target === 'json') {
         syncJsonOutput();
+      } else if (target === 'preview') {
+        renderPreview();
       }
     };
 
@@ -607,6 +696,7 @@
         if (suppressJsonListener) return;
         schemaState = parseSchema(schemaInput.value);
         renderBuilder();
+        renderPreview();
         setFeedback('JSON parsed into builder.', 'success');
       });
     }
@@ -715,6 +805,7 @@
           schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx].options = parseOptionLines(event.target.value);
         }
         syncJsonOutput();
+        renderPreview();
       });
     }
 
@@ -814,8 +905,9 @@
         }
         schemaState = parseSchema(schemaInput.value);
         renderBuilder();
-        setActiveTab('builder');
-        setFeedback('Schema ready in builder view.', 'success');
+        const defaultTab = mode === 'view' ? 'preview' : 'builder';
+        setActiveTab(defaultTab);
+        setFeedback(defaultTab === 'preview' ? 'Preview loaded for review.' : 'Schema ready in builder view.', 'success');
         openModal();
       });
     });
