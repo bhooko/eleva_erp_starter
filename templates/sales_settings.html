@@ -86,6 +86,23 @@
                     <td class="px-6 py-4">
                       <div class="flex flex-wrap items-center gap-2">
                         <button type="button"
+                                class="inline-flex items-center justify-center rounded-xl border border-slate-700/70 p-2.5 text-slate-200 hover:border-sky-400/50 hover:text-sky-100 transition"
+                                title="View template"
+                                aria-label="View template"
+                                data-template-open="view"
+                                data-template-id="{{ template.id }}"
+                                data-template-name="{{ template.name }}"
+                                data-template-slug="{{ template.slug }}"
+                                data-template-primary="{{ 'true' if template.is_primary else 'false' }}"
+                                data-template-active="{{ 'true' if template.is_active else 'false' }}"
+                                data-template-schema='{{ template.parsed_schema|tojson|replace("'", "&#39;") }}'>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span class="sr-only">View</span>
+                        </button>
+                        <button type="button"
                                 class="inline-flex items-center justify-center rounded-xl border border-slate-700/70 p-2.5 text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
                                 title="Edit template"
                                 aria-label="Edit template"
@@ -236,7 +253,7 @@
       </div>
       <div class="border-t border-slate-800 px-6 py-4 flex flex-wrap items-center gap-3">
         <button type="button" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:text-white transition" data-template-dismiss>Cancel</button>
-        <button type="submit" class="px-4 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-100 font-semibold hover:bg-emerald-500/30 transition">Save template</button>
+        <button type="submit" class="px-4 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-100 font-semibold hover:bg-emerald-500/30 transition" data-template-save>Save template</button>
       </div>
     </form>
   </div>
@@ -262,6 +279,7 @@
     const builderEl = tabsEl ? tabsEl.querySelector('[data-schema-builder]') : null;
     const builderFeedbackEl = tabsEl ? tabsEl.querySelector('[data-schema-feedback]') : null;
     const previewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
+    const saveBtn = form.querySelector('[data-template-save]');
 
     const slugify = (value) => {
       return String(value || '')
@@ -286,7 +304,7 @@
     const defaultSection = (index = 1) => ({
       id: `section-${index}`,
       title: `Section ${index}`,
-      role: 'sales',
+      role: '',
       fields: [defaultField(1)],
     });
 
@@ -305,7 +323,7 @@
     };
 
     const normalizeField = (field, fieldIndex = 0) => {
-      const allowedTypes = ['text', 'textarea', 'number', 'date', 'select', 'table'];
+      const allowedTypes = ['text', 'textarea', 'number', 'date', 'select', 'table', 'checkbox', 'if_else'];
       const allowedColumnTypes = ['text', 'number', 'select'];
       const type = allowedTypes.includes(field?.type) ? field.type : 'text';
       const base = {
@@ -317,8 +335,9 @@
         columns: [],
       };
 
-      if (type === 'select') {
-        const rawOptions = Array.isArray(field?.options) ? field.options : parseOptionLines('OK|ok\nNot OK|not_ok');
+      if (type === 'select' || type === 'if_else') {
+        const fallbackOptions = type === 'if_else' ? 'If branch|if\nElse branch|else' : 'OK|ok\nNot OK|not_ok';
+        const rawOptions = Array.isArray(field?.options) ? field.options : parseOptionLines(fallbackOptions);
         base.options = rawOptions
           .map((opt, idx) => ({
             label: opt?.label || opt?.value || `Option ${idx + 1}`,
@@ -348,7 +367,7 @@
       return {
         id: slugify(section?.id || section?.title || `section-${sectionIndex + 1}`) || `section-${sectionIndex + 1}`,
         title: section?.title || `Section ${sectionIndex + 1}`,
-        role: section?.role || 'sales',
+        role: typeof section?.role === 'string' ? section.role : '',
         fields: fields.length ? fields.map((field, idx) => normalizeField(field, idx)) : [defaultField(1)],
       };
     };
@@ -372,13 +391,13 @@
         schemaState.map((section) => ({
           id: slugify(section.id || section.title),
           title: section.title || '',
-          role: section.role || 'sales',
+          role: section.role || '',
           fields: section.fields.map((field) => ({
             id: slugify(field.id || field.label),
             label: field.label || '',
             type: field.type,
             required: Boolean(field.required),
-            ...(field.type === 'select' ? { options: field.options } : {}),
+            ...(field.type === 'select' || field.type === 'if_else' ? { options: field.options } : {}),
             ...(field.type === 'table' ? { columns: field.columns } : {}),
           })),
         })),
@@ -419,10 +438,12 @@
 
     const renderBuilder = () => {
       if (!builderEl) return;
+      const isReadOnly = form.dataset.mode === 'view';
       const sectionMarkup = schemaState
         .map((section, sectionIndex) => {
           const fieldsMarkup = section.fields
             .map((field, fieldIndex) => {
+              const disabledAttr = isReadOnly ? 'disabled' : '';
               const optionsText = field.options
                 .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
                 .join('\n');
@@ -435,15 +456,15 @@
                             <div class="grid md:grid-cols-3 gap-3">
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Column label</label>
-                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-label" value="${col.label || ''}">
+                                <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-label" value="${col.label || ''}">
                               </div>
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Column ID</label>
-                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-id" value="${col.id || ''}">
+                                <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-id" value="${col.id || ''}">
                               </div>
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Type</label>
-                                <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-type">
+                                <select ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-type">
                                   <option value="text" ${col.type === 'text' ? 'selected' : ''}>Text</option>
                                   <option value="number" ${col.type === 'number' ? 'selected' : ''}>Number</option>
                                   <option value="select" ${col.type === 'select' ? 'selected' : ''}>Dropdown</option>
@@ -453,27 +474,27 @@
                             ${col.type === 'select'
                               ? `<div>
                                   <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
-                                  <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-options">${
+                                  <textarea rows="2" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-options">${
                                   (col.options || [])
                                     .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
                                     .join('\n')
                                 }</textarea>
                                 </div>`
                               : ''}
-                            <div class="flex justify-end">
+                            ${isReadOnly ? '' : `<div class="flex justify-end">
                               <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-column" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}">Remove column</button>
-                            </div>
+                            </div>`}
                           </div>
                         `,
                       )
                       .join('')}
-                    <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60" data-action="add-column" data-section="${sectionIndex}" data-field="${fieldIndex}">Add column</button>
+                    ${isReadOnly ? '' : `<button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60" data-action="add-column" data-section="${sectionIndex}" data-field="${fieldIndex}">Add column</button>`}
                   </div>`
                 : '';
-              const optionsBlock = field.type === 'select'
+              const optionsBlock = field.type === 'select' || field.type === 'if_else'
                 ? `<div>
                     <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
-                    <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="options">${optionsText}</textarea>
+                    <textarea rows="2" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="options">${optionsText}</textarea>
                   </div>`
                 : '';
               return `
@@ -482,29 +503,31 @@
                     <div class="flex-1 grid md:grid-cols-2 gap-3">
                       <div>
                         <label class="block text-xs text-slate-400 mb-1">Field label</label>
-                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="label" value="${field.label || ''}">
+                        <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="label" value="${field.label || ''}">
                       </div>
                       <div>
                         <label class="block text-xs text-slate-400 mb-1">Field ID</label>
-                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="id" value="${field.id || ''}">
+                        <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="id" value="${field.id || ''}">
                       </div>
                     </div>
-                    <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-field" data-section="${sectionIndex}" data-field="${fieldIndex}">Remove</button>
+                    ${isReadOnly ? '' : `<button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-field" data-section="${sectionIndex}" data-field="${fieldIndex}">Remove</button>`}
                   </div>
                   <div class="grid md:grid-cols-3 gap-3">
                     <div>
                       <label class="block text-xs text-slate-400 mb-1">Type</label>
-                      <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="type">
+                      <select ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="type">
                         <option value="text" ${field.type === 'text' ? 'selected' : ''}>Short text</option>
                         <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>Long text</option>
                         <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
                         <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
                         <option value="select" ${field.type === 'select' ? 'selected' : ''}>Dropdown</option>
+                        <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+                        <option value="if_else" ${field.type === 'if_else' ? 'selected' : ''}>If / Else</option>
                         <option value="table" ${field.type === 'table' ? 'selected' : ''}>Table</option>
                       </select>
                     </div>
                     <label class="inline-flex items-center gap-2 text-sm text-slate-200 mt-6">
-                      <input type="checkbox" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="required" ${field.required ? 'checked' : ''}>
+                      <input type="checkbox" ${disabledAttr} data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="required" ${field.required ? 'checked' : ''}>
                       <span>Required</span>
                     </label>
                   </div>
@@ -520,33 +543,37 @@
                 <div class="flex-1 grid md:grid-cols-3 gap-3">
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Section title</label>
-                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-title" value="${section.title || ''}">
+                    <input type="text" ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-title" value="${section.title || ''}">
                   </div>
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Section ID</label>
-                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-id" value="${section.id || ''}">
+                    <input type="text" ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-id" value="${section.id || ''}">
                   </div>
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Owned by</label>
-                    <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-role">
+                    <select ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-role">
+                      <option value="" ${!section.role ? 'selected' : ''}>Unassigned</option>
                       <option value="sales" ${section.role === 'sales' ? 'selected' : ''}>Sales</option>
                       <option value="design" ${section.role === 'design' ? 'selected' : ''}>Design</option>
                     </select>
                   </div>
                 </div>
-                <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-section" data-section="${sectionIndex}">Remove</button>
+                ${isReadOnly ? '' : `<button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-section" data-section="${sectionIndex}">Remove</button>`}
               </div>
               <div class="space-y-3">
                 ${fieldsMarkup || '<p class="text-sm text-slate-400">No fields added yet.</p>'}
               </div>
-              <div class="flex flex-wrap items-center gap-2">
+              ${isReadOnly ? '' : `<div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-emerald-500/60 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25" data-action="add-field" data-section="${sectionIndex}">Add field</button>
-              </div>
+              </div>`}
             </div>
           `;
         })
         .join('');
-      builderEl.innerHTML = sectionMarkup;
+      builderEl.innerHTML = `${sectionMarkup}${isReadOnly ? '' : `
+      <div class="pt-2">
+        <button type="button" class="px-4 py-2 text-sm rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-section">+ Add section</button>
+      </div>`}`;
       syncJsonOutput();
     };
 
@@ -586,6 +613,7 @@
 
     if (tabsEl) {
       tabsEl.addEventListener('click', (event) => {
+        if (form.dataset.mode === 'view') return;
         const actionEl = event.target.closest('[data-action]');
         if (!actionEl) return;
         const sectionIdx = Number(actionEl.dataset.section || 0);
@@ -630,6 +658,7 @@
       });
 
       tabsEl.addEventListener('input', (event) => {
+        if (form.dataset.mode === 'view') return;
         const sectionIdx = Number(event.target.dataset.section || 0);
         const fieldIdx = Number(event.target.dataset.field || 0);
         const columnIdx = Number(event.target.dataset.col || 0);
@@ -644,7 +673,7 @@
         } else if (prop === 'section-id') {
           schemaState[sectionIdx].id = slugify(event.target.value);
         } else if (prop === 'section-role') {
-          schemaState[sectionIdx].role = event.target.value || 'sales';
+          schemaState[sectionIdx].role = event.target.value || '';
         } else if (prop === 'label') {
           schemaState[sectionIdx].fields[fieldIdx].label = event.target.value;
           if (!schemaState[sectionIdx].fields[fieldIdx].id) {
@@ -659,8 +688,14 @@
           if (nextType === 'select' && !field.options.length) {
             field.options = parseOptionLines('Yes|yes\nNo|no');
           }
+          if (nextType === 'if_else' && !field.options.length) {
+            field.options = parseOptionLines('If branch|if\nElse branch|else');
+          }
           if (nextType === 'table' && !field.columns.length) {
             field.columns = defaultField().columns;
+          }
+          if (nextType !== 'select' && nextType !== 'if_else') {
+            field.options = [];
           }
         } else if (prop === 'required') {
           schemaState[sectionIdx].fields[fieldIdx].required = event.target.checked;
@@ -694,6 +729,31 @@
       document.body.classList.remove('overflow-hidden');
     };
 
+    const setReadOnly = (readOnly) => {
+      form.dataset.mode = readOnly ? 'view' : 'edit';
+      const interactiveEls = form.querySelectorAll('input, select, textarea, button');
+      interactiveEls.forEach((el) => {
+        if (el.hasAttribute('data-template-dismiss') || el.hasAttribute('data-template-save')) {
+          return;
+        }
+        if (readOnly && el.type !== 'button') {
+          el.setAttribute('disabled', 'disabled');
+        } else {
+          el.removeAttribute('disabled');
+        }
+      });
+      if (saveBtn) {
+        saveBtn.classList.toggle('hidden', readOnly);
+      }
+    };
+
+    form.addEventListener('submit', (event) => {
+      if (form.dataset.mode === 'view') {
+        event.preventDefault();
+        closeModal();
+      }
+    });
+
     modal.querySelectorAll('[data-template-dismiss]').forEach(btn => {
       btn.addEventListener('click', closeModal);
     });
@@ -725,6 +785,24 @@
           }
           titleEl.textContent = 'Edit Client Requirements template';
           subtitleEl.textContent = 'Adjust labels and options, then save to update the template in Sales and Design flows.';
+          setReadOnly(false);
+        } else if (mode === 'view') {
+          form.querySelector('input[name="action"]').value = '';
+          templateIdInput.value = btn.dataset.templateId || '';
+          nameInput.value = btn.dataset.templateName || '';
+          slugInput.value = btn.dataset.templateSlug || '';
+          isPrimaryInput.checked = btn.dataset.templatePrimary === 'true';
+          isActiveInput.checked = btn.dataset.templateActive === 'true';
+          const schemaRaw = btn.dataset.templateSchema || '{}';
+          try {
+            const parsed = JSON.parse(schemaRaw);
+            schemaInput.value = JSON.stringify(parsed, null, 2);
+          } catch (error) {
+            schemaInput.value = schemaRaw;
+          }
+          titleEl.textContent = 'View Client Requirements template';
+          subtitleEl.textContent = 'Fields are read-only; close to return to settings.';
+          setReadOnly(true);
         } else {
           form.querySelector('input[name="action"]').value = 'create';
           templateIdInput.value = '';
@@ -732,6 +810,7 @@
           isActiveInput.checked = true;
           titleEl.textContent = 'New Client Requirements template';
           subtitleEl.textContent = 'Start from the default schema and tailor fields for your sales/design workflow.';
+          setReadOnly(false);
         }
         schemaState = parseSchema(schemaInput.value);
         renderBuilder();
