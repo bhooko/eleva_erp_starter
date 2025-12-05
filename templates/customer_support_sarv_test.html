@@ -11,6 +11,17 @@
         Latest SARV webhook calls (last 50). Use this page to verify payloads, durations and recording downloads surfaced to Customer Support.
       </p>
     </div>
+    <div class="flex flex-col items-start gap-2 sm:items-end">
+      <button id="sarvUpdateRecordsBtn"
+              class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 shadow-sm transition hover:scale-[1.01] hover:bg-emerald-400/20 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 disabled:cursor-not-allowed disabled:opacity-50">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 4.5A9.002 9.002 0 0112 3c4.97 0 9 4.03 9 9m-1.5-5.25V3.75a.75.75 0 00-.75-.75h-3" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 19.5A9.002 9.002 0 0112 21a9 9 0 01-9-9m1.5 5.25v2.25c0 .414.336.75.75.75h3" />
+        </svg>
+        <span id="sarvUpdateRecordsLabel">Update records</span>
+      </button>
+      <p id="sarvUpdateStatus" class="text-xs text-slate-400"></p>
+    </div>
   </div>
 
   <div class="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-4 text-sm text-amber-100">
@@ -111,4 +122,101 @@
     </div>
   </div>
 </div>
+
+<div id="sarvErrorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4 backdrop-blur">
+  <div class="w-full max-w-2xl rounded-2xl border border-rose-400/30 bg-slate-900/90 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/60 px-4 py-3">
+      <div class="flex items-center gap-2 text-rose-100">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-.008 3h.016v.016h-.016V15.75zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h3 class="text-sm font-semibold">SARV update errors</h3>
+      </div>
+      <button id="sarvErrorClose" class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800/80 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-400/50">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="max-h-[60vh] space-y-3 overflow-y-auto px-4 py-4">
+      <p class="text-sm text-slate-200">We ran into issues while updating SARV call recordings. Review the logs below and try again.</p>
+      <ul id="sarvErrorList" class="space-y-2 text-sm text-rose-100"></ul>
+    </div>
+    <div class="flex items-center justify-end gap-3 border-t border-slate-800/60 px-4 py-3">
+      <button id="sarvErrorCloseFooter" class="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-400/50">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const csrfToken = '{{ csrf_token() }}';
+    const btn = document.getElementById('sarvUpdateRecordsBtn');
+    const label = document.getElementById('sarvUpdateRecordsLabel');
+    const status = document.getElementById('sarvUpdateStatus');
+    const modal = document.getElementById('sarvErrorModal');
+    const errorList = document.getElementById('sarvErrorList');
+    const closeButtons = [document.getElementById('sarvErrorClose'), document.getElementById('sarvErrorCloseFooter')];
+
+    const closeModal = () => {
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    };
+
+    closeButtons.forEach((el) => el && el.addEventListener('click', closeModal));
+
+    const showErrors = (errors) => {
+      if (!modal || !errorList) return;
+      errorList.innerHTML = '';
+      errors.forEach((err) => {
+        const item = document.createElement('li');
+        item.className = 'rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm';
+        item.textContent = err;
+        errorList.appendChild(item);
+      });
+      modal.classList.remove('hidden');
+    };
+
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        label.textContent = 'Updating...';
+        status.textContent = '';
+
+        try {
+          const resp = await fetch('{{ url_for("customer_support_sarv_update_records") }}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken,
+            },
+          });
+
+          if (!resp.ok) {
+            throw new Error(`Request failed with status ${resp.status}`);
+          }
+
+          const data = await resp.json();
+          const summary = `Checked ${data.checked} recording${data.checked === 1 ? '' : 's'} · Updated ${data.updated}`;
+          status.textContent = summary;
+          status.className = data.errors && data.errors.length
+            ? 'text-xs text-amber-300'
+            : 'text-xs text-emerald-300';
+
+          if (data.errors && data.errors.length) {
+            showErrors(data.errors);
+          }
+        } catch (err) {
+          status.textContent = 'Could not update SARV records. See errors for details.';
+          status.className = 'text-xs text-rose-200';
+          showErrors([err.message || 'Unknown error']);
+        } finally {
+          btn.disabled = false;
+          label.textContent = 'Update records';
+        }
+      });
+    }
+  });
+</script>
 {% endblock %}
