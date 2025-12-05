@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Incoming Calls (SARV Demo)</h2>
+  <p class="text-muted">Showing latest 50 calls logged via SARV webhook.</p>
+
+  <table class="table table-dark table-striped table-sm align-middle">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>DID</th>
+        <th>Customer</th>
+        <th>Agent</th>
+        <th>Status</th>
+        <th>Duration (s)</th>
+        <th>Recording</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in calls %}
+      <tr>
+        <td>{{ c.ivr_start_time or c.created_at }}</td>
+        <td>{{ c.did }}</td>
+        <td>{{ c.customer_number }}</td>
+        <td>{{ c.agent_name or c.agent_number or c.agent_user_id }}</td>
+        <td>{{ c.call_status }}</td>
+        <td>{{ c.talk_duration or c.total_duration }}</td>
+        <td>
+          {% if c.recordings %}
+            {% for r in c.recordings %}
+              {% if r.local_file_path and r.download_status == "success" %}
+                <audio controls style="max-width:200px;">
+                  <source src="{{ url_for('static', filename=r.local_file_path) }}" type="audio/wav">
+                  Your browser does not support the audio element.
+                </audio>
+                <a href="{{ url_for('static', filename=r.local_file_path) }}" download class="btn btn-sm btn-outline-light ms-1">
+                  Download
+                </a>
+              {% elif r.download_status == "failed" %}
+                <span class="badge bg-danger">Download failed</span>
+              {% else %}
+                <span class="badge bg-secondary">Pending</span>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <span class="text-muted">None</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

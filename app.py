@@ -4279,6 +4279,10 @@ def apply_actor_context(entry, actor_name=None, actor_role=None):
 app = create_app()
 login_manager.login_view = "login"
 
+from integrations.sarv.routes import sarv_bp
+
+app.register_blueprint(sarv_bp)
+
 
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_upload(exc):
@@ -5264,6 +5268,8 @@ from eleva_app.models import (
     DesignDrawingRevision,
     DesignTask,
     DesignTaskComment,
+    CallLog,
+    CallRecording,
     Notification,
     DeliveryChallan,
     DeliveryChallanItem,
@@ -9784,6 +9790,8 @@ def ensure_tables():
         QCWorkComment.__table__,
         QCWorkLog.__table__,
         Notification.__table__,
+        CallLog.__table__,
+        CallRecording.__table__,
         DesignTask.__table__,
         DesignTaskComment.__table__,
         DesignDrawing.__table__,
@@ -20986,6 +20994,13 @@ def qc_recent_submissions():
         "qc_recent_submissions.html",
         submissions=submissions
     )
+
+
+@app.route("/calls/demo")
+@login_required
+def calls_demo():
+    calls = CallLog.query.order_by(CallLog.created_at.desc()).limit(50).all()
+    return render_template("calls/demo.html", calls=calls)
 
 
 @app.cli.command("initdb")
