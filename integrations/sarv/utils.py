@@ -21,18 +21,20 @@ def download_call_recording(call_recording: CallRecording):
     Updates CallRecording.local_file_path and download_status.
     """
 
-    base_url = current_app.config.get("SARV_RECORDING_BASE_URL")
+    base_url = current_app.config.get(
+        "SARV_RECORDING_BASE_URL", "https://ctv1.sarv.com"
+    )
     token = current_app.config.get("SARV_RECORDING_TOKEN", "")
     target_dir = current_app.config.get("CALL_RECORDINGS_DIR", "static/call_recordings")
     target_dir = _resolve_target_dir(target_dir)
 
     os.makedirs(target_dir, exist_ok=True)
 
-    full_url = urljoin(base_url.rstrip("/") + "/", call_recording.sarv_file_path.lstrip("/"))
+    full_url = urljoin(
+        base_url.rstrip("/") + "/", call_recording.sarv_file_path.lstrip("/")
+    )
 
-    headers = {}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     try:
         request = Request(full_url, headers=headers)
@@ -47,7 +49,7 @@ def download_call_recording(call_recording: CallRecording):
             with open(local_path, "wb") as f:
                 f.write(resp.read())
 
-        rel_path = os.path.relpath(local_path, start=current_app.static_folder)
+        rel_path = os.path.relpath(local_path, start="static")
 
         call_recording.local_file_path = rel_path.replace("\\", "/")
         call_recording.download_status = "success"
