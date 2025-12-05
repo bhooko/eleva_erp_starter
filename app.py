@@ -12818,8 +12818,6 @@ def sales_opportunity_convert_to_project(opportunity_id):
     return redirect(url_for("project_detail", project_id=project.id))
 
 
-@app.route("/sales/opportunities/<int:opportunity_id>/stage", methods=["POST"])
-@login_required
 def _missing_confirmed_client_requirement_forms(opportunity: SalesOpportunity):
     """Return list of lift labels missing a confirmed CRF."""
 
@@ -12851,6 +12849,8 @@ def _missing_confirmed_client_requirement_forms(opportunity: SalesOpportunity):
     return missing_labels
 
 
+@app.route("/sales/opportunities/<int:opportunity_id>/stage", methods=["POST"])
+@login_required
 def sales_opportunity_stage(opportunity_id):
     _module_visibility_required("sales")
     opportunity = db.session.get(SalesOpportunity, opportunity_id)
