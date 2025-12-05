@@ -20996,11 +20996,18 @@ def qc_recent_submissions():
     )
 
 
+@app.route("/customer-support/sarv-test")
+@login_required
+def customer_support_sarv_test():
+    _module_visibility_required("customer_support")
+    calls = CallLog.query.order_by(CallLog.created_at.desc()).limit(50).all()
+    return render_template("customer_support_sarv_test.html", calls=calls)
+
+
 @app.route("/calls/demo")
 @login_required
 def calls_demo():
-    calls = CallLog.query.order_by(CallLog.created_at.desc()).limit(50).all()
-    return render_template("calls/demo.html", calls=calls)
+    return redirect(url_for("customer_support_sarv_test"))
 
 
 @app.cli.command("initdb")
