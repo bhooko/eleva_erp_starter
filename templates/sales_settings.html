@@ -389,9 +389,14 @@
 
     const parseSchema = (value) => {
       try {
-        const parsed = JSON.parse(value || '[]');
-        if (Array.isArray(parsed) && parsed.length) {
-          return parsed.map((section, idx) => normalizeSection(section, idx));
+        const parsed = JSON.parse(value || '{}');
+        const candidateSections = Array.isArray(parsed?.sections)
+          ? parsed.sections
+          : Array.isArray(parsed)
+            ? parsed
+            : [];
+        if (candidateSections.length) {
+          return candidateSections.map((section, idx) => normalizeSection(section, idx));
         }
       } catch (error) {
         console.warn('Schema parse error', error);
@@ -403,19 +408,21 @@
 
     const serializeSchema = () => {
       return JSON.stringify(
-        schemaState.map((section) => ({
-          id: slugify(section.id || section.title),
-          title: section.title || '',
-          role: section.role || '',
-          fields: section.fields.map((field) => ({
-            id: slugify(field.id || field.label),
-            label: field.label || '',
-            type: field.type,
-            required: Boolean(field.required),
-            ...(field.type === 'select' || field.type === 'if_else' ? { options: field.options } : {}),
-            ...(field.type === 'table' ? { columns: field.columns } : {}),
+        {
+          sections: schemaState.map((section) => ({
+            id: slugify(section.id || section.title),
+            title: section.title || '',
+            role: section.role || '',
+            fields: section.fields.map((field) => ({
+              id: slugify(field.id || field.label),
+              label: field.label || '',
+              type: field.type,
+              required: Boolean(field.required),
+              ...(field.type === 'select' || field.type === 'if_else' ? { options: field.options } : {}),
+              ...(field.type === 'table' ? { columns: field.columns } : {}),
+            })),
           })),
-        })),
+        },
         null,
         2,
       );
