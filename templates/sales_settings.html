@@ -292,8 +292,7 @@
     const tabPanes = tabsEl ? tabsEl.querySelectorAll('[data-schema-pane]') : [];
     const builderEl = tabsEl ? tabsEl.querySelector('[data-schema-builder]') : null;
     const builderFeedbackEl = tabsEl ? tabsEl.querySelector('[data-schema-feedback]') : null;
-    const jsonPreviewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
-    const previewFormEl = tabsEl ? tabsEl.querySelector('[data-schema-preview-form]') : null;
+    const previewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
     const saveBtn = form.querySelector('[data-template-save]');
 
     const slugify = (value) => {
