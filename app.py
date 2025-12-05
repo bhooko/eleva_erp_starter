@@ -21010,6 +21010,49 @@ def calls_demo():
     return redirect(url_for("customer_support_sarv_test"))
 
 
+@app.route("/customer-support/sarv/update-records", methods=["POST"])
+@login_required
+def customer_support_sarv_update_records():
+    _module_visibility_required("customer_support")
+
+    errors = []
+    checked = 0
+    updated = 0
+
+    recordings = (
+        CallRecording.query
+        .options(joinedload(CallRecording.call_log))
+        .order_by(CallRecording.created_at.desc())
+        .all()
+    )
+
+    for recording in recordings:
+        checked += 1
+
+        local_missing = not recording.local_file_path
+        if recording.local_file_path and current_app:
+            local_path = os.path.join(current_app.static_folder, recording.local_file_path)
+            local_missing = not os.path.exists(local_path)
+
+        if not local_missing and recording.download_status == "success":
+            continue
+
+        try:
+            download_call_recording(recording)
+            updated += 1
+        except Exception as exc:  # pragma: no cover - defensive logging
+            db.session.rollback()
+            recording.download_status = "failed"
+            recording.download_error = str(exc)[:250]
+            db.session.commit()
+            errors.append(
+                f"Recording {recording.id} ({recording.sarv_file_path}) failed: {recording.download_error}"
+            )
+
+    status = "ok" if not errors else "error"
+    return jsonify({"checked": checked, "updated": updated, "errors": errors, "status": status})
+
+
 @app.cli.command("initdb")
 def initdb():
     """Initialize database and seed sample data"""
