@@ -1,7 +1,8 @@
 import os
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
-import requests
 from flask import current_app
 
 from eleva_app import db
@@ -34,15 +35,17 @@ def download_call_recording(call_recording: CallRecording):
         headers["Authorization"] = f"Bearer {token}"
 
     try:
-        resp = requests.get(full_url, headers=headers, timeout=60)
-        resp.raise_for_status()
+        request = Request(full_url, headers=headers)
+        with urlopen(request, timeout=60) as resp:
+            if resp.status >= 400:
+                raise HTTPError(full_url, resp.status, resp.reason, resp.headers, None)
 
-        filename = os.path.basename(call_recording.sarv_file_path)
-        local_name = f"{call_recording.call_log.sarv_call_id}_{filename}"
-        local_path = os.path.join(target_dir, local_name)
+            filename = os.path.basename(call_recording.sarv_file_path)
+            local_name = f"{call_recording.call_log.sarv_call_id}_{filename}"
+            local_path = os.path.join(target_dir, local_name)
 
-        with open(local_path, "wb") as f:
-            f.write(resp.content)
+            with open(local_path, "wb") as f:
+                f.write(resp.read())
 
         rel_path = os.path.relpath(local_path, start=current_app.static_folder)
 
@@ -50,7 +53,7 @@ def download_call_recording(call_recording: CallRecording):
         call_recording.download_status = "success"
         call_recording.download_error = None
         db.session.commit()
-    except Exception as exc:  # pragma: no cover - network and IO side effects
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:  # pragma: no cover - network and IO side effects
         call_recording.download_status = "failed"
         call_recording.download_error = str(exc)[:250]
         db.session.commit()
