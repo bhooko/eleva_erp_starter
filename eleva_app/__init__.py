@@ -65,12 +65,12 @@ def create_app():
         app.config["ERP_PO_GO_LIVE_DATE"] = None
 
     app.config["SARV_RECORDING_BASE_URL"] = os.environ.get(
-        "SARV_RECORDING_BASE_URL", "https://example.sarv.com"
+        "SARV_RECORDING_BASE_URL", "https://ctv1.sarv.com"
+    )
+    app.config["CALL_RECORDINGS_DIR"] = os.environ.get(
+        "CALL_RECORDINGS_DIR", "static/call_recordings"
     )
     app.config["SARV_RECORDING_TOKEN"] = os.environ.get("SARV_RECORDING_TOKEN", "")
-    app.config["CALL_RECORDINGS_DIR"] = os.environ.get(
-        "CALL_RECORDINGS_DIR", os.path.join("static", "call_recordings")
-    )
 
     db.init_app(app)
     login_manager.init_app(app)
