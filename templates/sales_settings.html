@@ -192,10 +192,46 @@
             <span>Active</span>
           </label>
         </div>
-        <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Schema JSON</label>
-          <textarea name="schema_json" rows="14" class="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-3 text-sm font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Paste JSON here">{{ default_crf_schema }}</textarea>
-          <p class="text-xs text-slate-500 mt-2">Keep the existing section IDs when updating labels/options so saved responses remain compatible.</p>
+        <div class="space-y-3" data-schema-tabs>
+          <div class="inline-flex rounded-xl border border-slate-800/80 bg-slate-900/50 p-1 text-sm">
+            <button type="button" data-schema-tab="builder" class="px-4 py-2 rounded-lg font-medium text-emerald-100 bg-slate-800 border border-slate-700/80 shadow-inner shadow-black/10">Form Builder</button>
+            <button type="button" data-schema-tab="json" class="px-4 py-2 rounded-lg font-medium text-slate-300 hover:text-white transition">Schema JSON</button>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-4" data-schema-pane="builder">
+            <div class="flex flex-wrap items-start gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-emerald-200">Form builder</p>
+                <p class="text-sm text-slate-300">Add sections, pick field types, and reorder JSON-safe IDs without touching code.</p>
+              </div>
+              <div class="ml-auto text-xs text-slate-400 flex items-center gap-2">
+                <span class="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-1 font-semibold text-emerald-100 border border-emerald-500/30">No-code</span>
+                <span class="inline-flex items-center rounded-full bg-sky-500/15 px-2 py-1 font-semibold text-sky-100 border border-sky-500/30">Syncs with JSON</span>
+              </div>
+            </div>
+
+            <div class="space-y-3" data-schema-builder>
+              <!-- Rendered via JS -->
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button type="button" data-schema-action="add-section" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+                </svg>
+                <span>Add section</span>
+              </button>
+              <span class="text-xs text-slate-400">Sections and field IDs auto-slugify; keep them stable to preserve saved responses.</span>
+            </div>
+            <p class="text-xs text-slate-400" data-schema-feedback></p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-2 hidden" data-schema-pane="json">
+            <label class="block text-xs uppercase tracking-wide text-slate-400">Schema JSON</label>
+            <textarea name="schema_json" rows="14" class="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-3 text-sm font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Paste JSON here">{{ default_crf_schema }}</textarea>
+            <p class="text-xs text-slate-500">Paste or edit JSON directly. Switching back to the builder will reformat and validate this content.</p>
+            <pre class="mt-2 text-xs text-slate-300 bg-slate-900/60 border border-slate-800 rounded-xl p-3 overflow-x-auto" data-schema-preview></pre>
+          </div>
         </div>
       </div>
       <div class="border-t border-slate-800 px-6 py-4 flex flex-wrap items-center gap-3">
@@ -220,6 +256,434 @@
     const schemaInput = form.querySelector('textarea[name="schema_json"]');
     const titleEl = modal.querySelector('[data-template-title]');
     const subtitleEl = modal.querySelector('[data-template-subtitle]');
+    const tabsEl = form.querySelector('[data-schema-tabs]');
+    const tabButtons = tabsEl ? tabsEl.querySelectorAll('[data-schema-tab]') : [];
+    const tabPanes = tabsEl ? tabsEl.querySelectorAll('[data-schema-pane]') : [];
+    const builderEl = tabsEl ? tabsEl.querySelector('[data-schema-builder]') : null;
+    const builderFeedbackEl = tabsEl ? tabsEl.querySelector('[data-schema-feedback]') : null;
+    const previewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
+
+    const slugify = (value) => {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-{2,}/g, '-');
+    };
+
+    const defaultField = (index = 1) => ({
+      id: `field-${index}`,
+      label: 'New field',
+      type: 'text',
+      required: false,
+      options: [],
+      columns: [
+        { id: 'column-1', label: 'Column 1', type: 'text', options: [] },
+        { id: 'column-2', label: 'Column 2', type: 'text', options: [] },
+      ],
+    });
+
+    const defaultSection = (index = 1) => ({
+      id: `section-${index}`,
+      title: `Section ${index}`,
+      role: 'sales',
+      fields: [defaultField(1)],
+    });
+
+    const parseOptionLines = (value) => {
+      return String(value || '')
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [labelPart, valuePart] = line.split('|').map((part) => part.trim());
+          const label = labelPart || valuePart || '';
+          const val = valuePart || slugify(label);
+          return label ? { label, value: val } : null;
+        })
+        .filter(Boolean);
+    };
+
+    const normalizeField = (field, fieldIndex = 0) => {
+      const allowedTypes = ['text', 'textarea', 'number', 'date', 'select', 'table'];
+      const allowedColumnTypes = ['text', 'number', 'select'];
+      const type = allowedTypes.includes(field?.type) ? field.type : 'text';
+      const base = {
+        id: slugify(field?.id || field?.label || `field-${fieldIndex + 1}`) || `field-${fieldIndex + 1}`,
+        label: field?.label || `Field ${fieldIndex + 1}`,
+        type,
+        required: Boolean(field?.required),
+        options: [],
+        columns: [],
+      };
+
+      if (type === 'select') {
+        const rawOptions = Array.isArray(field?.options) ? field.options : parseOptionLines('OK|ok\nNot OK|not_ok');
+        base.options = rawOptions
+          .map((opt, idx) => ({
+            label: opt?.label || opt?.value || `Option ${idx + 1}`,
+            value: slugify(opt?.value || opt?.label || `option-${idx + 1}`),
+          }))
+          .filter((opt) => opt.label);
+      }
+
+      if (type === 'table') {
+        const rawCols = Array.isArray(field?.columns) ? field.columns : defaultField().columns;
+        base.columns = rawCols.map((col, idx) => ({
+          id: slugify(col?.id || col?.label || `column-${idx + 1}`) || `column-${idx + 1}`,
+          label: col?.label || `Column ${idx + 1}`,
+          type: allowedColumnTypes.includes(col?.type) ? col.type : 'text',
+          options:
+            col?.type === 'select'
+              ? (Array.isArray(col?.options) && col.options.length ? col.options : parseOptionLines('Yes|yes\nNo|no'))
+              : [],
+        }));
+      }
+
+      return base;
+    };
+
+    const normalizeSection = (section, sectionIndex = 0) => {
+      const fields = Array.isArray(section?.fields) ? section.fields : [];
+      return {
+        id: slugify(section?.id || section?.title || `section-${sectionIndex + 1}`) || `section-${sectionIndex + 1}`,
+        title: section?.title || `Section ${sectionIndex + 1}`,
+        role: section?.role || 'sales',
+        fields: fields.length ? fields.map((field, idx) => normalizeField(field, idx)) : [defaultField(1)],
+      };
+    };
+
+    const parseSchema = (value) => {
+      try {
+        const parsed = JSON.parse(value || '[]');
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed.map((section, idx) => normalizeSection(section, idx));
+        }
+      } catch (error) {
+        console.warn('Schema parse error', error);
+      }
+      return [defaultSection(1)];
+    };
+
+    let schemaState = parseSchema(schemaInput?.value || '');
+
+    const serializeSchema = () => {
+      return JSON.stringify(
+        schemaState.map((section) => ({
+          id: slugify(section.id || section.title),
+          title: section.title || '',
+          role: section.role || 'sales',
+          fields: section.fields.map((field) => ({
+            id: slugify(field.id || field.label),
+            label: field.label || '',
+            type: field.type,
+            required: Boolean(field.required),
+            ...(field.type === 'select' ? { options: field.options } : {}),
+            ...(field.type === 'table' ? { columns: field.columns } : {}),
+          })),
+        })),
+        null,
+        2,
+      );
+    };
+
+    const setFeedback = (message, tone = 'muted') => {
+      if (!builderFeedbackEl) return;
+      builderFeedbackEl.textContent = message;
+      builderFeedbackEl.classList.remove('text-emerald-300', 'text-rose-300', 'text-slate-400');
+      const toneClass = tone === 'success' ? 'text-emerald-300' : tone === 'error' ? 'text-rose-300' : 'text-slate-400';
+      builderFeedbackEl.classList.add(toneClass);
+      if (message) {
+        setTimeout(() => {
+          if (builderFeedbackEl.textContent === message) {
+            builderFeedbackEl.textContent = '';
+            builderFeedbackEl.classList.remove('text-emerald-300', 'text-rose-300');
+            builderFeedbackEl.classList.add('text-slate-400');
+          }
+        }, 4000);
+      }
+    };
+
+    let suppressJsonListener = false;
+
+    const syncJsonOutput = () => {
+      if (!schemaInput) return;
+      suppressJsonListener = true;
+      const serialized = serializeSchema();
+      schemaInput.value = serialized;
+      if (previewEl) {
+        previewEl.textContent = serialized;
+      }
+      suppressJsonListener = false;
+    };
+
+    const renderBuilder = () => {
+      if (!builderEl) return;
+      const sectionMarkup = schemaState
+        .map((section, sectionIndex) => {
+          const fieldsMarkup = section.fields
+            .map((field, fieldIndex) => {
+              const optionsText = field.options
+                .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
+                .join('\n');
+              const columnsMarkup = field.type === 'table'
+                ? `<div class="space-y-2 mt-3">
+                    ${field.columns
+                      .map(
+                        (col, colIndex) => `
+                          <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                            <div class="grid md:grid-cols-3 gap-3">
+                              <div>
+                                <label class="block text-xs text-slate-400 mb-1">Column label</label>
+                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-label" value="${col.label || ''}">
+                              </div>
+                              <div>
+                                <label class="block text-xs text-slate-400 mb-1">Column ID</label>
+                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-id" value="${col.id || ''}">
+                              </div>
+                              <div>
+                                <label class="block text-xs text-slate-400 mb-1">Type</label>
+                                <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-type">
+                                  <option value="text" ${col.type === 'text' ? 'selected' : ''}>Text</option>
+                                  <option value="number" ${col.type === 'number' ? 'selected' : ''}>Number</option>
+                                  <option value="select" ${col.type === 'select' ? 'selected' : ''}>Dropdown</option>
+                                </select>
+                              </div>
+                            </div>
+                            ${col.type === 'select'
+                              ? `<div>
+                                  <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
+                                  <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-options">${
+                                  (col.options || [])
+                                    .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
+                                    .join('\n')
+                                }</textarea>
+                                </div>`
+                              : ''}
+                            <div class="flex justify-end">
+                              <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-column" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}">Remove column</button>
+                            </div>
+                          </div>
+                        `,
+                      )
+                      .join('')}
+                    <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60" data-action="add-column" data-section="${sectionIndex}" data-field="${fieldIndex}">Add column</button>
+                  </div>`
+                : '';
+              const optionsBlock = field.type === 'select'
+                ? `<div>
+                    <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
+                    <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="options">${optionsText}</textarea>
+                  </div>`
+                : '';
+              return `
+                <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1 grid md:grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-xs text-slate-400 mb-1">Field label</label>
+                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="label" value="${field.label || ''}">
+                      </div>
+                      <div>
+                        <label class="block text-xs text-slate-400 mb-1">Field ID</label>
+                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="id" value="${field.id || ''}">
+                      </div>
+                    </div>
+                    <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-field" data-section="${sectionIndex}" data-field="${fieldIndex}">Remove</button>
+                  </div>
+                  <div class="grid md:grid-cols-3 gap-3">
+                    <div>
+                      <label class="block text-xs text-slate-400 mb-1">Type</label>
+                      <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="type">
+                        <option value="text" ${field.type === 'text' ? 'selected' : ''}>Short text</option>
+                        <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>Long text</option>
+                        <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
+                        <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
+                        <option value="select" ${field.type === 'select' ? 'selected' : ''}>Dropdown</option>
+                        <option value="table" ${field.type === 'table' ? 'selected' : ''}>Table</option>
+                      </select>
+                    </div>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-200 mt-6">
+                      <input type="checkbox" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="required" ${field.required ? 'checked' : ''}>
+                      <span>Required</span>
+                    </label>
+                  </div>
+                  ${optionsBlock}
+                  ${columnsMarkup}
+                </div>
+              `;
+            })
+            .join('');
+          return `
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-4">
+              <div class="flex items-center gap-3">
+                <div class="flex-1 grid md:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Section title</label>
+                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-title" value="${section.title || ''}">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Section ID</label>
+                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-id" value="${section.id || ''}">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Owned by</label>
+                    <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-role">
+                      <option value="sales" ${section.role === 'sales' ? 'selected' : ''}>Sales</option>
+                      <option value="design" ${section.role === 'design' ? 'selected' : ''}>Design</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-section" data-section="${sectionIndex}">Remove</button>
+              </div>
+              <div class="space-y-3">
+                ${fieldsMarkup || '<p class="text-sm text-slate-400">No fields added yet.</p>'}
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-emerald-500/60 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25" data-action="add-field" data-section="${sectionIndex}">Add field</button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+      builderEl.innerHTML = sectionMarkup;
+      syncJsonOutput();
+    };
+
+    const setActiveTab = (target) => {
+      if (!tabsEl) return;
+      tabButtons.forEach((btn) => {
+        const isActive = btn.getAttribute('data-schema-tab') === target;
+        btn.classList.toggle('bg-slate-800', isActive);
+        btn.classList.toggle('border', true);
+        btn.classList.toggle('border-slate-700/80', isActive);
+        btn.classList.toggle('text-emerald-100', isActive);
+        btn.classList.toggle('text-slate-300', !isActive);
+      });
+      tabPanes.forEach((pane) => {
+        pane.classList.toggle('hidden', pane.getAttribute('data-schema-pane') !== target);
+      });
+      if (target === 'json') {
+        syncJsonOutput();
+      }
+    };
+
+    if (tabButtons.length && tabPanes.length) {
+      tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setActiveTab(btn.getAttribute('data-schema-tab')));
+      });
+      setActiveTab('builder');
+    }
+
+    if (schemaInput) {
+      schemaInput.addEventListener('input', () => {
+        if (suppressJsonListener) return;
+        schemaState = parseSchema(schemaInput.value);
+        renderBuilder();
+        setFeedback('JSON parsed into builder.', 'success');
+      });
+    }
+
+    if (tabsEl) {
+      tabsEl.addEventListener('click', (event) => {
+        const actionEl = event.target.closest('[data-action]');
+        if (!actionEl) return;
+        const sectionIdx = Number(actionEl.dataset.section || 0);
+        const fieldIdx = Number(actionEl.dataset.field || 0);
+        const columnIdx = Number(actionEl.dataset.col || 0);
+        const action = actionEl.getAttribute('data-action');
+        if (action === 'add-section') {
+          schemaState.push(defaultSection(schemaState.length + 1));
+          renderBuilder();
+          setFeedback('Section added.', 'success');
+        } else if (action === 'remove-section') {
+          if (schemaState.length === 1) return;
+          schemaState.splice(sectionIdx, 1);
+          renderBuilder();
+          setFeedback('Section removed.', 'success');
+        } else if (action === 'add-field') {
+          const targetSection = schemaState[sectionIdx];
+          targetSection.fields.push(defaultField(targetSection.fields.length + 1));
+          renderBuilder();
+          setFeedback('Field added.', 'success');
+        } else if (action === 'remove-field') {
+          const targetSection = schemaState[sectionIdx];
+          if (targetSection.fields.length === 1) return;
+          targetSection.fields.splice(fieldIdx, 1);
+          renderBuilder();
+          setFeedback('Field removed.', 'success');
+        } else if (action === 'add-column') {
+          const targetField = schemaState[sectionIdx]?.fields?.[fieldIdx];
+          if (targetField && targetField.type === 'table') {
+            targetField.columns.push({ id: `column-${targetField.columns.length + 1}`, label: 'Column', type: 'text', options: [] });
+            renderBuilder();
+            setFeedback('Column added.', 'success');
+          }
+        } else if (action === 'remove-column') {
+          const targetField = schemaState[sectionIdx]?.fields?.[fieldIdx];
+          if (targetField && targetField.type === 'table' && targetField.columns.length > 1) {
+            targetField.columns.splice(columnIdx, 1);
+            renderBuilder();
+            setFeedback('Column removed.', 'success');
+          }
+        }
+      });
+
+      tabsEl.addEventListener('input', (event) => {
+        const sectionIdx = Number(event.target.dataset.section || 0);
+        const fieldIdx = Number(event.target.dataset.field || 0);
+        const columnIdx = Number(event.target.dataset.col || 0);
+        const prop = event.target.dataset.prop;
+        if (!prop) return;
+
+        if (prop === 'section-title') {
+          schemaState[sectionIdx].title = event.target.value;
+          if (!schemaState[sectionIdx].id) {
+            schemaState[sectionIdx].id = slugify(event.target.value);
+          }
+        } else if (prop === 'section-id') {
+          schemaState[sectionIdx].id = slugify(event.target.value);
+        } else if (prop === 'section-role') {
+          schemaState[sectionIdx].role = event.target.value || 'sales';
+        } else if (prop === 'label') {
+          schemaState[sectionIdx].fields[fieldIdx].label = event.target.value;
+          if (!schemaState[sectionIdx].fields[fieldIdx].id) {
+            schemaState[sectionIdx].fields[fieldIdx].id = slugify(event.target.value);
+          }
+        } else if (prop === 'id') {
+          schemaState[sectionIdx].fields[fieldIdx].id = slugify(event.target.value);
+        } else if (prop === 'type') {
+          const nextType = event.target.value;
+          const field = schemaState[sectionIdx].fields[fieldIdx];
+          field.type = nextType;
+          if (nextType === 'select' && !field.options.length) {
+            field.options = parseOptionLines('Yes|yes\nNo|no');
+          }
+          if (nextType === 'table' && !field.columns.length) {
+            field.columns = defaultField().columns;
+          }
+        } else if (prop === 'required') {
+          schemaState[sectionIdx].fields[fieldIdx].required = event.target.checked;
+        } else if (prop === 'options') {
+          schemaState[sectionIdx].fields[fieldIdx].options = parseOptionLines(event.target.value);
+        } else if (prop === 'column-label') {
+          schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx].label = event.target.value;
+        } else if (prop === 'column-id') {
+          schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx].id = slugify(event.target.value);
+        } else if (prop === 'column-type') {
+          const targetColumn = schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx];
+          targetColumn.type = event.target.value;
+          if (targetColumn.type === 'select' && !targetColumn.options.length) {
+            targetColumn.options = parseOptionLines('Front|front\nBack|back');
+          }
+        } else if (prop === 'column-options') {
+          schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx].options = parseOptionLines(event.target.value);
+        }
+        syncJsonOutput();
+      });
+    }
+
+    renderBuilder();
 
     const openModal = () => {
       modal.classList.remove('hidden');
@@ -269,6 +733,10 @@
           titleEl.textContent = 'New Client Requirements template';
           subtitleEl.textContent = 'Start from the default schema and tailor fields for your sales/design workflow.';
         }
+        schemaState = parseSchema(schemaInput.value);
+        renderBuilder();
+        setActiveTab('builder');
+        setFeedback('Schema ready in builder view.', 'success');
         openModal();
       });
     });
