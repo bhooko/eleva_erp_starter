@@ -111,7 +111,7 @@ class User(UserMixin, db.Model):
     position = db.relationship("Position", back_populates="users")
     notifications = db.relationship(
         "Notification",
-        backref="user",
+        back_populates="user",
         lazy="dynamic",
     )
 
@@ -1629,7 +1629,7 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
 
-    user = db.relationship("User")
+    user = db.relationship("User", back_populates="notifications")
 
     @property
     def created_display(self):
