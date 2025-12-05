@@ -86,6 +86,23 @@
                     <td class="px-6 py-4">
                       <div class="flex flex-wrap items-center gap-2">
                         <button type="button"
+                                class="inline-flex items-center justify-center rounded-xl border border-slate-700/70 p-2.5 text-slate-200 hover:border-sky-400/50 hover:text-sky-100 transition"
+                                title="View template"
+                                aria-label="View template"
+                                data-template-open="view"
+                                data-template-id="{{ template.id }}"
+                                data-template-name="{{ template.name }}"
+                                data-template-slug="{{ template.slug }}"
+                                data-template-primary="{{ 'true' if template.is_primary else 'false' }}"
+                                data-template-active="{{ 'true' if template.is_active else 'false' }}"
+                                data-template-schema='{{ template.parsed_schema|tojson|replace("'", "&#39;") }}'>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span class="sr-only">View</span>
+                        </button>
+                        <button type="button"
                                 class="inline-flex items-center justify-center rounded-xl border border-slate-700/70 p-2.5 text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100 transition"
                                 title="Edit template"
                                 aria-label="Edit template"
@@ -195,6 +212,7 @@
         <div class="space-y-3" data-schema-tabs>
           <div class="inline-flex rounded-xl border border-slate-800/80 bg-slate-900/50 p-1 text-sm">
             <button type="button" data-schema-tab="builder" class="px-4 py-2 rounded-lg font-medium text-emerald-100 bg-slate-800 border border-slate-700/80 shadow-inner shadow-black/10">Form Builder</button>
+            <button type="button" data-schema-tab="preview" class="px-4 py-2 rounded-lg font-medium text-slate-300 hover:text-white transition">Preview</button>
             <button type="button" data-schema-tab="json" class="px-4 py-2 rounded-lg font-medium text-slate-300 hover:text-white transition">Schema JSON</button>
           </div>
 
@@ -226,6 +244,19 @@
             <p class="text-xs text-slate-400" data-schema-feedback></p>
           </div>
 
+          <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-3 hidden" data-schema-pane="preview">
+            <div class="flex items-center gap-2">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-emerald-200">Form preview</p>
+                <p class="text-sm text-slate-300">What end users see when filling out this template.</p>
+              </div>
+              <span class="ml-auto inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-[11px] font-semibold text-slate-200 border border-slate-700/80">Read-only preview</span>
+            </div>
+            <div class="space-y-4" data-schema-preview-form>
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
           <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 space-y-2 hidden" data-schema-pane="json">
             <label class="block text-xs uppercase tracking-wide text-slate-400">Schema JSON</label>
             <textarea name="schema_json" rows="14" class="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-3 text-sm font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Paste JSON here">{{ default_crf_schema }}</textarea>
@@ -236,7 +267,7 @@
       </div>
       <div class="border-t border-slate-800 px-6 py-4 flex flex-wrap items-center gap-3">
         <button type="button" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:text-white transition" data-template-dismiss>Cancel</button>
-        <button type="submit" class="px-4 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-100 font-semibold hover:bg-emerald-500/30 transition">Save template</button>
+        <button type="submit" class="px-4 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-100 font-semibold hover:bg-emerald-500/30 transition" data-template-save>Save template</button>
       </div>
     </form>
   </div>
@@ -261,7 +292,9 @@
     const tabPanes = tabsEl ? tabsEl.querySelectorAll('[data-schema-pane]') : [];
     const builderEl = tabsEl ? tabsEl.querySelector('[data-schema-builder]') : null;
     const builderFeedbackEl = tabsEl ? tabsEl.querySelector('[data-schema-feedback]') : null;
-    const previewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
+    const jsonPreviewEl = tabsEl ? tabsEl.querySelector('[data-schema-preview]') : null;
+    const previewFormEl = tabsEl ? tabsEl.querySelector('[data-schema-preview-form]') : null;
+    const saveBtn = form.querySelector('[data-template-save]');
 
     const slugify = (value) => {
       return String(value || '')
@@ -286,7 +319,7 @@
     const defaultSection = (index = 1) => ({
       id: `section-${index}`,
       title: `Section ${index}`,
-      role: 'sales',
+      role: '',
       fields: [defaultField(1)],
     });
 
@@ -305,7 +338,7 @@
     };
 
     const normalizeField = (field, fieldIndex = 0) => {
-      const allowedTypes = ['text', 'textarea', 'number', 'date', 'select', 'table'];
+      const allowedTypes = ['text', 'textarea', 'number', 'date', 'select', 'table', 'checkbox', 'if_else'];
       const allowedColumnTypes = ['text', 'number', 'select'];
       const type = allowedTypes.includes(field?.type) ? field.type : 'text';
       const base = {
@@ -317,8 +350,9 @@
         columns: [],
       };
 
-      if (type === 'select') {
-        const rawOptions = Array.isArray(field?.options) ? field.options : parseOptionLines('OK|ok\nNot OK|not_ok');
+      if (type === 'select' || type === 'if_else') {
+        const fallbackOptions = type === 'if_else' ? 'If branch|if\nElse branch|else' : 'OK|ok\nNot OK|not_ok';
+        const rawOptions = Array.isArray(field?.options) ? field.options : parseOptionLines(fallbackOptions);
         base.options = rawOptions
           .map((opt, idx) => ({
             label: opt?.label || opt?.value || `Option ${idx + 1}`,
@@ -348,7 +382,7 @@
       return {
         id: slugify(section?.id || section?.title || `section-${sectionIndex + 1}`) || `section-${sectionIndex + 1}`,
         title: section?.title || `Section ${sectionIndex + 1}`,
-        role: section?.role || 'sales',
+        role: typeof section?.role === 'string' ? section.role : '',
         fields: fields.length ? fields.map((field, idx) => normalizeField(field, idx)) : [defaultField(1)],
       };
     };
@@ -372,13 +406,13 @@
         schemaState.map((section) => ({
           id: slugify(section.id || section.title),
           title: section.title || '',
-          role: section.role || 'sales',
+          role: section.role || '',
           fields: section.fields.map((field) => ({
             id: slugify(field.id || field.label),
             label: field.label || '',
             type: field.type,
             required: Boolean(field.required),
-            ...(field.type === 'select' ? { options: field.options } : {}),
+            ...(field.type === 'select' || field.type === 'if_else' ? { options: field.options } : {}),
             ...(field.type === 'table' ? { columns: field.columns } : {}),
           })),
         })),
@@ -411,18 +445,92 @@
       suppressJsonListener = true;
       const serialized = serializeSchema();
       schemaInput.value = serialized;
-      if (previewEl) {
-        previewEl.textContent = serialized;
+      if (jsonPreviewEl) {
+        jsonPreviewEl.textContent = serialized;
       }
       suppressJsonListener = false;
     };
 
+    const renderPreview = () => {
+      if (!previewFormEl) return;
+      const sectionMarkup = schemaState
+        .map((section) => {
+          const fieldsMarkup = Array.isArray(section.fields)
+            ? section.fields
+                .map((field) => {
+                  const labelHtml = `<label class="block text-sm font-semibold text-slate-100">${field.label || ''}${
+                    field.required ? ' <span class="text-rose-200">*</span>' : ''
+                  }</label>`;
+                  const helpText = field.type === 'select' && !field.options.length
+                    ? '<p class="text-xs text-amber-200">Add options to populate this dropdown.</p>'
+                    : '';
+                  const commonClasses = 'w-full rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm text-slate-100';
+                  let controlHtml = '';
+
+                  if (field.type === 'textarea') {
+                    controlHtml = `<textarea rows="3" class="${commonClasses}" disabled placeholder="Enter ${
+                      field.label || 'details'
+                    }..."></textarea>`;
+                  } else if (field.type === 'number') {
+                    controlHtml = `<input type="number" class="${commonClasses}" disabled placeholder="0">`;
+                  } else if (field.type === 'date') {
+                    controlHtml = `<input type="date" class="${commonClasses}" disabled>`;
+                  } else if (field.type === 'select' || field.type === 'if_else') {
+                    const optionsHtml = (field.options || [])
+                      .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
+                      .join('');
+                    controlHtml = `<select class="${commonClasses}" disabled><option value="">Select...</option>${optionsHtml}</select>${helpText}`;
+                  } else if (field.type === 'table') {
+                    const columns = field.columns || [];
+                    const headerCells = columns
+                      .map((col) => `<th class="px-3 py-2 text-left text-xs text-slate-300">${col.label || 'Column'}</th>`)
+                      .join('');
+                    const rowCells = columns
+                      .map((col) => {
+                        if (col.type === 'select') {
+                          const opts = (col.options || [])
+                            .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
+                            .join('');
+                          return `<td class="px-3 py-2"><select class="${commonClasses}" disabled><option value="">Select...</option>${opts}</select></td>`;
+                        }
+                        const type = col.type === 'number' ? 'number' : 'text';
+                        return `<td class="px-3 py-2"><input type="${type}" class="${commonClasses}" disabled></td>`;
+                      })
+                      .join('');
+                    controlHtml = `<div class="overflow-x-auto border border-slate-800 rounded-xl"><table class="min-w-full divide-y divide-slate-800 text-sm text-slate-200"><thead class="bg-slate-900/80">${
+                      headerCells ? `<tr>${headerCells}</tr>` : ''
+                    }</thead><tbody><tr>${rowCells || '<td class="px-3 py-2 text-slate-400">Add columns to preview the table.</td>'}</tr></tbody></table></div>`;
+                  } else if (field.type === 'checkbox') {
+                    controlHtml = `<label class="inline-flex items-center gap-2 text-sm text-slate-100"><input type="checkbox" disabled class="rounded border-slate-700 bg-slate-900 text-emerald-500"> <span>${field.label || 'Checkbox'}</span></label>`;
+                  } else {
+                    controlHtml = `<input type="text" class="${commonClasses}" disabled placeholder="Enter ${field.label || 'value'}">`;
+                  }
+
+                  return `<div class="space-y-2"><div class="flex items-start justify-between gap-2">${labelHtml}<span class="text-[11px] uppercase tracking-wide text-slate-400">${
+                    field.type
+                  }</span></div>${controlHtml}</div>`;
+                })
+                .join('')
+            : '';
+
+          return `<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-4"><div class="flex items-start justify-between gap-3"><div><p class="text-xs uppercase tracking-wide text-slate-400">${
+            section.id || 'section'
+          }</p><h4 class="text-lg font-semibold text-slate-100">${section.title || 'Untitled section'}</h4>${
+            section.role ? `<p class="text-xs text-slate-400 mt-1">Owned by: ${section.role}</p>` : ''
+          }</div></div><div class="space-y-3">${fieldsMarkup || '<p class="text-sm text-slate-400">No fields to display.</p>'}</div></div>`;
+        })
+        .join('');
+      previewFormEl.innerHTML = sectionMarkup || '<p class="text-sm text-slate-400">Nothing to preview yet.</p>';
+    };
+
     const renderBuilder = () => {
       if (!builderEl) return;
+      const isReadOnly = form.dataset.mode === 'view';
       const sectionMarkup = schemaState
         .map((section, sectionIndex) => {
           const fieldsMarkup = section.fields
             .map((field, fieldIndex) => {
+              const disabledAttr = isReadOnly ? 'disabled' : '';
               const optionsText = field.options
                 .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
                 .join('\n');
@@ -435,15 +543,15 @@
                             <div class="grid md:grid-cols-3 gap-3">
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Column label</label>
-                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-label" value="${col.label || ''}">
+                                <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-label" value="${col.label || ''}">
                               </div>
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Column ID</label>
-                                <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-id" value="${col.id || ''}">
+                                <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-id" value="${col.id || ''}">
                               </div>
                               <div>
                                 <label class="block text-xs text-slate-400 mb-1">Type</label>
-                                <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-type">
+                                <select ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-type">
                                   <option value="text" ${col.type === 'text' ? 'selected' : ''}>Text</option>
                                   <option value="number" ${col.type === 'number' ? 'selected' : ''}>Number</option>
                                   <option value="select" ${col.type === 'select' ? 'selected' : ''}>Dropdown</option>
@@ -453,27 +561,27 @@
                             ${col.type === 'select'
                               ? `<div>
                                   <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
-                                  <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-options">${
+                                  <textarea rows="2" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}" data-prop="column-options">${
                                   (col.options || [])
                                     .map((opt) => `${opt.label || ''}|${opt.value || ''}`.trim())
                                     .join('\n')
                                 }</textarea>
                                 </div>`
                               : ''}
-                            <div class="flex justify-end">
+                            ${isReadOnly ? '' : `<div class="flex justify-end">
                               <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-column" data-section="${sectionIndex}" data-field="${fieldIndex}" data-col="${colIndex}">Remove column</button>
-                            </div>
+                            </div>`}
                           </div>
                         `,
                       )
                       .join('')}
-                    <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60" data-action="add-column" data-section="${sectionIndex}" data-field="${fieldIndex}">Add column</button>
+                    ${isReadOnly ? '' : `<button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60" data-action="add-column" data-section="${sectionIndex}" data-field="${fieldIndex}">Add column</button>`}
                   </div>`
                 : '';
-              const optionsBlock = field.type === 'select'
+              const optionsBlock = field.type === 'select' || field.type === 'if_else'
                 ? `<div>
                     <label class="block text-xs text-slate-400 mb-1">Options (Label|value per line)</label>
-                    <textarea rows="2" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="options">${optionsText}</textarea>
+                    <textarea rows="2" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="options">${optionsText}</textarea>
                   </div>`
                 : '';
               return `
@@ -482,29 +590,31 @@
                     <div class="flex-1 grid md:grid-cols-2 gap-3">
                       <div>
                         <label class="block text-xs text-slate-400 mb-1">Field label</label>
-                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="label" value="${field.label || ''}">
+                        <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="label" value="${field.label || ''}">
                       </div>
                       <div>
                         <label class="block text-xs text-slate-400 mb-1">Field ID</label>
-                        <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="id" value="${field.id || ''}">
+                        <input type="text" ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="id" value="${field.id || ''}">
                       </div>
                     </div>
-                    <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-field" data-section="${sectionIndex}" data-field="${fieldIndex}">Remove</button>
+                    ${isReadOnly ? '' : `<button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-field" data-section="${sectionIndex}" data-field="${fieldIndex}">Remove</button>`}
                   </div>
                   <div class="grid md:grid-cols-3 gap-3">
                     <div>
                       <label class="block text-xs text-slate-400 mb-1">Type</label>
-                      <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="type">
+                      <select ${disabledAttr} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="type">
                         <option value="text" ${field.type === 'text' ? 'selected' : ''}>Short text</option>
                         <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>Long text</option>
                         <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
                         <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
                         <option value="select" ${field.type === 'select' ? 'selected' : ''}>Dropdown</option>
+                        <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+                        <option value="if_else" ${field.type === 'if_else' ? 'selected' : ''}>If / Else</option>
                         <option value="table" ${field.type === 'table' ? 'selected' : ''}>Table</option>
                       </select>
                     </div>
                     <label class="inline-flex items-center gap-2 text-sm text-slate-200 mt-6">
-                      <input type="checkbox" data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="required" ${field.required ? 'checked' : ''}>
+                      <input type="checkbox" ${disabledAttr} data-section="${sectionIndex}" data-field="${fieldIndex}" data-prop="required" ${field.required ? 'checked' : ''}>
                       <span>Required</span>
                     </label>
                   </div>
@@ -520,34 +630,39 @@
                 <div class="flex-1 grid md:grid-cols-3 gap-3">
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Section title</label>
-                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-title" value="${section.title || ''}">
+                    <input type="text" ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-title" value="${section.title || ''}">
                   </div>
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Section ID</label>
-                    <input type="text" class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-id" value="${section.id || ''}">
+                    <input type="text" ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-id" value="${section.id || ''}">
                   </div>
                   <div>
                     <label class="block text-xs text-slate-400 mb-1">Owned by</label>
-                    <select class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-role">
+                    <select ${isReadOnly ? 'disabled' : ''} class="w-full rounded-lg bg-slate-800/70 border border-slate-700/60 px-3 py-2 text-sm" data-section="${sectionIndex}" data-prop="section-role">
+                      <option value="" ${!section.role ? 'selected' : ''}>Unassigned</option>
                       <option value="sales" ${section.role === 'sales' ? 'selected' : ''}>Sales</option>
                       <option value="design" ${section.role === 'design' ? 'selected' : ''}>Design</option>
                     </select>
                   </div>
                 </div>
-                <button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-section" data-section="${sectionIndex}">Remove</button>
+                ${isReadOnly ? '' : `<button type="button" class="text-xs text-rose-200 hover:text-rose-100" data-action="remove-section" data-section="${sectionIndex}">Remove</button>`}
               </div>
               <div class="space-y-3">
                 ${fieldsMarkup || '<p class="text-sm text-slate-400">No fields added yet.</p>'}
               </div>
-              <div class="flex flex-wrap items-center gap-2">
+              ${isReadOnly ? '' : `<div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="text-xs rounded-lg px-3 py-1.5 border border-emerald-500/60 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25" data-action="add-field" data-section="${sectionIndex}">Add field</button>
-              </div>
+              </div>`}
             </div>
           `;
         })
         .join('');
-      builderEl.innerHTML = sectionMarkup;
+      builderEl.innerHTML = `${sectionMarkup}${isReadOnly ? '' : `
+      <div class="pt-2">
+        <button type="button" class="px-4 py-2 text-sm rounded-xl border border-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition" data-action="add-section">+ Add section</button>
+      </div>`}`;
       syncJsonOutput();
+      renderPreview();
     };
 
     const setActiveTab = (target) => {
@@ -565,6 +680,8 @@
       });
       if (target === 'json') {
         syncJsonOutput();
+      } else if (target === 'preview') {
+        renderPreview();
       }
     };
 
@@ -580,12 +697,14 @@
         if (suppressJsonListener) return;
         schemaState = parseSchema(schemaInput.value);
         renderBuilder();
+        renderPreview();
         setFeedback('JSON parsed into builder.', 'success');
       });
     }
 
     if (tabsEl) {
       tabsEl.addEventListener('click', (event) => {
+        if (form.dataset.mode === 'view') return;
         const actionEl = event.target.closest('[data-action]');
         if (!actionEl) return;
         const sectionIdx = Number(actionEl.dataset.section || 0);
@@ -630,6 +749,7 @@
       });
 
       tabsEl.addEventListener('input', (event) => {
+        if (form.dataset.mode === 'view') return;
         const sectionIdx = Number(event.target.dataset.section || 0);
         const fieldIdx = Number(event.target.dataset.field || 0);
         const columnIdx = Number(event.target.dataset.col || 0);
@@ -644,7 +764,7 @@
         } else if (prop === 'section-id') {
           schemaState[sectionIdx].id = slugify(event.target.value);
         } else if (prop === 'section-role') {
-          schemaState[sectionIdx].role = event.target.value || 'sales';
+          schemaState[sectionIdx].role = event.target.value || '';
         } else if (prop === 'label') {
           schemaState[sectionIdx].fields[fieldIdx].label = event.target.value;
           if (!schemaState[sectionIdx].fields[fieldIdx].id) {
@@ -659,8 +779,14 @@
           if (nextType === 'select' && !field.options.length) {
             field.options = parseOptionLines('Yes|yes\nNo|no');
           }
+          if (nextType === 'if_else' && !field.options.length) {
+            field.options = parseOptionLines('If branch|if\nElse branch|else');
+          }
           if (nextType === 'table' && !field.columns.length) {
             field.columns = defaultField().columns;
+          }
+          if (nextType !== 'select' && nextType !== 'if_else') {
+            field.options = [];
           }
         } else if (prop === 'required') {
           schemaState[sectionIdx].fields[fieldIdx].required = event.target.checked;
@@ -680,6 +806,7 @@
           schemaState[sectionIdx].fields[fieldIdx].columns[columnIdx].options = parseOptionLines(event.target.value);
         }
         syncJsonOutput();
+        renderPreview();
       });
     }
 
@@ -693,6 +820,31 @@
       modal.classList.add('hidden');
       document.body.classList.remove('overflow-hidden');
     };
+
+    const setReadOnly = (readOnly) => {
+      form.dataset.mode = readOnly ? 'view' : 'edit';
+      const interactiveEls = form.querySelectorAll('input, select, textarea, button');
+      interactiveEls.forEach((el) => {
+        if (el.hasAttribute('data-template-dismiss') || el.hasAttribute('data-template-save')) {
+          return;
+        }
+        if (readOnly && el.type !== 'button') {
+          el.setAttribute('disabled', 'disabled');
+        } else {
+          el.removeAttribute('disabled');
+        }
+      });
+      if (saveBtn) {
+        saveBtn.classList.toggle('hidden', readOnly);
+      }
+    };
+
+    form.addEventListener('submit', (event) => {
+      if (form.dataset.mode === 'view') {
+        event.preventDefault();
+        closeModal();
+      }
+    });
 
     modal.querySelectorAll('[data-template-dismiss]').forEach(btn => {
       btn.addEventListener('click', closeModal);
@@ -725,6 +877,24 @@
           }
           titleEl.textContent = 'Edit Client Requirements template';
           subtitleEl.textContent = 'Adjust labels and options, then save to update the template in Sales and Design flows.';
+          setReadOnly(false);
+        } else if (mode === 'view') {
+          form.querySelector('input[name="action"]').value = '';
+          templateIdInput.value = btn.dataset.templateId || '';
+          nameInput.value = btn.dataset.templateName || '';
+          slugInput.value = btn.dataset.templateSlug || '';
+          isPrimaryInput.checked = btn.dataset.templatePrimary === 'true';
+          isActiveInput.checked = btn.dataset.templateActive === 'true';
+          const schemaRaw = btn.dataset.templateSchema || '{}';
+          try {
+            const parsed = JSON.parse(schemaRaw);
+            schemaInput.value = JSON.stringify(parsed, null, 2);
+          } catch (error) {
+            schemaInput.value = schemaRaw;
+          }
+          titleEl.textContent = 'View Client Requirements template';
+          subtitleEl.textContent = 'Fields are read-only; close to return to settings.';
+          setReadOnly(true);
         } else {
           form.querySelector('input[name="action"]').value = 'create';
           templateIdInput.value = '';
@@ -732,11 +902,13 @@
           isActiveInput.checked = true;
           titleEl.textContent = 'New Client Requirements template';
           subtitleEl.textContent = 'Start from the default schema and tailor fields for your sales/design workflow.';
+          setReadOnly(false);
         }
         schemaState = parseSchema(schemaInput.value);
         renderBuilder();
-        setActiveTab('builder');
-        setFeedback('Schema ready in builder view.', 'success');
+        const defaultTab = mode === 'view' ? 'preview' : 'builder';
+        setActiveTab(defaultTab);
+        setFeedback(defaultTab === 'preview' ? 'Preview loaded for review.' : 'Schema ready in builder view.', 'success');
         openModal();
       });
     });
