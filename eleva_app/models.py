@@ -2269,3 +2269,59 @@ class DeliveryOrderItem(db.Model):
     delivery_order = db.relationship(
         "DeliveryOrder", backref=db.backref("items", cascade="all, delete-orphan")
     )
+
+
+class CallLog(db.Model):
+    __tablename__ = "call_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sarv_call_id = db.Column(db.String(64), unique=True, nullable=False)
+    ctype = db.Column(db.String(16))
+    did = db.Column(db.String(32))
+    customer_number = db.Column(db.String(32))
+    agent_user_id = db.Column(db.String(64))
+    agent_number = db.Column(db.String(32))
+    agent_name = db.Column(db.String(128))
+    group_id = db.Column(db.String(64))
+
+    call_status = db.Column(db.String(32))
+    ivr_flow = db.Column(db.String(255))
+    ivr_id_arr = db.Column(db.String(255))
+
+    ivr_start_time = db.Column(db.DateTime)
+    ivr_end_time = db.Column(db.DateTime)
+    first_answer_time = db.Column(db.DateTime)
+    last_hangup_time = db.Column(db.DateTime)
+    cust_answer_start = db.Column(db.DateTime)
+    cust_answer_end = db.Column(db.DateTime)
+
+    ivr_duration = db.Column(db.Integer)
+    talk_duration = db.Column(db.Integer)
+    total_duration = db.Column(db.Integer)
+    hold_duration = db.Column(db.Integer)
+
+    raw_payload = db.Column(db.JSON)
+
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    recordings = db.relationship(
+        "CallRecording", backref="call_log", cascade="all, delete-orphan"
+    )
+
+
+class CallRecording(db.Model):
+    __tablename__ = "call_recordings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    call_log_id = db.Column(db.Integer, db.ForeignKey("call_logs.id"), nullable=False)
+
+    sarv_file_path = db.Column(db.String(255), nullable=False)
+    sarv_node_id = db.Column(db.String(64))
+    sarv_visit_id = db.Column(db.String(64))
+    sarv_time = db.Column(db.DateTime, nullable=True)
+
+    local_file_path = db.Column(db.String(255), nullable=True)
+    download_status = db.Column(db.String(16), default="pending")
+    download_error = db.Column(db.String(255), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)

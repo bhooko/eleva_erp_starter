@@ -64,11 +64,20 @@ def create_app():
     except ValueError:
         app.config["ERP_PO_GO_LIVE_DATE"] = None
 
+    app.config["SARV_RECORDING_BASE_URL"] = os.environ.get(
+        "SARV_RECORDING_BASE_URL", "https://example.sarv.com"
+    )
+    app.config["SARV_RECORDING_TOKEN"] = os.environ.get("SARV_RECORDING_TOKEN", "")
+    app.config["CALL_RECORDINGS_DIR"] = os.environ.get(
+        "CALL_RECORDINGS_DIR", os.path.join("static", "call_recordings")
+    )
+
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
 
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    os.makedirs(app.config["CALL_RECORDINGS_DIR"], exist_ok=True)
     os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
 
     with app.app_context():
