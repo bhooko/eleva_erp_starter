@@ -1380,6 +1380,310 @@ DROPDOWN_FIELD_DEFINITIONS = {
 }
 
 
+def _default_client_requirement_schema():
+    """Return a structured schema for the Client Requirements Form template."""
+
+    door_type_options = [
+        {"label": "Collapsible", "value": "collapsible"},
+        {"label": "Manual swing", "value": "manual_swing"},
+        {"label": "Automatic", "value": "automatic"},
+    ]
+
+    door_finish_options = [
+        {"label": "Powder coated", "value": "powder_coated"},
+        {"label": "SS Hairline", "value": "ss_hl"},
+        {"label": "SS Mirror", "value": "ss_mirror"},
+        {"label": "Designer", "value": "designer"},
+    ]
+
+    urgency_options = [
+        {"label": "Normal", "value": "normal"},
+        {"label": "Urgent", "value": "urgent"},
+        {"label": "Delayed", "value": "delayed"},
+    ]
+
+    sales_sections = [
+        {
+            "id": "lead_details",
+            "title": "Lead Details",
+            "role": "sales",
+            "fields": [
+                {"id": "quote_in_name_of", "type": "text", "label": "Quote in the Name of", "required": True},
+                {"id": "priority", "type": "select", "label": "Priority", "options": urgency_options, "required": True},
+                {"id": "site_name", "type": "text", "label": "Site Name", "required": True},
+                {"id": "site_address", "type": "textarea", "label": "Site Address"},
+                {"id": "lift_type", "type": "select", "label": "Lift Type", "options": [
+                    {"label": "Villa", "value": "villa"},
+                    {"label": "Apartment", "value": "apartment"},
+                    {"label": "Commercial", "value": "commercial"},
+                ], "required": True},
+                {"id": "start_date", "type": "date", "label": "Start Date"},
+                {"id": "completion_by", "type": "date", "label": "Completion By"},
+                {"id": "order_value", "type": "number", "label": "Order Value"},
+                {"id": "sales_representative", "type": "text", "label": "Sales Representative", "required": True},
+                {"id": "sales_manager", "type": "text", "label": "Sales Manager"},
+                {"id": "closed_by", "type": "select", "label": "Closed By", "options": [
+                    {"label": "Sales Rep", "value": "sales_rep"},
+                    {"label": "Manager", "value": "manager"},
+                    {"label": "Director", "value": "director"},
+                ]},
+            ],
+        },
+        {
+            "id": "client_details",
+            "title": "Client Details",
+            "role": "sales",
+            "fields": [
+                {"id": "owner_name", "type": "text", "label": "Owner Name", "required": True},
+                {"id": "owner_phone", "type": "text", "label": "Owner Phone"},
+                {"id": "owner_email", "type": "text", "label": "Owner Email"},
+                {"id": "alt_contact_name", "type": "text", "label": "Alternate Contact Name"},
+                {"id": "alt_contact_phone", "type": "text", "label": "Alternate Contact Phone"},
+                {"id": "alt_contact_email", "type": "text", "label": "Alternate Contact Email"},
+                {"id": "architect", "type": "text", "label": "Architect"},
+                {"id": "rcc_consultant", "type": "text", "label": "RCC Consultant"},
+            ],
+        },
+        {
+            "id": "requirement_details",
+            "title": "Requirement Details",
+            "role": "sales",
+            "fields": [
+                {"id": "lift_configuration", "type": "select", "label": "Lift Type", "options": [
+                    {"label": "MR", "value": "mr"},
+                    {"label": "MRL", "value": "mrl"},
+                    {"label": "Hydraulic", "value": "hydraulic"},
+                    {"label": "Dumbwaiter", "value": "dumbwaiter"},
+                    {"label": "Goods", "value": "goods"},
+                ], "required": True},
+                {"id": "motor_type", "type": "select", "label": "Motor Type", "options": [
+                    {"label": "Geared", "value": "geared"},
+                    {"label": "Gearless", "value": "gearless"},
+                    {"label": "Drum", "value": "drum"},
+                    {"label": "Hydraulic", "value": "hydraulic"},
+                ]},
+                {"id": "structure_required", "type": "select", "label": "Structure Required", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "structure_placement", "type": "select", "label": "Structure Placement", "options": [
+                    {"label": "Inside shaft", "value": "inside"},
+                    {"label": "Outside shaft", "value": "outside"},
+                    {"label": "Not applicable", "value": "na"},
+                ]},
+                {"id": "entry_platform", "type": "select", "label": "Entry Platform", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "lift_placement", "type": "select", "label": "Lift Placement", "options": [
+                    {"label": "Indoor", "value": "indoor"},
+                    {"label": "Outdoor", "value": "outdoor"},
+                ]},
+                {"id": "platform_size", "type": "text", "label": "Platform Size"},
+                {"id": "cladding_type", "type": "select", "label": "Cladding Type", "options": [
+                    {"label": "ACP Solid", "value": "acp_solid"},
+                    {"label": "ACP Designer", "value": "acp_designer"},
+                    {"label": "Glass (8mm)", "value": "glass_8mm"},
+                ]},
+                {"id": "structure_finish", "type": "text", "label": "Structure Finish"},
+                {"id": "cabin_finish", "type": "select", "label": "Cabin Finish", "options": [
+                    {"label": "SS Hairline", "value": "ss_hl"},
+                    {"label": "SS Mirror", "value": "ss_mirror"},
+                    {"label": "SS Designer", "value": "ss_designer"},
+                    {"label": "Wooden", "value": "wooden"},
+                    {"label": "MS1", "value": "ms1"},
+                    {"label": "MS2", "value": "ms2"},
+                    {"label": "Other", "value": "other"},
+                ]},
+                {"id": "shaft_width", "type": "number", "label": "Shaft Width (mm)"},
+                {"id": "shaft_depth", "type": "number", "label": "Shaft Depth (mm)"},
+                {"id": "number_of_floors", "type": "number", "label": "Number of Floors"},
+                {"id": "shaft_plastering_done", "type": "select", "label": "Shaft Plastering Done?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "front_side_masonry", "type": "select", "label": "Front Side Masonry Done?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "dual_opening", "type": "select", "label": "Dual Opening Required?", "options": [
+                    {"label": "Opposite", "value": "opposite"},
+                    {"label": "Adjacent", "value": "adjacent"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "wheel_chair", "type": "select", "label": "Wheel Chair?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "mechanism_side", "type": "select", "label": "Mechanism Side", "options": [
+                    {"label": "Back", "value": "back"},
+                    {"label": "Right", "value": "right"},
+                    {"label": "Left", "value": "left"},
+                ]},
+                {"id": "passengers", "type": "number", "label": "Passengers"},
+                {"id": "door_details", "type": "table", "label": "Door Details", "columns": [
+                    {"id": "notation", "label": "Notation", "type": "text"},
+                    {"id": "floor_height", "label": "Floor Height (mm)", "type": "number"},
+                    {"id": "opening_side", "label": "Opening Side", "type": "select", "options": [
+                        {"label": "Front", "value": "front"},
+                        {"label": "Left", "value": "left"},
+                        {"label": "Right", "value": "right"},
+                        {"label": "Back", "value": "back"},
+                    ]},
+                    {"id": "door_type", "label": "Door Type", "type": "select", "options": door_type_options},
+                    {"id": "door_finish", "label": "Door Finish", "type": "select", "options": door_finish_options},
+                    {"id": "opening_width", "label": "Opening (mm)", "type": "number"},
+                    {"id": "position", "label": "Position", "type": "select", "options": [
+                        {"label": "In-shaft", "value": "in_shaft"},
+                        {"label": "Out", "value": "out"},
+                        {"label": "APD", "value": "apd"},
+                    ]},
+                    {"id": "remarks", "label": "Remarks", "type": "textarea"},
+                ]},
+                {"id": "photos_clicked", "type": "select", "label": "Photos clicked", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "construct_as_per_drawing", "type": "select", "label": "Shaft to construct as per drawing?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ]},
+                {"id": "representative_name", "type": "text", "label": "Rep Name"},
+            ],
+        },
+    ]
+
+    design_sections = [
+        {
+            "id": "design_confirmation",
+            "title": "Design Confirmation",
+            "role": "design",
+            "fields": [
+                {"id": "pit_height_ok", "type": "select", "label": "Pit Height OK?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ], "required": True},
+                {"id": "pit_height_remarks", "type": "textarea", "label": "Pit Height Remarks"},
+                {"id": "overhead_height_ok", "type": "select", "label": "Overhead Height OK?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ], "required": True},
+                {"id": "overhead_height_remarks", "type": "textarea", "label": "Overhead Height Remarks"},
+                {"id": "lintel_height_ok", "type": "select", "label": "Lintel Height OK?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ], "required": True},
+                {"id": "lintel_height_remarks", "type": "textarea", "label": "Lintel Height Remarks"},
+                {"id": "floor_height_ok", "type": "select", "label": "Floor Height OK?", "options": [
+                    {"label": "Yes", "value": "yes"},
+                    {"label": "No", "value": "no"},
+                ], "required": True},
+                {"id": "floor_height_remarks", "type": "textarea", "label": "Floor Height Remarks"},
+                {"id": "option1", "type": "group", "label": "Option 1", "fields": [
+                    {"id": "option1_cabin_size", "type": "text", "label": "Cabin Inside Size"},
+                    {"id": "option1_doors", "type": "table", "label": "Door Configuration", "columns": [
+                        {"id": "side", "label": "Side", "type": "select", "options": [
+                            {"label": "Front", "value": "front"},
+                            {"label": "Back", "value": "back"},
+                            {"label": "Left", "value": "left"},
+                            {"label": "Right", "value": "right"},
+                        ]},
+                        {"id": "opening_size", "label": "Opening Size (mm)", "type": "number"},
+                        {"id": "car_door_type", "label": "Car Door Type", "type": "select", "options": door_type_options},
+                        {"id": "landing_door_type", "label": "Landing Door Type", "type": "select", "options": door_type_options},
+                        {"id": "floors", "label": "Floor (All / list)", "type": "text"},
+                        {"id": "landing_position", "label": "Landing Door Position", "type": "select", "options": [
+                            {"label": "Inside", "value": "inside"},
+                            {"label": "Outside", "value": "outside"},
+                        ]},
+                        {"id": "frame_position", "label": "Door Frame Position", "type": "select", "options": [
+                            {"label": "Inside", "value": "inside"},
+                            {"label": "Outside", "value": "outside"},
+                        ]},
+                        {"id": "mechanism_side", "label": "Mechanism Side", "type": "select", "options": [
+                            {"label": "Front", "value": "front"},
+                            {"label": "Back", "value": "back"},
+                            {"label": "Left", "value": "left"},
+                            {"label": "Right", "value": "right"},
+                        ]},
+                        {"id": "remarks", "label": "Remarks", "type": "textarea"},
+                    ]},
+                ]},
+                {"id": "option2", "type": "group", "label": "Option 2", "fields": [
+                    {"id": "option2_cabin_size", "type": "text", "label": "Cabin Inside Size"},
+                    {"id": "option2_doors", "type": "table", "label": "Door Configuration", "columns": [
+                        {"id": "side", "label": "Side", "type": "select", "options": [
+                            {"label": "Front", "value": "front"},
+                            {"label": "Back", "value": "back"},
+                            {"label": "Left", "value": "left"},
+                            {"label": "Right", "value": "right"},
+                        ]},
+                        {"id": "opening_size", "label": "Opening Size (mm)", "type": "number"},
+                        {"id": "car_door_type", "label": "Car Door Type", "type": "select", "options": door_type_options},
+                        {"id": "landing_door_type", "label": "Landing Door Type", "type": "select", "options": door_type_options},
+                        {"id": "floors", "label": "Floor (All / list)", "type": "text"},
+                        {"id": "landing_position", "label": "Landing Door Position", "type": "select", "options": [
+                            {"label": "Inside", "value": "inside"},
+                            {"label": "Outside", "value": "outside"},
+                        ]},
+                        {"id": "frame_position", "label": "Door Frame Position", "type": "select", "options": [
+                            {"label": "Inside", "value": "inside"},
+                            {"label": "Outside", "value": "outside"},
+                        ]},
+                        {"id": "mechanism_side", "label": "Mechanism Side", "type": "select", "options": [
+                            {"label": "Front", "value": "front"},
+                            {"label": "Back", "value": "back"},
+                            {"label": "Left", "value": "left"},
+                            {"label": "Right", "value": "right"},
+                        ]},
+                        {"id": "remarks", "label": "Remarks", "type": "textarea"},
+                    ]},
+                ]},
+                {"id": "preferred_option", "type": "select", "label": "Preferred Option", "options": [
+                    {"label": "Option 1", "value": "option1"},
+                    {"label": "Option 2", "value": "option2"},
+                ]},
+                {"id": "engineering_remarks", "type": "textarea", "label": "Engineering Team Remarks"},
+                {"id": "engineer_name", "type": "text", "label": "Engineer Name"},
+            ],
+        }
+    ]
+
+    return {"sections": sales_sections + design_sections}
+
+
+def ensure_client_requirement_template_seed():
+    """Ensure a primary client requirements form template exists."""
+
+    existing = FormTemplate.query.filter_by(type="client_requirements").all()
+    primary = next((tpl for tpl in existing if tpl.is_primary and tpl.is_active), None)
+
+    if not primary:
+        schema = json.dumps(_default_client_requirement_schema(), indent=2)
+        template = FormTemplate(
+            name="Client Requirements – Standard",
+            slug="client_requirements_standard",
+            type="client_requirements",
+            is_primary=True,
+            is_active=True,
+            schema_json=schema,
+        )
+        db.session.add(template)
+        db.session.flush()
+        existing.append(template)
+        print("✅ Seeded primary Client Requirements form template")
+
+    if existing:
+        # Ensure only one template is marked primary for this type.
+        primaries = [tpl for tpl in existing if tpl.is_primary and tpl.is_active]
+        if primaries:
+            for tpl in primaries[1:]:
+                tpl.is_primary = False
+        else:
+            existing[0].is_primary = True
+
+    db.session.commit()
+
 LEGACY_DEMO_CUSTOMERS = {
     "CUS0001": "St. Marys Convent",
     "CUS0002": "Kilowott Agency Pvt. Ltd.",
@@ -4935,6 +5239,7 @@ from eleva_app.models import (
     Department,
     DropdownOption,
     FormSchema,
+    FormTemplate,
     Lift,
     LiftComment,
     LiftFile,
@@ -4987,6 +5292,7 @@ from eleva_app.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     Submission,
+    ClientRequirementForm,
     TaskTemplate,
     User,
 )
@@ -9450,6 +9756,7 @@ def ensure_tables():
         Project.__table__,
         ProjectComment.__table__,
         FormSchema.__table__,
+        FormTemplate.__table__,
         Submission.__table__,
         ProjectTemplate.__table__,
         ProjectTemplateTask.__table__,
@@ -9503,6 +9810,7 @@ def ensure_tables():
         DeliveryChallanItem.__table__,
         DeliveryOrder.__table__,
         DeliveryOrderItem.__table__,
+        ClientRequirementForm.__table__,
     ]
 
     for table in models:
@@ -9926,6 +10234,7 @@ def bootstrap_db():
     ensure_product_columns()
     ensure_procurement_stage_seed()
     ensure_dropdown_options_seed()
+    ensure_client_requirement_template_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
 
