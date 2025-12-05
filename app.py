@@ -11234,11 +11234,196 @@ def sales_task_toggle(task_id):
     return redirect(url_for("sales_tasks", tab=request.form.get("active_tab") or "taskboard"))
 
 
-@app.route("/sales/settings")
+def _form_bool(value):
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "y", "t"}
+
+
+def _guarantee_primary_crf_template():
+    """Ensure a single active primary Client Requirements template exists."""
+
+    active_primary = (
+        FormTemplate.query.filter_by(
+            type="client_requirements", is_primary=True, is_active=True
+        )
+        .order_by(FormTemplate.updated_at.desc())
+        .first()
+    )
+    if active_primary:
+        return
+
+    fallback = (
+        FormTemplate.query.filter_by(type="client_requirements", is_active=True)
+        .order_by(FormTemplate.updated_at.desc())
+        .first()
+    )
+    if fallback:
+        fallback.is_primary = True
+        db.session.commit()
+        return
+
+    ensure_client_requirement_template_seed()
+
+
+@app.route("/sales/settings", methods=["GET", "POST"])
 @login_required
 def sales_settings():
     _module_visibility_required("sales")
-    return render_template("sales_settings.html")
+
+    templates = (
+        FormTemplate.query.filter_by(type="client_requirements")
+        .order_by(FormTemplate.updated_at.desc())
+        .all()
+    )
+    active_tab = request.args.get("tab") or "form-templates"
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip().lower()
+        template_id_raw = request.form.get("template_id")
+        name = (request.form.get("name") or "").strip()
+        slug = (request.form.get("slug") or "").strip()
+        is_primary_flag = _form_bool(request.form.get("is_primary"))
+        is_active_flag = _form_bool(request.form.get("is_active", True))
+        schema_payload = request.form.get("schema_json")
+
+        if action in {"create", "update"}:
+            if not name:
+                flash("Template name is required.", "error")
+                return redirect(url_for("sales_settings", tab="form-templates"))
+
+            if not slug:
+                slug = slugify(name)
+
+            try:
+                parsed_schema = (
+                    json.loads(schema_payload)
+                    if schema_payload
+                    else _default_client_requirement_schema()
+                )
+                if not isinstance(parsed_schema, dict):
+                    raise ValueError
+            except ValueError:
+                flash("Provide a valid JSON schema for the template.", "error")
+                return redirect(url_for("sales_settings", tab="form-templates"))
+
+            if action == "create":
+                slug_candidate = slug
+                suffix = 1
+                while FormTemplate.query.filter_by(
+                    slug=slug_candidate, type="client_requirements"
+                ).first():
+                    slug_candidate = f"{slug}-{suffix}"
+                    suffix += 1
+
+                template = FormTemplate(
+                    name=name,
+                    slug=slug_candidate,
+                    type="client_requirements",
+                    is_primary=is_primary_flag,
+                    is_active=is_active_flag,
+                    schema_json=json.dumps(parsed_schema, indent=2),
+                )
+                db.session.add(template)
+                flash("Template created.", "success")
+            else:
+                template = FormTemplate.query.get(template_id_raw)
+                if not template:
+                    flash("Template not found.", "error")
+                    return redirect(url_for("sales_settings", tab="form-templates"))
+
+                if template.type != "client_requirements":
+                    flash("Only Client Requirements templates can be edited here.", "error")
+                    return redirect(url_for("sales_settings", tab="form-templates"))
+
+                existing_slug_owner = FormTemplate.query.filter_by(
+                    slug=slug, type="client_requirements"
+                ).first()
+                if existing_slug_owner and existing_slug_owner.id != template.id:
+                    flash("Slug is already in use for another template.", "error")
+                    return redirect(url_for("sales_settings", tab="form-templates"))
+
+                template.name = name
+                template.slug = slug
+                template.is_active = is_active_flag
+                template.is_primary = is_primary_flag if is_active_flag else False
+                template.schema_json = json.dumps(parsed_schema, indent=2)
+                flash("Template updated.", "success")
+
+            if is_primary_flag and is_active_flag:
+                for tpl in templates:
+                    if tpl.id != getattr(template, "id", None):
+                        tpl.is_primary = False
+
+            db.session.commit()
+            _guarantee_primary_crf_template()
+            return redirect(url_for("sales_settings", tab="form-templates"))
+
+        elif action == "set_primary":
+            template = FormTemplate.query.get(template_id_raw)
+            if not template:
+                flash("Template not found.", "error")
+                return redirect(url_for("sales_settings", tab="form-templates"))
+
+            if template.type != "client_requirements":
+                flash("Only Client Requirements templates can be managed here.", "error")
+                return redirect(url_for("sales_settings", tab="form-templates"))
+
+            template.is_active = True
+            template.is_primary = True
+            for tpl in templates:
+                if tpl.id != template.id:
+                    tpl.is_primary = False
+            db.session.commit()
+            flash("Template marked as primary.", "success")
+            _guarantee_primary_crf_template()
+            return redirect(url_for("sales_settings", tab="form-templates"))
+
+        elif action == "toggle_active":
+            template = FormTemplate.query.get(template_id_raw)
+            if not template:
+                flash("Template not found.", "error")
+                return redirect(url_for("sales_settings", tab="form-templates"))
+
+            desired_state = _form_bool(request.form.get("desired_state"))
+            if not desired_state and template.is_primary:
+                alternative = (
+                    FormTemplate.query.filter(
+                        FormTemplate.type == "client_requirements",
+                        FormTemplate.is_active == True,  # noqa: E712
+                        FormTemplate.id != template.id,
+                    )
+                    .order_by(FormTemplate.updated_at.desc())
+                    .first()
+                )
+                if not alternative:
+                    flash(
+                        "Set another template as primary before deactivating this one.",
+                        "error",
+                    )
+                    return redirect(url_for("sales_settings", tab="form-templates"))
+
+            template.is_active = desired_state
+            if not desired_state:
+                template.is_primary = False
+            db.session.commit()
+            flash(
+                "Template activated." if desired_state else "Template deactivated.",
+                "success",
+            )
+            _guarantee_primary_crf_template()
+            return redirect(url_for("sales_settings", tab="form-templates"))
+
+    primary_template = next((tpl for tpl in templates if tpl.is_primary and tpl.is_active), None)
+    default_schema = json.dumps(_default_client_requirement_schema(), indent=2)
+
+    return render_template(
+        "sales_settings.html",
+        templates=templates,
+        active_tab=active_tab,
+        primary_template=primary_template,
+        default_crf_schema=default_schema,
+    )
 
 
 @app.route("/sales/clients")
