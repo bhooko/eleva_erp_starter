@@ -912,7 +912,7 @@
         </a>
 
         {% if current_user.is_authenticated and current_user.can_view_module('customer_support') %}
-          {% set cs_endpoints = ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home','customer_support_settings'] %}
+          {% set cs_endpoints = ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_sarv_test','customer_support_home','customer_support_settings'] %}
           {% set cs_parent_active = request.endpoint in cs_endpoints %}
           <div class="space-y-1">
             <a href="{{ url_for('customer_support_home') }}"
@@ -932,6 +932,10 @@
               <a href="{{ url_for('customer_support_calls') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_calls' else '' }}">
                 <span class="label">Call History</span>
+              </a>
+              <a href="{{ url_for('customer_support_sarv_test') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'customer_support_sarv_test' else '' }}">
+                <span class="label">SARV test</span>
               </a>
               {% if current_user.is_admin %}
                 <a href="{{ url_for('customer_support_settings') }}"
@@ -1281,7 +1285,7 @@
           {% set section_title = 'QC - New form' %}
         {% elif endpoint in ['qc_settings'] %}
           {% set section_title = 'QC Settings' %}
-        {% elif endpoint in ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_home'] %}
+        {% elif endpoint in ['customer_support_overview','customer_support_tasks','customer_support_calls','customer_support_sarv_test','customer_support_home'] %}
           {% set section_title = 'Customer Support' %}
         {% elif endpoint in ['service_home','service_overview','service_tasks','service_customers','service_lifts','service_complaints','service_contracts','service_parts_materials','service_preventive_maintenance','service_automations'] %}
           {% set section_title = 'Service' %}

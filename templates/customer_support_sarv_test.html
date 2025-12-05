@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Customer Support · SARV test{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Customer Support</p>
+      <h1 class="mt-1 text-2xl font-semibold text-slate-100">SARV test</h1>
+      <p class="mt-2 max-w-2xl text-sm text-slate-400">
+        Latest SARV webhook calls (last 50). Use this page to verify payloads, durations and recording downloads surfaced to Customer Support.
+      </p>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-4 text-sm text-amber-100">
+    <div class="flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5 mt-0.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      <div class="space-y-1">
+        <p class="font-semibold text-amber-50">How requests are handled</p>
+        <p class="text-amber-100/90">
+          SARV sends POST requests to <code class="rounded bg-slate-900/70 px-2 py-1 text-xs text-slate-200">/sarv/webhook</code>. Each payload is stored as a
+          <span class="font-semibold">CallLog</span>, with recordings tracked as <span class="font-semibold">CallRecording</span> entries. For every new recording, the downloader
+          fetches the media using the configured SARV token and saves it under <code class="rounded bg-slate-900/70 px-2 py-1 text-xs text-slate-200">static/</code> for playback and download.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60">
+    <div class="flex flex-col gap-2 border-b border-slate-800/60 px-6 py-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Incoming calls</h2>
+        <p class="text-sm text-slate-400">Showing latest 50 calls logged via SARV webhook.</p>
+      </div>
+      <span class="text-xs uppercase tracking-wide text-slate-500">{{ calls|length }} calls</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-800/60 text-sm">
+        <thead class="bg-slate-900/80 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-6 py-3">Time</th>
+            <th class="px-6 py-3">DID</th>
+            <th class="px-6 py-3">Customer</th>
+            <th class="px-6 py-3">Agent</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Duration (s)</th>
+            <th class="px-6 py-3">Recording</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/50 text-slate-200">
+          {% for c in calls %}
+          <tr class="transition hover:bg-slate-800/40">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{{ c.ivr_start_time or c.created_at }}</td>
+            <td class="px-6 py-4 font-mono text-xs text-slate-300">{{ c.did or '—' }}</td>
+            <td class="px-6 py-4">{{ c.customer_number or '—' }}</td>
+            <td class="px-6 py-4">{{ c.agent_name or c.agent_number or c.agent_user_id or '—' }}</td>
+            <td class="px-6 py-4">
+              <span class="inline-flex items-center rounded-full bg-slate-800/70 px-3 py-1 text-xs font-semibold">
+                {{ c.call_status or '—' }}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-xs text-slate-400">{{ c.talk_duration or c.total_duration or '—' }}</td>
+            <td class="px-6 py-4 space-y-2">
+              {% if c.recordings %}
+                {% for r in c.recordings %}
+                  {% if r.local_file_path and r.download_status == "success" %}
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <audio controls class="w-full max-w-xs">
+                        <source src="{{ url_for('static', filename=r.local_file_path) }}" type="audio/wav">
+                        Your browser does not support the audio element.
+                      </audio>
+                      <a href="{{ url_for('static', filename=r.local_file_path) }}" download class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download
+                      </a>
+                    </div>
+                  {% elif r.download_status == "failed" %}
+                    <span class="inline-flex items-center gap-2 rounded-full bg-rose-500/15 px-3 py-1 text-xs font-semibold text-rose-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-.008 3h.016v.016h-.016V15.75zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Download failed
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center gap-2 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992M2.985 19.644l4.992.359M4.03 4.038l3.536 3.536m8.982-3.736l-3.181 3.18m-1.387 9.4l3.535 3.536M3.5 12h5.25M12 3.75v4.5m6.75 6.75v1.5m0 1.5v.75m0 1.5h.008v.008H18.75V18z" />
+                      </svg>
+                      Pending
+                    </span>
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <span class="text-sm text-slate-400">None</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="px-6 py-8 text-center text-sm text-slate-400">No calls recorded yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
