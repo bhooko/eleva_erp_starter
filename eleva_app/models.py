@@ -274,6 +274,76 @@ class FormSchema(db.Model):
     )
 
 
+class FormTemplate(db.Model):
+    __tablename__ = "form_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(200), nullable=False)
+    type = db.Column(db.String(80), nullable=False)
+    is_primary = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
+    schema_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("slug", "type", name="uq_form_template_slug_type"),
+    )
+
+    @property
+    def parsed_schema(self):
+        try:
+            data = json.loads(self.schema_json or "{}")
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+
+class ClientRequirementForm(db.Model):
+    __tablename__ = "client_requirement_form"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(
+        db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False
+    )
+    lift_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity_item.id"), nullable=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("form_template.id"), nullable=False)
+    version = db.Column(db.Integer, default=1)
+    status = db.Column(db.String(40), default="draft")
+    sales_section_data = db.Column(db.Text, default="{}", nullable=False)
+    design_section_data = db.Column(db.Text, default="{}", nullable=False)
+    created_by_sales_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    design_engineer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    opportunity = db.relationship("SalesOpportunity")
+    lift = db.relationship("SalesOpportunityItem")
+    template = db.relationship("FormTemplate")
+    created_by_sales = db.relationship("User", foreign_keys=[created_by_sales_id])
+    design_engineer = db.relationship("User", foreign_keys=[design_engineer_id])
+    project = db.relationship("Project")
+
+    @property
+    def sales_data(self):
+        try:
+            return json.loads(self.sales_section_data or "{}")
+        except (TypeError, ValueError):
+            return {}
+
+    @property
+    def design_data(self):
+        try:
+            return json.loads(self.design_section_data or "{}")
+        except (TypeError, ValueError):
+            return {}
+
 class Submission(db.Model):
     __tablename__ = "submission"
     id = db.Column(db.Integer, primary_key=True)
