@@ -376,6 +376,7 @@ class ProjectTemplateTask(db.Model):
     __tablename__ = "project_template_task"
     id = db.Column(db.Integer, primary_key=True)
     template_id = db.Column(db.Integer, db.ForeignKey("project_template.id"), nullable=False)
+    task_type = db.Column(db.String(50), default="general")
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     order_index = db.Column(db.Integer, default=0)

@@ -110,6 +110,7 @@
              data-reorder-url="{{ url_for('project_template_task_reorder', template_id=template.id) }}">
           {% for task in tasks %}
             {% set task_payload = {
+              'task_type': task.task_type or 'general',
               'id': task.id,
               'name': task.name,
               'description': task.description or '',
@@ -134,7 +135,17 @@
                     </svg>
                   </button>
                   <div>
-                    <div class="text-sm font-semibold text-slate-100">{{ task.name }}</div>
+                    {% set task_type_value = task.task_type or 'general' %}
+                    {% set task_type_label = 'General Task' %}
+                    {% for value, label in PROJECT_TEMPLATE_TASK_TYPES %}
+                      {% if task_type_value == value %}
+                        {% set task_type_label = label %}
+                      {% endif %}
+                    {% endfor %}
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="text-sm font-semibold text-slate-100">{{ task.name }}</div>
+                      <span class="px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-[11px] uppercase tracking-wide text-indigo-100">{{ task_type_label }}</span>
+                    </div>
                     {% if task.description %}
                       <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
                     {% endif %}
@@ -206,6 +217,14 @@
             data-edit-url-template="{{ url_for('project_template_task_edit', template_id=template.id, task_id=0).replace('/0/edit', '/{id}/edit') }}"
             data-default-order="{{ tasks|length + 1 }}">
         {{ csrf_field() }}
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task type</label>
+          <select name="task_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+            {% for value, label in PROJECT_TEMPLATE_TASK_TYPES %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div>
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task name</label>
           <input name="name" required class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none" placeholder="e.g. Kick-off meeting" />
@@ -501,6 +520,7 @@
       const editTemplate = form.dataset.editUrlTemplate;
       const defaultOrder = form.dataset.defaultOrder;
       const dependencySelect = form.querySelector('select[name="depends_on_ids"]');
+      const typeSelect = form.querySelector('select[name="task_type"]');
       let editingTaskId = null;
 
       function updateScheduledVisibility() {
@@ -541,6 +561,10 @@
         const orderInput = form.querySelector('input[name="order_index"]');
         if (orderInput) {
           orderInput.value = defaultOrder || orderInput.getAttribute('value') || '';
+        }
+        if (typeSelect) {
+          const defaultOption = typeSelect.querySelector('option');
+          typeSelect.value = defaultOption ? defaultOption.value : '';
         }
         if (scheduledWrapper) {
           scheduledWrapper.classList.add('opacity-60', 'pointer-events-none');
@@ -598,6 +622,7 @@
             if (assigneeSelect) assigneeSelect.value = data.default_assignee_id ? String(data.default_assignee_id) : '';
             const formSelect = form.querySelector('select[name="form_template_id"]');
             if (formSelect) formSelect.value = data.form_template_id ? String(data.form_template_id) : '';
+            if (typeSelect) typeSelect.value = data.task_type || (typeSelect.querySelector('option')?.value || '');
 
             const startModeInput = form.querySelector(`input[name="start_mode"][value="${data.start_mode || 'immediate'}"]`);
             if (startModeInput) startModeInput.checked = true;

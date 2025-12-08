@@ -1863,6 +1863,12 @@ def get_dropdown_options_map():
         for field_key in DROPDOWN_FIELD_DEFINITIONS.keys()
     }
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
+PROJECT_TEMPLATE_TASK_TYPES = [
+    ("general", "General Task"),
+    ("srt", "SRT Task"),
+    ("qc", "QC Task"),
+]
+PROJECT_TEMPLATE_TASK_TYPE_KEYS = {value for value, _ in PROJECT_TEMPLATE_TASK_TYPES}
 TASK_MILESTONES = [
     "Order Milestone",
     "Design Milestone",
@@ -5113,6 +5119,7 @@ def build_task_template_blueprint(template):
             if dep_index is not None:
                 dependency_indexes.append(dep_index)
         blueprint.append({
+            "task_type": task.task_type or "general",
             "name": task.name,
             "description": task.description,
             "order_index": task.order_index or (idx + 1),
@@ -5135,6 +5142,9 @@ def apply_blueprint_to_template(template, blueprint):
         if not isinstance(entry, dict):
             continue
         name = (entry.get("name") or f"Task {idx + 1}").strip()
+        task_type = (entry.get("task_type") or "general").lower()
+        if task_type not in PROJECT_TEMPLATE_TASK_TYPE_KEYS:
+            task_type = "general"
         description = (entry.get("description") or None)
         order_index = entry.get("order_index") or (idx + 1)
         default_assignee_id = entry.get("default_assignee_id")
@@ -5158,6 +5168,7 @@ def apply_blueprint_to_template(template, blueprint):
 
         task = ProjectTemplateTask(
             template_id=template.id,
+            task_type=task_type,
             name=name,
             description=description,
             order_index=order_index,
@@ -9289,6 +9300,9 @@ def ensure_qc_columns():
     if template_task_exists:
         cur.execute("PRAGMA table_info(project_template_task)")
         template_cols = [r[1] for r in cur.fetchall()]
+        if "task_type" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN task_type TEXT DEFAULT 'general';")
+            added_template_cols.append("task_type")
         if "start_mode" not in template_cols:
             cur.execute("ALTER TABLE project_template_task ADD COLUMN start_mode TEXT DEFAULT 'immediate';")
             added_template_cols.append("start_mode")
@@ -15922,6 +15936,9 @@ def project_template_detail(template_id):
     forms = FormSchema.query.order_by(FormSchema.name.asc()).all()
 
     if request.method == "POST":
+        task_type = (request.form.get("task_type") or "general").lower()
+        if task_type not in PROJECT_TEMPLATE_TASK_TYPE_KEYS:
+            task_type = "general"
         name = (request.form.get("name") or "").strip()
         description = (request.form.get("description") or "").strip()
         requested_order = request.form.get("order_index", type=int)
@@ -15983,6 +16000,7 @@ def project_template_detail(template_id):
 
         task = ProjectTemplateTask(
             template_id=template.id,
+            task_type=task_type,
             name=name,
             description=description or None,
             order_index=requested_order,
@@ -16015,7 +16033,8 @@ def project_template_detail(template_id):
         users=users,
         forms=forms,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
-        TASK_MILESTONES=TASK_MILESTONES
+        TASK_MILESTONES=TASK_MILESTONES,
+        PROJECT_TEMPLATE_TASK_TYPES=PROJECT_TEMPLATE_TASK_TYPES
     )
 
 
@@ -16124,6 +16143,9 @@ def project_template_task_edit(template_id, task_id):
         flash("Task not found for this template.", "error")
         return redirect(url_for("project_template_detail", template_id=template.id))
 
+    task_type = (request.form.get("task_type") or "general").lower()
+    if task_type not in PROJECT_TEMPLATE_TASK_TYPE_KEYS:
+        task_type = "general"
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
     requested_order = request.form.get("order_index", type=int)
@@ -16185,6 +16207,7 @@ def project_template_task_edit(template_id, task_id):
         existing.order_index = new_index
 
     task.name = name
+    task.task_type = task_type
     task.description = description or None
     task.order_index = requested_order
     task.default_assignee_id = default_assignee_id
