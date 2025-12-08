@@ -130,11 +130,17 @@ document.addEventListener('DOMContentLoaded', () => {
     "'": '&#39;'
   })[ch]);
 
+  const choiceDefaults = {
+    select: ['OK', 'Not OK', 'Need Client Input'],
+    checkbox: ['Option 1', 'Option 2'],
+    if_else: ['If branch', 'Else branch']
+  };
+
   const makeDefaultItem = () => ({
     label: 'New Check',
     type: 'select',
     required: true,
-    options: ['OK', 'Not OK', 'Need Client Input'],
+    options: choiceDefaults.select.slice(),
     allow_photo: true,
     photo_required_if_ng: true,
     allow_remark: true
@@ -175,14 +181,16 @@ document.addEventListener('DOMContentLoaded', () => {
         base.label = String(item.label);
       }
       const t = String(item.type || '').toLowerCase();
-      base.type = ['select', 'text', 'textarea'].includes(t) ? t : 'select';
+      const allowed = ['select', 'text', 'textarea', 'checkbox', 'if_else'];
+      base.type = allowed.includes(t) ? t : 'select';
       base.required = Boolean(item.required);
       base.allow_photo = item.allow_photo !== undefined ? Boolean(item.allow_photo) : true;
       base.allow_remark = Boolean(item.allow_remark);
-      if (base.type === 'select') {
-        const opts = Array.isArray(item.options) ? item.options : base.options;
+      if (['select', 'checkbox', 'if_else'].includes(base.type)) {
+        const fallbackOpts = choiceDefaults[base.type] || choiceDefaults.select;
+        const opts = Array.isArray(item.options) ? item.options : fallbackOpts;
         const normalizedOpts = opts.map((opt) => String(opt).trim()).filter(Boolean);
-        base.options = normalizedOpts.length ? normalizedOpts : ['OK', 'Not OK', 'Need Client Input'];
+        base.options = normalizedOpts.length ? normalizedOpts : fallbackOpts.slice();
       } else {
         base.options = [];
       }
@@ -191,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!base.allow_photo) {
       base.photo_required_if_ng = false;
     }
-    if (base.type !== 'select') {
+    if (!['select', 'checkbox', 'if_else'].includes(base.type)) {
       base.options = [];
     }
     return base;
@@ -279,10 +287,11 @@ document.addEventListener('DOMContentLoaded', () => {
           ? 'px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed'
           : 'px-3 py-2 text-xs rounded-xl border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 transition';
         const isTable = item.type === 'table';
+        const isChoiceField = ['select', 'checkbox', 'if_else'].includes(item.type);
         const disablePhotoRequired = isTable || item.type !== 'select' || !item.allow_photo;
         const photoRequiredWrapper = disablePhotoRequired ? 'opacity-40' : '';
         const photoRequiredDisabledAttr = disablePhotoRequired ? 'disabled' : '';
-        const optionsBlock = !isTable && item.type === 'select'
+        const optionsBlock = !isTable && isChoiceField
           ? `<div>
               <label class="block text-xs text-slate-400 mb-1">Options <span class="text-slate-500">(one per line)</span></label>
               <textarea rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" data-section="${sectionIndex}" data-item="${itemIndex}" data-prop="options">${escapeHtml(item.options.join('\n'))}</textarea>
@@ -293,6 +302,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <option value="select" ${item.type === 'select' ? 'selected' : ''}>Select (OK / Not OK / Need Client Input)</option>
             <option value="text" ${item.type === 'text' ? 'selected' : ''}>Short text</option>
             <option value="textarea" ${item.type === 'textarea' ? 'selected' : ''}>Long text</option>
+            <option value="checkbox" ${item.type === 'checkbox' ? 'selected' : ''}>Checkbox (multiple choice)</option>
+            <option value="if_else" ${item.type === 'if_else' ? 'selected' : ''}>If / Else</option>
             <option value="table" ${item.type === 'table' ? 'selected' : ''}>Table with reference</option>
           </select>
         `;
@@ -561,27 +572,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof item.required !== 'boolean') {
           item.required = defaults.required;
         }
-      } else {
-        const allowed = ['select', 'text', 'textarea'];
-        item.type = allowed.includes(newType) ? newType : 'select';
-        if (item.type === 'select') {
-          if (!item.options || !item.options.length) {
-            item.options = ['OK', 'Not OK', 'Need Client Input'];
-          }
-          if (typeof item.allow_photo !== 'boolean') {
-            item.allow_photo = true;
-          }
-          if (typeof item.allow_remark !== 'boolean') {
-            item.allow_remark = true;
-          }
         } else {
-          item.options = [];
-          item.photo_required_if_ng = false;
+          const allowed = ['select', 'text', 'textarea', 'checkbox', 'if_else'];
+          item.type = allowed.includes(newType) ? newType : 'select';
+          if (['select', 'checkbox', 'if_else'].includes(item.type)) {
+            if (!item.options || !item.options.length) {
+              const fallbackOpts = choiceDefaults[item.type] || choiceDefaults.select;
+              item.options = fallbackOpts.slice();
+            }
+            item.options = item.options.map((opt) => String(opt).trim()).filter(Boolean);
+            if (typeof item.allow_photo !== 'boolean') {
+              item.allow_photo = true;
+            }
+            if (typeof item.allow_remark !== 'boolean') {
+              item.allow_remark = true;
+            }
+          } else {
+            item.options = [];
+            item.photo_required_if_ng = false;
+          }
+          item.rows = [];
+          item.columns = [];
+          item.reference_image = '';
         }
-        item.rows = [];
-        item.columns = [];
-        item.reference_image = '';
-      }
       requiresRender = true;
     } else if (prop === 'required') {
       item.required = event.target.checked;

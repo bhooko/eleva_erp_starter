@@ -5176,14 +5176,21 @@ def _normalize_form_schema(schema_raw):
         normalized = dict(item)
         normalized["label"] = str(item.get("label") or f"Item {idx + 1}")
         ftype = (item.get("type") or "select").lower()
-        if ftype not in {"text", "textarea", "select", "table"}:
+        if ftype not in {"text", "textarea", "select", "table", "checkbox", "if_else"}:
             ftype = "select"
         normalized["type"] = ftype
         normalized["required"] = bool(item.get("required", False))
-        if ftype == "select":
-            opts = item.get("options") or ["OK", "Not OK", "Need Client Input"]
+        if ftype in {"select", "checkbox", "if_else"}:
+            default_opts = {
+                "select": ["OK", "Not OK", "Need Client Input"],
+                "checkbox": ["Option 1", "Option 2"],
+                "if_else": ["If branch", "Else branch"],
+            }
+            opts = item.get("options") or default_opts.get(ftype, default_opts["select"])
             normalized["options"] = [str(opt) for opt in opts if str(opt).strip()]
-            normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False))
+            if not normalized["options"]:
+                normalized["options"] = default_opts.get(ftype, default_opts["select"])
+            normalized["photo_required_if_ng"] = bool(item.get("photo_required_if_ng", False)) if ftype == "select" else False
             normalized["allow_photo"] = bool(item.get("allow_photo", normalized["photo_required_if_ng"]))
             normalized["allow_remark"] = bool(item.get("allow_remark", False))
             normalized["reference_image"] = None
@@ -15008,7 +15015,7 @@ def forms_fill(form_id):
                     if required and not val:
                         flash(f"'{label}' is required", "error")
                         return render_form(preserved_data=request.form)
-                elif ftype == "select":
+                elif ftype in ["select", "if_else"]:
                     val = request.form.get(field_name, "")
                     normalized_val = val.strip().lower() if isinstance(val, str) else ""
                     if required and not val:
@@ -15018,6 +15025,20 @@ def forms_fill(form_id):
                         flash(f"'{label}' has an invalid selection", "error")
                         return render_form(preserved_data=request.form)
                     if normalized_val in {"ng", "not ok"}:
+                        any_ng = True
+                elif ftype == "checkbox":
+                    selected_options = request.form.getlist(field_name)
+                    cleaned = [val for val in selected_options if val]
+                    if options:
+                        invalid = [val for val in cleaned if val not in options]
+                        if invalid:
+                            flash(f"'{label}' has an invalid selection", "error")
+                            return render_form(preserved_data=request.form)
+                    if required and not cleaned:
+                        flash(f"Select at least one option for '{label}'", "error")
+                        return render_form(preserved_data=request.form)
+                    val = cleaned
+                    if any(v.strip().lower() in {"ng", "not ok"} for v in cleaned):
                         any_ng = True
                 else:
                     val = request.form.get(field_name, "").strip()

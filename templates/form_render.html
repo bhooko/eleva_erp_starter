@@ -127,11 +127,35 @@
                           <input name="{{ field_name }}" value="{{ form_data.get(field_name, '') }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                         {% elif field.type == 'textarea' %}
                           <textarea name="{{ field_name }}" rows="2" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>{{ form_data.get(field_name, '') }}</textarea>
+                        {% elif field.type == 'checkbox' %}
+                          {% set selected_list = [] %}
+                          {% if form_data.getlist is defined %}
+                            {% set selected_list = form_data.getlist(field_name) %}
+                          {% else %}
+                            {% set raw_val = form_data.get(field_name, []) %}
+                            {% if raw_val is string %}
+                              {% set selected_list = [raw_val] %}
+                            {% elif raw_val is iterable %}
+                              {% set selected_list = raw_val %}
+                            {% endif %}
+                          {% endif %}
+                          <div class="space-y-2">
+                            {% for opt in field.options %}
+                              <label class="flex items-center gap-2 text-sm text-slate-100">
+                                <input type="checkbox" name="{{ field_name }}" value="{{ opt }}" class="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/50" {% if preview_mode %}disabled{% endif %} {% if opt in selected_list %}checked{% endif %}>
+                                <span>{{ opt }}</span>
+                              </label>
+                            {% else %}
+                              <p class="text-xs text-slate-400">Add options in the form builder to show choices.</p>
+                            {% endfor %}
+                          </div>
                         {% else %}
                           <select name="{{ field_name }}" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40" {% if field.required and not preview_mode %}required{% endif %} {% if preview_mode %}disabled{% endif %}>
                             <option value="" {% if not form_data.get(field_name) %}selected{% endif %}>-- Select --</option>
                             {% for opt in field.options %}
                               <option value="{{ opt }}" {% if form_data.get(field_name) == opt %}selected{% endif %}>{{ opt }}</option>
+                            {% else %}
+                              <option value="" disabled>No options configured</option>
                             {% endfor %}
                           </select>
                         {% endif %}
