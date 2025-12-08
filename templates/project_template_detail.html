@@ -20,6 +20,13 @@
       outline-offset: 8px;
     }
   </style>
+  {% set task_type_styles = {
+    'general': 'bg-slate-800 text-slate-100 border border-slate-700',
+    'qc': 'bg-purple-500/20 text-purple-100 border border-purple-400/50',
+    'milestone': 'bg-amber-500/20 text-amber-900 border border-amber-400/70',
+    'sales': 'bg-teal-500/20 text-teal-100 border border-teal-400/50',
+    'custom': 'bg-indigo-500/20 text-indigo-100 border border-indigo-400/50'
+  } %}
   <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
     <div class="flex flex-wrap items-start gap-6 justify-between">
       <form id="template-meta-form"
@@ -107,10 +114,10 @@
       {% if tasks %}
         <div id="task-blueprint-list"
              class="space-y-3"
-             data-reorder-url="{{ url_for('project_template_task_reorder', template_id=template.id) }}">
+            data-reorder-url="{{ url_for('project_template_task_reorder', template_id=template.id) }}">
           {% for task in tasks %}
             {% set task_payload = {
-              'task_type': task.task_type or 'general',
+              'task_type': task.task_type or '',
               'id': task.id,
               'name': task.name,
               'description': task.description or '',
@@ -123,80 +130,109 @@
               'duration_days': task.duration_days,
               'milestone': task.milestone or ''
             } %}
+            {% set task_type_value = (task.task_type or '').lower() %}
+            {% set task_type_label = TASK_TYPE_LABELS.get(task_type_value, TASK_TYPE_LABELS['custom']) %}
+            {% set type_style = task_type_styles.get(task_type_value, task_type_styles['custom']) %}
+            {% set dependencies = task.dependencies %}
+            {% set dependency_count = dependencies|length %}
+            {% set duration_label = task.duration_days is not none and (task.duration_days|string + ' day' + ('s' if task.duration_days != 1 else '')) or 'No duration set' %}
             <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 transition-transform duration-150"
                  draggable="true"
                  data-task-item
                  data-task-id="{{ task.id }}">
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex items-start gap-3">
-                  <button type="button" class="mt-1 cursor-move text-slate-500 hover:text-slate-300" title="Drag to reorder">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7 10h2V8H7v2zm0 6h2v-2H7v2zm4-6h2V8h-2v2zm0 6h2v-2h-2v2zm4-6h2V8h-2v2zm0 6h2v-2h-2v2z" />
-                    </svg>
-                  </button>
-                  <div>
-                    {% set task_type_value = task.task_type or 'general' %}
-                    {% set task_type_label = 'General Task' %}
-                    {% for value, label in PROJECT_TEMPLATE_TASK_TYPES %}
-                      {% if task_type_value == value %}
-                        {% set task_type_label = label %}
-                      {% endif %}
-                    {% endfor %}
-                    <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-sm font-semibold text-slate-100">{{ task.name }}</div>
-                      <span class="px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-[11px] uppercase tracking-wide text-indigo-100">{{ task_type_label }}</span>
-                    </div>
-                    {% if task.description %}
-                      <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
-                    {% endif %}
-                    <div class="mt-2 grid gap-1 text-sm text-slate-400">
+              <div class="flex flex-col gap-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-start gap-3">
+                    <button type="button" class="mt-1 cursor-move text-slate-500 hover:text-slate-300" title="Drag to reorder">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 10h2V8H7v2zm0 6h2v-2H7v2zm4-6h2V8h-2v2zm0 6h2v-2h-2v2zm4-6h2V8h-2v2zm0 6h2v-2h-2v2z" />
+                      </svg>
+                    </button>
+                    <div class="space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
-                        <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60">{{ task.form_template.name if task.form_template else DEFAULT_TASK_FORM_NAME }}</span>
-                        {% if task.default_assignee %}
-                          <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60">Default: {{ task.default_assignee.display_name }}</span>
-                        {% else %}
-                          <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60">Unassigned by default</span>
-                        {% endif %}
-                        {% if task.milestone %}
-                          <span class="px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-200">Milestone: {{ task.milestone }}</span>
-                        {% endif %}
+                        <div class="text-sm font-semibold text-slate-100">{{ task.name }}</div>
+                        <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ type_style }}">{{ task_type_label }}</span>
                       </div>
-                      <div class="flex flex-wrap items-center gap-2">
-                        {% set dependencies = task.dependencies %}
-                        {% if dependencies %}
-                          {% for dependency in dependencies %}
-                            <span class="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-200">Depends on {{ dependency.name }}</span>
-                          {% endfor %}
-                        {% else %}
-                          <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-400/40 text-emerald-200">Independent</span>
-                        {% endif %}
-                        {% if task.start_mode == 'scheduled' or task.planned_start_date %}
-                          <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-200">Starts {{ task.planned_start_date.strftime('%Y-%m-%d') if task.planned_start_date else 'when scheduled' }}</span>
-                        {% elif task.start_mode == 'after_previous' %}
-                          <span class="px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-100">Starts after previous step</span>
-                        {% else %}
-                          <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-400/40 text-emerald-200">Starts immediately</span>
-                        {% endif %}
-                        {% if task.duration_days is not none %}
-                          <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-200">Duration: {{ task.duration_days }} day{{ '' if task.duration_days == 1 else 's' }}</span>
-                        {% endif %}
-                        {% if task.planned_due_date %}
-                          <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-200">Due {{ task.planned_due_date.strftime('%Y-%m-%d') }}</span>
-                        {% endif %}
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60" data-order-label>Order {{ task.order_index }}</span>
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/40 border border-slate-700/40">Duration: {{ duration_label }}</span>
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/40 border border-slate-700/40">{{ dependency_count }} dependenc{{ 'y' if dependency_count == 1 else 'ies' }}</span>
                       </div>
                     </div>
                   </div>
+                  <div class="flex items-center gap-2">
+                    <button type="button"
+                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-xs uppercase tracking-wide text-slate-200 hover:bg-slate-700/60"
+                            data-edit-task='{{ task_payload|tojson }}'>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 17.17V21h3.83L18.74 10.09l-3.83-3.83L4 17.17zm15.71-8.29c.39-.39.39-1.02 0-1.41l-2.59-2.59a.995.995 0 0 0-1.41 0l-1.83 1.83 3.83 3.83 2-2z" />
+                      </svg>
+                      Edit
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-xs uppercase tracking-wide text-slate-200 hover:bg-slate-700/60"
+                            data-toggle-details="task-details-{{ task.id }}"
+                            aria-expanded="false"
+                            aria-controls="task-details-{{ task.id }}">
+                      <span>Details</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" data-chevron>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div class="flex flex-col items-end gap-2">
-                  <span data-order-label class="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 uppercase tracking-wide">Order {{ task.order_index }}</span>
-                  <button type="button"
-                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-xs uppercase tracking-wide text-slate-200 hover:bg-slate-700/60"
-                          data-edit-task='{{ task_payload|tojson }}'>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M4 17.17V21h3.83L18.74 10.09l-3.83-3.83L4 17.17zm15.71-8.29c.39-.39.39-1.02 0-1.41l-2.59-2.59a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.83 3.83 2-2z" />
-                    </svg>
-                    Edit
-                  </button>
+                <div id="task-details-{{ task.id }}" class="hidden rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300 space-y-2" data-task-details>
+                  {% if task.description %}
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Description</div>
+                      <p class="mt-1 text-slate-200">{{ task.description }}</p>
+                    </div>
+                  {% endif %}
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Default assignee</div>
+                      <p class="mt-1">{{ task.default_assignee.display_name if task.default_assignee else 'Unassigned' }}</p>
+                    </div>
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Form template</div>
+                      <p class="mt-1">{{ task.form_template.name if task.form_template else DEFAULT_TASK_FORM_NAME }}</p>
+                    </div>
+                  </div>
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Start behaviour</div>
+                      {% set start_labels = {'immediate': 'Immediate', 'after_previous': 'After previous', 'scheduled': 'Scheduled'} %}
+                      <p class="mt-1">{{ start_labels.get(task.start_mode or 'immediate', 'Immediate') }}</p>
+                      {% if task.planned_start_date %}
+                        <p class="text-xs text-slate-400">Planned start: {{ task.planned_start_date.strftime('%Y-%m-%d') }}</p>
+                      {% endif %}
+                    </div>
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Timeline</div>
+                      <p class="mt-1">{{ duration_label }}</p>
+                      {% if task.planned_due_date %}
+                        <p class="text-xs text-slate-400">Planned due: {{ task.planned_due_date.strftime('%Y-%m-%d') }}</p>
+                      {% endif %}
+                    </div>
+                  </div>
+                  {% if task.milestone %}
+                    <div>
+                      <div class="text-xs uppercase tracking-wide text-slate-500">Milestone</div>
+                      <p class="mt-1">{{ task.milestone }}</p>
+                    </div>
+                  {% endif %}
+                  <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Dependencies</div>
+                    {% if dependencies %}
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        {% for dependency in dependencies %}
+                          <span class="inline-flex items-center px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-100">{{ dependency.name }}</span>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <p class="mt-1 text-slate-400">No dependencies</p>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
             </div>
@@ -251,20 +287,20 @@
         <div>
           <span class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Start behaviour</span>
           <div class="flex flex-wrap gap-3 text-xs">
-            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
-              <input type="radio" name="start_mode" value="immediate" class="accent-emerald-500" checked>
-              <span>Starts immediately</span>
-            </label>
-            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
-              <input type="radio" name="start_mode" value="scheduled" class="accent-emerald-500">
-              <span>Scheduled start</span>
-            </label>
-            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
-              <input type="radio" name="start_mode" value="after_previous" class="accent-emerald-500">
-              <span>Start after previous step</span>
-            </label>
+              <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
+                <input type="radio" name="start_mode" value="immediate" class="accent-emerald-500" checked>
+                <span>Immediate</span>
+              </label>
+              <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
+                <input type="radio" name="start_mode" value="scheduled" class="accent-emerald-500">
+                <span>Scheduled</span>
+              </label>
+              <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 cursor-pointer">
+                <input type="radio" name="start_mode" value="after_previous" class="accent-emerald-500">
+                <span>After previous</span>
+              </label>
+            </div>
           </div>
-        </div>
         <div class="grid sm:grid-cols-2 gap-3">
           <div id="scheduled-start-wrapper" class="opacity-60 pointer-events-none transition">
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Start date</label>
@@ -507,6 +543,27 @@
           syncOrderLabels(list);
           persistOrder(list);
         });
+
+        list.addEventListener('click', (event) => {
+          const toggleButton = event.target.closest('[data-toggle-details]');
+          if (!toggleButton) return;
+          const targetId = toggleButton.getAttribute('data-toggle-details');
+          if (!targetId) return;
+          const target = document.getElementById(targetId);
+          if (!target) return;
+          const isHidden = target.classList.contains('hidden');
+          if (isHidden) {
+            target.classList.remove('hidden');
+            toggleButton.setAttribute('aria-expanded', 'true');
+          } else {
+            target.classList.add('hidden');
+            toggleButton.setAttribute('aria-expanded', 'false');
+          }
+          const chevron = toggleButton.querySelector('[data-chevron]');
+          if (chevron) {
+            chevron.classList.toggle('rotate-180', isHidden);
+          }
+        });
       }
 
       const form = document.getElementById('template-task-form');
@@ -622,7 +679,16 @@
             if (assigneeSelect) assigneeSelect.value = data.default_assignee_id ? String(data.default_assignee_id) : '';
             const formSelect = form.querySelector('select[name="form_template_id"]');
             if (formSelect) formSelect.value = data.form_template_id ? String(data.form_template_id) : '';
-            if (typeSelect) typeSelect.value = data.task_type || (typeSelect.querySelector('option')?.value || '');
+            if (typeSelect) {
+              const hasOption = Array.from(typeSelect.options).some((option) => option.value === data.task_type);
+              if (!hasOption && data.task_type) {
+                const fallbackOption = document.createElement('option');
+                fallbackOption.value = data.task_type;
+                fallbackOption.textContent = data.task_type.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+                typeSelect.appendChild(fallbackOption);
+              }
+              typeSelect.value = data.task_type || (typeSelect.querySelector('option')?.value || '');
+            }
 
             const startModeInput = form.querySelector(`input[name="start_mode"][value="${data.start_mode || 'immediate'}"]`);
             if (startModeInput) startModeInput.checked = true;
