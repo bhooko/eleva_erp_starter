@@ -835,6 +835,14 @@
         if (el.hasAttribute('data-template-dismiss') || el.hasAttribute('data-template-save')) {
           return;
         }
+
+        // Keep the preview form interactive even when the template is in view mode so users
+        // can open dropdowns and try the form without saving changes.
+        const isPreviewField = el.closest('[data-schema-preview-form]');
+        if (isPreviewField) {
+          return;
+        }
+
         if (readOnly && el.type !== 'button') {
           el.setAttribute('disabled', 'disabled');
         } else {
