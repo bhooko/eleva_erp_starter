@@ -1863,13 +1863,24 @@ def get_dropdown_options_map():
         for field_key in DROPDOWN_FIELD_DEFINITIONS.keys()
     }
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
+TASK_TYPE_LABELS = {
+    "general": "General Task",
+    "qc": "QC Task",
+    "milestone": "Milestone",
+    "sales": "Sales Task",
+    "design": "Design Task",
+    "srt": "SRT Task",
+    "custom": "Custom Task",
+}
 PROJECT_TEMPLATE_TASK_TYPES = [
-    ("general", "General Task"),
-    ("srt", "SRT Task"),
-    ("qc", "QC Task"),
-    ("design", "Design Task"),
+    ("general", TASK_TYPE_LABELS["general"]),
+    ("qc", TASK_TYPE_LABELS["qc"]),
+    ("milestone", TASK_TYPE_LABELS["milestone"]),
+    ("sales", TASK_TYPE_LABELS["sales"]),
+    ("design", TASK_TYPE_LABELS["design"]),
+    ("srt", TASK_TYPE_LABELS["srt"]),
 ]
-PROJECT_TEMPLATE_TASK_TYPE_KEYS = {value for value, _ in PROJECT_TEMPLATE_TASK_TYPES}
+PROJECT_TEMPLATE_TASK_TYPE_KEYS = set(TASK_TYPE_LABELS.keys())
 TASK_MILESTONES = [
     "Order Milestone",
     "Design Milestone",
@@ -16115,7 +16126,8 @@ def project_template_detail(template_id):
         forms=forms,
         DEFAULT_TASK_FORM_NAME=DEFAULT_TASK_FORM_NAME,
         TASK_MILESTONES=TASK_MILESTONES,
-        PROJECT_TEMPLATE_TASK_TYPES=PROJECT_TEMPLATE_TASK_TYPES
+        PROJECT_TEMPLATE_TASK_TYPES=PROJECT_TEMPLATE_TASK_TYPES,
+        TASK_TYPE_LABELS=TASK_TYPE_LABELS,
     )
 
 
