@@ -1462,19 +1462,39 @@ def _default_client_requirement_schema():
                     {"label": "Drum", "value": "drum"},
                     {"label": "Hydraulic", "value": "hydraulic"},
                 ]},
-                {"id": "structure_required", "type": "select", "label": "Structure Required", "options": [
-                    {"label": "Yes", "value": "yes"},
-                    {"label": "No", "value": "no"},
-                ]},
-                {"id": "structure_placement", "type": "select", "label": "Structure Placement", "options": [
-                    {"label": "Inside shaft", "value": "inside"},
-                    {"label": "Outside shaft", "value": "outside"},
-                    {"label": "Not applicable", "value": "na"},
-                ]},
-                {"id": "entry_platform", "type": "select", "label": "Entry Platform", "options": [
-                    {"label": "Yes", "value": "yes"},
-                    {"label": "No", "value": "no"},
-                ]},
+                {
+                    "id": "structure_required",
+                    "type": "if_else",
+                    "label": "Structure Required",
+                    "options": [
+                        {"label": "Yes", "value": "yes"},
+                        {"label": "No", "value": "no"},
+                    ],
+                    "branches": {
+                        "yes": [
+                            {
+                                "id": "structure_placement",
+                                "type": "select",
+                                "label": "Structure Placement",
+                                "options": [
+                                    {"label": "Inside shaft", "value": "inside"},
+                                    {"label": "Outside shaft", "value": "outside"},
+                                    {"label": "Not applicable", "value": "na"},
+                                ],
+                            },
+                            {
+                                "id": "entry_platform",
+                                "type": "select",
+                                "label": "Entry Platform",
+                                "options": [
+                                    {"label": "Yes", "value": "yes"},
+                                    {"label": "No", "value": "no"},
+                                ],
+                            },
+                        ],
+                        "no": [],
+                    },
+                },
                 {"id": "lift_placement", "type": "select", "label": "Lift Placement", "options": [
                     {"label": "Indoor", "value": "indoor"},
                     {"label": "Outdoor", "value": "outdoor"},
