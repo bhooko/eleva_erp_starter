@@ -1867,6 +1867,7 @@ PROJECT_TEMPLATE_TASK_TYPES = [
     ("general", "General Task"),
     ("srt", "SRT Task"),
     ("qc", "QC Task"),
+    ("design", "Design Task"),
 ]
 PROJECT_TEMPLATE_TASK_TYPE_KEYS = {value for value, _ in PROJECT_TEMPLATE_TASK_TYPES}
 TASK_MILESTONES = [
@@ -15599,6 +15600,86 @@ def project_apply_template(project_id):
     ordered_template_tasks = sorted(template.tasks, key=lambda t: ((t.order_index or 0), t.id))
 
     for template_task in ordered_template_tasks:
+        task_type = (template_task.task_type or "general").lower()
+        if task_type == "srt":
+            task_id = f"SRT-{_random_digits(4)}"
+            owner_name = "Unassigned"
+            if template_task.default_assignee_id:
+                owner_candidate = db.session.get(User, template_task.default_assignee_id)
+                if owner_candidate and owner_candidate.is_active:
+                    owner_name = owner_candidate.display_name
+
+            planned_start = template_task.planned_start_date
+            planned_duration = template_task.duration_days
+            due_date = None
+            if planned_start and planned_duration:
+                due_date = datetime.datetime.combine(planned_start, datetime.time.min) + datetime.timedelta(days=planned_duration)
+            elif planned_duration and (template_task.start_mode or "immediate") != "after_previous":
+                due_date = datetime.datetime.utcnow() + datetime.timedelta(days=planned_duration)
+            elif template_task.planned_due_date:
+                due_date = datetime.datetime.combine(template_task.planned_due_date, datetime.time.min)
+
+            SRT_SAMPLE_TASKS.insert(
+                0,
+                {
+                    "id": task_id,
+                    "site": project.site_name or project.name,
+                    "name": template_task.name,
+                    "summary": template_task.description or template_task.name,
+                    "priority": "Normal",
+                    "status": "Pending",
+                    "due_date": due_date.date() if isinstance(due_date, datetime.datetime) else None,
+                    "owner": owner_name or "Unassigned",
+                    "age_days": 0,
+                },
+            )
+            _log_srt_activity(
+                task_id,
+                type="status",
+                label="Task created",
+                detail=template_task.description or template_task.name,
+                actor=current_user.display_name if current_user.is_authenticated else "System",
+                actor_role="admin" if current_user.is_admin else "user",
+            )
+            created.append(task_id)
+            continue
+
+        if task_type == "design":
+            planned_start = template_task.planned_start_date
+            planned_duration = template_task.duration_days
+            due_date = None
+            if planned_start and planned_duration:
+                due_date = datetime.datetime.combine(planned_start, datetime.time.min) + datetime.timedelta(days=planned_duration)
+            elif planned_duration and (template_task.start_mode or "immediate") != "after_previous":
+                due_date = datetime.datetime.utcnow() + datetime.timedelta(days=planned_duration)
+            elif template_task.planned_due_date:
+                due_date = datetime.datetime.combine(template_task.planned_due_date, datetime.time.min)
+
+            assignee_id = None
+            if template_task.default_assignee_id:
+                assignee_candidate = db.session.get(User, template_task.default_assignee_id)
+                if assignee_candidate and assignee_candidate.is_active:
+                    assignee_id = assignee_candidate.id
+
+            design_task = DesignTask(
+                task_type=task_type,
+                project_id=project.id,
+                project_name=project.name,
+                requested_by_user_id=current_user.id,
+                assigned_to_user_id=assignee_id,
+                status="new",
+                priority="medium",
+                due_date=due_date.date() if isinstance(due_date, datetime.datetime) else None,
+                description=template_task.description or template_task.name,
+                origin_type="operations",
+                origin_id=project.id,
+                origin_reference=project.name,
+                notes=None,
+            )
+            db.session.add(design_task)
+            created.append(design_task)
+            continue
+
         if template_task.id in existing_template_task_ids:
             continue
 
