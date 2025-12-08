@@ -250,7 +250,7 @@
                 <p class="text-xs uppercase tracking-wide text-emerald-200">Form preview</p>
                 <p class="text-sm text-slate-300">What end users see when filling out this template.</p>
               </div>
-              <span class="ml-auto inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-[11px] font-semibold text-slate-200 border border-slate-700/80">Read-only preview</span>
+              <span class="ml-auto inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-[11px] font-semibold text-slate-200 border border-slate-700/80">Interactive preview</span>
             </div>
             <div class="space-y-4" data-schema-preview-form>
               <!-- Rendered via JS -->
@@ -475,18 +475,18 @@
                   let controlHtml = '';
 
                   if (field.type === 'textarea') {
-                    controlHtml = `<textarea rows="3" class="${commonClasses}" disabled placeholder="Enter ${
+                    controlHtml = `<textarea rows="3" class="${commonClasses}" placeholder="Enter ${
                       field.label || 'details'
                     }..."></textarea>`;
                   } else if (field.type === 'number') {
-                    controlHtml = `<input type="number" class="${commonClasses}" disabled placeholder="0">`;
+                    controlHtml = `<input type="number" class="${commonClasses}" placeholder="0">`;
                   } else if (field.type === 'date') {
-                    controlHtml = `<input type="date" class="${commonClasses}" disabled>`;
+                    controlHtml = `<input type="date" class="${commonClasses}">`;
                   } else if (field.type === 'select' || field.type === 'if_else') {
                     const optionsHtml = (field.options || [])
                       .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
                       .join('');
-                    controlHtml = `<select class="${commonClasses}" disabled><option value="">Select...</option>${optionsHtml}</select>${helpText}`;
+                    controlHtml = `<select class="${commonClasses}"><option value="">Select...</option>${optionsHtml}</select>${helpText}`;
                   } else if (field.type === 'table') {
                     const columns = field.columns || [];
                     const headerCells = columns
@@ -498,19 +498,19 @@
                           const opts = (col.options || [])
                             .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
                             .join('');
-                          return `<td class="px-3 py-2"><select class="${commonClasses}" disabled><option value="">Select...</option>${opts}</select></td>`;
+                          return `<td class="px-3 py-2"><select class="${commonClasses}"><option value="">Select...</option>${opts}</select></td>`;
                         }
                         const type = col.type === 'number' ? 'number' : 'text';
-                        return `<td class="px-3 py-2"><input type="${type}" class="${commonClasses}" disabled></td>`;
+                        return `<td class="px-3 py-2"><input type="${type}" class="${commonClasses}"></td>`;
                       })
                       .join('');
                     controlHtml = `<div class="overflow-x-auto border border-slate-800 rounded-xl"><table class="min-w-full divide-y divide-slate-800 text-sm text-slate-200"><thead class="bg-slate-900/80">${
                       headerCells ? `<tr>${headerCells}</tr>` : ''
                     }</thead><tbody><tr>${rowCells || '<td class="px-3 py-2 text-slate-400">Add columns to preview the table.</td>'}</tr></tbody></table></div>`;
                   } else if (field.type === 'checkbox') {
-                    controlHtml = `<label class="inline-flex items-center gap-2 text-sm text-slate-100"><input type="checkbox" disabled class="rounded border-slate-700 bg-slate-900 text-emerald-500"> <span>${field.label || 'Checkbox'}</span></label>`;
+                    controlHtml = `<label class="inline-flex items-center gap-2 text-sm text-slate-100"><input type="checkbox" class="rounded border-slate-700 bg-slate-900 text-emerald-500"> <span>${field.label || 'Checkbox'}</span></label>`;
                   } else {
-                    controlHtml = `<input type="text" class="${commonClasses}" disabled placeholder="Enter ${field.label || 'value'}">`;
+                    controlHtml = `<input type="text" class="${commonClasses}" placeholder="Enter ${field.label || 'value'}">`;
                   }
 
                   return `<div class="space-y-2"><div class="flex items-start justify-between gap-2">${labelHtml}<span class="text-[11px] uppercase tracking-wide text-slate-400">${
@@ -908,7 +908,7 @@
             schemaInput.value = schemaRaw;
           }
           titleEl.textContent = 'View Client Requirements template';
-          subtitleEl.textContent = 'Fields are read-only; close to return to settings.';
+          subtitleEl.textContent = 'Try the form without saving; close when you are done.';
           setReadOnly(true);
         } else {
           form.querySelector('input[name="action"]').value = 'create';
