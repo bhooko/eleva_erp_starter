@@ -1868,8 +1868,6 @@ TASK_TYPE_LABELS = {
     "qc": "QC Task",
     "milestone": "Milestone",
     "sales": "Sales Task",
-    "design": "Design Task",
-    "srt": "SRT Task",
     "custom": "Custom Task",
 }
 PROJECT_TEMPLATE_TASK_TYPES = [
@@ -1877,8 +1875,6 @@ PROJECT_TEMPLATE_TASK_TYPES = [
     ("qc", TASK_TYPE_LABELS["qc"]),
     ("milestone", TASK_TYPE_LABELS["milestone"]),
     ("sales", TASK_TYPE_LABELS["sales"]),
-    ("design", TASK_TYPE_LABELS["design"]),
-    ("srt", TASK_TYPE_LABELS["srt"]),
 ]
 PROJECT_TEMPLATE_TASK_TYPE_KEYS = set(TASK_TYPE_LABELS.keys())
 TASK_MILESTONES = [
