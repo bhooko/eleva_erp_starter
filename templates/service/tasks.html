@@ -35,12 +35,15 @@
             <th class="px-6 py-3">Status</th>
             <th class="px-6 py-3">Worklog</th>
             <th class="px-6 py-3">Parts used</th>
+            <th class="px-6 py-3">Open</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/70 text-slate-200">
           {% for task in tasks %}
-            <tr class="align-top">
-              <td class="px-6 py-4 font-semibold text-theme-primary">{{ task.id }}</td>
+            <tr class="align-top hover:bg-slate-800/40 cursor-pointer" onclick="window.location='{{ url_for('service_task_detail', task_id=task.id) }}'">
+              <td class="px-6 py-4 font-semibold text-theme-primary">
+                <a href="{{ url_for('service_task_detail', task_id=task.id) }}" class="hover:text-emerald-200">{{ task.id }}</a>
+              </td>
               <td class="px-6 py-4">
                 <div class="font-medium text-slate-100">{{ task.site }}</div>
                 <div class="text-xs text-slate-400">{{ task.client }}</div>
@@ -79,6 +82,9 @@
                 {% else %}
                   <span class="text-slate-500">—</span>
                 {% endif %}
+              </td>
+              <td class="px-6 py-4 text-xs">
+                <a href="{{ url_for('service_task_detail', task_id=task.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:text-white">Open</a>
               </td>
             </tr>
           {% endfor %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Eleva ERP – Service Task {{ task.id }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Service task</p>
+      <h1 class="text-2xl font-semibold text-theme-primary">{{ task.id }}</h1>
+      <p class="text-sm text-slate-400">{{ task.call_type or 'Task details' }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <span class="inline-flex items-center gap-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
+        Status: {{ task.status or 'Open' }}
+      </span>
+      <span class="inline-flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100">
+        Priority: {{ task.priority or 'Medium' }}
+      </span>
+      <a
+        href="{{ url_for('service_tasks') }}"
+        class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-200 transition hover:text-white"
+      >
+        Back to list
+      </a>
+    </div>
+  </header>
+
+  <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Location</p>
+      <p class="mt-1 text-sm font-semibold text-slate-100">{{ task.site or 'Not specified' }}</p>
+      <p class="text-xs text-slate-400">{{ task.client or 'Client details pending' }}</p>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Lift ID</p>
+      <p class="mt-1 text-sm font-semibold text-slate-100">{{ task.lift_id or '—' }}</p>
+      <p class="text-xs text-slate-400">{{ task.sla or 'No SLA defined' }}</p>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Schedule window</p>
+      <p class="mt-1 text-sm font-semibold text-slate-100">{{ task.schedule_window or 'Awaiting scheduling' }}</p>
+      <p class="text-xs text-slate-400">{{ task.requires_media_label }}</p>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Owner</p>
+      <p class="mt-1 text-sm font-semibold text-slate-100">{{ task.owner_display }}</p>
+      <p class="text-xs text-slate-400">{{ task.assignee_display }}</p>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Technicians</p>
+      <p class="mt-1 text-sm font-semibold text-slate-100">{{ task.technician_display or 'Unassigned' }}</p>
+      <p class="text-xs text-slate-400">Call type: {{ task.call_type or 'Service task' }}</p>
+    </article>
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Origin</p>
+      {% if task.origin_ticket_id %}
+        <p class="mt-1 text-sm font-semibold text-slate-100">Support ticket {{ task.origin_ticket_id }}</p>
+        <p class="text-xs text-slate-400">Created from customer support workflow</p>
+      {% else %}
+        <p class="mt-1 text-sm font-semibold text-slate-100">Direct service record</p>
+        <p class="text-xs text-slate-400">No linked support ticket</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-2">
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <header class="flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-100">Worklog</h2>
+        <span class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300">{{ (task.worklog or [])|length }} entries</span>
+      </header>
+      <div class="mt-3 space-y-3 text-sm text-slate-200">
+        {% if task.worklog %}
+          {% for entry in task.worklog %}
+            <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-3 py-2">
+              <p class="font-semibold text-theme-primary">{{ entry.time }}</p>
+              <p class="text-slate-300">{{ entry.label }}</p>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-slate-500">No updates logged.</p>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <header class="flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-100">Parts used</h2>
+        <span class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300">{{ (task.parts_used or [])|length }} items</span>
+      </header>
+      <div class="mt-3 space-y-2 text-sm text-slate-200">
+        {% if task.parts_used %}
+          {% for part in task.parts_used %}
+            <div class="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/70 px-3 py-2">
+              <span>{{ part.name }}</span>
+              <span class="font-semibold text-theme-primary">{{ part.qty }}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-slate-500">No parts recorded for this task.</p>
+        {% endif %}
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}
