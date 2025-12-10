@@ -10523,6 +10523,7 @@ def login():
                 db.session.commit()
                 login_user(user)
                 session["session_token"] = user.session_token
+                session["admin_switch_allowed"] = bool(user.is_admin)
                 attempt.failures.clear()
                 attempt.blocked_until = None
                 if key in _login_attempts and not attempt.failures:
@@ -10548,6 +10549,7 @@ def login():
 def logout():
     logout_user()
     session.pop("session_token", None)
+    session.pop("admin_switch_allowed", None)
     flash("Logged out", "info")
     return redirect(url_for("index"))
 
@@ -10555,7 +10557,7 @@ def logout():
 @app.route("/switch-user", methods=["POST"])
 @login_required
 def switch_user():
-    if not current_user.is_admin:
+    if not (current_user.is_admin or session.get("admin_switch_allowed")):
         abort(403)
 
     target_id = request.form.get("user_id")
