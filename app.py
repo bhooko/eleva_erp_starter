@@ -2772,6 +2772,23 @@ def _service_complaint_tasks_from_support():
     return complaint_tasks
 
 
+def _build_service_tasks():
+    def _normalize_task(task):
+        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
+        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
+        return {
+            **task,
+            "owner_display": owner_display,
+            "assignee_display": assignee_display or "Unassigned",
+            "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
+            "technician_display": ", ".join(task.get("technicians") or []),
+        }
+
+    tasks = [_normalize_task(task) for task in SERVICE_TASKS]
+    tasks.extend(_normalize_task(task) for task in _service_complaint_tasks_from_support())
+    return tasks
+
+
 def _infer_attachment_type(filename, mimetype=None):
     ext = (os.path.splitext(filename)[1] or "").lower()
     if mimetype:
@@ -17864,32 +17881,19 @@ def service_overview():
 @login_required
 def service_tasks():
     _module_visibility_required("service")
-    tasks = []
-    for task in SERVICE_TASKS:
-        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
-        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
-        tasks.append(
-            {
-                **task,
-                "owner_display": owner_display,
-                "assignee_display": assignee_display or "Unassigned",
-                "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
-                "technician_display": ", ".join(task.get("technicians") or []),
-            }
-        )
-    for task in _service_complaint_tasks_from_support():
-        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
-        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
-        tasks.append(
-            {
-                **task,
-                "owner_display": owner_display,
-                "assignee_display": assignee_display or "Unassigned",
-                "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
-                "technician_display": ", ".join(task.get("technicians") or []),
-            }
-        )
+    tasks = _build_service_tasks()
     return render_template("service/tasks.html", tasks=tasks)
+
+
+@app.route("/service/tasks/<task_id>")
+@login_required
+def service_task_detail(task_id):
+    _module_visibility_required("service")
+    tasks = _build_service_tasks()
+    task = next((task for task in tasks if str(task.get("id")) == str(task_id)), None)
+    if not task:
+        abort(404)
+    return render_template("service/task_detail.html", task=task)
 
 
 @app.route("/service/customers")
