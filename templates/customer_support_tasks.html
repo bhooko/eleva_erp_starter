@@ -26,6 +26,41 @@
           <h2 class="text-lg font-semibold text-slate-100">Ticket queue</h2>
           <p class="text-sm text-slate-400">Sorted by SLA deadline (soonest first). Use the view action to open the full timeline.</p>
         </div>
+        <div class="flex flex-wrap items-center gap-2" aria-label="Ticket status filters">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition"
+            data-ticket-status-filter="all"
+            data-default-filter="true"
+            aria-pressed="true"
+          >
+            All
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:text-slate-100"
+            data-ticket-status-filter="open"
+            aria-pressed="false"
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:text-slate-100"
+            data-ticket-status-filter="in-progress"
+            aria-pressed="false"
+          >
+            In progress
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:text-slate-100"
+            data-ticket-status-filter="closed-resolved"
+            aria-pressed="false"
+          >
+            Closed/Resolved
+          </button>
+        </div>
       </div>
     </div>
     <div class="space-y-4 px-4 py-4 sm:px-6">
@@ -81,6 +116,9 @@
       {% else %}
         <div class="px-2 py-10 text-center text-sm text-slate-400 sm:px-6">No tickets logged.</div>
       {% endfor %}
+      {% if tickets %}
+        <div class="hidden px-2 py-10 text-center text-sm text-slate-400 sm:px-6" data-ticket-filter-empty>No tickets match this status filter.</div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -765,6 +803,71 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const body = document.body;
+
+      const legacyFilterGroups = document.querySelectorAll('[data-ticket-filter-group]');
+      legacyFilterGroups.forEach((group) => group.remove());
+
+      const ticketRows = Array.from(document.querySelectorAll('[data-ticket-row]'));
+      const statusFilterButtons = Array.from(document.querySelectorAll('[data-ticket-status-filter]'));
+      const filteredEmptyState = document.querySelector('[data-ticket-filter-empty]');
+      const activeFilterClasses = [
+        'border-emerald-400/60',
+        'bg-emerald-500/15',
+        'text-emerald-100',
+      ];
+      const inactiveFilterClasses = [
+        'border-slate-700/70',
+        'bg-slate-800/60',
+        'text-slate-300',
+      ];
+
+      const updateFilterButtons = (activeValue) => {
+        const normalizedActive = (activeValue || '').toLowerCase();
+        statusFilterButtons.forEach((button) => {
+          const value = (button.dataset.ticketStatusFilter || '').toLowerCase();
+          const isActive = value === normalizedActive;
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          activeFilterClasses.forEach((className) => button.classList.toggle(className, isActive));
+          inactiveFilterClasses.forEach((className) => button.classList.toggle(className, !isActive));
+        });
+      };
+
+      const applyTicketStatusFilter = (value) => {
+        const normalized = (value || 'all').toLowerCase();
+        let visibleCount = 0;
+        ticketRows.forEach((row) => {
+          const status = (row.dataset.ticketStatus || '').toLowerCase();
+          const matches =
+            normalized === 'all' ||
+            status === normalized ||
+            (normalized === 'closed-resolved' && ['closed', 'resolved'].includes(status));
+          row.classList.toggle('hidden', !matches);
+          if (matches) {
+            visibleCount += 1;
+          }
+        });
+
+        if (filteredEmptyState) {
+          filteredEmptyState.classList.toggle('hidden', visibleCount > 0);
+        }
+      };
+
+      if (statusFilterButtons.length) {
+        const defaultButton =
+          statusFilterButtons.find((button) => button.dataset.defaultFilter === 'true') ||
+          statusFilterButtons[0];
+        const initialValue = (defaultButton ? defaultButton.dataset.ticketStatusFilter : 'all') || 'all';
+        applyTicketStatusFilter(initialValue);
+        updateFilterButtons(initialValue);
+
+        statusFilterButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const value = button.dataset.ticketStatusFilter || 'all';
+            applyTicketStatusFilter(value);
+            updateFilterButtons(value);
+          });
+        });
+      }
 
       const assigneeWhitelist = {{ (assignee_whitelist or {}) | tojson }};
       const categoryAssignments = {{ (category_assignments or {}) | tojson }};
