@@ -70,6 +70,7 @@ else:
     Workbook = load_workbook = Alignment = Font = None  # type: ignore[assignment]
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+INDIA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=5, minutes=30), name="IST")
 DEFAULT_MAX_UPLOAD_SIZE_MB = 45
 DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
@@ -256,6 +257,27 @@ def _normalize_extension(extension):
     if ext and not ext.startswith("."):
         ext = f".{ext}"
     return ext
+
+
+def _to_india_time(value):
+    if not value:
+        return value
+    if isinstance(value, datetime.datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(INDIA_TIMEZONE)
+    return value
+
+
+def _format_india_datetime(value, fmt="%Y-%m-%d %H:%M"):
+    localized = _to_india_time(value)
+    if isinstance(localized, (datetime.datetime, datetime.date)):
+        try:
+            return localized.strftime(fmt)
+        except Exception:
+            return ""
+    return ""
 
 
 class UploadValidationError(ValueError):
@@ -10501,6 +10523,7 @@ def login():
                 db.session.commit()
                 login_user(user)
                 session["session_token"] = user.session_token
+                session["admin_switch_allowed"] = bool(user.is_admin)
                 attempt.failures.clear()
                 attempt.blocked_until = None
                 if key in _login_attempts and not attempt.failures:
@@ -10526,6 +10549,7 @@ def login():
 def logout():
     logout_user()
     session.pop("session_token", None)
+    session.pop("admin_switch_allowed", None)
     flash("Logged out", "info")
     return redirect(url_for("index"))
 
@@ -10533,7 +10557,7 @@ def logout():
 @app.route("/switch-user", methods=["POST"])
 @login_required
 def switch_user():
-    if not current_user.is_admin:
+    if not (current_user.is_admin or session.get("admin_switch_allowed")):
         abort(403)
 
     target_id = request.form.get("user_id")
@@ -16572,6 +16596,7 @@ def customer_support_tasks():
         support_categories=CUSTOMER_SUPPORT_CATEGORIES,
         channels=CUSTOMER_SUPPORT_CHANNELS,
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
+        status_options=["Open", "Resolved", "Closed"],
         priority_options=["Low", "Medium", "High", "Critical"],
         open_ticket_modal=bool(selected_ticket),
         open_linked_task_modal=open_linked_task_modal,

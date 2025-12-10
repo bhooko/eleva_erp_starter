@@ -35,7 +35,7 @@
             <div class="text-sm font-semibold text-slate-100">{{ ticket.id }} · {{ ticket.subject }}</div>
             <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <span class="rounded-full bg-slate-900/60 px-3 py-1 text-xs text-slate-300">Due {{ ticket._sla_due_display }}</span>
-              <span class="text-xs text-slate-500">Updated {{ (ticket.updated_at or ticket.created_at).strftime('%d %b %H:%M') }}</span>
+              <span class="text-xs text-slate-500">Updated {{ (ticket.updated_at or ticket.created_at)|format_india_datetime('%d %b %H:%M') }}</span>
               <span class="rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs text-emerald-200" data-sla-countdown data-sla-deadline="{{ ticket._sla_due_iso }}">Calculating…</span>
             </div>
           </div>
@@ -418,8 +418,8 @@
           {% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Created {{ selected_ticket.created_at.strftime('%d %b %Y %H:%M') }}</span>
-          <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Updated {{ (selected_ticket.updated_at or selected_ticket.created_at).strftime('%d %b %Y %H:%M') }}</span>
+          <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Created {{ selected_ticket.created_at|format_india_datetime('%d %b %Y %H:%M') }}</span>
+          <span class="rounded-full border border-slate-700/70 bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Updated {{ (selected_ticket.updated_at or selected_ticket.created_at)|format_india_datetime('%d %b %Y %H:%M') }}</span>
           {% if current_user.is_admin %}
             <form method="post" action="{{ url_for('customer_support_delete_ticket', ticket_id=selected_ticket.id) }}" onsubmit="return confirm('Delete this ticket permanently?');">
               {{ csrf_field() }}
@@ -532,7 +532,7 @@
                 <p class="mt-0.5 text-slate-100">
                   {% set due_date = selected_ticket.get('due_at') or selected_ticket.get('_sla_due_at') %}
                   {% if due_date %}
-                    {{ due_date.strftime('%d %b %Y %H:%M') }}
+                    {{ due_date|format_india_datetime('%d %b %Y %H:%M') }}
                   {% else %}
                     Not scheduled
                   {% endif %}
@@ -560,7 +560,7 @@
                     System
                   {% endif %}
                   {% if ticket_first_update.timestamp %}
-                    · {{ ticket_first_update.timestamp.strftime('%d %b %Y · %I:%M %p') }}
+                    · {{ ticket_first_update.timestamp|format_india_datetime('%d %b %Y · %I:%M %p') }}
                   {% endif %}
                 </p>
               </div>
@@ -673,7 +673,7 @@
                 <div class="flex flex-col gap-1 rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
                   <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <div class="text-sm font-semibold text-slate-100">{{ entry.label }}</div>
-                    <div class="text-xs text-slate-500">{{ entry.timestamp.strftime('%d %b %Y · %I:%M %p') }}</div>
+                    <div class="text-xs text-slate-500">{{ entry.timestamp|format_india_datetime('%d %b %Y · %I:%M %p') }}</div>
                   </div>
                   <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span class="rounded-full bg-slate-800/70 px-2 py-1">{{ entry.actor_label or entry.actor }}</span>

@@ -100,7 +100,7 @@
         </div>
         <div class="text-right text-xs text-slate-400">
           <div>Created {{ customer.created_at.strftime('%d %b %Y') if customer.created_at else '—' }}</div>
-          <div>Updated {{ customer.updated_at.strftime('%d %b %Y %H:%M') if customer.updated_at else '—' }}</div>
+          <div>Updated {{ customer.updated_at|format_india_datetime('%d %b %Y %H:%M') if customer.updated_at else '—' }}</div>
         </div>
       </div>
       <dl class="grid gap-4">
@@ -215,7 +215,7 @@
           <article class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-3">
             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
               <span>{{ comment.author.display_name if comment.author else 'System' }}</span>
-              <span>{{ comment.created_at.strftime('%d %b %Y %H:%M') }}</span>
+              <span>{{ comment.created_at|format_india_datetime('%d %b %Y %H:%M') }}</span>
             </div>
             <p class="mt-2 leading-relaxed text-slate-200">{{ comment.body|urlize(target='_blank') }}</p>
           </article>

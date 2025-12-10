@@ -81,7 +81,7 @@
                 <div class="px-2 py-1 bg-slate-100 rounded-lg">v{{ rev.version_number }}</div>
                 <div class="flex-1">
                   <p class="font-semibold">{{ rev.change_reason or 'Uploaded revision' }}</p>
-                  <p class="text-xs text-slate-500">{{ rev.created_at.strftime('%d %b %Y, %I:%M %p') if rev.created_at else '' }} · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}</p>
+                  <p class="text-xs text-slate-500">{{ rev.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if rev.created_at else '' }} · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}</p>
                   <a href="{{ url_for('static', filename='uploads/' ~ rev.file_name) }}" class="text-orange-600 text-xs" download>Download</a>
                 </div>
               </div>
@@ -343,7 +343,7 @@
         <div class="mt-3 space-y-2">
           {% for comment in task.comments|sort(attribute='created_at', reverse=True) %}
           <div class="p-2 bg-slate-50 rounded-lg text-sm">
-            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at.strftime('%d %b %Y %I:%M %p') if comment.created_at else '' }}</span></p>
+            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at|format_india_datetime('%d %b %Y %I:%M %p') if comment.created_at else '' }}</span></p>
             <p class="text-slate-600">{{ comment.body }}</p>
           </div>
           {% else %}
