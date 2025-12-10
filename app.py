@@ -2079,6 +2079,13 @@ CUSTOMER_SUPPORT_CATEGORIES = [
         "default_resolution_hours": 24,
     },
     {
+        "id": "support-ni",
+        "label": "Support – NI",
+        "description": "Post-sale NI support tasks and follow-ups.",
+        "default_first_response_hours": 4,
+        "default_resolution_hours": 24,
+    },
+    {
         "id": "sales-amc",
         "label": "Sales – AMC",
         "description": "Annual maintenance contract conversations and renewals.",
@@ -2347,6 +2354,50 @@ def _resolve_customer_support_channel_label(channel_value):
         if lowered in {channel_id, channel_label}:
             return channel.get("label")
     return None
+
+
+def _create_enquiry_from_sales_ni_task(*, ticket, title, details, assignee_user, owner_user):
+    enquiry_title = title or ticket.get("subject") or ticket.get("id") or "Sales enquiry"
+    pipeline_config = get_pipeline_config("lift")
+    stages = pipeline_config.get("stages", []) if isinstance(pipeline_config, dict) else []
+    default_stage = stages[0] if stages else "New Enquiry"
+
+    description_parts = []
+    if ticket.get("id"):
+        description_parts.append(f"Linked ticket: {ticket.get('id')}")
+    if ticket.get("customer"):
+        description_parts.append(f"Customer/site: {ticket.get('customer')}")
+    if ticket.get("location"):
+        description_parts.append(f"Location: {ticket.get('location')}")
+    if details:
+        description_parts.append(details)
+    description = "\n".join(part for part in description_parts if part)
+
+    enquiry_owner = assignee_user or owner_user
+    if not enquiry_owner and current_user.is_authenticated:
+        enquiry_owner = current_user
+
+    linked_client = None
+    if ticket.get("linked_sales_client") and ticket["linked_sales_client"].get("id"):
+        linked_client = db.session.get(SalesClient, ticket["linked_sales_client"]["id"])
+
+    linked_project = None
+    if ticket.get("linked_installation_project") and ticket["linked_installation_project"].get("id"):
+        linked_project = db.session.get(Project, ticket["linked_installation_project"]["id"])
+
+    enquiry = SalesOpportunity(
+        title=enquiry_title,
+        pipeline="lift",
+        stage=default_stage,
+        description=description or None,
+        owner=enquiry_owner,
+        client=linked_client,
+        project=linked_project,
+    )
+    db.session.add(enquiry)
+    db.session.flush()
+
+    return enquiry
 
 
 def _format_customer_support_amc_site_from_lift(lift):
@@ -2984,7 +3035,7 @@ def _handle_customer_support_ticket_creation():
     if channel_value and not channel_label:
         errors.append("Choose a valid ticket channel.")
 
-    critical_sla_categories = {"sales-ni", "sales-amc", "support-amc"}
+    critical_sla_categories = {"sales-ni", "support-ni", "sales-amc", "support-amc"}
     default_sla_priority_id = (
         "critical" if category_id.lower() in critical_sla_categories else "standard"
     )
@@ -3274,6 +3325,7 @@ def _handle_customer_support_ticket_creation():
         "contact_phone": contact_phone or "",
         "contact_email": contact_email or "",
         "category": category_label or category_id,
+        "category_key": category_id.lower(),
         "channel": channel_label or channel_value,
         "priority": "Medium",
         "status": "Open",
@@ -16424,6 +16476,9 @@ def customer_support_tasks():
             open_add_ticket_modal = True
         elif response is not None:
             return response
+
+    if current_user.is_authenticated and "owner" not in add_ticket_form_data:
+        add_ticket_form_data["owner"] = str(current_user.id)
     now = datetime.datetime.utcnow()
     tickets = []
     for ticket in CUSTOMER_SUPPORT_TICKETS:
@@ -16621,6 +16676,24 @@ def customer_support_create_linked_task():
     owner_label = owner_user.display_name if owner_user else (current_user.display_name if current_user.is_authenticated else "Unassigned")
     owner_id = owner_user.id if owner_user else (current_user.id if current_user.is_authenticated else None)
 
+    created_enquiry = None
+    if category and category.lower() == "sales-ni":
+        try:
+            created_enquiry = _create_enquiry_from_sales_ni_task(
+                ticket=ticket,
+                title=title,
+                details=details,
+                assignee_user=assignee_user,
+                owner_user=owner_user,
+            )
+        except Exception as exc:
+            app.logger.exception("Failed to create enquiry for Sales – NI task: %s", exc)
+            flash(
+                "Could not create the enquiry for this Sales – NI task. Please try again.",
+                "error",
+            )
+            return redirect(url_for("customer_support_tasks", ticket=ticket_id, open_linked_task="1"))
+
     new_task = {
         "id": generate_linked_task_id(),
         "title": title,
@@ -16637,7 +16710,16 @@ def customer_support_create_linked_task():
         "url": task_url or None,
     }
 
+    if created_enquiry:
+        new_task["linked_enquiry"] = {
+            "id": created_enquiry.id,
+            "title": created_enquiry.title,
+            "url": url_for("sales_opportunity_detail", opportunity_id=created_enquiry.id),
+        }
+
     ticket.setdefault("linked_tasks", []).append(new_task)
+    if created_enquiry:
+        db.session.commit()
     _save_customer_support_state()
     flash("Linked task created successfully.", "success")
     return redirect(url_for("customer_support_tasks", ticket=ticket_id))
