@@ -124,7 +124,7 @@
             <div class="border border-slate-800 rounded-2xl bg-slate-950/40 p-4">
               <div class="flex items-center justify-between">
                 <div class="text-sm font-semibold text-slate-100">{{ c.author.username if c.author else 'Unknown' }}</div>
-                <div class="text-xs text-slate-400">{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                <div class="text-xs text-slate-400">{{ c.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</div>
               </div>
               {% if c.body %}
                 <p class="text-sm text-slate-200 mt-2 whitespace-pre-line">{{ c.body }}</p>
@@ -156,7 +156,7 @@
               <li class="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                 <div class="space-y-1">
                   <div class="text-sm font-semibold text-slate-100">{{ item.name }}</div>
-                  <div class="text-xs text-slate-400">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }} · {{ item.author }}</div>
+                  <div class="text-xs text-slate-400">{{ item.created_at|format_india_datetime('%Y-%m-%d %H:%M') }} · {{ item.author }}</div>
                   {% if item.body %}
                     <p class="text-xs text-slate-300">{{ item.body }}</p>
                   {% endif %}
@@ -190,7 +190,7 @@
                 {% for s in submissions %}
                   <tr>
                     <td class="py-2 pr-3">{{ s.user.username if s.user else '—' }}</td>
-                    <td class="py-2 pr-3">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="py-2 pr-3">{{ s.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</td>
                     <td class="py-2 pr-3">{{ s.photo_count }} photos / {{ s.video_count }} videos</td>
                     <td class="py-2">
                       <a href="{{ url_for('submission_view', sub_id=s.id) }}" class="px-3 py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60">View</a>
@@ -216,7 +216,7 @@
                   {% else %}
                     <span class="font-semibold text-slate-100">{{ log.action.replace('_', ' ')|title }}</span>
                   {% endif %}
-                  <span class="text-xs text-slate-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                  <span class="text-xs text-slate-400">{{ log.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</span>
                 </div>
                 <div class="text-xs text-slate-400 mt-1">
                   {% if log.actor %}

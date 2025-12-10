@@ -205,7 +205,7 @@
               <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 px-4 py-3">
                 <div class="flex items-center justify-between text-sm">
                   <p class="font-semibold text-slate-100">{{ activity.title }}</p>
-                  <span class="text-xs text-slate-500">{{ activity.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                  <span class="text-xs text-slate-500">{{ activity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
                 </div>
                 {% if activity.notes %}
                 <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
@@ -242,7 +242,7 @@
                 <p class="text-sm text-slate-200 whitespace-pre-line">{{ comment.body }}</p>
                 <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{{ comment.author.display_name if comment.author else 'System' }}</span>
-                  <span>{{ comment.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                  <span>{{ comment.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
                 </div>
               </li>
               {% endfor %}
@@ -278,7 +278,7 @@
                 <div>
                   <a href="{{ url_for('static', filename=file.stored_path) }}" class="font-medium text-slate-100 hover:text-emerald-100" download>{{ file.original_filename }}</a>
                   <div class="mt-1 text-xs text-slate-500">
-                    Uploaded {{ file.created_at.strftime('%d %b %Y, %I:%M %p') }}{% if file.uploaded_by %} · {{ file.uploaded_by.display_name }}{% endif %}
+                    Uploaded {{ file.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}{% if file.uploaded_by %} · {{ file.uploaded_by.display_name }}{% endif %}
                   </div>
                 </div>
                 <span class="text-xs text-slate-400">{{ file.display_size }}</span>
@@ -341,7 +341,7 @@
             <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 160 + loop.index0 * 40 }}ms;">
               <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <p class="font-semibold text-slate-100">{{ engagement.display_activity_type }}</p>
-                <span class="text-xs text-slate-500">{{ engagement.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                <span class="text-xs text-slate-500">{{ engagement.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
               </div>
               {% if engagement.subject %}
               <p class="mt-2 text-sm text-emerald-100">{{ engagement.subject }}</p>
@@ -426,7 +426,7 @@
               <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 200 + loop.index0 * 40 }}ms;">
                 <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <p class="font-semibold text-slate-100">{{ item.lift_type or 'Lift Item' }}</p>
-                  <span class="text-xs text-slate-500">{{ item.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                  <span class="text-xs text-slate-500">{{ item.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
                 </div>
                 {% if item.details %}
                 <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ item.details }}</p>
@@ -499,7 +499,7 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
-          <dd>{{ opportunity.updated_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+          <dd>{{ opportunity.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
         </div>
       </dl>
     </div>

@@ -118,7 +118,7 @@
               —
               {% endif %}
             </td>
-            <td class="py-3 px-4">{{ site.last_updated.strftime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</td>
+            <td class="py-3 px-4">{{ site.last_updated|format_india_datetime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</td>
           </tr>
           {% else %}
           <tr><td colspan="9" class="py-4 px-4 text-slate-500">No drawing site records found.</td></tr>

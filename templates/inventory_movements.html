@@ -51,7 +51,7 @@
         <tbody class="divide-y">
           {% for move in movements %}
           <tr>
-            <td class="py-2">{{ move.timestamp.strftime('%Y-%m-%d %H:%M') if move.timestamp else '—' }}</td>
+            <td class="py-2">{{ move.timestamp|format_india_datetime('%Y-%m-%d %H:%M') if move.timestamp else '—' }}</td>
             <td class="py-2">{{ move.movement_type }}</td>
             <td class="py-2 font-semibold {{ 'text-emerald-700' if move.physical_delta > 0 else 'text-rose-700' if move.physical_delta < 0 else 'text-slate-700' }}">{{ '%+.2f'|format(move.physical_delta) }}</td>
             <td class="py-2 {{ 'text-emerald-700' if move.book_delta > 0 else 'text-rose-700' if move.book_delta < 0 else 'text-slate-700' }}">{{ '%+.2f'|format(move.book_delta) }}</td>

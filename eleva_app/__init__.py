@@ -23,9 +23,11 @@ csrf = CSRFProtect()
 def create_app():
     from app import (
         BASE_DIR,
+        _format_india_datetime,
         _get_max_upload_size_bytes,
         _load_admin_settings,
         _load_inventory_control,
+        _to_india_time,
         _save_inventory_control,
     )
 
@@ -75,6 +77,8 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+    app.jinja_env.filters["to_india_time"] = _to_india_time
+    app.jinja_env.filters["format_india_datetime"] = _format_india_datetime
 
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["CALL_RECORDINGS_DIR"], exist_ok=True)

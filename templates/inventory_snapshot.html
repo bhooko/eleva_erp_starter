@@ -42,7 +42,7 @@
           <td class="py-2">{{ record.uom or '—' }}</td>
           <td class="py-2">{{ record.on_hand_value if record.on_hand_value is not none else '—' }}</td>
           <td class="py-2">{{ record.company or '—' }}</td>
-          <td class="py-2">{{ record.last_updated.strftime('%Y-%m-%d %H:%M') if record.last_updated else '—' }}</td>
+          <td class="py-2">{{ record.last_updated|format_india_datetime('%Y-%m-%d %H:%M') if record.last_updated else '—' }}</td>
         </tr>
         {% else %}
         <tr><td colspan="7" class="py-3 text-slate-500">No Odoo inventory uploaded yet.</td></tr>

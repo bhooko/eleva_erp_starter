@@ -107,7 +107,7 @@
                 <div class="font-medium text-slate-100">{{ call.handled_by }}</div>
               </td>
               <td class="px-6 py-4 text-xs text-slate-400">{{ call.duration_minutes }} mins</td>
-              <td class="px-6 py-4 text-xs text-slate-400">{{ call.logged_at.strftime('%d %b %Y · %I:%M %p') }}</td>
+              <td class="px-6 py-4 text-xs text-slate-400">{{ call.logged_at|format_india_datetime('%d %b %Y · %I:%M %p') }}</td>
             </tr>
           {% else %}
             <tr>

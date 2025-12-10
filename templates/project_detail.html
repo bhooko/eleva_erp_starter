@@ -35,7 +35,7 @@
             </svg>
             <div class="leading-tight">
               <div class="text-xs uppercase tracking-wide text-emerald-300/80">Sales won</div>
-              <div class="text-sm">{{ project.sales_won_at.strftime('%Y-%m-%d %H:%M') if project.sales_won_at else 'Not recorded' }}</div>
+              <div class="text-sm">{{ project.sales_won_at|format_india_datetime('%Y-%m-%d %H:%M') if project.sales_won_at else 'Not recorded' }}</div>
             </div>
           </div>
           <div class="inline-flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/50 px-3 py-2 text-slate-100">
@@ -47,7 +47,7 @@
               <div class="text-sm">{{ project.sales_executive_name or 'Not captured' }}</div>
             </div>
           </div>
-          <span class="text-xs text-slate-500">Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+          <span class="text-xs text-slate-500">Created {{ project.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</span>
         </div>
         <p class="text-sm text-slate-400">Lift type: {{ project.lift_type or 'Not specified' }}</p>
       </div>
@@ -446,7 +446,7 @@
               <li class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-3 text-sm text-slate-200">
                 <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
                   <span>{{ comment.author.display_name if comment.author else 'System' }}</span>
-                  <span>{{ comment.created_at.strftime('%d %b %Y %H:%M') }}</span>
+                  <span>{{ comment.created_at|format_india_datetime('%d %b %Y %H:%M') }}</span>
                 </div>
                 <p class="mt-2 leading-relaxed">{{ comment.body|urlize(target='_blank') }}</p>
               </li>
