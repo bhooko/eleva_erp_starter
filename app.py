@@ -16594,7 +16594,7 @@ def customer_support_tasks():
         support_categories=CUSTOMER_SUPPORT_CATEGORIES,
         channels=CUSTOMER_SUPPORT_CHANNELS,
         sla_presets=CUSTOMER_SUPPORT_SLA_PRESETS,
-        status_options=["Open", "In Progress", "Resolved", "Closed"],
+        status_options=["Open", "Resolved", "Closed"],
         priority_options=["Low", "Medium", "High", "Critical"],
         open_ticket_modal=bool(selected_ticket),
         open_linked_task_modal=open_linked_task_modal,

@@ -20,16 +20,10 @@
   </div>
 
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60">
-    <div class="flex flex-col gap-3 border-b border-slate-800/60 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex flex-col gap-3 border-b border-slate-800/60 px-6 py-4">
       <div>
         <h2 class="text-lg font-semibold text-slate-100">Ticket queue</h2>
         <p class="text-sm text-slate-400">Sorted by SLA deadline (soonest first). Use the view action to open the full timeline.</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2" data-ticket-filter-group>
-        <button type="button" class="rounded-xl border border-slate-700/70 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800/70" data-ticket-filter="all">All</button>
-        <button type="button" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200" data-ticket-filter="open" data-ticket-filter-values="open">Open</button>
-        <button type="button" class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200" data-ticket-filter="in-progress" data-ticket-filter-values="in-progress">In progress</button>
-        <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200" data-ticket-filter="closed-resolved" data-ticket-filter-values="resolved,closed">Resolved / Closed</button>
       </div>
     </div>
     <div class="space-y-4 px-4 py-4 sm:px-6">
@@ -85,9 +79,6 @@
       {% else %}
         <div class="px-2 py-10 text-center text-sm text-slate-400 sm:px-6">No tickets logged.</div>
       {% endfor %}
-      {% if tickets %}
-        <div class="hidden px-2 py-6 text-center text-sm text-slate-400 sm:px-6" data-ticket-empty-state>No tickets match this filter.</div>
-      {% endif %}
     </div>
   </div>
 </div>
@@ -1421,66 +1412,6 @@
             });
           }
         });
-      }
-
-      const filterButtons = Array.from(document.querySelectorAll('[data-ticket-filter]'));
-      const ticketRows = Array.from(document.querySelectorAll('[data-ticket-row]'));
-      const emptyState = document.querySelector('[data-ticket-empty-state]');
-
-      if (filterButtons.length && ticketRows.length) {
-        const activateFilterButton = (activeButton) => {
-          filterButtons.forEach((button) => {
-            const isActive = button === activeButton;
-            button.classList.toggle('ring-1', isActive);
-            button.classList.toggle('ring-emerald-400/60', isActive);
-            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-          });
-        };
-
-        const applyFilterFromButton = (button) => {
-          if (!button) {
-            return;
-          }
-
-          const filterKey = (button.dataset.ticketFilter || '').toLowerCase();
-          const valueAttr = button.dataset.ticketFilterValues || '';
-          let allowedStatuses = null;
-
-          if (filterKey !== 'all') {
-            const parsed = valueAttr
-              .split(',')
-              .map((value) => value.trim().toLowerCase())
-              .filter((value) => value.length > 0);
-            allowedStatuses = parsed.length ? parsed : [filterKey];
-          }
-
-          let visibleCount = 0;
-          ticketRows.forEach((row) => {
-            const status = (row.dataset.ticketStatus || '').toLowerCase();
-            const shouldShow = !allowedStatuses ? true : allowedStatuses.includes(status);
-            row.classList.toggle('hidden', !shouldShow);
-            if (shouldShow) {
-              visibleCount += 1;
-            }
-          });
-
-          if (emptyState) {
-            emptyState.classList.toggle('hidden', visibleCount !== 0);
-          }
-
-          activateFilterButton(button);
-        };
-
-        filterButtons.forEach((button) => {
-          button.addEventListener('click', () => applyFilterFromButton(button));
-        });
-
-        const defaultButton =
-          filterButtons.find((button) => (button.dataset.ticketFilter || '').toLowerCase() === 'open') ||
-          filterButtons.find((button) => (button.dataset.ticketFilter || '').toLowerCase() === 'all') ||
-          filterButtons[0];
-
-        applyFilterFromButton(defaultButton);
       }
 
       const countdownBadges = Array.from(document.querySelectorAll('[data-sla-countdown]'));
