@@ -21,9 +21,11 @@
 
   <div class="rounded-2xl border border-slate-800/60 bg-slate-900/60">
     <div class="flex flex-col gap-3 border-b border-slate-800/60 px-6 py-4">
-      <div>
-        <h2 class="text-lg font-semibold text-slate-100">Ticket queue</h2>
-        <p class="text-sm text-slate-400">Sorted by SLA deadline (soonest first). Use the view action to open the full timeline.</p>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-100">Ticket queue</h2>
+          <p class="text-sm text-slate-400">Sorted by SLA deadline (soonest first). Use the view action to open the full timeline.</p>
+        </div>
       </div>
     </div>
     <div class="space-y-4 px-4 py-4 sm:px-6">
@@ -763,9 +765,6 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const body = document.body;
-
-      const legacyFilterGroups = document.querySelectorAll('[data-ticket-filter-group]');
-      legacyFilterGroups.forEach((group) => group.remove());
 
       const assigneeWhitelist = {{ (assignee_whitelist or {}) | tojson }};
       const categoryAssignments = {{ (category_assignments or {}) | tojson }};
