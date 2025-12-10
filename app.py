@@ -70,6 +70,7 @@ else:
     Workbook = load_workbook = Alignment = Font = None  # type: ignore[assignment]
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+INDIA_TIMEZONE = datetime.timezone(datetime.timedelta(hours=5, minutes=30), name="IST")
 DEFAULT_MAX_UPLOAD_SIZE_MB = 45
 DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
@@ -256,6 +257,27 @@ def _normalize_extension(extension):
     if ext and not ext.startswith("."):
         ext = f".{ext}"
     return ext
+
+
+def _to_india_time(value):
+    if not value:
+        return value
+    if isinstance(value, datetime.datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(INDIA_TIMEZONE)
+    return value
+
+
+def _format_india_datetime(value, fmt="%Y-%m-%d %H:%M"):
+    localized = _to_india_time(value)
+    if isinstance(localized, (datetime.datetime, datetime.date)):
+        try:
+            return localized.strftime(fmt)
+        except Exception:
+            return ""
+    return ""
 
 
 class UploadValidationError(ValueError):

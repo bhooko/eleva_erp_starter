@@ -105,7 +105,7 @@
                 </td>
                 <td class="py-3 pr-3 text-slate-200">
                   {% if f.updated_at %}
-                    {{ f.updated_at.strftime('%d %b %Y, %H:%M') }}
+                    {{ f.updated_at|format_india_datetime('%d %b %Y, %H:%M') }}
                   {% else %}
                     <span class="text-slate-500 text-xs">—</span>
                   {% endif %}

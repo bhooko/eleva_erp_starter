@@ -34,7 +34,7 @@
           <div class="p-3 bg-slate-50 rounded-xl">Lift Identifier: <strong>{{ site.lift_identifier or '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Latest Drawing: <strong>{{ site.latest_drawing_number or '—' }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Latest Revision: <strong>{{ site.latest_revision or '—' }}</strong></div>
-          <div class="p-3 bg-slate-50 rounded-xl">Last Updated: <strong>{{ site.last_updated.strftime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</strong></div>
+          <div class="p-3 bg-slate-50 rounded-xl">Last Updated: <strong>{{ site.last_updated|format_india_datetime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</strong></div>
         </div>
       </div>
 
@@ -123,7 +123,7 @@
               <tr>
                 <td class="py-3 px-4 font-semibold">{{ version.drawing_number or '—' }}</td>
                 <td class="py-3 px-4">{{ version.revision_no or '—' }}</td>
-                <td class="py-3 px-4">{{ version.created_at.strftime('%d %b %Y, %I:%M %p') if version.created_at else '—' }}</td>
+                <td class="py-3 px-4">{{ version.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if version.created_at else '—' }}</td>
                 <td class="py-3 px-4">{{ version.submitted_date.strftime('%d %b %Y') if version.submitted_date else '—' }}</td>
                 <td class="py-3 px-4">{{ version.approved_date.strftime('%d %b %Y') if version.approved_date else '—' }}</td>
                 <td class="py-3 px-4">{{ version.approval_status or '—' }}</td>
@@ -174,7 +174,7 @@
         <div class="space-y-2">
           {% for comment in comments %}
           <div class="p-3 bg-slate-50 rounded-xl text-sm">
-            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at.strftime('%d %b %Y, %I:%M %p') if comment.created_at else '' }}</span></p>
+            <p class="font-semibold">{{ comment.author.display_name if comment.author else 'Design' }} <span class="text-xs text-slate-500">{{ comment.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if comment.created_at else '' }}</span></p>
             {% if comment.version %}
             <p class="text-xs text-slate-500 mb-1">Linked to {{ comment.version.drawing_number or 'Drawing' }} {{ comment.version.revision_no or '' }}</p>
             {% endif %}

@@ -28,7 +28,7 @@
       <div class="flex items-center gap-2">
         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if order.status in ['Completed', 'Confirmed'] else 'bg-amber-100 text-amber-700' if order.status == 'Partially Delivered' else 'bg-slate-100 text-slate-700' }}">{{ order.status }}</span>
         {% if order.dispatched_by %}
-          <span class="text-xs text-slate-500">by {{ order.dispatched_by.display_name }} on {{ order.dispatched_at.strftime('%Y-%m-%d %H:%M') if order.dispatched_at else '' }}</span>
+          <span class="text-xs text-slate-500">by {{ order.dispatched_by.display_name }} on {{ order.dispatched_at|format_india_datetime('%Y-%m-%d %H:%M') if order.dispatched_at else '' }}</span>
         {% endif %}
         {% if order.stage %}
           <div class="text-xs text-slate-500">Stage: {{ order.stage.name }}</div>

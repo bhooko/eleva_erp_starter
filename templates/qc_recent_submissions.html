@@ -15,7 +15,7 @@
       <div class="grid lg:grid-cols-3 md:grid-cols-2 gap-4">
         {% for s in submissions %}
           <div class="border border-slate-800 rounded-2xl bg-slate-950/40 p-4 flex flex-col gap-2">
-            <div class="text-xs text-slate-400">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div class="text-xs text-slate-400">{{ s.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</div>
             <div class="font-semibold text-slate-100">{{ s.form.name }}</div>
             {% if s.work_id %}
               <a href="{{ url_for('qc_work_detail', work_id=s.work_id) }}" class="text-xs text-emerald-400 hover:underline">View linked task #{{ s.work_id }}</a>

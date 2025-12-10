@@ -59,7 +59,7 @@
         <div class="text-right">
           <div class="text-sm font-semibold text-slate-100">Template info</div>
           <div class="mt-1">Default task form: <span class="text-emerald-300">{{ DEFAULT_TASK_FORM_NAME }}</span></div>
-          <div class="mt-1">Created {{ template.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+          <div class="mt-1">Created {{ template.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</div>
           {% if template.creator %}
             <div class="mt-1">By {{ template.creator.display_name }}</div>
           {% endif %}

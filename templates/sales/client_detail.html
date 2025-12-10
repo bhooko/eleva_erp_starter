@@ -44,7 +44,7 @@
             <div class="bg-slate-900/80 border border-slate-800/80 rounded-xl px-4 py-3">
               <div class="flex items-center justify-between text-sm">
                 <p class="font-semibold text-slate-100">{{ activity.title }}</p>
-                <span class="text-xs text-slate-500">{{ activity.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+                <span class="text-xs text-slate-500">{{ activity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
               </div>
               {% if activity.notes %}
               <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
@@ -193,11 +193,11 @@
           </div>
           <div>
             <dt class="text-xs uppercase tracking-wide text-slate-500">Created</dt>
-            <dd>{{ client.created_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+            <dd>{{ client.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
           </div>
           <div>
             <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
-            <dd>{{ client.updated_at.strftime('%d %b %Y, %I:%M %p') }}</dd>
+            <dd>{{ client.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
           </div>
         </dl>
       </div>
