@@ -2151,6 +2151,27 @@ CUSTOMER_SUPPORT_SETTINGS_PATH = os.path.join(
 )
 
 
+def _ticket_category_key(ticket_or_value):
+    if isinstance(ticket_or_value, dict):
+        return (
+            (ticket_or_value.get("category_key") or ticket_or_value.get("category") or "")
+            .strip()
+            .lower()
+        )
+    return (ticket_or_value or "").strip().lower()
+
+
+def _ticket_is_other_department(ticket_or_value):
+    key = _ticket_category_key(ticket_or_value)
+    return key in {"other-dept", "other department"}
+
+
+def _filter_other_department_records(records, *, include_other_department=False):
+    if include_other_department:
+        return list(records)
+    return [record for record in records if not _ticket_is_other_department(record)]
+
+
 def _default_customer_support_settings():
     return {
         "category_position_assignments": {},
@@ -2517,7 +2538,7 @@ def _customer_support_summary():
         "Closed": 0,
     }
 
-    for ticket in CUSTOMER_SUPPORT_TICKETS:
+    for ticket in _filter_other_department_records(CUSTOMER_SUPPORT_TICKETS):
         summary.setdefault(ticket["status"], 0)
         summary[ticket["status"]] += 1
 
@@ -2699,7 +2720,7 @@ def _service_complaint_tasks_from_support():
     service_user_ids = {user.id for user in service_users if user.is_active}
 
     complaint_tasks = []
-    for ticket in CUSTOMER_SUPPORT_TICKETS:
+    for ticket in _filter_other_department_records(CUSTOMER_SUPPORT_TICKETS):
         status_value = (ticket.get("status") or "").strip().lower()
         if status_value in {"resolved", "closed"}:
             continue
@@ -13930,7 +13951,7 @@ def _build_task_overview(viewing_user: "User"):
             return "scheduled"
         return "open"
 
-    def _pending_support_tickets_for_users(user_ids):
+    def _pending_support_tickets_for_users(user_ids, *, include_other_department=False):
         if not user_ids:
             return []
 
@@ -13953,6 +13974,8 @@ def _build_task_overview(viewing_user: "User"):
 
         pending_tickets = []
         for ticket in CUSTOMER_SUPPORT_TICKETS:
+            if _ticket_is_other_department(ticket) and not include_other_department:
+                continue
             status_value = (ticket.get("status") or "").strip().lower()
             if status_value in {"resolved", "closed"}:
                 continue
@@ -14585,7 +14608,9 @@ def _build_task_overview(viewing_user: "User"):
                 )
             })
 
-    support_tickets = _pending_support_tickets_for_users({getattr(viewing_user, "id", None)})
+    support_tickets = _pending_support_tickets_for_users(
+        {getattr(viewing_user, "id", None)}, include_other_department=True
+    )
     pending_modules, pending_total = _build_pending_modules(
         viewing_user,
         open_tasks,
@@ -16532,6 +16557,8 @@ def customer_support_tasks():
         ticket["_sla_due_iso"] = sla_due_at.isoformat() if sla_due_at else ""
         ticket["_sla_due_display"] = sla_due_at.strftime("%d %b %Y %H:%M") if sla_due_at else "No SLA"
         ticket["_sla_seconds_remaining"] = (sla_due_at - now).total_seconds() if sla_due_at else None
+        if _ticket_is_other_department(ticket):
+            continue
         tickets.append(ticket)
 
     tickets.sort(key=lambda ticket: ticket.get("_sla_due_at") or datetime.datetime.max)
@@ -17755,7 +17782,7 @@ def build_service_overview_payload():
     }
 
     category_counts = Counter()
-    for ticket in CUSTOMER_SUPPORT_TICKETS:
+    for ticket in _filter_other_department_records(CUSTOMER_SUPPORT_TICKETS):
         category_value = clean_str(ticket.get("category")) or "Uncategorised"
         category_counts[category_value] += 1
     if category_counts:
