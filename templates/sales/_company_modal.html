@@ -1,4 +1,4 @@
-{% from "base.html" import csrf_field %}
+{%- from "base.html" import csrf_field with context %}
 
 <div id="{{ modal_id or 'companyModal' }}" class="fixed inset-0 z-50 hidden" aria-hidden="true">
   <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-company-modal></div>
