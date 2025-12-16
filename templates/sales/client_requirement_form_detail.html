@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Client Requirements Form{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+  <div>
+    <p class="text-sm text-slate-400">Sales Workspace</p>
+    <h2 class="text-3xl font-semibold tracking-tight">Client Requirements Form</h2>
+    {% if opportunity %}
+    <p class="text-xs text-slate-400">Linked to <a href="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="text-emerald-200 hover:underline">{{ opportunity.title }}</a></p>
+    {% endif %}
+  </div>
+  <a href="{{ url_for('sales_tasks') }}" class="inline-flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">← Back to Tasks</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2 space-y-4">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl p-5">
+      <p class="text-xs uppercase tracking-wide text-slate-400">Summary</p>
+      <h3 class="text-lg font-semibold text-slate-100">{{ form.template.name if form.template else 'Client Requirements' }}</h3>
+      <p class="text-sm text-slate-300">Version {{ form.version }} · {{ form.status|replace('_', ' ')|title }}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl p-5 space-y-4">
+      <h3 class="text-lg font-semibold text-slate-100">Sales Section</h3>
+      <pre class="rounded-xl bg-slate-950/60 border border-slate-800/80 p-4 text-xs text-slate-200 overflow-auto">{{ sales_data_json }}</pre>
+    </div>
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl p-5 space-y-4">
+      <h3 class="text-lg font-semibold text-slate-100">Design Section</h3>
+      <pre class="rounded-xl bg-slate-950/60 border border-slate-800/80 p-4 text-xs text-slate-200 overflow-auto">{{ design_data_json }}</pre>
+    </div>
+  </div>
+  <div class="space-y-4">
+    <div class="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl p-5 text-sm text-slate-300">
+      <p class="text-xs uppercase tracking-wide text-slate-400 mb-2">Metadata</p>
+      <p><span class="text-slate-400">Created:</span> {{ form.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</p>
+      <p><span class="text-slate-400">Updated:</span> {{ form.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</p>
+      {% if form.created_by_sales %}
+      <p><span class="text-slate-400">Sales Owner:</span> {{ form.created_by_sales.display_name }}</p>
+      {% endif %}
+      {% if form.design_engineer %}
+      <p><span class="text-slate-400">Design Engineer:</span> {{ form.design_engineer.display_name }}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
