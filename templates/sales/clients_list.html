@@ -32,7 +32,6 @@
           <th class="px-6 py-3">Email</th>
           <th class="px-6 py-3">Email Opt-Out</th>
           <th class="px-6 py-3">Owner</th>
-          <th class="px-6 py-3">Lifecycle Stage</th>
           <th class="px-6 py-3">Phone</th>
           <th class="px-6 py-3 text-center">Open Pipelines</th>
           <th class="px-6 py-3">Created</th>
@@ -51,14 +50,13 @@
           <td class="px-6 py-4">{{ client.email or '—' }}</td>
           <td class="px-6 py-4">{{ client.email_opt_out_label }}</td>
           <td class="px-6 py-4">{{ client.owner.display_name if client.owner else 'Unassigned' }}</td>
-          <td class="px-6 py-4">{{ client.lifecycle_stage or '—' }}</td>
           <td class="px-6 py-4">{{ client.phone or '—' }}</td>
           <td class="px-6 py-4 text-center font-semibold">{{ client.open_opportunity_count }}</td>
           <td class="px-6 py-4 text-xs text-slate-400">{{ client.created_at.strftime('%b %d, %Y') }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="9" class="px-6 py-16 text-center text-slate-500">No clients yet. Add one using the button above.</td>
+          <td colspan="8" class="px-6 py-16 text-center text-slate-500">No clients yet. Add one using the button above.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -123,14 +121,6 @@
               <option value="Company">Company</option>
             </select>
           </div>
-          <div>
-            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
-            <select name="lifecycle_stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-              {% for stage in lifecycle_options %}
-              <option value="{{ stage }}" {% if loop.first %}selected{% endif %}>{{ stage }}</option>
-              {% endfor %}
-            </select>
-          </div>
         </div>
         <div>
           <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Notes</label>
@@ -177,7 +167,6 @@
           <ul class="mt-2 space-y-2 text-xs text-slate-400">
             <li>• Display Name is required for every row.</li>
             <li>• Owner Email should match a user with Sales access.</li>
-            <li>• Lifecycle Stage must be one of: {{ lifecycle_options|join(', ') }}.</li>
           </ul>
         </div>
         <div>
