@@ -74,6 +74,11 @@
               type="button"
               class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
               data-modal-open="clientDetailModal"
+              data-client-id="{{ opportunity.client.id }}"
+              data-client-name="{{ opportunity.client.display_name }}"
+              data-client-email="{{ opportunity.client.email or '' }}"
+              data-client-phone="{{ opportunity.client.phone or '' }}"
+              data-client-description="{{ opportunity.client.description|default('', true)|e }}"
               data-client-modal-open
             >
               <span data-client-name>{{ opportunity.client.display_name }}</span>
@@ -497,6 +502,11 @@
               type="button"
               class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
               data-modal-open="clientDetailModal"
+              data-client-id="{{ opportunity.client.id }}"
+              data-client-name="{{ opportunity.client.display_name }}"
+              data-client-email="{{ opportunity.client.email or '' }}"
+              data-client-phone="{{ opportunity.client.phone or '' }}"
+              data-client-description="{{ opportunity.client.description|default('', true)|e }}"
               data-client-modal-open
             >
               <span data-client-name>{{ opportunity.client.display_name }}</span>
@@ -918,12 +928,23 @@
       if (firstEditable) firstEditable.focus();
     }
 
+    function updateClientModalFromSource(source) {
+      if (!clientModal || !source?.dataset) return;
+      const { clientId, clientName, clientEmail, clientPhone, clientDescription } = source.dataset;
+      if (clientId) clientModal.dataset.clientId = clientId;
+      if (clientName !== undefined) clientModal.dataset.clientName = clientName;
+      if (clientEmail !== undefined) clientModal.dataset.clientEmail = clientEmail;
+      if (clientPhone !== undefined) clientModal.dataset.clientPhone = clientPhone;
+      if (clientDescription !== undefined) clientModal.dataset.clientDescription = clientDescription;
+    }
+
     document.querySelectorAll('[data-modal-open]').forEach((button) => {
       button.addEventListener('click', () => {
-        toggleModal(button.dataset.modalOpen, true);
         if (button.dataset.modalOpen === 'clientDetailModal') {
+          updateClientModalFromSource(button);
           showClientView();
         }
+        toggleModal(button.dataset.modalOpen, true);
       });
     });
 
