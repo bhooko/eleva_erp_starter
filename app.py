@@ -11495,10 +11495,10 @@ def sales_task_detail(task_id):
 
     if request.method == "POST":
         if not task.is_completed:
-        task.status = "Completed"
-        task.completed_at = datetime.datetime.utcnow()
-        db.session.commit()
-        flash("Task marked complete.", "success")
+            task.status = "Completed"
+            task.completed_at = datetime.datetime.utcnow()
+            db.session.commit()
+            flash("Task marked complete.", "success")
         return redirect(url_for("sales_task_detail", task_id=task.id))
 
     client_requirement_form = None
