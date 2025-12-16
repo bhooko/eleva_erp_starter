@@ -5758,6 +5758,15 @@ def get_assignable_users_for_module(module_key, order_by="name"):
 
 
 @app.context_processor
+def inject_current_user():
+    # Ensure templates always receive the `current_user` proxy. Some rendering
+    # flows (for example, template compilation during application startup or
+    # when a request bypasses Flask-Login's context processor) may otherwise
+    # fail to resolve `current_user`, resulting in Jinja undefined errors.
+    return {"current_user": current_user}
+
+
+@app.context_processor
 def inject_workspace_modules():
     return {
         "workspace_modules": WORKSPACE_MODULES,
