@@ -2374,8 +2374,15 @@ def _ticket_has_open_linked_tasks(ticket):
     if not ticket:
         return False
 
+    category_key = _ticket_category_key(ticket)
+    skip_opportunity_tasks = category_key == "sales-ni"
     closing_statuses = {"closed", "resolved", "completed", "done", "cancelled"}
     for task in ticket.get("linked_tasks", []) or []:
+        if skip_opportunity_tasks:
+            related_type = (task.get("related_type") or "").strip().lower()
+            if related_type == "opportunity":
+                continue
+
         status = (task.get("status") or "").strip().lower()
         if status and status in closing_statuses:
             continue
@@ -3493,6 +3500,7 @@ def _handle_customer_support_ticket_creation():
                 "assignee_ids": [
                     user.id for user in created_sales_task.assignees if getattr(user, "id", None)
                 ],
+                "related_type": created_sales_task.related_type,
                 "status": created_sales_task.status or "Pending",
                 "due_date": created_sales_task.due_date,
                 "details": created_sales_task.description,
