@@ -7,9 +7,6 @@
     <h2 class="text-3xl font-semibold tracking-tight">{{ client.display_name }}</h2>
     <div class="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-400">
       <span class="inline-flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 14c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z"/></svg> {{ client.owner.display_name if client.owner else 'Unassigned' }}</span>
-      {% if client.lifecycle_stage %}
-      <span class="inline-flex items-center px-2 py-1 rounded-lg bg-slate-800/70 border border-slate-700/70 text-xs text-slate-200">{{ client.lifecycle_stage }}</span>
-      {% endif %}
     </div>
   </div>
   <div class="flex items-center gap-3">
@@ -154,15 +151,6 @@
               <select name="category" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
                 <option value="Individual" {% if client.category == 'Individual' %}selected{% endif %}>Individual</option>
                 <option value="Company" {% if client.category == 'Company' %}selected{% endif %}>Company</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Lifecycle Stage</label>
-              <select name="lifecycle_stage" class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2">
-                <option value="">Not set</option>
-                {% for stage in lifecycle_options %}
-                <option value="{{ stage }}" {% if client.lifecycle_stage == stage %}selected{% endif %}>{{ stage }}</option>
-                {% endfor %}
               </select>
             </div>
           </div>

@@ -3303,6 +3303,33 @@ def _handle_customer_support_ticket_creation():
     created_opportunity = None
     created_call_activity = None
     created_sales_task = None
+    resolved_sales_client = None
+    if create_sales_lead and category_id.lower() == "sales-ni":
+        resolved_sales_client, _ = _get_or_create_sales_client_for_ticket(
+            ticket_id=ticket_id,
+            customer_name=customer,
+            phone=contact_phone,
+            email=contact_email,
+            location=location,
+            owner_user=sales_lead_owner,
+        )
+        if not customer and resolved_sales_client:
+            customer = resolved_sales_client.display_name
+        if resolved_sales_client and not linked_sales_client:
+            linked_sales_client = resolved_sales_client
+        if resolved_sales_client and not any(
+            entity.get("type") == "sales_client" for entity in linked_entities
+        ):
+            linked_entities.append(
+                {
+                    "type": "sales_client",
+                    "label": "Sales client",
+                    "name": resolved_sales_client.display_name,
+                    "url": url_for(
+                        "sales_client_detail", client_id=resolved_sales_client.id
+                    ),
+                }
+            )
     sales_lead_pipeline_map = {"sales-ni": "lift", "sales-amc": "amc"}
     if create_sales_lead and category_id.lower() in sales_lead_pipeline_map:
         pipeline_key = sales_lead_pipeline_map[category_id.lower()]
@@ -3320,6 +3347,8 @@ def _handle_customer_support_ticket_creation():
         created_opportunity.owner = sales_lead_owner or (current_user if current_user.is_authenticated else None)
         if linked_sales_client:
             created_opportunity.client = linked_sales_client
+        elif resolved_sales_client:
+            created_opportunity.client = resolved_sales_client
 
         db.session.add(created_opportunity)
         db.session.flush()
@@ -4121,6 +4150,109 @@ def normalize_lifecycle_stage(value):
     if value not in SALES_CLIENT_LIFECYCLE_STAGES:
         return SALES_CLIENT_LIFECYCLE_STAGES[0]
     return value
+
+
+def _normalize_client_name_key(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return " ".join(str(value).strip().split()).lower()
+
+
+def _select_latest_match(matches, *, warn_label: str = ""):
+    if not matches:
+        return None
+    matches = sorted(
+        matches,
+        key=lambda client: client.created_at or datetime.datetime.min,
+        reverse=True,
+    )
+    if len(matches) > 1:
+        app.logger.warning(
+            "Multiple SalesClient matches found for %s; using the most recent entry.",
+            warn_label or "criteria",
+        )
+    return matches[0]
+
+
+def _match_sales_client(phone: str, email: str, name_key: Optional[str]):
+    if phone:
+        matches = (
+            SalesClient.query.filter(func.lower(SalesClient.phone) == phone.lower())
+            .order_by(SalesClient.created_at.desc())
+            .all()
+        )
+        client = _select_latest_match(matches, warn_label=f"phone {phone}")
+        if client:
+            return client
+
+    if email:
+        matches = (
+            SalesClient.query.filter(func.lower(SalesClient.email) == email.lower())
+            .order_by(SalesClient.created_at.desc())
+            .all()
+        )
+        client = _select_latest_match(matches, warn_label=f"email {email}")
+        if client:
+            return client
+
+    if name_key:
+        name_matches = []
+        for candidate in SalesClient.query.options(
+            load_only(
+                SalesClient.id,
+                SalesClient.display_name,
+                SalesClient.email,
+                SalesClient.phone,
+                SalesClient.created_at,
+            )
+        ):
+            candidate_name_key = _normalize_client_name_key(candidate.display_name)
+            if candidate_name_key and candidate_name_key == name_key:
+                name_matches.append(candidate)
+        return _select_latest_match(name_matches, warn_label=f"name {name_key}")
+
+    return None
+
+
+def _get_or_create_sales_client_for_ticket(
+    *,
+    ticket_id: str,
+    customer_name: Optional[str],
+    phone: Optional[str],
+    email: Optional[str],
+    location: Optional[str],
+    owner_user,
+):
+    name_key = _normalize_client_name_key(customer_name)
+    phone_value = (phone or "").strip()
+    email_value = (email or "").strip()
+
+    matched_client = _match_sales_client(phone_value, email_value, name_key)
+    if matched_client:
+        return matched_client, False
+
+    client_name = customer_name or f"Ticket {ticket_id} client"
+    description_parts = [f"Auto-created from Sales - NI ticket #{ticket_id}"]
+    if location:
+        description_parts.append(f"Site: {location}")
+
+    client = SalesClient(
+        display_name=client_name.strip(),
+        phone=phone_value or None,
+        email=email_value or None,
+        description="\n".join(description_parts),
+        category="Individual",
+    )
+    client.owner = owner_user or (current_user if current_user.is_authenticated else None)
+    db.session.add(client)
+    db.session.flush()
+    log_sales_activity(
+        "client",
+        client.id,
+        f"Client auto-created from Sales - NI ticket {ticket_id}",
+        actor=current_user if current_user.is_authenticated else None,
+    )
+    return client, True
 
 
 def normalize_email_opt_out(value):
@@ -11613,7 +11745,6 @@ def sales_clients():
         companies=companies,
         pipeline_map=SALES_PIPELINES,
         temperature_choices=SALES_TEMPERATURES,
-        lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
     )
 
 
@@ -12078,8 +12209,47 @@ def sales_client_detail(client_id):
         pipeline_map=SALES_PIPELINES,
         opportunity_clients=all_clients,
         temperature_choices=SALES_TEMPERATURES,
-        lifecycle_options=SALES_CLIENT_LIFECYCLE_STAGES,
         companies=companies,
+    )
+
+
+@app.route("/sales/clients/<int:client_id>/inline-update", methods=["POST"])
+@login_required
+def sales_client_inline_update(client_id):
+    client = db.session.get(SalesClient, client_id)
+    if not client:
+        return jsonify({"success": False, "message": "Client not found."}), 404
+
+    _module_visibility_required("sales", owner_user_id=client.owner_id)
+
+    display_name = (request.form.get("display_name") or "").strip()
+    if not display_name:
+        return jsonify({"success": False, "message": "Client name is required."}), 400
+
+    client.display_name = display_name
+    client.email = (request.form.get("email") or "").strip() or None
+    client.phone = (request.form.get("phone") or "").strip() or None
+    client.description = (request.form.get("description") or "").strip() or None
+
+    log_sales_activity(
+        "client",
+        client.id,
+        "Client updated from opportunity view",
+        actor=current_user if current_user.is_authenticated else None,
+    )
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "client": {
+                "id": client.id,
+                "display_name": client.display_name,
+                "email": client.email,
+                "phone": client.phone,
+                "description": client.description,
+            },
+        }
     )
 
 

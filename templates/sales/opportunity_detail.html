@@ -68,7 +68,21 @@
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
-          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.client.display_name if opportunity.client else 'Unassigned' }}</dd>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if opportunity.client %}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
+              data-modal-open="clientDetailModal"
+              data-client-modal-open
+            >
+              <span data-client-name>{{ opportunity.client.display_name }}</span>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5A2.25 2.25 0 0 0 6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V9.75L13.5 4.5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5v5.25H18.75"/></svg>
+            </button>
+            {% else %}
+            <span data-client-name>Unassigned</span>
+            {% endif %}
+          </dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Related Project</dt>
@@ -477,7 +491,21 @@
       <dl class="grid grid-cols-1 gap-4 px-6 py-5 text-sm text-slate-300">
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
-          <dd>{{ opportunity.client.display_name if opportunity.client else 'Unassigned' }}</dd>
+          <dd>
+            {% if opportunity.client %}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
+              data-modal-open="clientDetailModal"
+              data-client-modal-open
+            >
+              <span data-client-name>{{ opportunity.client.display_name }}</span>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5A2.25 2.25 0 0 0 6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V9.75L13.5 4.5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5v5.25H18.75"/></svg>
+            </button>
+            {% else %}
+            <span data-client-name>Unassigned</span>
+            {% endif %}
+          </dd>
         </div>
         <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Owner</dt>
@@ -506,7 +534,138 @@
   </div>
 </div>
 
-<div id="editOpportunityModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+{% if opportunity.client %}
+<div
+  id="clientDetailModal"
+  data-modal-id="clientDetailModal"
+  data-client-id="{{ opportunity.client.id }}"
+  data-client-name="{{ opportunity.client.display_name }}"
+  data-client-email="{{ opportunity.client.email or '' }}"
+  data-client-phone="{{ opportunity.client.phone or '' }}"
+  data-client-description="{{ opportunity.client.description|default('', true)|e }}"
+  class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur"
+>
+  <div class="relative w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Client</p>
+        <h3 class="text-lg font-semibold text-slate-100" data-client-name-display>{{ opportunity.client.display_name }}</h3>
+      </div>
+      <button
+        type="button"
+        class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100"
+        data-modal-close="clientDetailModal"
+        aria-label="Close client modal"
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-4 px-6 py-5">
+      <div class="space-y-3" data-client-view>
+        <dl class="grid grid-cols-1 gap-3 text-sm text-slate-300">
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Email</dt>
+            <dd data-client-email-display>{{ opportunity.client.email or 'Not provided' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Phone</dt>
+            <dd data-client-phone-display>{{ opportunity.client.phone or 'Not provided' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Notes</dt>
+            <dd class="whitespace-pre-line" data-client-description-display>{{ opportunity.client.description or 'No notes added yet.' }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      {% if current_user.can_view_module('sales') %}
+      <form
+        id="clientInlineForm"
+        class="hidden space-y-3"
+        method="post"
+        action="{{ url_for('sales_client_inline_update', client_id=opportunity.client.id) }}"
+      >
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Client Name</label>
+            <input
+              type="text"
+              name="display_name"
+              class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Email</label>
+            <input
+              type="email"
+              name="email"
+              class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+            />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Phone</label>
+            <input
+              type="text"
+              name="phone"
+              class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+            />
+          </div>
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Notes</label>
+            <textarea
+              name="description"
+              rows="2"
+              class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+            ></textarea>
+          </div>
+        </div>
+        <p class="hidden text-sm text-rose-300" data-client-error></p>
+      </form>
+      {% endif %}
+
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        {% if current_user.can_view_module('sales') %}
+        <button
+          type="button"
+          class="hidden items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:text-emerald-100"
+          data-client-edit-cancel
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          form="clientInlineForm"
+          class="hidden items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+          data-client-save
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          class="items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+          data-client-edit-toggle
+        >
+          Edit
+        </button>
+        {% endif %}
+        <button
+          type="button"
+          class="items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:text-emerald-100"
+          data-modal-close="clientDetailModal"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="editOpportunityModal" data-modal-id="editOpportunityModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
   <div class="relative w-full max-w-3xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
       <h3 class="text-lg font-semibold text-slate-100">Edit Opportunity</h3>
@@ -678,6 +837,19 @@
       trigger.addEventListener('click', () => setActiveTab(trigger.dataset.tab));
     });
 
+    const clientModal = document.getElementById('clientDetailModal');
+    const clientForm = document.getElementById('clientInlineForm');
+    const clientNameTargets = document.querySelectorAll('[data-client-name]');
+    const clientNameDisplay = clientModal?.querySelector('[data-client-name-display]');
+    const clientEmailDisplay = clientModal?.querySelector('[data-client-email-display]');
+    const clientPhoneDisplay = clientModal?.querySelector('[data-client-phone-display]');
+    const clientDescriptionDisplay = clientModal?.querySelector('[data-client-description-display]');
+    const clientError = clientModal?.querySelector('[data-client-error]');
+    const clientEditToggle = clientModal?.querySelector('[data-client-edit-toggle]');
+    const clientEditCancel = clientModal?.querySelector('[data-client-edit-cancel]');
+    const clientSaveButton = clientModal?.querySelector('[data-client-save]');
+    const clientViewSection = clientModal?.querySelector('[data-client-view]');
+
     function toggleModal(modalId, open) {
       const modal = document.getElementById(modalId);
       if (!modal) return;
@@ -692,25 +864,134 @@
       }
     }
 
-    document.querySelectorAll('[data-modal-open]').forEach((button) => {
-      button.addEventListener('click', () => toggleModal(button.dataset.modalOpen, true));
-    });
+    function syncClientFields() {
+      if (!clientModal) return;
+      const { clientName, clientEmail, clientPhone, clientDescription } = clientModal.dataset;
+      const nameValue = clientName || 'Unassigned';
+      const emailValue = clientEmail || 'Not provided';
+      const phoneValue = clientPhone || 'Not provided';
+      const descriptionValue = clientDescription || 'No notes added yet.';
 
-    document.querySelectorAll('#editOpportunityModal [data-modal-close]').forEach((button) => {
-      button.addEventListener('click', () => toggleModal('editOpportunityModal', false));
-    });
+      if (clientNameDisplay) clientNameDisplay.textContent = nameValue;
+      if (clientEmailDisplay) clientEmailDisplay.textContent = emailValue;
+      if (clientPhoneDisplay) clientPhoneDisplay.textContent = phoneValue;
+      if (clientDescriptionDisplay) clientDescriptionDisplay.textContent = descriptionValue;
 
-    document.getElementById('editOpportunityModal')?.addEventListener('click', (event) => {
-      if (event.target === event.currentTarget) {
-        toggleModal('editOpportunityModal', false);
+      clientNameTargets.forEach((target) => {
+        target.textContent = nameValue;
+      });
+
+      if (clientForm) {
+        const nameInput = clientForm.querySelector('input[name="display_name"]');
+        const emailInput = clientForm.querySelector('input[name="email"]');
+        const phoneInput = clientForm.querySelector('input[name="phone"]');
+        const descriptionInput = clientForm.querySelector('textarea[name="description"]');
+        if (nameInput) nameInput.value = clientName || '';
+        if (emailInput) emailInput.value = clientEmail || '';
+        if (phoneInput) phoneInput.value = clientPhone || '';
+        if (descriptionInput) descriptionInput.value = clientDescription || '';
       }
+    }
+
+    function showClientView() {
+      if (!clientModal) return;
+      syncClientFields();
+      clientForm?.classList.add('hidden');
+      clientViewSection?.classList.remove('hidden');
+      clientError?.classList.add('hidden');
+      if (clientError) clientError.textContent = '';
+      clientSaveButton?.classList.add('hidden');
+      clientEditCancel?.classList.add('hidden');
+      clientEditToggle?.classList.remove('hidden');
+    }
+
+    function showClientEdit() {
+      if (!clientModal) return;
+      syncClientFields();
+      clientViewSection?.classList.add('hidden');
+      clientForm?.classList.remove('hidden');
+      clientError?.classList.add('hidden');
+      clientSaveButton?.classList.remove('hidden');
+      clientEditCancel?.classList.remove('hidden');
+      clientEditToggle?.classList.add('hidden');
+      const firstEditable = clientForm?.querySelector('input, textarea');
+      if (firstEditable) firstEditable.focus();
+    }
+
+    document.querySelectorAll('[data-modal-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        toggleModal(button.dataset.modalOpen, true);
+        if (button.dataset.modalOpen === 'clientDetailModal') {
+          showClientView();
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-modal-close]').forEach((button) => {
+      const targetId = button.dataset.modalClose || button.closest('[data-modal-id]')?.dataset.modalId || 'editOpportunityModal';
+      button.addEventListener('click', () => toggleModal(targetId, false));
+    });
+
+    document.querySelectorAll('[data-modal-id]').forEach((modal) => {
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+          toggleModal(modal.dataset.modalId || modal.id, false);
+        }
+      });
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && document.getElementById('editOpportunityModal')?.classList.contains('flex')) {
-        toggleModal('editOpportunityModal', false);
+      if (event.key === 'Escape') {
+        document.querySelectorAll('[data-modal-id].flex').forEach((modal) => {
+          toggleModal(modal.dataset.modalId || modal.id, false);
+        });
       }
     });
+
+    if (clientEditToggle && clientModal) {
+      clientEditToggle.addEventListener('click', () => showClientEdit());
+    }
+
+    if (clientEditCancel) {
+      clientEditCancel.addEventListener('click', () => showClientView());
+    }
+
+    if (clientForm) {
+      clientForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!clientForm.action) return;
+        if (clientError) {
+          clientError.textContent = '';
+          clientError.classList.add('hidden');
+        }
+        const formData = new FormData(clientForm);
+        fetch(clientForm.action, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (!data.success || !data.client) {
+              throw new Error(data.message || 'Could not update client.');
+            }
+            if (clientModal) {
+              clientModal.dataset.clientName = data.client.display_name || '';
+              clientModal.dataset.clientEmail = data.client.email || '';
+              clientModal.dataset.clientPhone = data.client.phone || '';
+              clientModal.dataset.clientDescription = data.client.description || '';
+            }
+            syncClientFields();
+            showClientView();
+          })
+          .catch((error) => {
+            if (clientError) {
+              clientError.textContent = error.message || 'Unable to update client right now.';
+              clientError.classList.remove('hidden');
+            }
+          });
+      });
+    }
 
     const fileInput = document.getElementById('opportunityFileInput');
     const fileLabel = document.querySelector('[data-file-label]');
