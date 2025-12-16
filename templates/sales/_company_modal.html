@@ -1,3 +1,5 @@
+{% from "base.html" import csrf_field %}
+
 <div id="{{ modal_id or 'companyModal' }}" class="fixed inset-0 z-50 hidden" aria-hidden="true">
   <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-company-modal></div>
   <div class="relative mx-auto mt-12 w-full max-w-3xl px-4">
