@@ -11495,17 +11495,42 @@ def sales_task_detail(task_id):
 
     if request.method == "POST":
         if not task.is_completed:
-            task.status = "Completed"
-            task.completed_at = datetime.datetime.utcnow()
-            db.session.commit()
-            flash("Task marked complete.", "success")
+        task.status = "Completed"
+        task.completed_at = datetime.datetime.utcnow()
+        db.session.commit()
+        flash("Task marked complete.", "success")
         return redirect(url_for("sales_task_detail", task_id=task.id))
+
+    client_requirement_form = None
+    latest_quotation_file = None
+    if task.opportunity_id:
+        client_requirement_form = (
+            ClientRequirementForm.query.filter_by(opportunity_id=task.opportunity_id)
+            .order_by(
+                ClientRequirementForm.version.desc(),
+                ClientRequirementForm.updated_at.desc(),
+            )
+            .first()
+        )
+        latest_quotation_file = (
+            SalesOpportunityFile.query.filter(
+                SalesOpportunityFile.opportunity_id == task.opportunity_id,
+                or_(
+                    SalesOpportunityFile.original_filename.ilike("%quotation%"),
+                    SalesOpportunityFile.original_filename.ilike("%quote%"),
+                ),
+            )
+            .order_by(SalesOpportunityFile.created_at.desc())
+            .first()
+        )
 
     return render_template(
         "sales/task_detail.html",
         task=task,
         category_label="Sales",
         category_url=url_for("sales_tasks"),
+        client_requirement_form=client_requirement_form,
+        latest_quotation_file=latest_quotation_file,
     )
 
 
@@ -11535,6 +11560,30 @@ def sales_task_toggle(task_id):
     db.session.commit()
     flash(message, "success")
     return redirect(url_for("sales_tasks", tab=request.form.get("active_tab") or "taskboard"))
+
+
+@app.route("/sales/client-requirement-forms/<int:form_id>")
+@login_required
+def sales_client_requirement_form_detail(form_id):
+    form = db.session.get(ClientRequirementForm, form_id)
+    if not form:
+        flash("Client Requirements form not found.", "error")
+        return redirect(url_for("sales_tasks"))
+
+    opportunity = form.opportunity
+    owner_id = getattr(opportunity, "owner_id", None) if opportunity else None
+    _module_visibility_required("sales", owner_user_id=owner_id)
+
+    sales_data_json = json.dumps(form.sales_data, indent=2, ensure_ascii=False)
+    design_data_json = json.dumps(form.design_data, indent=2, ensure_ascii=False)
+
+    return render_template(
+        "sales/client_requirement_form_detail.html",
+        form=form,
+        opportunity=opportunity,
+        sales_data_json=sales_data_json,
+        design_data_json=design_data_json,
+    )
 
 
 def _form_bool(value):
