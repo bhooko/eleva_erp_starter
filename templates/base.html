@@ -506,7 +506,10 @@
     .table-wrapper {
       position: relative;
       overflow: auto;
-      max-height: 68vh;
+      max-height: calc(100vh - var(--header-height) - 140px);
+      padding-bottom: 1.25rem;
+      box-sizing: border-box;
+      overscroll-behavior: auto;
       border-radius: 14px;
       border: 1px solid rgba(var(--color-neutral-rgb), 0.28);
       background: rgba(var(--color-card-rgb), 0.6);
