@@ -12868,6 +12868,102 @@ def sales_opportunity_detail(opportunity_id):
             flash("Comment saved.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
+        elif action == "link_client_requirement":
+            can_manage_docs = (
+                current_user.is_admin
+                or opportunity.owner_id is None
+                or opportunity.owner_id == current_user.id
+            )
+            if not can_manage_docs:
+                flash("Only the opportunity owner can link Client Requirements.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            link_mode = (request.form.get("link_mode") or "existing").strip()
+            if link_mode == "existing":
+                try:
+                    existing_id = int(request.form.get("existing_form_id") or "0")
+                except (TypeError, ValueError):
+                    existing_id = 0
+
+                if not existing_id:
+                    flash("Select a Client Requirements form to link.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                form = db.session.get(ClientRequirementForm, existing_id)
+                if not form:
+                    flash("Selected Client Requirements form not found.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                existing_client_id = getattr(getattr(form, "opportunity", None), "client_id", None)
+                if opportunity.client_id and existing_client_id and existing_client_id != opportunity.client_id:
+                    flash("You can only link forms that belong to the same client.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                if form.opportunity_id == opportunity.id:
+                    flash("This Client Requirements form is already linked.", "info")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                form.opportunity = opportunity
+                form.project_id = opportunity.project_id
+                db.session.commit()
+
+                log_sales_activity(
+                    "opportunity",
+                    opportunity.id,
+                    "Client Requirements linked",
+                    notes=f"Linked form #{form.id} to opportunity.",
+                    actor=current_user,
+                )
+                flash("Client Requirements form linked.", "success")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            _guarantee_primary_crf_template()
+            template = (
+                FormTemplate.query.filter_by(type="client_requirements", is_primary=True)
+                .order_by(FormTemplate.updated_at.desc())
+                .first()
+            )
+            if not template:
+                flash("No active Client Requirements template found.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            latest_form = (
+                ClientRequirementForm.query.filter_by(opportunity_id=opportunity.id)
+                .order_by(ClientRequirementForm.version.desc())
+                .first()
+            )
+            next_version = (latest_form.version if latest_form else 0) + 1
+
+            sales_defaults = {
+                "opportunity_title": opportunity.title,
+                "opportunity_id": opportunity.id,
+                "client_id": opportunity.client_id,
+                "client_name": getattr(opportunity.client, "display_name", None),
+                "sales_owner": getattr(opportunity.owner, "display_name", None),
+            }
+
+            new_form = ClientRequirementForm(
+                opportunity=opportunity,
+                template=template,
+                version=next_version,
+                status="draft",
+                sales_section_data=json.dumps(sales_defaults, ensure_ascii=False),
+                created_by_sales=current_user if current_user.is_authenticated else None,
+                project_id=opportunity.project_id,
+            )
+            db.session.add(new_form)
+            db.session.commit()
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Client Requirements created",
+                notes=f"Draft created (v{next_version}).",
+                actor=current_user,
+            )
+            flash("New Client Requirements form created.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
         elif action == "upload_file":
             uploaded_file = request.files.get("attachment")
             if not uploaded_file or not uploaded_file.filename:
@@ -12908,6 +13004,74 @@ def sales_opportunity_detail(opportunity_id):
             )
             db.session.commit()
             flash("File uploaded.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "upload_quotation":
+            can_manage_docs = (
+                current_user.is_admin
+                or opportunity.owner_id is None
+                or opportunity.owner_id == current_user.id
+            )
+            if not can_manage_docs:
+                flash("Only the opportunity owner can upload quotations.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            uploaded_file = request.files.get("quotation_file")
+            if not uploaded_file or not uploaded_file.filename:
+                flash("Select a quotation file to upload.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            safe_name = secure_filename(uploaded_file.filename)
+            if not safe_name:
+                flash("The selected file name is not valid.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            quote_root = os.path.join(
+                app.config["UPLOAD_FOLDER"], "opportunities", str(opportunity.id), "quotations"
+            )
+            os.makedirs(quote_root, exist_ok=True)
+
+            existing_quotes = (
+                SalesOpportunityFile.query.filter(
+                    SalesOpportunityFile.opportunity_id == opportunity.id,
+                    or_(
+                        SalesOpportunityFile.stored_path.ilike("%/quotations/%"),
+                        SalesOpportunityFile.original_filename.ilike("%quotation%"),
+                        SalesOpportunityFile.original_filename.ilike("%quote%"),
+                    ),
+                )
+                .order_by(SalesOpportunityFile.created_at.desc())
+                .all()
+            )
+            next_version = len(existing_quotes) + 1
+
+            unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+            destination_path = os.path.join(quote_root, unique_name)
+            uploaded_file.save(destination_path)
+
+            static_root = os.path.join(BASE_DIR, "static")
+            stored_relative = os.path.relpath(destination_path, static_root).replace(os.sep, "/")
+            versioned_name = f"Quotation V{next_version} – {uploaded_file.filename}"
+
+            record = SalesOpportunityFile(
+                opportunity=opportunity,
+                original_filename=versioned_name,
+                stored_path=stored_relative,
+                content_type=uploaded_file.mimetype,
+                file_size=os.path.getsize(destination_path),
+                uploaded_by=current_user if current_user.is_authenticated else None,
+            )
+            db.session.add(record)
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                f"Quotation uploaded (V{next_version})",
+                notes=uploaded_file.filename,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Quotation uploaded.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
         elif action == "add_item":
@@ -13077,6 +13241,50 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesOpportunityItem.created_at.desc())
         .all()
     )
+    client_requirement_forms = (
+        ClientRequirementForm.query.filter_by(opportunity_id=opportunity.id)
+        .order_by(
+            ClientRequirementForm.updated_at.desc(),
+            ClientRequirementForm.version.desc(),
+        )
+        .all()
+    )
+    available_client_forms = []
+    if opportunity.client_id:
+        available_client_forms = (
+            ClientRequirementForm.query.join(
+                SalesOpportunity,
+                ClientRequirementForm.opportunity_id == SalesOpportunity.id,
+            )
+            .filter(SalesOpportunity.client_id == opportunity.client_id)
+            .order_by(ClientRequirementForm.updated_at.desc())
+            .all()
+        )
+        available_client_forms = [
+            form for form in available_client_forms if form.opportunity_id != opportunity.id
+        ]
+
+    quotation_files = (
+        SalesOpportunityFile.query.filter(
+            SalesOpportunityFile.opportunity_id == opportunity.id,
+            or_(
+                SalesOpportunityFile.stored_path.ilike("%/quotations/%"),
+                SalesOpportunityFile.original_filename.ilike("%quotation%"),
+                SalesOpportunityFile.original_filename.ilike("%quote%"),
+            ),
+        )
+        .order_by(SalesOpportunityFile.created_at.desc())
+        .all()
+    )
+    if quotation_files:
+        total_versions = len(quotation_files)
+        for idx, file in enumerate(quotation_files):
+            setattr(file, "computed_version", total_versions - idx)
+    can_manage_opportunity_docs = (
+        current_user.is_admin
+        or opportunity.owner_id is None
+        or opportunity.owner_id == current_user.id
+    )
     design_task_filters = [
         and_(DesignTask.origin_type == "sales", DesignTask.origin_id == opportunity.id)
     ]
@@ -13128,6 +13336,10 @@ def sales_opportunity_detail(opportunity_id):
         lift_types=LIFT_TYPES,
         temperature_choices=SALES_TEMPERATURES,
         pipeline_map=SALES_PIPELINES,
+        client_requirement_forms=client_requirement_forms,
+        available_client_forms=available_client_forms,
+        quotation_files=quotation_files,
+        can_manage_opportunity_docs=can_manage_opportunity_docs,
     )
 
 

@@ -489,6 +489,147 @@
   </div>
 
   <div class="space-y-6">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 140ms;">
+      <div class="flex items-start justify-between gap-3 px-6 py-4 border-b border-slate-800/80">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Linked Client Inputs &amp; Quotation</p>
+          <p class="text-sm text-slate-300">Keep requirements and pricing visible while you work.</p>
+        </div>
+        <button type="button" class="rounded-full border border-slate-700 bg-slate-800/60 p-2 text-slate-300 hover:text-emerald-100" data-linked-toggle aria-label="Collapse linked documents">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="space-y-5 px-6 py-5" data-linked-panel>
+        {% if not client_requirement_forms and not quotation_files %}
+        <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-5 text-center text-sm text-slate-400">
+          <p class="font-medium text-slate-200">No client inputs or quotations linked yet.</p>
+          <p class="mt-1 text-xs text-slate-500">Link the client form or upload your first quotation to keep everything in one place.</p>
+          {% if can_manage_opportunity_docs %}
+          <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
+            <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30" data-link-form-toggle>+ Link Client Requirements</button>
+            <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-sky-400/40 bg-sky-500/20 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/30" for="quotationUploadInput">+ Upload Quotation</label>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500">Client Requirements Form</p>
+              <p class="text-sm text-slate-300">Linked to this opportunity and client.</p>
+            </div>
+            {% if can_manage_opportunity_docs %}
+            <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30" data-link-form-toggle>+ Link Form</button>
+            {% endif %}
+          </div>
+          {% if client_requirement_forms %}
+          <div class="space-y-3">
+            {% for form in client_requirement_forms %}
+            <button type="button" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-3 text-left hover:border-emerald-400/40" data-crf-open data-crf-title="{{ form.template.name if form.template else 'Client Requirements Form' }}" data-crf-status="{{ form.status|replace('_',' ')|title }}" data-crf-version="V{{ form.version }}" data-crf-created="{{ form.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}" data-crf-author="{{ form.created_by_sales.display_name if form.created_by_sales else 'Unassigned' }}" data-crf-link="{{ url_for('sales_client_requirement_form_detail', form_id=form.id) }}">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="font-semibold text-slate-100">{{ form.template.name if form.template else 'Client Requirements Form' }}</p>
+                  <p class="text-xs text-slate-500">Version {{ form.version }} · {{ form.status|replace('_',' ')|title }}</p>
+                </div>
+                <span class="inline-flex items-center gap-2 rounded-full bg-slate-800/70 px-3 py-1 text-xs text-slate-300">{{ form.created_at|format_india_datetime('%d %b %Y') }}</span>
+              </div>
+              <p class="mt-1 text-xs text-slate-400">Created by {{ form.created_by_sales.display_name if form.created_by_sales else 'System' }}</p>
+            </button>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">No Client Requirements form linked yet.</div>
+          {% endif %}
+
+          {% if can_manage_opportunity_docs %}
+          <div class="hidden rounded-xl border border-slate-800/80 bg-slate-950/60 p-4 space-y-4" data-link-form-panel>
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-sm font-semibold text-slate-100">Link or create a Client Requirements form</p>
+              <button type="button" class="text-xs text-slate-400 hover:text-emerald-100" data-link-form-toggle>Close</button>
+            </div>
+            <form method="post" class="space-y-3">
+              {{ csrf_field() }}
+              <input type="hidden" name="form_action" value="link_client_requirement">
+              <input type="hidden" name="link_mode" value="existing">
+              <label class="block text-xs uppercase tracking-wide text-slate-400">Link existing form (same client)</label>
+              <select name="existing_form_id" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                <option value="">Select a form</option>
+                {% for form in available_client_forms %}
+                <option value="{{ form.id }}">Form #{{ form.id }} · {{ form.template.name if form.template else 'Client Requirements' }} · Updated {{ form.updated_at|format_india_datetime('%d %b %Y') }}</option>
+                {% endfor %}
+              </select>
+              {% if not available_client_forms %}
+              <p class="text-xs text-slate-500">No other forms found for this client yet.</p>
+              {% endif %}
+              <div class="flex justify-end">
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Link Selected</button>
+              </div>
+            </form>
+            <form method="post" class="space-y-3">
+              {{ csrf_field() }}
+              <input type="hidden" name="form_action" value="link_client_requirement">
+              <input type="hidden" name="link_mode" value="new">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-400">Or create new draft</p>
+                  <p class="text-sm text-slate-300">Prefills client, opportunity and owner.</p>
+                </div>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100">Create Draft</button>
+              </div>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500">Quotation Files</p>
+              <p class="text-sm text-slate-300">Latest version appears first.</p>
+            </div>
+            {% if can_manage_opportunity_docs %}
+            <form method="post" enctype="multipart/form-data" class="shrink-0">
+              {{ csrf_field() }}
+              <input type="hidden" name="form_action" value="upload_quotation">
+              <input type="file" name="quotation_file" id="quotationUploadInput" class="hidden" data-auto-submit-file>
+              <label for="quotationUploadInput" class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-sky-400/40 bg-sky-500/20 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Upload New Version</label>
+            </form>
+            {% endif %}
+          </div>
+          {% if quotation_files %}
+          <ul class="divide-y divide-slate-800/80 rounded-xl border border-slate-800/80 bg-slate-950/40">
+            {% for file in quotation_files %}
+            {% set ext = file.original_filename.split('.')[-1].lower() if '.' in file.original_filename else '' %}
+            <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/70 text-slate-200">
+                  {% if ext in ['pdf'] %}
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 4h8l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 12h4M12 16h2M8 12h.01"/></svg>
+                  {% elif ext in ['xls','xlsx','csv'] %}
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7a2 2 0 0 1 2-2h8l4 4v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 17l6-6M9 11l6 6"/></svg>
+                  {% else %}
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path stroke-linecap="round" stroke-linejoin="round" d="M14 3v4a1 1 0 0 0 1 1h4"/></svg>
+                  {% endif %}
+                </div>
+                <div>
+                  <p class="font-semibold text-slate-100">{{ file.original_filename }}</p>
+                  <p class="text-xs text-slate-500">Uploaded {{ file.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}{% if file.uploaded_by %} · {{ file.uploaded_by.display_name }}{% endif %}</p>
+                </div>
+              </div>
+              <div class="text-right text-sm text-slate-300">
+                <div class="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100">V{{ file.computed_version or (quotation_files|length - loop.index0) }}</div>
+                <a href="{{ url_for('static', filename=file.stored_path) }}" class="mt-2 inline-flex items-center gap-2 text-sky-200 hover:text-sky-100" target="_blank" rel="noopener">Preview / Download</a>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">No quotation uploaded yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
       <div class="px-6 py-4 border-b border-slate-800/80">
         <h3 class="text-lg font-semibold">Snapshot</h3>
@@ -540,6 +681,40 @@
           <dd>{{ opportunity.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
         </div>
       </dl>
+    </div>
+  </div>
+</div>
+
+<div id="clientRequirementModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="w-full max-w-lg rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Client Requirements Form</p>
+        <h3 class="text-lg font-semibold text-slate-100" data-crf-modal-title>Client Requirements</h3>
+      </div>
+      <button type="button" class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" data-crf-close aria-label="Close requirements modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-3 px-6 py-5 text-sm text-slate-300">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Status</p>
+      <p class="rounded-lg bg-slate-800/60 px-3 py-2 font-semibold text-slate-100" data-crf-modal-status>Draft</p>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Version</p>
+          <p class="font-semibold text-slate-100" data-crf-modal-version>—</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Created</p>
+          <p class="font-semibold text-slate-100" data-crf-modal-created>—</p>
+        </div>
+      </div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Created By</p>
+      <p class="rounded-lg bg-slate-800/60 px-3 py-2 font-semibold text-slate-100" data-crf-modal-author>—</p>
+    </div>
+    <div class="flex items-center justify-between gap-3 border-t border-slate-800/80 px-6 py-4">
+      <p class="text-xs text-slate-500">Opens the full form in a new tab.</p>
+      <a href="#" target="_blank" rel="noopener" data-crf-modal-link class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Open Form</a>
     </div>
   </div>
 </div>
@@ -873,6 +1048,57 @@
         document.body.classList.remove('overflow-hidden');
       }
     }
+
+    const linkedPanel = document.querySelector('[data-linked-panel]');
+    const linkedToggle = document.querySelector('[data-linked-toggle]');
+    if (linkedPanel && linkedToggle) {
+      linkedToggle.addEventListener('click', () => {
+        linkedPanel.classList.toggle('hidden');
+        linkedToggle.classList.toggle('rotate-180');
+      });
+    }
+
+    const linkFormPanel = document.querySelector('[data-link-form-panel]');
+    const linkFormToggles = document.querySelectorAll('[data-link-form-toggle]');
+    linkFormToggles.forEach((toggle) => {
+      toggle.addEventListener('click', () => {
+        if (!linkFormPanel) return;
+        linkFormPanel.classList.toggle('hidden');
+      });
+    });
+
+    document.querySelectorAll('[data-auto-submit-file]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (input.files && input.files.length > 0) {
+          input.closest('form')?.submit();
+        }
+      });
+    });
+
+    const crfModal = document.getElementById('clientRequirementModal');
+    const crfTitle = crfModal?.querySelector('[data-crf-modal-title]');
+    const crfStatus = crfModal?.querySelector('[data-crf-modal-status]');
+    const crfVersion = crfModal?.querySelector('[data-crf-modal-version]');
+    const crfCreated = crfModal?.querySelector('[data-crf-modal-created]');
+    const crfAuthor = crfModal?.querySelector('[data-crf-modal-author]');
+    const crfLink = crfModal?.querySelector('[data-crf-modal-link]');
+
+    document.querySelectorAll('[data-crf-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!crfModal) return;
+        if (crfTitle) crfTitle.textContent = button.dataset.crfTitle || 'Client Requirements';
+        if (crfStatus) crfStatus.textContent = button.dataset.crfStatus || 'Draft';
+        if (crfVersion) crfVersion.textContent = button.dataset.crfVersion || '—';
+        if (crfCreated) crfCreated.textContent = button.dataset.crfCreated || '—';
+        if (crfAuthor) crfAuthor.textContent = button.dataset.crfAuthor || '—';
+        if (crfLink) crfLink.href = button.dataset.crfLink || '#';
+        toggleModal('clientRequirementModal', true);
+      });
+    });
+
+    crfModal?.querySelectorAll('[data-crf-close]').forEach((closeButton) => {
+      closeButton.addEventListener('click', () => toggleModal('clientRequirementModal', false));
+    });
 
     function syncClientFields() {
       if (!clientModal) return;
