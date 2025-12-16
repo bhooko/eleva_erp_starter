@@ -3231,16 +3231,8 @@ def _handle_customer_support_ticket_creation():
 
     attachments_added = _save_customer_support_attachments(uploaded_files)
 
-    ticket_summary_parts = [ticket_id]
-    if subject:
-        ticket_summary_parts.append(subject)
-    ticket_summary = " · ".join(part for part in ticket_summary_parts if part)
     ticket_url = url_for("customer_support_tasks", ticket=ticket_id, _external=True)
-    comment_message = (
-        f"Support ticket {ticket_summary} linked from customer support.\n{ticket_url}"
-        if ticket_summary
-        else f"Support ticket linked from customer support.\n{ticket_url}"
-    )
+    comment_message = f"[{ticket_id}]({ticket_url})"
 
     linked_entities = []
     if linked_sales_client:
