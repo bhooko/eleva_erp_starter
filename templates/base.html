@@ -503,18 +503,45 @@
       border-bottom: 1px solid rgba(var(--color-neutral-rgb), 0.35);
     }
 
+    .table-wrapper {
+      position: relative;
+      overflow: auto;
+      max-height: 68vh;
+      border-radius: 14px;
+      border: 1px solid rgba(var(--color-neutral-rgb), 0.28);
+      background: rgba(var(--color-card-rgb), 0.6);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02),
+                  0 12px 28px rgba(15, 23, 42, 0.18);
+      scrollbar-gutter: stable;
+    }
+    .table-wrapper table,
+    .table-sticky {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+    }
+    .table-wrapper thead th,
+    .table-sticky thead th,
     .table-enhanced thead th {
       position: sticky;
       top: 0;
       z-index: 10;
-      background: rgba(var(--color-card-rgb), 0.92);
-      backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(var(--color-card-rgb), 0.98), rgba(var(--color-card-rgb), 0.92));
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
     }
+    .table-wrapper th,
+    .table-wrapper td,
+    .table-sticky th,
+    .table-sticky td,
     .table-enhanced tbody tr {
-      transition: background 200ms ease;
+      border-bottom: 1px solid rgba(var(--color-neutral-rgb), 0.22);
     }
+    .table-wrapper tbody tr:hover,
+    .table-sticky tbody tr:hover,
     .table-enhanced tbody tr:hover {
       background-color: rgba(var(--color-primary-rgb), 0.05);
+      transition: background 200ms ease;
     }
 
     /* Improved table text contrast for dark themes */
@@ -1551,6 +1578,63 @@
           }
         });
       });
+    });
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const applySticky = (scope = document) => {
+        const tables = Array.from(scope.querySelectorAll('table'));
+
+        tables.forEach((table) => {
+          if (!table || table.dataset.stickyReady === 'true') {
+            return;
+          }
+
+          const parent = table.parentElement;
+          if (!parent) {
+            return;
+          }
+
+          const prepareWrapper = (wrapper) => {
+            if (!wrapper.classList.contains('table-wrapper')) {
+              wrapper.classList.add('table-wrapper');
+            }
+            table.classList.add('table-sticky');
+            table.dataset.stickyReady = 'true';
+          };
+
+          if (parent.classList.contains('table-wrapper')) {
+            prepareWrapper(parent);
+            return;
+          }
+
+          if (parent.children.length === 1 && !['BODY', 'HTML'].includes(parent.tagName)) {
+            prepareWrapper(parent);
+            return;
+          }
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'table-wrapper';
+          parent.insertBefore(wrapper, table);
+          wrapper.appendChild(table);
+          prepareWrapper(wrapper);
+        });
+      };
+
+      applySticky();
+
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              applySticky(node);
+            }
+          });
+        });
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
     });
   </script>
 
