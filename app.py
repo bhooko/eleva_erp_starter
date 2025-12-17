@@ -10007,6 +10007,22 @@ def ensure_sales_opportunity_columns():
         cur.execute("ALTER TABLE sales_opportunity ADD COLUMN project_id INTEGER;")
         added.append("project_id")
 
+    if "created_at" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN created_at DATETIME;")
+        added.append("created_at")
+
+    if "updated_at" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN updated_at DATETIME;")
+        added.append("updated_at")
+
+    cur.execute(
+        """
+        UPDATE sales_opportunity
+        SET created_at = COALESCE(created_at, updated_at, CURRENT_TIMESTAMP)
+        WHERE created_at IS NULL
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -10014,6 +10030,76 @@ def ensure_sales_opportunity_columns():
         print(f"✅ Auto-added in sales_opportunity: {', '.join(added)}")
     else:
         print("✔️ sales_opportunity OK")
+
+
+def ensure_sales_opportunity_item_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_sales_opportunity_item_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_opportunity_item'"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(sales_opportunity_item)")
+    cols = [row[1] for row in cur.fetchall()]
+    added = []
+
+    if "name" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN name TEXT;")
+        added.append("name")
+
+    if "unit" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN unit TEXT;")
+        added.append("unit")
+
+    if "item_value" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN item_value REAL;")
+        added.append("item_value")
+
+    if "notes" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN notes TEXT;")
+        added.append("notes")
+
+    if "updated_at" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN updated_at DATETIME;")
+        added.append("updated_at")
+
+    cur.execute(
+        """
+        UPDATE sales_opportunity_item
+        SET name = COALESCE(NULLIF(name, ''), NULLIF(lift_type, ''), 'Item')
+        WHERE name IS NULL OR TRIM(name) = ''
+        """
+    )
+    cur.execute(
+        """
+        UPDATE sales_opportunity_item
+        SET quantity = 1
+        WHERE quantity IS NULL OR quantity < 1
+        """
+    )
+    cur.execute(
+        """
+        UPDATE sales_opportunity_item
+        SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+        WHERE updated_at IS NULL
+        """
+    )
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in sales_opportunity_item: {', '.join(added)}")
+    else:
+        print("✔️ sales_opportunity_item OK")
 
 
 def ensure_user_columns():
@@ -10539,6 +10625,7 @@ def bootstrap_db():
     ensure_sales_client_columns()
     ensure_sales_task_columns()
     ensure_sales_opportunity_columns()
+    ensure_sales_opportunity_item_columns()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
@@ -13110,62 +13197,137 @@ def sales_opportunity_detail(opportunity_id):
             flash("Quotation uploaded.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-        elif action == "add_item":
-            details = (request.form.get("item_details") or "").strip()
-            lift_type = (request.form.get("item_lift_type") or "").strip()
-            if lift_type and lift_type not in LIFT_TYPES:
-                lift_type = None
+        elif action in {"add_item", "create_item", "update_item"}:
+            def parse_item_form():
+                name = (request.form.get("item_name") or "").strip()
+                if not name:
+                    flash("Item name is required.", "error")
+                    return None
 
-            quantity_raw = (request.form.get("item_quantity") or "").strip()
-            quantity_value = None
-            if quantity_raw:
+                qty_raw = (request.form.get("item_qty") or "1").strip()
                 try:
-                    quantity_value = int(quantity_raw)
-                    if quantity_value < 0:
+                    qty_value = int(qty_raw or 1)
+                    if qty_value < 1:
                         raise ValueError
                 except ValueError:
-                    flash("Quantity must be a positive whole number.", "error")
-                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                    flash("Quantity must be at least 1.", "error")
+                    return None
 
-            floors_value = (request.form.get("item_floors") or "").strip() or None
-            cabin_finish = (request.form.get("item_cabin_finish") or "").strip() or None
-            door_type = (request.form.get("item_door_type") or "").strip() or None
-            structure_value = (request.form.get("item_structure") or "no").strip().lower()
-            structure_required = structure_value in {"yes", "true", "1", "on"}
+                unit_value = (request.form.get("item_unit") or "").strip() or None
+                item_value_raw = (request.form.get("item_value") or "").strip()
+                item_value = None
+                if item_value_raw:
+                    try:
+                        item_value = float(item_value_raw)
+                        if item_value < 0:
+                            raise ValueError
+                    except ValueError:
+                        flash("Item value must be zero or greater.", "error")
+                        return None
 
-            if not any([details, lift_type, quantity_value, floors_value, cabin_finish, door_type]):
-                flash("Provide at least one detail for the opportunity item.", "error")
+                notes_value = (request.form.get("item_notes") or "").strip() or None
+
+                return {
+                    "name": name,
+                    "quantity": qty_value,
+                    "unit": unit_value,
+                    "item_value": item_value,
+                    "notes": notes_value,
+                }
+
+            item_data = parse_item_form()
+            if not item_data:
                 return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-            item = SalesOpportunityItem(
-                opportunity=opportunity,
-                details=details or None,
-                lift_type=lift_type or None,
-                quantity=quantity_value,
-                floors=floors_value,
-                cabin_finish=cabin_finish,
-                door_type=door_type,
-                structure_required=structure_required,
-            )
-            db.session.add(item)
+            if action in {"add_item", "create_item"}:
+                item = SalesOpportunityItem(
+                    opportunity=opportunity,
+                    name=item_data["name"],
+                    quantity=item_data["quantity"],
+                    unit=item_data["unit"],
+                    item_value=item_data["item_value"],
+                    notes=item_data["notes"],
+                    details=item_data["notes"],
+                )
+                db.session.add(item)
+                summary_bits = [
+                    f"Name: {item.name}",
+                    f"Qty: {item.quantity}",
+                ]
+                if item.unit:
+                    summary_bits.append(f"Unit: {item.unit}")
+                if item.item_value is not None:
+                    summary_bits.append(f"Value: {item.item_value}")
+                log_sales_activity(
+                    "opportunity",
+                    opportunity.id,
+                    "Item added",
+                    notes="; ".join(summary_bits) or None,
+                    actor=current_user,
+                )
+                db.session.commit()
+                flash("Opportunity item added.", "success")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-            summary_bits = []
-            if lift_type:
-                summary_bits.append(f"Lift type: {lift_type}")
-            if quantity_value is not None:
-                summary_bits.append(f"Qty: {quantity_value}")
-            if floors_value:
-                summary_bits.append(f"Floors: {floors_value}")
+            item_id_raw = request.form.get("item_id")
+            try:
+                item_id = int(item_id_raw)
+            except (TypeError, ValueError):
+                flash("Invalid item selected for update.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            item = db.session.get(SalesOpportunityItem, item_id)
+            if not item or item.opportunity_id != opportunity.id:
+                flash("Item not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            item.name = item_data["name"]
+            item.quantity = item_data["quantity"]
+            item.unit = item_data["unit"]
+            item.item_value = item_data["item_value"]
+            item.notes = item_data["notes"]
+            item.details = item_data["notes"]
+
+            summary_bits = [f"Updated: {item.name}", f"Qty: {item.quantity}"]
+            if item.unit:
+                summary_bits.append(f"Unit: {item.unit}")
+            if item.item_value is not None:
+                summary_bits.append(f"Value: {item.item_value}")
 
             log_sales_activity(
                 "opportunity",
                 opportunity.id,
-                "Item added",
+                "Item updated",
                 notes="; ".join(summary_bits) or None,
                 actor=current_user,
             )
             db.session.commit()
-            flash("Opportunity item added.", "success")
+            flash("Opportunity item updated.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "delete_item":
+            item_id_raw = request.form.get("item_id")
+            try:
+                item_id = int(item_id_raw)
+            except (TypeError, ValueError):
+                flash("Invalid item selected for deletion.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            item = db.session.get(SalesOpportunityItem, item_id)
+            if not item or item.opportunity_id != opportunity.id:
+                flash("Item not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            db.session.delete(item)
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Item removed",
+                notes=item.name or f"Item #{item.id}",
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Opportunity item deleted.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
         elif action == "schedule_activity":

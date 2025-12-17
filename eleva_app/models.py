@@ -818,20 +818,33 @@ class SalesOpportunityItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    name = db.Column(db.String(200), nullable=True)
+    unit = db.Column(db.String(40), nullable=True)
+    item_value = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     details = db.Column(db.Text, nullable=True)
     lift_type = db.Column(db.String(80), nullable=True)
-    quantity = db.Column(db.Integer, nullable=True)
+    quantity = db.Column(db.Integer, nullable=True, default=1)
     floors = db.Column(db.String(80), nullable=True)
     cabin_finish = db.Column(db.String(120), nullable=True)
     door_type = db.Column(db.String(120), nullable=True)
     structure_required = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
 
     opportunity = db.relationship("SalesOpportunity", back_populates="items")
 
     @property
     def structure_label(self):
         return "Yes" if self.structure_required else "No"
+
+    @property
+    def display_name(self):
+        return self.name or self.lift_type or (self.details[:40] + "…" if self.details else "Item")
 
 
 # NEW: QC Work table (simple tracker for “create work for new site QC”)
