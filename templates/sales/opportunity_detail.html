@@ -29,7 +29,27 @@
   </div>
 </div>
 
-<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up">
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-4 shadow-xl card-hover-lift fade-in-up">
+  <div class="text-xs uppercase tracking-wide text-slate-500 mb-3">Stage Progress</div>
+  <div class="flex items-center gap-3 overflow-x-auto pb-1">
+    {% for stage_option in stages %}
+      {% set is_current = stage_option == opportunity.stage %}
+      {% set is_complete = loop.index0 < current_stage_index %}
+      {% set connector_state = 'is-complete' if loop.index0 < current_stage_index else ('is-progress' if loop.index0 == current_stage_index else '') %}
+      <div class="flex items-center gap-3">
+        <div class="flex flex-col items-center text-center">
+          <div title="{{ stage_option }}" class="stage-node w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold {{ 'is-active' if is_current else '' }} {{ 'is-complete' if is_complete else '' }}">{{ loop.index }}</div>
+          <span class="mt-2 text-xs stage-label {{ 'is-active' if is_current else '' }}">{{ stage_option }}</span>
+        </div>
+        {% if not loop.last %}
+          <div class="stage-connector {{ connector_state }}"></div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 40ms;">
   <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
     <div class="flex-1">
       <div class="text-xs uppercase tracking-wide text-slate-500">Opportunity Details</div>
@@ -100,6 +120,14 @@
             {% endif %}
           </dd>
         </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Created On</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if opportunity.created_at else '—' }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
+          <dd class="mt-1 font-medium text-slate-100">{{ opportunity.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') if opportunity.updated_at else '—' }}</dd>
+        </div>
       </dl>
     </div>
     <div class="flex items-start gap-2 md:flex-col">
@@ -122,7 +150,90 @@
   </div>
 </div>
 
-<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 60ms;">
+<div id="items-section" class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 70ms;">
+  <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 px-6 py-4">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Items</p>
+      <p class="text-sm text-slate-300">Items linked to this opportunity.</p>
+    </div>
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+      data-item-create
+    >
+      + Add Item
+    </button>
+  </div>
+  <div class="px-6 py-5">
+    {% if items %}
+      <div class="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur">
+              <tr class="text-left text-slate-500">
+                <th class="py-3 px-4">Item Name</th>
+                <th class="py-3 px-4">Qty</th>
+                <th class="py-3 px-4">Unit</th>
+                <th class="py-3 px-4">Item Value</th>
+                <th class="py-3 px-4">Notes</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/70">
+              {% for item in items %}
+              <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
+                <td class="py-3 px-4 font-semibold text-slate-100">{{ item.display_name }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ item.quantity or '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ item.unit or '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ '{:,.2f}'.format(item.item_value) if item.item_value is not none else '—' }}</td>
+                <td class="py-3 px-4 max-w-xs">
+                  {% if item.notes %}
+                    <span class="line-clamp-2" title="{{ item.notes }}">{{ item.notes }}</span>
+                  {% elif item.details %}
+                    <span class="line-clamp-2" title="{{ item.details }}">{{ item.details }}</span>
+                  {% else %}
+                    <span class="text-slate-500">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-4 text-right">
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100"
+                      data-item-edit
+                      data-item-id="{{ item.id }}"
+                      data-item-name="{{ item.name or item.display_name }}"
+                      data-item-qty="{{ item.quantity or 1 }}"
+                      data-item-unit="{{ item.unit or '' }}"
+                      data-item-value="{{ item.item_value if item.item_value is not none else '' }}"
+                      data-item-notes="{{ item.notes or item.details or '' }}"
+                    >
+                      Edit
+                    </button>
+                    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="inline" onsubmit="return confirm('Delete this item?');">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="form_action" value="delete_item">
+                      <input type="hidden" name="item_id" value="{{ item.id }}">
+                      <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/10">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-400">
+        <p class="font-medium text-slate-200">No items added yet.</p>
+        <p class="mt-1 text-xs text-slate-500">Use the Add Item button to capture the scope for this opportunity.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <p class="text-xs uppercase tracking-wide text-slate-500">Design Tasks for this Opportunity</p>
@@ -138,7 +249,7 @@
   </div>
   <div class="mt-3 overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/40">
     <table class="w-full text-sm">
-      <thead>
+      <thead class="sticky top-0 bg-slate-950/60 backdrop-blur">
         <tr class="text-left text-slate-500">
           <th class="py-3 px-4">Task Type</th>
           <th class="py-3 px-4">Title</th>
@@ -149,7 +260,7 @@
       </thead>
       <tbody class="divide-y divide-slate-800/70">
         {% for task in design_tasks %}
-        <tr class="hover:bg-slate-900/60">
+        <tr class="hover:bg-slate-900/60 transition">
           <td class="py-3 px-4 font-semibold text-slate-200">{{ task.task_type.replace('_',' ').title() }}</td>
           <td class="py-3 px-4">
             <a href="{{ url_for('design_task_detail', task_id=task.id) }}" class="text-emerald-100 hover:text-emerald-200 font-semibold">{{ task.description or task.project_label }}</a>
@@ -169,26 +280,6 @@
   </div>
 </div>
 
-<div class="mb-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-4 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 80ms;">
-  <div class="text-xs uppercase tracking-wide text-slate-500 mb-3">Stage Progress</div>
-  <div class="flex items-center gap-3 overflow-x-auto pb-1">
-    {% for stage_option in stages %}
-      {% set is_current = stage_option == opportunity.stage %}
-      {% set is_complete = loop.index0 < current_stage_index %}
-      {% set connector_state = 'is-complete' if loop.index0 < current_stage_index else ('is-progress' if loop.index0 == current_stage_index else '') %}
-      <div class="flex items-center gap-3">
-        <div class="flex flex-col items-center text-center">
-          <div title="{{ stage_option }}" class="stage-node w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold {{ 'is-active' if is_current else '' }} {{ 'is-complete' if is_complete else '' }}">{{ loop.index }}</div>
-          <span class="mt-2 text-xs stage-label {{ 'is-active' if is_current else '' }}">{{ stage_option }}</span>
-        </div>
-        {% if not loop.last %}
-          <div class="stage-connector {{ connector_state }}"></div>
-        {% endif %}
-      </div>
-    {% endfor %}
-  </div>
-</div>
-
 <div class="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
   <div class="space-y-6">
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 120ms;">
@@ -198,7 +289,6 @@
           <button type="button" data-tab="comments" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Comments</button>
           <button type="button" data-tab="files" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Files</button>
           <button type="button" data-tab="activities" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Activities</button>
-          <button type="button" data-tab="items" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Items</button>
         </div>
       </div>
       <div class="px-6 py-6">
@@ -385,101 +475,6 @@
           {% endif %}
         </div>
 
-        <div data-tab-panel="items" class="motion-panel hidden">
-          <div class="space-y-5">
-            <p class="text-sm text-slate-300">Track solution components, services, or pricing packages tied to this opportunity.</p>
-            <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-5 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
-              {{ csrf_field() }}
-              <input type="hidden" name="form_action" value="add_item">
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details</label>
-                <textarea name="item_details" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add specifications, scope, or notes."></textarea>
-              </div>
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Lift Type</label>
-                  <select name="item_lift_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-                    <option value="">Select lift type</option>
-                    {% for lift_type in lift_types %}
-                    <option value="{{ lift_type }}">{{ lift_type }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Quantity</label>
-                  <input type="number" name="item_quantity" min="0" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="1">
-                </div>
-              </div>
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Floors</label>
-                  <input type="text" name="item_floors" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="G+5">
-                </div>
-                <div>
-                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Cabin Finish</label>
-                  <input type="text" name="item_cabin_finish" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="SS / Designer">
-                </div>
-                <div>
-                  <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Door Type</label>
-                  <input type="text" name="item_door_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Auto">
-                </div>
-              </div>
-              <div class="sm:w-1/3">
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Structure</label>
-                <select name="item_structure" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-                  <option value="no">No</option>
-                  <option value="yes">Yes</option>
-                </select>
-              </div>
-              <div class="flex justify-end">
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Add Item</button>
-              </div>
-            </form>
-            {% if items %}
-            <div class="space-y-4">
-              {% for item in items %}
-              <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 200 + loop.index0 * 40 }}ms;">
-                <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <p class="font-semibold text-slate-100">{{ item.lift_type or 'Lift Item' }}</p>
-                  <span class="text-xs text-slate-500">{{ item.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
-                </div>
-                {% if item.details %}
-                <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ item.details }}</p>
-                {% endif %}
-                <dl class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-3">
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Lift Type</dt>
-                    <dd class="text-sm text-slate-200">{{ item.lift_type or '—' }}</dd>
-                  </div>
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Quantity</dt>
-                    <dd class="text-sm text-slate-200">{{ item.quantity if item.quantity is not none else '—' }}</dd>
-                  </div>
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Floors</dt>
-                    <dd class="text-sm text-slate-200">{{ item.floors or '—' }}</dd>
-                  </div>
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Structure</dt>
-                    <dd class="text-sm text-slate-200">{{ item.structure_label }}</dd>
-                  </div>
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Cabin Finish</dt>
-                    <dd class="text-sm text-slate-200">{{ item.cabin_finish or '—' }}</dd>
-                  </div>
-                  <div>
-                    <dt class="uppercase tracking-wide text-xs text-slate-300">Door Type</dt>
-                    <dd class="text-sm text-slate-200">{{ item.door_type or '—' }}</dd>
-                  </div>
-                </dl>
-              </div>
-              {% endfor %}
-            </div>
-            {% else %}
-            <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500 card-hover-lift fade-in-up" style="--fade-delay: 200ms;">No items added yet.</div>
-            {% endif %}
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -626,63 +621,11 @@
         </div>
       </div>
     </div>
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 160ms;">
-      <div class="px-6 py-4 border-b border-slate-800/80">
-        <h3 class="text-lg font-semibold">Snapshot</h3>
-      </div>
-      <dl class="grid grid-cols-1 gap-4 px-6 py-5 text-sm text-slate-300">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Client</dt>
-          <dd>
-            {% if opportunity.client %}
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
-              data-modal-open="clientDetailModal"
-              data-client-id="{{ opportunity.client.id }}"
-              data-client-name="{{ opportunity.client.display_name }}"
-              data-client-email="{{ opportunity.client.email or '' }}"
-              data-client-phone="{{ opportunity.client.phone or '' }}"
-              data-client-description="{{ opportunity.client.description|default('', true)|e }}"
-              data-client-modal-open
-            >
-              <span data-client-name>{{ opportunity.client.display_name }}</span>
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5A2.25 2.25 0 0 0 6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V9.75L13.5 4.5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5v5.25H18.75"/></svg>
-            </button>
-            {% else %}
-            <span data-client-name>Unassigned</span>
-            {% endif %}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Owner</dt>
-          <dd>{{ opportunity.owner.display_name if opportunity.owner else 'Unassigned' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Expected Close</dt>
-          <dd>{{ opportunity.expected_close_date.strftime('%d %b %Y') if opportunity.expected_close_date else 'Not set' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Probability</dt>
-          <dd>
-            {% if opportunity.probability is not none %}
-              {{ opportunity.probability }}%
-            {% else %}
-              —
-            {% endif %}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Updated</dt>
-          <dd>{{ opportunity.updated_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
-        </div>
-      </dl>
-    </div>
   </div>
 </div>
 
-<div id="clientRequirementModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
-  <div class="w-full max-w-lg rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+<div id="clientRequirementModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-lg rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
       <div>
         <p class="text-xs uppercase tracking-wide text-slate-400">Client Requirements Form</p>
@@ -720,9 +663,9 @@
   id="clientDetailModal"
   data-modal-id="clientDetailModal"
   data-client-id="{{ opportunity.client.id }}"
-  class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur"
+  class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur"
 >
-  <div class="relative w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+  <div class="modal-panel relative w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
       <div>
         <p class="text-xs uppercase tracking-wide text-slate-400">Client</p>
@@ -878,8 +821,8 @@
 </div>
 {% endif %}
 
-<div id="editOpportunityModal" data-modal-id="editOpportunityModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
-  <div class="relative w-full max-w-3xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+<div id="editOpportunityModal" data-modal-id="editOpportunityModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel relative w-full max-w-3xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
       <h3 class="text-lg font-semibold text-slate-100">Edit Opportunity</h3>
       <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close edit opportunity modal">
@@ -971,6 +914,53 @@
   </div>
 </div>
 
+<div id="opportunityItemModal" data-modal-id="opportunityItemModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Opportunity Item</p>
+        <h3 class="text-lg font-semibold text-slate-100" data-item-modal-title>Add Item</h3>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close item modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5" id="itemModalForm">
+      {{ csrf_field() }}
+      <input type="hidden" name="form_action" value="create_item" data-item-form-action>
+      <input type="hidden" name="item_id" value="" data-item-id-field>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Item Name</label>
+          <input type="text" name="item_name" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Lift package" required>
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Qty</label>
+          <input type="number" name="item_qty" min="1" value="1" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Unit <span class="text-slate-600">(Optional)</span></label>
+          <input type="text" name="item_unit" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Nos / Set">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Item Value <span class="text-slate-600">(Optional)</span></label>
+          <input type="number" name="item_value" min="0" step="0.01" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="0.00">
+        </div>
+      </div>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes <span class="text-slate-600">(Optional)</span></label>
+        <textarea name="item_notes" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Scope, customizations, exclusions..."></textarea>
+      </div>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer" data-item-submit>Save Item</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% with
   modal_id='salesDesignTaskModal',
   modal_title='Create Sales Query Task',
@@ -989,6 +979,44 @@
 %}
   {% include 'partials/design_task_modal.html' %}
 {% endwith %}
+
+<style>
+  .modal-backdrop {
+    opacity: 0;
+    transition: opacity 200ms ease, visibility 200ms ease;
+  }
+
+  .modal-backdrop.is-open {
+    opacity: 1;
+  }
+
+  .modal-panel {
+    transform: translateY(12px);
+    opacity: 0;
+    transition: opacity 220ms ease, transform 220ms ease;
+  }
+
+  .modal-backdrop.is-open .modal-panel {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  @keyframes fadeSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fade-slide-row {
+    animation: fadeSlideIn 260ms ease;
+  }
+</style>
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -1077,10 +1105,23 @@
       if (open) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        requestAnimationFrame(() => modal.classList.add('is-open'));
         document.body.classList.add('overflow-hidden');
       } else {
-        modal.classList.remove('flex');
-        modal.classList.add('hidden');
+        modal.classList.remove('is-open');
+        const handleClose = (event) => {
+          if (event.target !== modal) return;
+          modal.classList.remove('flex');
+          modal.classList.add('hidden');
+          modal.removeEventListener('transitionend', handleClose);
+        };
+        modal.addEventListener('transitionend', handleClose, { once: true });
+        setTimeout(() => {
+          if (!modal.classList.contains('is-open')) {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+          }
+        }, 260);
         document.body.classList.remove('overflow-hidden');
       }
     }
@@ -1108,6 +1149,47 @@
         if (input.files && input.files.length > 0) {
           input.closest('form')?.submit();
         }
+      });
+    });
+
+    const itemModal = document.getElementById('opportunityItemModal');
+    const itemForm = document.getElementById('itemModalForm');
+    const itemTitle = itemModal?.querySelector('[data-item-modal-title]');
+    const itemActionField = itemModal?.querySelector('[data-item-form-action]');
+    const itemIdField = itemModal?.querySelector('[data-item-id-field]');
+    const itemNameInput = itemModal?.querySelector('input[name="item_name"]');
+    const itemQtyInput = itemModal?.querySelector('input[name="item_qty"]');
+    const itemUnitInput = itemModal?.querySelector('input[name="item_unit"]');
+    const itemValueInput = itemModal?.querySelector('input[name="item_value"]');
+    const itemNotesInput = itemModal?.querySelector('textarea[name="item_notes"]');
+
+    function openItemModal(mode = 'create', data = {}) {
+      if (!itemModal || !itemForm) return;
+      const isEdit = mode === 'edit';
+      if (itemTitle) itemTitle.textContent = isEdit ? 'Edit Item' : 'Add Item';
+      if (itemActionField) itemActionField.value = isEdit ? 'update_item' : 'create_item';
+      if (itemIdField) itemIdField.value = isEdit ? data.id || '' : '';
+      if (itemNameInput) itemNameInput.value = data.name || '';
+      if (itemQtyInput) itemQtyInput.value = data.qty || 1;
+      if (itemUnitInput) itemUnitInput.value = data.unit || '';
+      if (itemValueInput) itemValueInput.value = data.value !== undefined ? data.value : '';
+      if (itemNotesInput) itemNotesInput.value = data.notes || '';
+      toggleModal('opportunityItemModal', true);
+      itemNameInput?.focus();
+    }
+
+    document.querySelector('[data-item-create]')?.addEventListener('click', () => openItemModal('create'));
+
+    document.querySelectorAll('[data-item-edit]').forEach((button) => {
+      button.addEventListener('click', () => {
+        openItemModal('edit', {
+          id: button.dataset.itemId,
+          name: button.dataset.itemName,
+          qty: button.dataset.itemQty,
+          unit: button.dataset.itemUnit,
+          value: button.dataset.itemValue,
+          notes: button.dataset.itemNotes,
+        });
       });
     });
 
