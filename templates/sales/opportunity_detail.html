@@ -75,10 +75,6 @@
               class="inline-flex items-center gap-2 text-emerald-200 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded"
               data-modal-open="clientDetailModal"
               data-client-id="{{ opportunity.client.id }}"
-              data-client-name="{{ opportunity.client.display_name }}"
-              data-client-email="{{ opportunity.client.email or '' }}"
-              data-client-phone="{{ opportunity.client.phone or '' }}"
-              data-client-description="{{ opportunity.client.description|default('', true)|e }}"
               data-client-modal-open
             >
               <span data-client-name>{{ opportunity.client.display_name }}</span>
@@ -724,10 +720,6 @@
   id="clientDetailModal"
   data-modal-id="clientDetailModal"
   data-client-id="{{ opportunity.client.id }}"
-  data-client-name="{{ opportunity.client.display_name }}"
-  data-client-email="{{ opportunity.client.email or '' }}"
-  data-client-phone="{{ opportunity.client.phone or '' }}"
-  data-client-description="{{ opportunity.client.description|default('', true)|e }}"
   class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur"
 >
   <div class="relative w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
@@ -746,18 +738,54 @@
       </button>
     </div>
     <div class="space-y-4 px-6 py-5">
+      <div class="hidden rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" data-client-loading>
+        Loading client details...
+      </div>
+      <div class="hidden rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" data-client-missing>
+        Client record not found. Please check Sales → Clients.
+      </div>
       <div class="space-y-3" data-client-view>
         <dl class="grid grid-cols-1 gap-3 text-sm text-slate-300">
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Client Name</dt>
+            <dd class="font-semibold text-slate-100" data-client-name-display>{{ opportunity.client.display_name }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Contact Person</dt>
+            <dd data-client-contact-display>Not provided</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Phone / Mobile</dt>
+            <dd data-client-phone-display>{{ opportunity.client.phone or 'Not provided' }}</dd>
+          </div>
           <div>
             <dt class="text-xs uppercase tracking-wide text-slate-500">Email</dt>
             <dd data-client-email-display>{{ opportunity.client.email or 'Not provided' }}</dd>
           </div>
           <div>
-            <dt class="text-xs uppercase tracking-wide text-slate-500">Phone</dt>
-            <dd data-client-phone-display>{{ opportunity.client.phone or 'Not provided' }}</dd>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Address</dt>
+            <dd data-client-address-display>Not provided</dd>
           </div>
           <div>
-            <dt class="text-xs uppercase tracking-wide text-slate-500">Notes</dt>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">City / State</dt>
+            <dd data-client-city-state-display>Not provided</dd>
+          </div>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-500">GST</dt>
+              <dd data-client-gst-display>Not provided</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-500">PAN</dt>
+              <dd data-client-pan-display>Not provided</dd>
+            </div>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Created Date</dt>
+            <dd data-client-created-display>{{ opportunity.client.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide text-slate-500">Remarks / Notes</dt>
             <dd class="whitespace-pre-line" data-client-description-display>{{ opportunity.client.description or 'No notes added yet.' }}</dd>
           </div>
         </dl>
@@ -831,7 +859,7 @@
         </button>
         <button
           type="button"
-          class="items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+          class="hidden items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
           data-client-edit-toggle
         >
           Edit
@@ -1026,14 +1054,22 @@
     const clientForm = document.getElementById('clientInlineForm');
     const clientNameTargets = document.querySelectorAll('[data-client-name]');
     const clientNameDisplay = clientModal?.querySelector('[data-client-name-display]');
+    const clientContactDisplay = clientModal?.querySelector('[data-client-contact-display]');
     const clientEmailDisplay = clientModal?.querySelector('[data-client-email-display]');
     const clientPhoneDisplay = clientModal?.querySelector('[data-client-phone-display]');
+    const clientAddressDisplay = clientModal?.querySelector('[data-client-address-display]');
+    const clientCityStateDisplay = clientModal?.querySelector('[data-client-city-state-display]');
+    const clientGstDisplay = clientModal?.querySelector('[data-client-gst-display]');
+    const clientPanDisplay = clientModal?.querySelector('[data-client-pan-display]');
+    const clientCreatedDisplay = clientModal?.querySelector('[data-client-created-display]');
     const clientDescriptionDisplay = clientModal?.querySelector('[data-client-description-display]');
     const clientError = clientModal?.querySelector('[data-client-error]');
     const clientEditToggle = clientModal?.querySelector('[data-client-edit-toggle]');
     const clientEditCancel = clientModal?.querySelector('[data-client-edit-cancel]');
     const clientSaveButton = clientModal?.querySelector('[data-client-save]');
     const clientViewSection = clientModal?.querySelector('[data-client-view]');
+    const clientLoading = clientModal?.querySelector('[data-client-loading]');
+    const clientMissing = clientModal?.querySelector('[data-client-missing]');
 
     function toggleModal(modalId, open) {
       const modal = document.getElementById(modalId);
@@ -1100,17 +1136,48 @@
       closeButton.addEventListener('click', () => toggleModal('clientRequirementModal', false));
     });
 
+    function formatCityState(city, state) {
+      if (city && state) return `${city}, ${state}`;
+      return city || state || '';
+    }
+
     function syncClientFields() {
       if (!clientModal) return;
-      const { clientName, clientEmail, clientPhone, clientDescription } = clientModal.dataset;
+      const {
+        clientName,
+        clientContact,
+        clientEmail,
+        clientPhone,
+        clientAddress,
+        clientCity,
+        clientState,
+        clientGst,
+        clientPan,
+        clientCreated,
+        clientDescription,
+      } = clientModal.dataset;
       const nameValue = clientName || 'Unassigned';
       const emailValue = clientEmail || 'Not provided';
       const phoneValue = clientPhone || 'Not provided';
       const descriptionValue = clientDescription || 'No notes added yet.';
+      const contactValue = clientContact || 'Not provided';
+      const addressValue = clientAddress || 'Not provided';
+      const cityStateValue = formatCityState(clientCity, clientState) || 'Not provided';
+      const gstValue = clientGst || 'Not provided';
+      const panValue = clientPan || 'Not provided';
+      const createdValue = clientCreated
+        ? new Date(clientCreated).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+        : 'Not available';
 
       if (clientNameDisplay) clientNameDisplay.textContent = nameValue;
+      if (clientContactDisplay) clientContactDisplay.textContent = contactValue;
       if (clientEmailDisplay) clientEmailDisplay.textContent = emailValue;
       if (clientPhoneDisplay) clientPhoneDisplay.textContent = phoneValue;
+      if (clientAddressDisplay) clientAddressDisplay.textContent = addressValue;
+      if (clientCityStateDisplay) clientCityStateDisplay.textContent = cityStateValue;
+      if (clientGstDisplay) clientGstDisplay.textContent = gstValue;
+      if (clientPanDisplay) clientPanDisplay.textContent = panValue;
+      if (clientCreatedDisplay) clientCreatedDisplay.textContent = createdValue;
       if (clientDescriptionDisplay) clientDescriptionDisplay.textContent = descriptionValue;
 
       clientNameTargets.forEach((target) => {
@@ -1132,6 +1199,7 @@
     function showClientView() {
       if (!clientModal) return;
       syncClientFields();
+      hideClientMissing();
       clientForm?.classList.add('hidden');
       clientViewSection?.classList.remove('hidden');
       clientError?.classList.add('hidden');
@@ -1156,19 +1224,82 @@
 
     function updateClientModalFromSource(source) {
       if (!clientModal || !source?.dataset) return;
-      const { clientId, clientName, clientEmail, clientPhone, clientDescription } = source.dataset;
+      const { clientId } = source.dataset;
       if (clientId) clientModal.dataset.clientId = clientId;
-      if (clientName !== undefined) clientModal.dataset.clientName = clientName;
-      if (clientEmail !== undefined) clientModal.dataset.clientEmail = clientEmail;
-      if (clientPhone !== undefined) clientModal.dataset.clientPhone = clientPhone;
-      if (clientDescription !== undefined) clientModal.dataset.clientDescription = clientDescription;
+    }
+
+    function setClientLoading(isLoading) {
+      if (!clientModal) return;
+      if (clientLoading) {
+        clientLoading.classList.toggle('hidden', !isLoading);
+      }
+      if (clientViewSection) {
+        clientViewSection.classList.toggle('opacity-50', Boolean(isLoading));
+      }
+    }
+
+    function showClientMissing(message) {
+      if (clientMissing) {
+        clientMissing.textContent = message || 'Client record not found. Please check Sales → Clients.';
+        clientMissing.classList.remove('hidden');
+      }
+      clientViewSection?.classList.add('hidden');
+    }
+
+    function hideClientMissing() {
+      clientMissing?.classList.add('hidden');
+      clientViewSection?.classList.remove('hidden');
+    }
+
+    function applyClientData(clientData) {
+      if (!clientModal || !clientData) return;
+      clientModal.dataset.clientName = clientData.display_name || '';
+      clientModal.dataset.clientContact = clientData.contact_person || '';
+      clientModal.dataset.clientEmail = clientData.email || '';
+      clientModal.dataset.clientPhone = clientData.phone || clientData.mobile || '';
+      clientModal.dataset.clientAddress = clientData.address || '';
+      clientModal.dataset.clientCity = clientData.city || '';
+      clientModal.dataset.clientState = clientData.state || '';
+      clientModal.dataset.clientGst = clientData.gst || '';
+      clientModal.dataset.clientPan = clientData.pan || '';
+      clientModal.dataset.clientCreated = clientData.created_at || '';
+      clientModal.dataset.clientDescription = clientData.remarks || clientData.description || '';
+    }
+
+    async function loadClientDetails(clientId) {
+      if (!clientId || !clientModal) return;
+      setClientLoading(true);
+      hideClientMissing();
+      try {
+        const response = await fetch(`/sales/clients/${clientId}/summary`, {
+          headers: { Accept: 'application/json' },
+        });
+
+        if (response.status === 404) {
+          showClientMissing();
+          return;
+        }
+
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.client) {
+          throw new Error(data.message || 'Unable to load client details.');
+        }
+
+        applyClientData(data.client);
+        showClientView();
+      } catch (error) {
+        console.error('Unable to load client details', error);
+        showClientMissing(error.message || 'Unable to load client details.');
+      } finally {
+        setClientLoading(false);
+      }
     }
 
     document.querySelectorAll('[data-modal-open]').forEach((button) => {
       button.addEventListener('click', () => {
         if (button.dataset.modalOpen === 'clientDetailModal') {
           updateClientModalFromSource(button);
-          showClientView();
+          loadClientDetails(button.dataset.clientId);
         }
         toggleModal(button.dataset.modalOpen, true);
       });

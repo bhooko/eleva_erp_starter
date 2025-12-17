@@ -12311,6 +12311,42 @@ def sales_client_inline_update(client_id):
     )
 
 
+@app.route("/sales/clients/<int:client_id>/summary")
+@login_required
+def sales_client_summary(client_id):
+    client = db.session.get(SalesClient, client_id)
+    if not client:
+        return jsonify({"success": False, "message": "Client not found."}), 404
+
+    _module_visibility_required("sales", owner_user_id=client.owner_id)
+
+    contact_person = client.company.contact_person_name if client.company else None
+    city_value = getattr(client.company, "office_city", None) or getattr(client.company, "city", None)
+    state_value = getattr(client.company, "office_state", None) or getattr(client.company, "state", None)
+
+    return jsonify(
+        {
+            "success": True,
+            "client": {
+                "id": client.id,
+                "display_name": client.display_name,
+                "contact_person": contact_person,
+                "phone": client.phone,
+                "mobile": client.phone,
+                "email": client.email,
+                "address": None,
+                "city": city_value,
+                "state": state_value,
+                "gst": None,
+                "pan": None,
+                "created_at": client.created_at.isoformat() if client.created_at else None,
+                "remarks": client.description,
+                "description": client.description,
+            },
+        }
+    )
+
+
 @app.route("/sales/opportunities/<pipeline_key>")
 @login_required
 def sales_opportunities_pipeline(pipeline_key):
