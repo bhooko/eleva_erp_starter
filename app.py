@@ -13303,7 +13303,22 @@ def sales_opportunity_detail(opportunity_id):
             flash("Opportunity item deleted.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-        elif action == "schedule_activity":
+        elif action in {"schedule_activity", "update_activity"}:
+            is_update = action == "update_activity"
+            engagement = None
+            if is_update:
+                engagement_id_raw = request.form.get("engagement_id")
+                try:
+                    engagement_id = int(engagement_id_raw)
+                except (TypeError, ValueError):
+                    flash("Invalid activity selected for update.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+                engagement = db.session.get(SalesOpportunityEngagement, engagement_id)
+                if not engagement or engagement.opportunity_id != opportunity.id:
+                    flash("Activity not found for this opportunity.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
             activity_type = (request.form.get("activity_type") or "meeting").strip().lower()
             if activity_type not in {"meeting", "call", "email"}:
                 activity_type = "meeting"
@@ -13345,17 +13360,6 @@ def sales_opportunity_detail(opportunity_id):
             elif scheduled_time:
                 scheduled_for = datetime.datetime.combine(datetime.date.today(), scheduled_time)
 
-            engagement = SalesOpportunityEngagement(
-                opportunity=opportunity,
-                activity_type=activity_type,
-                subject=subject or None,
-                scheduled_for=scheduled_for,
-                reminder_option=reminder_option or None,
-                notes=additional_notes or None,
-                created_by=current_user if current_user.is_authenticated else None,
-            )
-            db.session.add(engagement)
-
             details = []
             if scheduled_parts:
                 details.append(f"Scheduled for {' '.join(scheduled_parts)}.")
@@ -13370,16 +13374,70 @@ def sales_opportunity_detail(opportunity_id):
                 details.append(additional_notes)
 
             activity_label = OPPORTUNITY_ACTIVITY_LABELS.get(activity_type, activity_type.title())
-            title = subject or f"Scheduled {activity_label}"
+            notes_value = "\n\n".join(details) if details else None
+            if is_update and engagement:
+                engagement.activity_type = activity_type
+                engagement.subject = subject or None
+                engagement.scheduled_for = scheduled_for
+                engagement.reminder_option = reminder_option or None
+                engagement.notes = additional_notes or None
+                title = subject or f"Updated {activity_label}"
+                log_sales_activity(
+                    "opportunity",
+                    opportunity.id,
+                    title,
+                    notes=notes_value,
+                    actor=current_user,
+                )
+                db.session.commit()
+                flash("Activity updated.", "success")
+            else:
+                engagement = SalesOpportunityEngagement(
+                    opportunity=opportunity,
+                    activity_type=activity_type,
+                    subject=subject or None,
+                    scheduled_for=scheduled_for,
+                    reminder_option=reminder_option or None,
+                    notes=additional_notes or None,
+                    created_by=current_user if current_user.is_authenticated else None,
+                )
+                db.session.add(engagement)
+
+                title = subject or f"Scheduled {activity_label}"
+                log_sales_activity(
+                    "opportunity",
+                    opportunity.id,
+                    title,
+                    notes=notes_value,
+                    actor=current_user,
+                )
+                db.session.commit()
+                flash("Activity scheduled.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "delete_activity":
+            engagement_id_raw = request.form.get("engagement_id")
+            try:
+                engagement_id = int(engagement_id_raw)
+            except (TypeError, ValueError):
+                flash("Invalid activity selected for deletion.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            engagement = db.session.get(SalesOpportunityEngagement, engagement_id)
+            if not engagement or engagement.opportunity_id != opportunity.id:
+                flash("Activity not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            db.session.delete(engagement)
+            removal_label = engagement.subject or OPPORTUNITY_ACTIVITY_LABELS.get(engagement.activity_type, "Activity")
             log_sales_activity(
                 "opportunity",
                 opportunity.id,
-                title,
-                notes="\n\n".join(details) if details else None,
+                f"Activity removed: {removal_label}",
                 actor=current_user,
             )
             db.session.commit()
-            flash("Activity scheduled.", "success")
+            flash("Activity removed.", "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
     activities = (
