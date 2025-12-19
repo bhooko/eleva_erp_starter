@@ -4057,7 +4057,19 @@ OPPORTUNITY_ACTIVITY_LABELS = {
     "meeting": "Meeting",
     "call": "Call",
     "email": "Email",
+    "whatsapp": "WhatsApp",
 }
+
+OPPORTUNITY_ACTIVITY_OUTCOMES = [
+    ("connected", "Connected"),
+    ("not_reachable", "Not reachable"),
+    ("callback_scheduled", "Callback scheduled"),
+    ("meeting_fixed", "Meeting fixed"),
+    ("site_visit_fixed", "Site visit fixed"),
+    ("quotation_discussed", "Quotation discussed"),
+    ("not_interested", "Not interested"),
+    ("other", "Other"),
+]
 
 
 def format_file_size(num_bytes):
@@ -10073,6 +10085,52 @@ def ensure_sales_opportunity_item_columns():
         print("✔️ sales_opportunity_item OK")
 
 
+def ensure_sales_opportunity_engagement_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_sales_opportunity_engagement_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_opportunity_engagement'"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(sales_opportunity_engagement)")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+
+    additions = [
+        ("status", "TEXT DEFAULT 'open'"),
+        ("completed_at", "DATETIME"),
+        ("completed_by_id", "INTEGER"),
+        ("outcome", "TEXT"),
+        ("log_details", "TEXT"),
+    ]
+
+    for column, ctype in additions:
+        if column not in cols:
+            cur.execute(f"ALTER TABLE sales_opportunity_engagement ADD COLUMN {column} {ctype};")
+            added.append(column)
+
+    if "status" in cols or "status" in [name for name, _ in additions]:
+        cur.execute(
+            "UPDATE sales_opportunity_engagement SET status = COALESCE(NULLIF(status, ''), 'open')"
+        )
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in sales_opportunity_engagement: {', '.join(added)}")
+    else:
+        print("✔️ sales_opportunity_engagement OK")
+
+
 def ensure_user_columns():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -10597,6 +10655,7 @@ def bootstrap_db():
     ensure_sales_task_columns()
     ensure_sales_opportunity_columns()
     ensure_sales_opportunity_item_columns()
+    ensure_sales_opportunity_engagement_columns()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
@@ -11337,16 +11396,36 @@ def sales_home():
     team_breakdown.sort(key=lambda row: row["value"], reverse=True)
 
     now = datetime.datetime.utcnow()
+    open_status_clause = func.lower(func.coalesce(SalesOpportunityEngagement.status, "open")) == "open"
     due_activities = (
         SalesOpportunityEngagement.query
         .filter(
             SalesOpportunityEngagement.scheduled_for.isnot(None),
             SalesOpportunityEngagement.scheduled_for <= now,
+            open_status_clause,
         )
         .order_by(SalesOpportunityEngagement.scheduled_for.asc())
         .limit(10)
         .all()
     )
+
+    my_activities = []
+    if getattr(current_user, "is_authenticated", False):
+        my_activities = (
+            SalesOpportunityEngagement.query.filter(
+                SalesOpportunityEngagement.created_by_id == current_user.id,
+                open_status_clause,
+            )
+            .order_by(
+                case((SalesOpportunityEngagement.scheduled_for.is_(None), 2),
+                     (SalesOpportunityEngagement.scheduled_for <= now, 0),
+                     else_=1),
+                SalesOpportunityEngagement.scheduled_for.asc(),
+                SalesOpportunityEngagement.created_at.desc(),
+            )
+            .limit(15)
+            .all()
+        )
 
     return render_template(
         "sales/dashboard.html",
@@ -11360,10 +11439,12 @@ def sales_home():
         previous_months=previous_months,
         team_breakdown=team_breakdown,
         due_activities=due_activities,
+        my_activities=my_activities,
         format_currency=format_currency,
         selected_duration=duration,
         period_label=period_label,
         period_description=period_description,
+        now=now,
     )
 
 
@@ -13318,9 +13399,12 @@ def sales_opportunity_detail(opportunity_id):
                 if not engagement or engagement.opportunity_id != opportunity.id:
                     flash("Activity not found for this opportunity.", "error")
                     return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                if (engagement.status or "open").lower() != "open":
+                    flash("Only open activities can be edited.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
             activity_type = (request.form.get("activity_type") or "meeting").strip().lower()
-            if activity_type not in {"meeting", "call", "email"}:
+            if activity_type not in {"meeting", "call", "email", "whatsapp"}:
                 activity_type = "meeting"
 
             subject = (request.form.get("activity_subject") or "").strip()
@@ -13381,6 +13465,7 @@ def sales_opportunity_detail(opportunity_id):
                 engagement.scheduled_for = scheduled_for
                 engagement.reminder_option = reminder_option or None
                 engagement.notes = additional_notes or None
+                engagement.status = "open"
                 title = subject or f"Updated {activity_label}"
                 log_sales_activity(
                     "opportunity",
@@ -13413,6 +13498,86 @@ def sales_opportunity_detail(opportunity_id):
                 )
                 db.session.commit()
                 flash("Activity scheduled.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "log_activity":
+            engagement_id_raw = request.form.get("engagement_id")
+            try:
+                engagement_id = int(engagement_id_raw)
+            except (TypeError, ValueError):
+                flash("Invalid activity selected for logging.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            engagement = db.session.get(SalesOpportunityEngagement, engagement_id)
+            if not engagement or engagement.opportunity_id != opportunity.id:
+                flash("Activity not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            if (engagement.status or "open").lower() != "open":
+                flash("Only open activities can be logged/closed.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            outcome = (request.form.get("outcome") or "").strip()
+            valid_outcomes = {value for value, _ in OPPORTUNITY_ACTIVITY_OUTCOMES}
+            if outcome not in valid_outcomes:
+                flash("Select an outcome before logging the activity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            log_details = (request.form.get("log_details") or "").strip() or None
+            engagement.status = "done"
+            engagement.outcome = outcome
+            engagement.log_details = log_details
+            engagement.completed_at = datetime.datetime.utcnow()
+            engagement.completed_by = current_user if current_user.is_authenticated else None
+
+            outcome_label = dict(OPPORTUNITY_ACTIVITY_OUTCOMES).get(outcome, outcome.replace("_", " ").title())
+            title = engagement.subject or f"Completed {engagement.display_activity_type}"
+            detail_lines = [f"Outcome: {outcome_label}"]
+            if log_details:
+                detail_lines.append(log_details)
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                title,
+                notes="\n\n".join(detail_lines),
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Activity logged and closed.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "cancel_activity":
+            engagement_id_raw = request.form.get("engagement_id")
+            try:
+                engagement_id = int(engagement_id_raw)
+            except (TypeError, ValueError):
+                flash("Invalid activity selected for cancellation.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            engagement = db.session.get(SalesOpportunityEngagement, engagement_id)
+            if not engagement or engagement.opportunity_id != opportunity.id:
+                flash("Activity not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            if (engagement.status or "open").lower() != "open":
+                flash("Only open activities can be cancelled.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            cancel_reason = (request.form.get("cancel_reason") or "").strip() or None
+            engagement.status = "cancelled"
+            engagement.completed_at = datetime.datetime.utcnow()
+            engagement.completed_by = current_user if current_user.is_authenticated else None
+            if cancel_reason:
+                engagement.log_details = cancel_reason
+
+            title = engagement.subject or f"Cancelled {engagement.display_activity_type}"
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                title,
+                notes=cancel_reason,
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Activity cancelled.", "info")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
         elif action == "delete_activity":
@@ -13458,10 +13623,32 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesOpportunityFile.created_at.desc())
         .all()
     )
-    scheduled_activities = (
-        SalesOpportunityEngagement.query
-        .filter_by(opportunity_id=opportunity.id)
-        .order_by(SalesOpportunityEngagement.created_at.desc())
+    open_engagements = (
+        SalesOpportunityEngagement.query.filter(
+            SalesOpportunityEngagement.opportunity_id == opportunity.id,
+            func.lower(func.coalesce(SalesOpportunityEngagement.status, "open")) == "open",
+        )
+        .order_by(
+            case((SalesOpportunityEngagement.scheduled_for.is_(None), 1), else_=0),
+            SalesOpportunityEngagement.scheduled_for.asc(),
+            SalesOpportunityEngagement.created_at.desc(),
+        )
+        .all()
+    )
+    now = datetime.datetime.utcnow()
+    for engagement in open_engagements:
+        engagement.is_overdue = bool(engagement.scheduled_for and engagement.scheduled_for < now)
+
+    logged_engagements = (
+        SalesOpportunityEngagement.query.filter(
+            SalesOpportunityEngagement.opportunity_id == opportunity.id,
+            func.lower(func.coalesce(SalesOpportunityEngagement.status, "open")) != "open",
+        )
+        .order_by(
+            case((SalesOpportunityEngagement.completed_at.is_(None), 1), else_=0),
+            SalesOpportunityEngagement.completed_at.desc(),
+            SalesOpportunityEngagement.created_at.desc(),
+        )
         .all()
     )
     items = (
@@ -13555,13 +13742,15 @@ def sales_opportunity_detail(opportunity_id):
         activities=activities,
         comments=comments,
         files=files,
-        scheduled_activities=scheduled_activities,
+        open_engagements=open_engagements,
+        logged_engagements=logged_engagements,
         items=items,
         design_tasks=design_tasks,
         open_design_tasks=open_design_tasks,
         design_projects=design_projects,
         design_users=design_users,
         reminder_options=OPPORTUNITY_REMINDER_OPTIONS,
+        activity_outcomes=OPPORTUNITY_ACTIVITY_OUTCOMES,
         lift_types=LIFT_TYPES,
         temperature_choices=SALES_TEMPERATURES,
         pipeline_map=SALES_PIPELINES,
