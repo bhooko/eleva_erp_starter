@@ -1135,8 +1135,9 @@
         <div>
           <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Activity Type</label>
           <select name="activity_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-            <option value="meeting">Meeting</option>
             <option value="call">Call</option>
+            <option value="meeting">Meeting</option>
+            <option value="site_visit">Site Visit</option>
             <option value="email">Email</option>
             <option value="whatsapp">WhatsApp</option>
           </select>
@@ -1209,6 +1210,52 @@
       <div>
         <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details <span class="text-slate-500">(optional)</span></label>
         <textarea name="log_details" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="What happened, next steps, or notes."></textarea>
+      </div>
+      <div class="rounded-xl border border-slate-800/70 bg-slate-950/60 px-4 py-3 space-y-3" data-next-action-container>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Next Action <span class="text-slate-400">(optional)</span></p>
+          <p class="text-xs text-slate-500">Create the follow-up immediately after closing this activity.</p>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="space-y-2" data-next-action-field>
+            <label class="text-xs uppercase tracking-wide text-slate-400">Next Action Type</label>
+            <select name="next_action_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" data-next-action-type>
+              <option value="">None</option>
+              <option value="meeting">Meeting</option>
+              <option value="site_visit">Site Visit</option>
+              <option value="call">Call</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+              <option value="callback">Callback</option>
+            </select>
+          </div>
+          <div class="space-y-2" data-next-action-field>
+            <label class="text-xs uppercase tracking-wide text-slate-400">Subject</label>
+            <input type="text" name="next_action_subject" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Follow-up discussion" data-next-action-subject>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="space-y-2" data-next-action-field>
+            <label class="text-xs uppercase tracking-wide text-slate-400">Date</label>
+            <input type="date" name="next_action_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60" data-next-action-date>
+          </div>
+          <div class="space-y-2" data-next-action-field>
+            <label class="text-xs uppercase tracking-wide text-slate-400">Time</label>
+            <input type="time" name="next_action_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60" data-next-action-time>
+          </div>
+          <div class="space-y-2" data-next-action-field>
+            <label class="text-xs uppercase tracking-wide text-slate-400">Reminder</label>
+            <select name="next_action_reminder" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" data-next-action-reminder>
+              {% for value, label in reminder_options %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="space-y-2" data-next-action-field>
+          <label class="text-xs uppercase tracking-wide text-slate-400">Planning Notes <span class="text-slate-500">(optional)</span></label>
+          <textarea name="next_action_notes" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Agenda, prep items, or notes for the next step." data-next-action-notes></textarea>
+        </div>
       </div>
       <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
         <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
@@ -1472,10 +1519,12 @@
     const activityNotesInput = activityModal?.querySelector('textarea[name="activity_notes"]');
     const activitySubmitButton = activityModal?.querySelector('[data-activity-submit]');
     const activityTypeLabels = {
-      meeting: 'Meeting',
       call: 'Call',
+      meeting: 'Meeting',
+      site_visit: 'Site Visit',
       email: 'Email',
       whatsapp: 'WhatsApp',
+      callback: 'Callback',
     };
 
     function openActivityModal(mode = 'create', data = {}) {
@@ -1530,6 +1579,64 @@
     const logActivitySchedule = logActivityModal?.querySelector('[data-log-activity-schedule]');
     const logOutcomeInput = logActivityModal?.querySelector('select[name="outcome"]');
     const logDetailsInput = logActivityModal?.querySelector('textarea[name="log_details"]');
+    const nextActionTypeInput = logActivityModal?.querySelector('select[name="next_action_type"]');
+    const nextActionSubjectInput = logActivityModal?.querySelector('input[name="next_action_subject"]');
+    const nextActionDateInput = logActivityModal?.querySelector('input[name="next_action_date"]');
+    const nextActionTimeInput = logActivityModal?.querySelector('input[name="next_action_time"]');
+    const nextActionReminderInput = logActivityModal?.querySelector('select[name="next_action_reminder"]');
+    const nextActionNotesInput = logActivityModal?.querySelector('textarea[name="next_action_notes"]');
+    const nextActionFields = [
+      nextActionSubjectInput,
+      nextActionDateInput,
+      nextActionTimeInput,
+      nextActionReminderInput,
+      nextActionNotesInput,
+    ];
+
+    function setNextActionFieldsEnabled(hasType) {
+      nextActionFields.forEach((input) => {
+        if (!input) return;
+        input.disabled = !hasType;
+        const wrapper = input.closest('[data-next-action-field]');
+        if (wrapper) {
+          wrapper.classList.toggle('opacity-50', !hasType);
+        }
+      });
+    }
+
+    function setNextActionSubjectFromType(typeLabel) {
+      if (!nextActionSubjectInput) return;
+      const allowAutofill = nextActionSubjectInput.dataset.autofill !== 'false';
+      if (!allowAutofill && nextActionSubjectInput.value.trim() !== '') return;
+      const baseText = (logActivitySubject?.textContent || '').trim() || typeLabel || 'Next action';
+      nextActionSubjectInput.value = `Follow-up: ${baseText}`;
+      nextActionSubjectInput.dataset.autofill = 'true';
+    }
+
+    function resetNextActionFields() {
+      if (nextActionTypeInput) nextActionTypeInput.value = '';
+      if (nextActionSubjectInput) {
+        nextActionSubjectInput.value = '';
+        nextActionSubjectInput.dataset.autofill = 'true';
+      }
+      if (nextActionDateInput) nextActionDateInput.value = '';
+      if (nextActionTimeInput) nextActionTimeInput.value = '';
+      if (nextActionReminderInput) nextActionReminderInput.value = '';
+      if (nextActionNotesInput) nextActionNotesInput.value = '';
+      setNextActionFieldsEnabled(false);
+    }
+
+    function handleNextActionTypeChange() {
+      const hasType = Boolean(nextActionTypeInput?.value);
+      setNextActionFieldsEnabled(hasType);
+      if (hasType && nextActionTypeInput) {
+        const selectedLabel =
+          activityTypeLabels[nextActionTypeInput.value] ||
+          nextActionTypeInput.options[nextActionTypeInput.selectedIndex]?.text ||
+          'Next action';
+        setNextActionSubjectFromType(selectedLabel);
+      }
+    }
 
     function openLogActivityModal(data = {}) {
       if (!logActivityModal || !logActivityForm) return;
@@ -1539,6 +1646,7 @@
       if (logActivitySchedule) logActivitySchedule.textContent = data.schedule || 'Schedule not set';
       if (logOutcomeInput) logOutcomeInput.value = data.outcome || '';
       if (logDetailsInput) logDetailsInput.value = data.details || '';
+      resetNextActionFields();
       toggleModal('logActivityModal', true);
       logOutcomeInput?.focus();
     }
@@ -1559,6 +1667,14 @@
         });
       });
     });
+
+    nextActionTypeInput?.addEventListener('change', handleNextActionTypeChange);
+    nextActionSubjectInput?.addEventListener('input', () => {
+      if (nextActionSubjectInput) {
+        nextActionSubjectInput.dataset.autofill = 'false';
+      }
+    });
+    setNextActionFieldsEnabled(Boolean(nextActionTypeInput?.value));
 
     const crfModal = document.getElementById('clientRequirementModal');
     const crfTitle = crfModal?.querySelector('[data-crf-modal-title]');
