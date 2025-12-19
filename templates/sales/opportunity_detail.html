@@ -247,6 +247,107 @@
 </div>
 
 <div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
+  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-slate-500">Activities</p>
+      <p class="text-sm text-slate-300">Log calls, meetings, follow-ups linked to this opportunity.</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+        data-activity-create
+      >
+        + Create Activity
+      </button>
+    </div>
+  </div>
+  {% if scheduled_activities %}
+  <div class="mt-3 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+    <div class="overflow-auto">
+      {% set include_created_by = scheduled_activities | selectattr('created_by') | list | length > 0 %}
+      <table class="min-w-full text-sm">
+        <thead class="sticky top-0 bg-slate-950/60 backdrop-blur">
+          <tr class="text-left text-slate-500">
+            <th class="py-3 px-4">Type</th>
+            <th class="py-3 px-4">Subject</th>
+            <th class="py-3 px-4">Date</th>
+            <th class="py-3 px-4">Time</th>
+            <th class="py-3 px-4">Reminder</th>
+            <th class="py-3 px-4">Notes</th>
+            {% if include_created_by %}
+            <th class="py-3 px-4">Created By</th>
+            {% endif %}
+            <th class="py-3 px-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/70">
+          {% for engagement in scheduled_activities %}
+          {% set has_time = engagement.scheduled_for and (engagement.scheduled_for.time().hour or engagement.scheduled_for.time().minute) %}
+          <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
+            <td class="py-3 px-4 font-semibold text-slate-200">{{ engagement.display_activity_type }}</td>
+            <td class="py-3 px-4 text-slate-200">{{ engagement.subject or '—' }}</td>
+            <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%d %b %Y') if engagement.scheduled_for else '—' }}</td>
+            <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%I:%M %p') if has_time else '—' }}</td>
+            <td class="py-3 px-4 text-slate-200">{{ engagement.display_reminder }}</td>
+            <td class="py-3 px-4 max-w-xs">
+              {% if engagement.notes %}
+              <span class="line-clamp-2" title="{{ engagement.notes }}">{{ engagement.notes }}</span>
+              {% else %}
+              <span class="text-slate-500">—</span>
+              {% endif %}
+            </td>
+            {% if include_created_by %}
+            <td class="py-3 px-4 text-slate-200">{{ engagement.created_by.display_name if engagement.created_by else '—' }}</td>
+            {% endif %}
+            <td class="py-3 px-4 text-right">
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100"
+                  data-activity-edit
+                  data-activity-id="{{ engagement.id }}"
+                  data-activity-type="{{ engagement.activity_type or 'meeting' }}"
+                  data-activity-subject="{{ (engagement.subject or '') | e }}"
+                  data-activity-date="{{ engagement.scheduled_for.date().isoformat() if engagement.scheduled_for else '' }}"
+                  data-activity-time="{{ engagement.scheduled_for.strftime('%H:%M') if has_time else '' }}"
+                  data-activity-reminder="{{ engagement.reminder_option or '' }}"
+                  data-activity-notes="{{ (engagement.notes or '') | e }}"
+                >
+                  Edit
+                </button>
+                <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="inline" onsubmit="return confirm('Delete this activity?');">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="form_action" value="delete_activity">
+                  <input type="hidden" name="engagement_id" value="{{ engagement.id }}">
+                  <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/10">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-400">
+    <p class="font-medium text-slate-200">No activities yet.</p>
+    <p class="mt-1 text-xs text-slate-500">Log calls, meetings and follow-ups to keep momentum.</p>
+    <div class="mt-4 flex justify-center">
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+        data-activity-create
+      >
+        + Create Activity
+      </button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <p class="text-xs uppercase tracking-wide text-slate-500">Design Tasks for this Opportunity</p>
@@ -298,51 +399,13 @@
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 120ms;">
       <div class="px-6 pt-5">
         <div class="flex flex-wrap items-center gap-2 text-sm">
-          <button type="button" data-tab="timeline" class="tab-trigger tab-active inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-emerald-100 transition">Timeline</button>
-          <button type="button" data-tab="comments" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Comments</button>
+          <button type="button" data-tab="comments" class="tab-trigger tab-active inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-emerald-100 transition">Comments</button>
           <button type="button" data-tab="files" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Files</button>
-          <button type="button" data-tab="activities" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Activities</button>
+          <button type="button" data-tab="timeline" class="tab-trigger inline-flex items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:text-emerald-100">Timeline</button>
         </div>
       </div>
       <div class="px-6 py-6">
-        <div data-tab-panel="timeline" class="motion-panel is-active">
-          <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
-            {{ csrf_field() }}
-            <input type="hidden" name="form_action" value="add_note">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-              <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Add Note</button>
-            </div>
-            <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
-          </form>
-          {% if activities %}
-          <ol class="relative ml-3 space-y-6 border-l border-slate-800/80">
-            {% for activity in activities %}
-            <li class="ml-6">
-              <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-xs font-semibold text-emerald-200">•</span>
-              <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 px-4 py-3">
-                <div class="flex items-center justify-between text-sm">
-                  <p class="font-semibold text-slate-100">{{ activity.title }}</p>
-                  <span class="text-xs text-slate-500">{{ activity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
-                </div>
-                {% if activity.notes %}
-                <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
-                {% endif %}
-                {% if activity.actor %}
-                <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">{{ 'Admin · ' if activity.actor.is_admin else 'User · ' }}{{ activity.actor.display_name }}</p>
-                {% else %}
-                <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">System</p>
-                {% endif %}
-              </div>
-            </li>
-            {% endfor %}
-          </ol>
-          {% else %}
-          <div class="py-16 text-center text-slate-500">No updates yet. Start logging interactions.</div>
-          {% endif %}
-        </div>
-
-        <div data-tab-panel="comments" class="motion-panel hidden">
+        <div data-tab-panel="comments" class="motion-panel is-active">
           <div class="space-y-4">
             <p class="text-sm text-slate-300">Capture internal comments about this deal to keep the team aligned.</p>
             <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-3">
@@ -409,82 +472,40 @@
           </div>
         </div>
 
-        <div data-tab-panel="activities" class="motion-panel hidden">
-          <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4">
+        <div data-tab-panel="timeline" class="motion-panel hidden">
+          <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="mb-6 space-y-3">
             {{ csrf_field() }}
-            <input type="hidden" name="form_action" value="schedule_activity">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Activity Type</label>
-                <select name="activity_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-                  <option value="meeting">Meeting</option>
-                  <option value="call">Call</option>
-                  <option value="email">Email</option>
-                </select>
-              </div>
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Subject</label>
-                <input type="text" name="activity_subject" placeholder="Follow-up" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              </div>
+            <input type="hidden" name="form_action" value="add_note">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+              <input type="text" name="note_title" placeholder="Add quick update" class="rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Add Note</button>
             </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Date</label>
-                <input type="date" name="activity_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              </div>
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Time</label>
-                <input type="time" name="activity_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-              </div>
-              <div>
-                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder</label>
-                <select name="reminder_option" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
-                  {% for value, label in reminder_options %}
-                  <option value="{{ value }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes</label>
-              <textarea name="activity_notes" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add talking points or objectives."></textarea>
-            </div>
-            <div class="flex justify-end">
-              <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Schedule Activity</button>
-            </div>
+            <textarea name="note_body" rows="3" placeholder="Meeting outcome, blockers or next steps." class="w-full rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60"></textarea>
           </form>
-          {% if scheduled_activities %}
-          <div class="mt-6 space-y-4">
-            {% for engagement in scheduled_activities %}
-            <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 px-4 py-4 card-hover-lift fade-in-up" style="--fade-delay: {{ 160 + loop.index0 * 40 }}ms;">
-              <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <p class="font-semibold text-slate-100">{{ engagement.display_activity_type }}</p>
-                <span class="text-xs text-slate-500">{{ engagement.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
-              </div>
-              {% if engagement.subject %}
-              <p class="mt-2 text-sm text-emerald-100">{{ engagement.subject }}</p>
-              {% endif %}
-              <div class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-500 sm:grid-cols-2">
-                <div>
-                  <p class="uppercase tracking-wide text-xs text-slate-300">Scheduled</p>
-                  <p class="text-sm text-slate-200">{{ engagement.display_schedule }}</p>
+          {% if activities %}
+          <ol class="relative ml-3 space-y-6 border-l border-slate-800/80">
+            {% for activity in activities %}
+            <li class="ml-6">
+              <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-xs font-semibold text-emerald-200">•</span>
+              <div class="rounded-xl border border-slate-800/80 bg-slate-900/80 px-4 py-3">
+                <div class="flex items-center justify-between text-sm">
+                  <p class="font-semibold text-slate-100">{{ activity.title }}</p>
+                  <span class="text-xs text-slate-500">{{ activity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
                 </div>
-                <div>
-                  <p class="uppercase tracking-wide text-xs text-slate-300">Reminder</p>
-                  <p class="text-sm text-slate-200">{{ engagement.display_reminder }}</p>
-                </div>
+                {% if activity.notes %}
+                <p class="mt-2 text-sm text-slate-300 whitespace-pre-line">{{ activity.notes }}</p>
+                {% endif %}
+                {% if activity.actor %}
+                <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">{{ 'Admin · ' if activity.actor.is_admin else 'User · ' }}{{ activity.actor.display_name }}</p>
+                {% else %}
+                <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">System</p>
+                {% endif %}
               </div>
-              {% if engagement.notes %}
-              <p class="mt-3 text-sm text-slate-300 whitespace-pre-line">{{ engagement.notes }}</p>
-              {% endif %}
-              {% if engagement.created_by %}
-              <p class="mt-3 text-xs uppercase tracking-wide text-slate-500">Logged by {{ engagement.created_by.display_name }}</p>
-              {% endif %}
-            </div>
+            </li>
             {% endfor %}
-          </div>
+          </ol>
           {% else %}
-          <div class="mt-6 rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500 card-hover-lift fade-in-up" style="--fade-delay: 160ms;">No activities scheduled yet.</div>
+          <div class="py-16 text-center text-slate-500">No updates yet. Start logging interactions.</div>
           {% endif %}
         </div>
 
@@ -988,6 +1009,66 @@
   </div>
 </div>
 
+<div id="activityModal" data-modal-id="activityModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Activities</p>
+        <h3 class="text-lg font-semibold text-slate-100" data-activity-modal-title>Create Activity</h3>
+        <p class="text-xs text-slate-500">Log calls, meetings, and follow-ups.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close activity modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5" id="activityForm">
+      {{ csrf_field() }}
+      <input type="hidden" name="form_action" value="schedule_activity" data-activity-form-action>
+      <input type="hidden" name="engagement_id" value="" data-activity-id>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Activity Type</label>
+          <select name="activity_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="meeting">Meeting</option>
+            <option value="call">Call</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Subject</label>
+          <input type="text" name="activity_subject" placeholder="Follow-up" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Date</label>
+          <input type="date" name="activity_date" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Time</label>
+          <input type="time" name="activity_time" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reminder</label>
+          <select name="reminder_option" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            {% for value, label in reminder_options %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes</label>
+        <textarea name="activity_notes" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add talking points or objectives."></textarea>
+      </div>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer" data-activity-submit>Save Activity</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% with
   modal_id='salesDesignTaskModal',
   modal_title='Create Sales Query Task',
@@ -1225,6 +1306,63 @@
           cabinFinish: button.dataset.itemCabinFinish,
           details: button.dataset.itemDetails,
           value: button.dataset.itemValue,
+        });
+      });
+    });
+
+    const activityModal = document.getElementById('activityModal');
+    const activityForm = document.getElementById('activityForm');
+    const activityTitle = activityModal?.querySelector('[data-activity-modal-title]');
+    const activityActionField = activityModal?.querySelector('[data-activity-form-action]');
+    const activityIdField = activityModal?.querySelector('[data-activity-id]');
+    const activityTypeInput = activityModal?.querySelector('select[name="activity_type"]');
+    const activitySubjectInput = activityModal?.querySelector('input[name="activity_subject"]');
+    const activityDateInput = activityModal?.querySelector('input[name="activity_date"]');
+    const activityTimeInput = activityModal?.querySelector('input[name="activity_time"]');
+    const activityReminderInput = activityModal?.querySelector('select[name="reminder_option"]');
+    const activityNotesInput = activityModal?.querySelector('textarea[name="activity_notes"]');
+    const activitySubmitButton = activityModal?.querySelector('[data-activity-submit]');
+
+    function openActivityModal(mode = 'create', data = {}) {
+      if (!activityModal || !activityForm) return;
+      const isEdit = mode === 'edit';
+      if (activityTitle) activityTitle.textContent = isEdit ? 'Edit Activity' : 'Create Activity';
+      if (activitySubmitButton) activitySubmitButton.textContent = isEdit ? 'Save Activity' : 'Create Activity';
+      if (activityActionField) activityActionField.value = isEdit ? 'update_activity' : 'schedule_activity';
+      if (activityIdField) activityIdField.value = isEdit ? data.id || '' : '';
+      if (activityTypeInput) activityTypeInput.value = data.type || 'meeting';
+      if (activitySubjectInput) activitySubjectInput.value = data.subject || '';
+      if (activityDateInput) activityDateInput.value = data.date || '';
+      if (activityTimeInput) activityTimeInput.value = data.time || '';
+      if (activityReminderInput) activityReminderInput.value = data.reminder || '';
+      if (activityNotesInput) activityNotesInput.value = data.notes || '';
+      toggleModal('activityModal', true);
+      activityTypeInput?.focus();
+    }
+
+    document.querySelectorAll('[data-activity-create]').forEach((button) => {
+      button.addEventListener('click', () => openActivityModal('create'));
+    });
+
+    document.querySelectorAll('[data-activity-edit]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const {
+          activityId,
+          activityType,
+          activitySubject,
+          activityDate,
+          activityTime,
+          activityReminder,
+          activityNotes,
+        } = button.dataset;
+        openActivityModal('edit', {
+          id: activityId,
+          type: activityType,
+          subject: activitySubject,
+          date: activityDate,
+          time: activityTime,
+          reminder: activityReminder,
+          notes: activityNotes,
         });
       });
     });
