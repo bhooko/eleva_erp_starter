@@ -620,6 +620,150 @@
   </div>
 
   <div class="space-y-6">
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 110ms;">
+      <div class="flex items-start justify-between gap-3 px-6 py-4 border-b border-slate-800/80">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Quotation Requests</p>
+          <p class="text-sm text-slate-300">Track items, CRFs and negotiation per request.</p>
+        </div>
+        {% if can_manage_opportunity_docs %}
+        <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30" data-modal-open="createQuotationRequestModal">+ Create Quotation Request</button>
+        {% endif %}
+      </div>
+      <div class="px-6 py-5 space-y-3">
+        {% if quotation_requests %}
+        <div class="space-y-3">
+          {% for request in quotation_requests %}
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/50">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p class="font-semibold text-slate-100">Request #{{ request.id }}</p>
+                <p class="text-xs text-slate-500">Created {{ request.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}{% if request.requested_by %} · {{ request.requested_by.display_name }}{% endif %}</p>
+                {% if request.notes %}
+                <p class="mt-1 text-xs text-slate-400">Notes: {{ request.notes }}</p>
+                {% endif %}
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-2 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">{{ request.item_count }} item{{ 's' if request.item_count != 1 else '' }}</span>
+                <span class="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100">{{ request.status_label }}</span>
+                {% if request.linked_crf %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-sky-500/20 px-3 py-1 text-xs font-semibold text-sky-100">CRF V{{ request.linked_crf.version }}{% if request.linked_crf.template %} · {{ request.linked_crf.template.name }}{% endif %}</span>
+                {% endif %}
+                <button type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100" data-request-toggle>View</button>
+              </div>
+            </div>
+            <div class="hidden border-t border-slate-800/80 px-4 py-3 space-y-3" data-request-panel>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                {% set types = request.items | map(attribute='opportunity_item') | map(attribute='lift_type') | list %}
+                <span class="font-semibold text-slate-200">Item types:</span>
+                {% if types %}
+                  {% for lift_type in types %}
+                  <span class="rounded-full bg-slate-800/70 px-2 py-1">{{ lift_type or 'Not set' }}</span>
+                  {% endfor %}
+                {% else %}
+                  <span>No items linked.</span>
+                {% endif %}
+              </div>
+              <div class="space-y-2">
+                <p class="text-xs uppercase tracking-wide text-slate-500">Actions</p>
+                {% if can_manage_opportunity_docs %}
+                <div class="flex flex-wrap gap-2">
+                  <form method="post">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="form_action" value="update_quotation_request_status">
+                    <input type="hidden" name="quotation_request_id" value="{{ request.id }}">
+                    <input type="hidden" name="target_status" value="in_progress">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/30">Mark In Progress</button>
+                  </form>
+                  <form method="post">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="form_action" value="update_quotation_request_status">
+                    <input type="hidden" name="quotation_request_id" value="{{ request.id }}">
+                    <input type="hidden" name="target_status" value="shared">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-500/20 px-3 py-1 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Mark Shared</button>
+                  </form>
+                  <form method="post">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="form_action" value="update_quotation_request_status">
+                    <input type="hidden" name="quotation_request_id" value="{{ request.id }}">
+                    <input type="hidden" name="target_status" value="revised">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-100 hover:bg-rose-500/30">Request Revision</button>
+                  </form>
+                  <form method="post">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="form_action" value="update_quotation_request_status">
+                    <input type="hidden" name="quotation_request_id" value="{{ request.id }}">
+                    <input type="hidden" name="target_status" value="finalized">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Finalize</button>
+                  </form>
+                  <button type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/40 hover:text-emerald-100" data-negotiation-open data-request-id="{{ request.id }}">Request Discount / Negotiation</button>
+                </div>
+                {% else %}
+                <p class="text-xs text-slate-500">Only the opportunity owner can update requests.</p>
+                {% endif %}
+              </div>
+              <div class="space-y-2">
+                <p class="text-xs uppercase tracking-wide text-slate-500">Linked Items</p>
+                <ul class="space-y-1 text-sm text-slate-200">
+                  {% for link in request.items %}
+                  <li class="flex items-center gap-2">
+                    <span class="rounded-full bg-slate-800/70 px-2 py-1 text-xs text-slate-300">#{{ link.opportunity_item.id }}</span>
+                    <span>{{ link.opportunity_item.details or link.opportunity_item.lift_type or 'Item' }}</span>
+                    <span class="text-xs text-slate-500">Qty: {{ link.opportunity_item.quantity or 1 }}</span>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="space-y-2">
+                <p class="text-xs uppercase tracking-wide text-slate-500">Quotation Files</p>
+                {% if request.files %}
+                <ul class="space-y-2 text-sm text-slate-200">
+                  {% for file in request.files %}
+                  <li class="flex items-center justify-between gap-2 rounded-lg bg-slate-900/70 px-3 py-2">
+                    <div>
+                      <p class="font-semibold">{{ file.original_filename }}</p>
+                      <p class="text-xs text-slate-500">Uploaded {{ file.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}{% if file.uploaded_by %} · {{ file.uploaded_by.display_name }}{% endif %}</p>
+                    </div>
+                    <a href="{{ url_for('static', filename=file.stored_path) }}" class="text-xs text-sky-200 hover:text-sky-100" target="_blank" rel="noopener">Preview</a>
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-sm text-slate-400">No quotation files linked yet.</p>
+                {% endif %}
+              </div>
+              {% if request.negotiation_logs %}
+              <div class="space-y-2">
+                <p class="text-xs uppercase tracking-wide text-slate-500">Negotiation / Discount Logs</p>
+                <ul class="space-y-2 text-sm text-slate-200">
+                  {% for log in request.negotiation_logs %}
+                  <li class="rounded-lg bg-slate-900/70 px-3 py-2">
+                    <div class="flex items-center justify-between text-xs text-slate-400">
+                      <span>{{ log.created_at|format_india_datetime('%d %b %Y, %I:%M %p') }}</span>
+                      {% if log.created_by %}<span>{{ log.created_by.display_name }}</span>{% endif %}
+                    </div>
+                    {% if log.reason %}<p class="mt-1 text-slate-200">{{ log.reason }}</p>{% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-5 text-center text-sm text-slate-400">
+          <p class="font-medium text-slate-200">No quotation requests created yet.</p>
+          {% if can_manage_opportunity_docs %}
+          <p class="mt-1 text-xs text-slate-500">Create a request to tie items, CRF and uploads together.</p>
+          <button type="button" class="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30" data-modal-open="createQuotationRequestModal">+ Create Quotation Request</button>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
     <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 140ms;">
       <div class="flex items-start justify-between gap-3 px-6 py-4 border-b border-slate-800/80">
         <div>
@@ -723,8 +867,16 @@
             <form method="post" enctype="multipart/form-data" class="shrink-0">
               {{ csrf_field() }}
               <input type="hidden" name="form_action" value="upload_quotation">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select name="quotation_request_id" class="rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-400/60">
+                  <option value="">Link to request (optional)</option>
+                  {% for request in quotation_requests %}
+                  <option value="{{ request.id }}">Request #{{ request.id }} · {{ request.status_label }}</option>
+                  {% endfor %}
+                </select>
               <input type="file" name="quotation_file" id="quotationUploadInput" class="hidden" data-auto-submit-file>
               <label for="quotationUploadInput" class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-sky-400/40 bg-sky-500/20 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Upload New Version</label>
+              </div>
             </form>
             {% endif %}
           </div>
@@ -1265,6 +1417,91 @@
   </div>
 </div>
 
+<div id="createQuotationRequestModal" data-modal-id="createQuotationRequestModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-2xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Quotation Request</p>
+        <h3 class="text-lg font-semibold text-slate-100">Create Request</h3>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close create request modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5">
+      {{ csrf_field() }}
+      <input type="hidden" name="form_action" value="create_quotation_request">
+      <div>
+        <p class="mb-2 text-xs uppercase tracking-wide text-slate-400">Select Items</p>
+        <div class="space-y-2 rounded-xl border border-slate-800/80 bg-slate-950/70 p-3 max-h-56 overflow-y-auto">
+          {% for item in items %}
+          <label class="flex items-start gap-3 rounded-lg border border-transparent px-2 py-1 hover:border-emerald-400/40">
+            <input type="checkbox" name="quotation_request_items" value="{{ item.id }}" class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400/60">
+            <div>
+              <p class="text-sm font-semibold text-slate-100">#{{ item.id }} · {{ item.details or item.lift_type or 'Opportunity Item' }}</p>
+              <p class="text-xs text-slate-500">Qty: {{ item.quantity or 1 }}{% if item.lift_type %} · {{ item.lift_type }}{% endif %}{% if item.cabin_finish %} · {{ item.cabin_finish }}{% endif %}</p>
+            </div>
+          </label>
+          {% endfor %}
+          {% if not items %}
+          <p class="text-sm text-slate-400">Add items to this opportunity to create a request.</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Linked CRF</label>
+          <select name="linked_crf_id" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="">Select form (optional)</option>
+            {% for form in client_requirement_forms %}
+            <option value="{{ form.id }}">CRF #{{ form.id }} · V{{ form.version }}{% if form.template %} · {{ form.template.name }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes</label>
+          <textarea name="quotation_request_notes" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Delivery timelines, discounts, special asks..."></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer" {% if not items %}disabled{% endif %}>Create Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="negotiationModal" data-modal-id="negotiationModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Negotiation / Discount</p>
+        <h3 class="text-lg font-semibold text-slate-100">Request Negotiation</h3>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close negotiation modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5">
+      {{ csrf_field() }}
+      <input type="hidden" name="form_action" value="quotation_request_negotiation">
+      <input type="hidden" name="quotation_request_id" value="" data-negotiation-request>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Reason / Details</label>
+        <textarea name="negotiation_reason" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Discount requested, scope change, competition pricing..."></textarea>
+      </div>
+      <label class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100">
+        <input type="checkbox" name="move_to_negotiation" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400/60" checked>
+        <span class="text-xs uppercase tracking-wide text-slate-300">Move opportunity stage to Negotiation</span>
+      </label>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Save Negotiation Log</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% with
   modal_id='salesDesignTaskModal',
   modal_title='Create Sales Query Task',
@@ -1453,6 +1690,26 @@
         if (input.files && input.files.length > 0) {
           input.closest('form')?.submit();
         }
+      });
+    });
+
+    document.querySelectorAll('[data-request-toggle]').forEach((button) => {
+      const container = button.closest('.rounded-xl');
+      const panel = container?.querySelector('[data-request-panel]');
+      if (!panel) return;
+      button.addEventListener('click', () => {
+        panel.classList.toggle('hidden');
+      });
+    });
+
+    const negotiationModal = document.getElementById('negotiationModal');
+    const negotiationRequestField = negotiationModal?.querySelector('[data-negotiation-request]');
+    document.querySelectorAll('[data-negotiation-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (negotiationRequestField) {
+          negotiationRequestField.value = button.dataset.requestId || '';
+        }
+        toggleModal('negotiationModal', true);
       });
     });
 
