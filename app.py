@@ -10138,6 +10138,38 @@ def ensure_sales_opportunity_engagement_columns():
         print("✔️ sales_opportunity_engagement OK")
 
 
+def ensure_sales_opportunity_file_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_sales_opportunity_file_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_opportunity_file'"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(sales_opportunity_file)")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+
+    if "quotation_request_id" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_file ADD COLUMN quotation_request_id INTEGER;")
+        added.append("quotation_request_id")
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in sales_opportunity_file: {', '.join(added)}")
+    else:
+        print("✔️ sales_opportunity_file OK")
+
+
 def ensure_user_columns():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -10663,6 +10695,7 @@ def bootstrap_db():
     ensure_sales_opportunity_columns()
     ensure_sales_opportunity_item_columns()
     ensure_sales_opportunity_engagement_columns()
+    ensure_sales_opportunity_file_columns()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
