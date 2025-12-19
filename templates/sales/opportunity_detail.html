@@ -171,26 +171,33 @@
           <table class="min-w-full text-sm">
             <thead class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur">
               <tr class="text-left text-slate-500">
-                <th class="py-3 px-4">Structure Required</th>
-                <th class="py-3 px-4">Lift Type</th>
-                <th class="py-3 px-4">Door Type</th>
+                <th class="py-3 px-4">Type</th>
                 <th class="py-3 px-4">Floors</th>
-                <th class="py-3 px-4">Quantity</th>
                 <th class="py-3 px-4">Cabin Finish</th>
-                <th class="py-3 px-4">Details</th>
+                <th class="py-3 px-4">Door Type</th>
+                <th class="py-3 px-4">Structure Required</th>
+                <th class="py-3 px-4">Qty</th>
                 <th class="py-3 px-4">Item Value</th>
+                <th class="py-3 px-4">Details</th>
                 <th class="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/70">
               {% for item in items %}
               <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
-                <td class="py-3 px-4 font-semibold text-slate-100">{{ item.structure_label }}</td>
                 <td class="py-3 px-4 text-slate-200">{{ item.lift_type or '—' }}</td>
-                <td class="py-3 px-4 text-slate-200">{{ item.door_type or '—' }}</td>
                 <td class="py-3 px-4 text-slate-200">{{ item.floors or '—' }}</td>
-                <td class="py-3 px-4 text-slate-200">{{ item.quantity or '—' }}</td>
                 <td class="py-3 px-4 text-slate-200">{{ item.cabin_finish or '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ item.door_type or '—' }}</td>
+                <td class="py-3 px-4 font-semibold text-slate-100">{{ item.structure_label }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ item.quantity or '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">
+                  {% if item.item_value is not none and item.item_value != '' %}
+                    {{ '{:,.2f}'.format(item.item_value) }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
                 <td class="py-3 px-4 max-w-xs">
                   {% if item.details %}
                     <span class="line-clamp-2" title="{{ item.details }}">{{ item.details }}</span>
@@ -198,7 +205,6 @@
                     <span class="text-slate-500">—</span>
                   {% endif %}
                 </td>
-                <td class="py-3 px-4 text-slate-200">{{ '{:,.2f}'.format(item.item_value) if item.item_value is not none else '—' }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
                     <button
@@ -936,14 +942,18 @@
       {{ csrf_field() }}
       <input type="hidden" name="form_action" value="create_item" data-item-form-action>
       <input type="hidden" name="item_id" value="" data-item-id-field>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Lift Type</label>
+        <input type="text" name="lift_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Machine roomless / Gearless">
+      </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100">
-          <input type="checkbox" name="structure_required" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400/60">
-          <span class="text-xs uppercase tracking-wide text-slate-300">Structure Required</span>
-        </label>
         <div>
-          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Lift Type</label>
-          <input type="text" name="lift_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Machine roomless / Gearless">
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Floors</label>
+          <input type="text" name="floors" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="G+3 / B+G+10">
+        </div>
+        <div>
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Cabin Finish</label>
+          <input type="text" name="cabin_finish" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="SS Hairline / M.S. Powdercoat">
         </div>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -951,10 +961,10 @@
           <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Door Type</label>
           <input type="text" name="door_type" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Manual / Automatic">
         </div>
-        <div>
-          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Floors</label>
-          <input type="text" name="floors" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="G+3 / B+G+10">
-        </div>
+        <label class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100">
+          <input type="checkbox" name="structure_required" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-400 focus:ring-emerald-400/60">
+          <span class="text-xs uppercase tracking-wide text-slate-300">Structure Required</span>
+        </label>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -962,17 +972,13 @@
           <input type="number" name="item_quantity" min="1" value="1" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required>
         </div>
         <div>
-          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Cabin Finish</label>
-          <input type="text" name="cabin_finish" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="SS Hairline / M.S. Powdercoat">
+          <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Item Value <span class="text-slate-600">(Optional)</span></label>
+          <input type="number" name="item_value" min="0" step="0.01" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="0.00">
         </div>
       </div>
       <div>
         <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details</label>
         <textarea name="details" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Scope, customizations, exclusions..."></textarea>
-      </div>
-      <div>
-        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Item Value <span class="text-slate-600">(Optional)</span></label>
-        <input type="number" name="item_value" min="0" step="0.01" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="0.00">
       </div>
       <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
         <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
