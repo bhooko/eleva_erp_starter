@@ -220,6 +220,7 @@ class Project(db.Model):
     __tablename__ = "project"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=True)
     site_name = db.Column(db.String(200), nullable=True)
     site_address = db.Column(db.Text, nullable=True)
     customer_name = db.Column(db.String(200), nullable=True)
@@ -238,6 +239,8 @@ class Project(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     sales_won_at = db.Column(db.DateTime, nullable=True)
     sales_executive_name = db.Column(db.String(200), nullable=True)
+
+    opportunity = db.relationship("SalesOpportunity", backref="projects_linked", foreign_keys=[opportunity_id])
 
     comments = db.relationship(
         "ProjectComment",
@@ -324,7 +327,7 @@ class ClientRequirementForm(db.Model):
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
 
-    opportunity = db.relationship("SalesOpportunity")
+    opportunity = db.relationship("SalesOpportunity", foreign_keys=[opportunity_id])
     lift = db.relationship("SalesOpportunityItem")
     template = db.relationship("FormTemplate")
     created_by_sales = db.relationship("User", foreign_keys=[created_by_sales_id])
@@ -564,6 +567,11 @@ class SalesOpportunity(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
     related_project = db.Column(db.String(200), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    final_crf_id = db.Column(db.Integer, db.ForeignKey("client_requirement_form.id"), nullable=True)
+    final_quotation_file_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity_file.id"), nullable=True)
+    closed_status = db.Column(db.String(20), nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_reason = db.Column(db.Text, nullable=True)
     description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -574,7 +582,12 @@ class SalesOpportunity(db.Model):
 
     owner = db.relationship("User")
     client = db.relationship("SalesClient", back_populates="opportunities")
-    project = db.relationship("Project", backref="opportunities", lazy="joined")
+    project = db.relationship(
+        "Project",
+        backref=db.backref("opportunities", foreign_keys="SalesOpportunity.project_id"),
+        lazy="joined",
+        foreign_keys=[project_id],
+    )
     comments = db.relationship(
         "SalesOpportunityComment",
         back_populates="opportunity",
@@ -583,6 +596,7 @@ class SalesOpportunity(db.Model):
     files = db.relationship(
         "SalesOpportunityFile",
         back_populates="opportunity",
+        foreign_keys="SalesOpportunityFile.opportunity_id",
         cascade="all, delete-orphan",
     )
     engagements = db.relationship(
@@ -600,6 +614,8 @@ class SalesOpportunity(db.Model):
         back_populates="opportunity",
         cascade="all, delete-orphan",
     )
+    final_crf = db.relationship("ClientRequirementForm", foreign_keys=[final_crf_id])
+    final_quotation_file = db.relationship("SalesOpportunityFile", foreign_keys=[final_quotation_file_id])
 
     @property
     def display_amount(self):
@@ -782,7 +798,7 @@ class SalesOpportunityFile(db.Model):
     file_size = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-    opportunity = db.relationship("SalesOpportunity", back_populates="files")
+    opportunity = db.relationship("SalesOpportunity", back_populates="files", foreign_keys=[opportunity_id])
     uploaded_by = db.relationship("User")
     quotation_request = db.relationship("SalesQuotationRequest", back_populates="files")
 
@@ -859,9 +875,11 @@ class SalesOpportunityItem(db.Model):
     door_type = db.Column(db.String(120), nullable=True)
     structure_required = db.Column(db.Boolean, default=False)
     item_value = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     opportunity = db.relationship("SalesOpportunity", back_populates="items")
+    project = db.relationship("Project")
 
     @property
     def structure_label(self):
