@@ -595,6 +595,11 @@ class SalesOpportunity(db.Model):
         back_populates="opportunity",
         cascade="all, delete-orphan",
     )
+    quotation_requests = db.relationship(
+        "SalesQuotationRequest",
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def display_amount(self):
@@ -767,6 +772,9 @@ class SalesOpportunityFile(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    quotation_request_id = db.Column(
+        db.Integer, db.ForeignKey("sales_quotation_request.id"), nullable=True
+    )
     uploaded_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     original_filename = db.Column(db.String(255), nullable=False)
     stored_path = db.Column(db.String(400), nullable=False)
@@ -776,6 +784,7 @@ class SalesOpportunityFile(db.Model):
 
     opportunity = db.relationship("SalesOpportunity", back_populates="files")
     uploaded_by = db.relationship("User")
+    quotation_request = db.relationship("SalesQuotationRequest", back_populates="files")
 
     @property
     def display_size(self):
@@ -857,6 +866,92 @@ class SalesOpportunityItem(db.Model):
     @property
     def structure_label(self):
         return "Yes" if self.structure_required else "No"
+
+
+class SalesQuotationRequest(db.Model):
+    __tablename__ = "sales_quotation_request"
+
+    id = db.Column(db.Integer, primary_key=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=False)
+    status = db.Column(db.String(40), default="draft")
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    requested_at = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    linked_crf_id = db.Column(db.Integer, db.ForeignKey("client_requirement_form.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    opportunity = db.relationship("SalesOpportunity", back_populates="quotation_requests")
+    requested_by = db.relationship("User")
+    linked_crf = db.relationship("ClientRequirementForm")
+    items = db.relationship(
+        "SalesQuotationRequestItem",
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
+    files = db.relationship(
+        "SalesOpportunityFile",
+        back_populates="quotation_request",
+        cascade="all",
+        order_by="SalesOpportunityFile.created_at.desc()",
+    )
+    negotiation_logs = db.relationship(
+        "SalesQuotationNegotiationLog",
+        back_populates="request",
+        cascade="all, delete-orphan",
+        order_by="SalesQuotationNegotiationLog.created_at.desc()",
+    )
+
+    @property
+    def status_label(self):
+        mapping = {
+            "draft": "Draft",
+            "requested": "Requested",
+            "in_progress": "In Progress",
+            "shared": "Shared",
+            "revised": "Revision Requested",
+            "finalized": "Finalized",
+            "cancelled": "Cancelled",
+        }
+        return mapping.get(self.status, (self.status or "Draft").replace("_", " ").title())
+
+    @property
+    def item_count(self):
+        return len(self.items or [])
+
+
+class SalesQuotationRequestItem(db.Model):
+    __tablename__ = "sales_quotation_request_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey("sales_quotation_request.id"), nullable=False)
+    opportunity_item_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity_item.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    request = db.relationship("SalesQuotationRequest", back_populates="items")
+    opportunity_item = db.relationship("SalesOpportunityItem")
+
+    __table_args__ = (
+        db.UniqueConstraint("request_id", "opportunity_item_id", name="uq_request_item"),
+    )
+
+
+class SalesQuotationNegotiationLog(db.Model):
+    __tablename__ = "sales_quotation_negotiation_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey("sales_quotation_request.id"), nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    reason = db.Column(db.Text, nullable=True)
+    suggested_stage = db.Column(db.String(80), nullable=True, default="Negotiation")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    request = db.relationship("SalesQuotationRequest", back_populates="negotiation_logs")
+    created_by = db.relationship("User")
 
 
 # NEW: QC Work table (simple tracker for “create work for new site QC”)

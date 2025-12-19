@@ -5593,6 +5593,9 @@ from eleva_app.models import (
     SalesOpportunityEngagement,
     SalesOpportunityFile,
     SalesOpportunityItem,
+    SalesQuotationNegotiationLog,
+    SalesQuotationRequest,
+    SalesQuotationRequestItem,
     SalesTask,
     sales_task_assignees,
     ServiceRoute,
@@ -13210,6 +13213,21 @@ def sales_opportunity_detail(opportunity_id):
             )
             os.makedirs(quote_root, exist_ok=True)
 
+            request_id_raw = (request.form.get("quotation_request_id") or "").strip()
+            linked_request = None
+            if request_id_raw:
+                try:
+                    linked_request = (
+                        SalesQuotationRequest.query.filter_by(
+                            id=int(request_id_raw), opportunity_id=opportunity.id
+                        ).first()
+                    )
+                except (TypeError, ValueError):
+                    linked_request = None
+                if not linked_request:
+                    flash("Selected quotation request not found for this opportunity.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
             existing_quotes = (
                 SalesOpportunityFile.query.filter(
                     SalesOpportunityFile.opportunity_id == opportunity.id,
@@ -13234,6 +13252,7 @@ def sales_opportunity_detail(opportunity_id):
 
             record = SalesOpportunityFile(
                 opportunity=opportunity,
+                quotation_request=linked_request,
                 original_filename=versioned_name,
                 stored_path=stored_relative,
                 content_type=uploaded_file.mimetype,
@@ -13251,6 +13270,179 @@ def sales_opportunity_detail(opportunity_id):
             )
             db.session.commit()
             flash("Quotation uploaded.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "create_quotation_request":
+            can_manage_docs = (
+                current_user.is_admin
+                or opportunity.owner_id is None
+                or opportunity.owner_id == current_user.id
+            )
+            if not can_manage_docs:
+                flash("Only the opportunity owner can create quotation requests.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            selected_items = request.form.getlist("quotation_request_items")
+            if not selected_items:
+                flash("Select at least one item to request a quotation for.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            try:
+                item_ids = [int(item_id) for item_id in selected_items]
+            except (TypeError, ValueError):
+                flash("Invalid item selection.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            valid_items = (
+                SalesOpportunityItem.query.filter(
+                    SalesOpportunityItem.id.in_(item_ids),
+                    SalesOpportunityItem.opportunity_id == opportunity.id,
+                ).all()
+            )
+            if len(valid_items) != len(item_ids):
+                flash("One or more selected items do not belong to this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            linked_crf_id_raw = (request.form.get("linked_crf_id") or "").strip()
+            linked_crf = None
+            if linked_crf_id_raw:
+                try:
+                    linked_crf = ClientRequirementForm.query.filter_by(
+                        id=int(linked_crf_id_raw), opportunity_id=opportunity.id
+                    ).first()
+                except (TypeError, ValueError):
+                    linked_crf = None
+                if not linked_crf:
+                    flash("Selected Client Requirements form not found for this opportunity.", "error")
+                    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            notes = (request.form.get("quotation_request_notes") or "").strip() or None
+            request_record = SalesQuotationRequest(
+                opportunity=opportunity,
+                status="requested",
+                requested_by=current_user if current_user.is_authenticated else None,
+                requested_at=datetime.datetime.utcnow(),
+                linked_crf=linked_crf,
+                notes=notes,
+            )
+            db.session.add(request_record)
+            db.session.flush()
+
+            for item in valid_items:
+                link = SalesQuotationRequestItem(request=request_record, opportunity_item=item)
+                db.session.add(link)
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                "Quotation request created",
+                notes=f"Request #{request_record.id} for {len(valid_items)} item(s).",
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Quotation request submitted.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "update_quotation_request_status":
+            can_manage_docs = (
+                current_user.is_admin
+                or opportunity.owner_id is None
+                or opportunity.owner_id == current_user.id
+            )
+            if not can_manage_docs:
+                flash("Only the opportunity owner can update quotation requests.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            request_id_raw = (request.form.get("quotation_request_id") or "").strip()
+            target_status = (request.form.get("target_status") or "").strip().lower()
+            allowed_statuses = {
+                "requested",
+                "in_progress",
+                "shared",
+                "revised",
+                "finalized",
+                "cancelled",
+            }
+            if target_status not in allowed_statuses:
+                flash("Invalid status selected.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            try:
+                request_record = (
+                    SalesQuotationRequest.query.filter_by(
+                        id=int(request_id_raw), opportunity_id=opportunity.id
+                    ).first()
+                )
+            except (TypeError, ValueError):
+                request_record = None
+            if not request_record:
+                flash("Quotation request not found.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            request_record.status = target_status
+            request_record.updated_at = datetime.datetime.utcnow()
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                f"Quotation request {request_record.id} marked {request_record.status_label}",
+                actor=current_user,
+            )
+            db.session.commit()
+            flash("Quotation request updated.", "success")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        elif action == "quotation_request_negotiation":
+            can_manage_docs = (
+                current_user.is_admin
+                or opportunity.owner_id is None
+                or opportunity.owner_id == current_user.id
+            )
+            if not can_manage_docs:
+                flash("Only the opportunity owner can request negotiation.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            request_id_raw = (request.form.get("quotation_request_id") or "").strip()
+            reason = (request.form.get("negotiation_reason") or "").strip() or None
+            suggest_stage = request.form.get("move_to_negotiation") == "on"
+            try:
+                request_record = (
+                    SalesQuotationRequest.query.filter_by(
+                        id=int(request_id_raw), opportunity_id=opportunity.id
+                    ).first()
+                )
+            except (TypeError, ValueError):
+                request_record = None
+
+            if not request_record:
+                flash("Quotation request not found.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+            log_entry = SalesQuotationNegotiationLog(
+                request=request_record,
+                created_by=current_user if current_user.is_authenticated else None,
+                reason=reason,
+                suggested_stage="Negotiation",
+            )
+            db.session.add(log_entry)
+
+            stage_changed = False
+            if suggest_stage and "Negotiation" in stages and opportunity.stage != "Negotiation":
+                opportunity.stage = "Negotiation"
+                stage_changed = True
+
+            log_sales_activity(
+                "opportunity",
+                opportunity.id,
+                f"Negotiation requested for quotation request #{request_record.id}",
+                notes=reason,
+                actor=current_user,
+            )
+            db.session.commit()
+
+            if stage_changed:
+                flash("Negotiation log added and stage moved to Negotiation.", "success")
+            else:
+                flash("Negotiation log added. Consider moving the stage to Negotiation.", "info")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
         elif action in {"add_item", "create_item", "update_item"}:
@@ -13740,6 +13932,18 @@ def sales_opportunity_detail(opportunity_id):
         .order_by(SalesOpportunityItem.created_at.desc())
         .all()
     )
+    quotation_requests = (
+        SalesQuotationRequest.query.options(
+            joinedload(SalesQuotationRequest.items).joinedload(SalesQuotationRequestItem.opportunity_item),
+            joinedload(SalesQuotationRequest.linked_crf).joinedload(ClientRequirementForm.template),
+            joinedload(SalesQuotationRequest.requested_by),
+            joinedload(SalesQuotationRequest.files).joinedload(SalesOpportunityFile.uploaded_by),
+            joinedload(SalesQuotationRequest.negotiation_logs).joinedload(SalesQuotationNegotiationLog.created_by),
+        )
+        .filter(SalesQuotationRequest.opportunity_id == opportunity.id)
+        .order_by(SalesQuotationRequest.created_at.desc())
+        .all()
+    )
     client_requirement_forms = (
         ClientRequirementForm.query.filter_by(opportunity_id=opportunity.id)
         .order_by(
@@ -13840,6 +14044,7 @@ def sales_opportunity_detail(opportunity_id):
         client_requirement_forms=client_requirement_forms,
         available_client_forms=available_client_forms,
         quotation_files=quotation_files,
+        quotation_requests=quotation_requests,
         can_manage_opportunity_docs=can_manage_opportunity_docs,
     )
 
