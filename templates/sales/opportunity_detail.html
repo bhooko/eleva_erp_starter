@@ -246,11 +246,11 @@
   </div>
 </div>
 
-<div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
+<div id="activities" class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
   <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
     <div>
       <p class="text-xs uppercase tracking-wide text-slate-500">Activities</p>
-      <p class="text-sm text-slate-300">Log calls, meetings, follow-ups linked to this opportunity.</p>
+      <p class="text-sm text-slate-300">Create, log, or close follow-ups linked to this opportunity.</p>
     </div>
     <div class="flex flex-wrap gap-3">
       <button
@@ -262,89 +262,195 @@
       </button>
     </div>
   </div>
-  {% if scheduled_activities %}
-  <div class="mt-3 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
-    <div class="overflow-auto">
-      {% set include_created_by = scheduled_activities | selectattr('created_by') | list | length > 0 %}
-      <table class="min-w-full text-sm">
-        <thead class="sticky top-0 bg-slate-950/60 backdrop-blur">
-          <tr class="text-left text-slate-500">
-            <th class="py-3 px-4">Type</th>
-            <th class="py-3 px-4">Subject</th>
-            <th class="py-3 px-4">Date</th>
-            <th class="py-3 px-4">Time</th>
-            <th class="py-3 px-4">Reminder</th>
-            <th class="py-3 px-4">Notes</th>
-            {% if include_created_by %}
-            <th class="py-3 px-4">Created By</th>
-            {% endif %}
-            <th class="py-3 px-4 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-800/70">
-          {% for engagement in scheduled_activities %}
-          {% set has_time = engagement.scheduled_for and (engagement.scheduled_for.time().hour or engagement.scheduled_for.time().minute) %}
-          <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
-            <td class="py-3 px-4 font-semibold text-slate-200">{{ engagement.display_activity_type }}</td>
-            <td class="py-3 px-4 text-slate-200">{{ engagement.subject or '—' }}</td>
-            <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%d %b %Y') if engagement.scheduled_for else '—' }}</td>
-            <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%I:%M %p') if has_time else '—' }}</td>
-            <td class="py-3 px-4 text-slate-200">{{ engagement.display_reminder }}</td>
-            <td class="py-3 px-4 max-w-xs">
-              {% if engagement.notes %}
-              <span class="line-clamp-2" title="{{ engagement.notes }}">{{ engagement.notes }}</span>
-              {% else %}
-              <span class="text-slate-500">—</span>
-              {% endif %}
-            </td>
-            {% if include_created_by %}
-            <td class="py-3 px-4 text-slate-200">{{ engagement.created_by.display_name if engagement.created_by else '—' }}</td>
-            {% endif %}
-            <td class="py-3 px-4 text-right">
-              <div class="flex justify-end gap-2">
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100"
-                  data-activity-edit
-                  data-activity-id="{{ engagement.id }}"
-                  data-activity-type="{{ engagement.activity_type or 'meeting' }}"
-                  data-activity-subject="{{ (engagement.subject or '') | e }}"
-                  data-activity-date="{{ engagement.scheduled_for.date().isoformat() if engagement.scheduled_for else '' }}"
-                  data-activity-time="{{ engagement.scheduled_for.strftime('%H:%M') if has_time else '' }}"
-                  data-activity-reminder="{{ engagement.reminder_option or '' }}"
-                  data-activity-notes="{{ (engagement.notes or '') | e }}"
-                >
-                  Edit
-                </button>
-                <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="inline" onsubmit="return confirm('Delete this activity?');">
-                  {{ csrf_field() }}
-                  <input type="hidden" name="form_action" value="delete_activity">
-                  <input type="hidden" name="engagement_id" value="{{ engagement.id }}">
-                  <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/10">Delete</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="mt-4 space-y-4">
+    <div class="rounded-xl border border-slate-800/80 bg-slate-950/40">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/70">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Open / Upcoming</p>
+          <p class="text-xs text-slate-500">Activities that still need to be logged or cancelled.</p>
+        </div>
+      </div>
+      {% if open_engagements %}
+      <div class="overflow-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-950/60 text-left text-slate-500">
+            <tr>
+              <th class="py-3 px-4">Type</th>
+              <th class="py-3 px-4">Subject</th>
+              <th class="py-3 px-4">Date</th>
+              <th class="py-3 px-4">Time</th>
+              <th class="py-3 px-4">Reminder</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70">
+            {% for engagement in open_engagements %}
+            {% set has_time = engagement.scheduled_for and (engagement.scheduled_for.time().hour or engagement.scheduled_for.time().minute) %}
+            {% set overdue = engagement.is_overdue %}
+            <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
+              <td class="py-3 px-4 font-semibold text-slate-200">{{ engagement.display_activity_type }}</td>
+              <td class="py-3 px-4 text-slate-200">
+                <div class="flex flex-col gap-1">
+                  <span class="font-semibold">{{ engagement.subject or '—' }}</span>
+                  {% if engagement.notes %}
+                    <span class="text-xs text-slate-500 line-clamp-2">{{ engagement.notes }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%d %b %Y') if engagement.scheduled_for else '—' }}</td>
+              <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%I:%M %p') if has_time else '—' }}</td>
+              <td class="py-3 px-4 text-slate-200">{{ engagement.display_reminder }}</td>
+              <td class="py-3 px-4">
+                <div class="flex flex-col gap-1">
+                  <span class="inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Open</span>
+                  {% if overdue %}
+                    <span class="inline-flex items-center gap-2 rounded-full border border-rose-500/50 bg-rose-500/10 px-3 py-1 text-[11px] font-semibold text-rose-100">Overdue</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="py-3 px-4 text-right">
+                <div class="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-lg border border-emerald-400/50 px-3 py-1 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
+                    data-activity-log
+                    data-activity-id="{{ engagement.id }}"
+                    data-activity-type="{{ engagement.activity_type or 'meeting' }}"
+                    data-activity-subject="{{ (engagement.subject or '') | e }}"
+                    data-activity-date="{{ engagement.scheduled_for.date().isoformat() if engagement.scheduled_for else '' }}"
+                    data-activity-time="{{ engagement.scheduled_for.strftime('%H:%M') if has_time else '' }}"
+                  >
+                    Log / Close
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-400/50 hover:text-emerald-100"
+                    data-activity-edit
+                    data-activity-id="{{ engagement.id }}"
+                    data-activity-type="{{ engagement.activity_type or 'meeting' }}"
+                    data-activity-subject="{{ (engagement.subject or '') | e }}"
+                    data-activity-date="{{ engagement.scheduled_for.date().isoformat() if engagement.scheduled_for else '' }}"
+                    data-activity-time="{{ engagement.scheduled_for.strftime('%H:%M') if has_time else '' }}"
+                    data-activity-reminder="{{ engagement.reminder_option or '' }}"
+                    data-activity-notes="{{ (engagement.notes or '') | e }}"
+                  >
+                    Edit
+                  </button>
+                  <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="inline" onsubmit="return confirm('Cancel this activity?');">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="form_action" value="cancel_activity">
+                    <input type="hidden" name="engagement_id" value="{{ engagement.id }}">
+                    <input type="hidden" name="cancel_reason" value="">
+                    <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/10">Cancel</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="px-4 py-5 text-center text-sm text-slate-400">
+        <p class="font-medium text-slate-200">No open activities yet.</p>
+        <p class="mt-1 text-xs text-slate-500">Log calls, meetings, WhatsApp follow-ups, and next steps.</p>
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
+            data-activity-create
+          >
+            + Create Activity
+          </button>
+        </div>
+      </div>
+      {% endif %}
     </div>
+
+    <details class="group rounded-xl border border-slate-800/80 bg-slate-950/40">
+      <summary class="flex cursor-pointer items-center justify-between px-4 py-3 text-slate-300 hover:text-emerald-100">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Logged / Completed</p>
+          <p class="text-xs text-slate-500">Closed or cancelled activities (collapsed by default).</p>
+        </div>
+        <svg class="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
+        </svg>
+      </summary>
+      <div class="border-t border-slate-800/70">
+        {% if logged_engagements %}
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-950/60 text-left text-slate-500">
+              <tr>
+                <th class="py-3 px-4">Type</th>
+                <th class="py-3 px-4">Subject</th>
+                <th class="py-3 px-4">Date</th>
+                <th class="py-3 px-4">Time</th>
+                <th class="py-3 px-4">Reminder</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/70">
+              {% for engagement in logged_engagements %}
+              {% set has_time = engagement.scheduled_for and (engagement.scheduled_for.time().hour or engagement.scheduled_for.time().minute) %}
+              {% set status = (engagement.status or 'open').lower() %}
+              {% set status_class = 'border-emerald-400/50 bg-emerald-500/10 text-emerald-100' if status == 'done' else 'border-slate-500/50 bg-slate-500/10 text-slate-100' %}
+              <tr class="transition duration-200 hover:bg-slate-900/60 fade-slide-row">
+                <td class="py-3 px-4 font-semibold text-slate-200">{{ engagement.display_activity_type }}</td>
+                <td class="py-3 px-4 text-slate-200">
+                  <div class="flex flex-col gap-1">
+                    <span class="font-semibold">{{ engagement.subject or '—' }}</span>
+                    {% if engagement.notes %}
+                      <span class="text-xs text-slate-500 line-clamp-2">{{ engagement.notes }}</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%d %b %Y') if engagement.scheduled_for else '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ engagement.scheduled_for.strftime('%I:%M %p') if has_time else '—' }}</td>
+                <td class="py-3 px-4 text-slate-200">{{ engagement.display_reminder }}</td>
+                <td class="py-3 px-4">
+                  <div class="flex flex-col gap-1 text-xs text-slate-200">
+                    <span class="inline-flex items-center gap-2 rounded-full border {{ status_class }} px-3 py-1 text-[11px] font-semibold uppercase tracking-wide">{{ engagement.display_status }}</span>
+                    {% if engagement.display_outcome %}
+                      <span class="text-emerald-100">Outcome: {{ engagement.display_outcome }}</span>
+                    {% endif %}
+                    {% if engagement.log_details %}
+                      <span class="text-slate-400">Notes: {{ engagement.log_details }}</span>
+                    {% endif %}
+                    {% if engagement.completed_by or engagement.completed_at %}
+                      <span class="text-[11px] text-slate-500">
+                        {{ 'By ' ~ (engagement.completed_by.display_name if engagement.completed_by else '—') }}{% if engagement.completed_at %}, {{ engagement.completed_at.strftime('%d %b %Y, %I:%M %p') }}{% endif %}
+                      </span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-right">
+                  <div class="flex justify-end gap-2">
+                    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="inline" onsubmit="return confirm('Delete this activity?');">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="form_action" value="delete_activity">
+                      <input type="hidden" name="engagement_id" value="{{ engagement.id }}">
+                      <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/10">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="px-4 py-5 text-center text-sm text-slate-400">
+          <p class="font-medium text-slate-200">No completed activities yet.</p>
+          <p class="mt-1 text-xs text-slate-500">Logged items will show here after you close them.</p>
+        </div>
+        {% endif %}
+      </div>
+    </details>
   </div>
-  {% else %}
-  <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-400">
-    <p class="font-medium text-slate-200">No activities yet.</p>
-    <p class="mt-1 text-xs text-slate-500">Log calls, meetings and follow-ups to keep momentum.</p>
-    <div class="mt-4 flex justify-center">
-      <button
-        type="button"
-        class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer"
-        data-activity-create
-      >
-        + Create Activity
-      </button>
-    </div>
-  </div>
-  {% endif %}
 </div>
 
 <div class="mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-6 py-5 shadow-xl card-hover-lift fade-in-up" style="--fade-delay: 90ms;">
@@ -1032,6 +1138,7 @@
             <option value="meeting">Meeting</option>
             <option value="call">Call</option>
             <option value="email">Email</option>
+            <option value="whatsapp">WhatsApp</option>
           </select>
         </div>
         <div>
@@ -1064,6 +1171,48 @@
       <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
         <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
         <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer" data-activity-submit>Save Activity</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="logActivityModal" data-modal-id="logActivityModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-slate-400">Log Activity</p>
+        <h3 class="text-lg font-semibold text-slate-100">Close Activity</h3>
+        <p class="text-xs text-slate-500" data-log-activity-schedule>Update the outcome and notes.</p>
+      </div>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close log activity modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_detail', opportunity_id=opportunity.id) }}" class="space-y-4 px-6 py-5" id="logActivityForm">
+      {{ csrf_field() }}
+      <input type="hidden" name="form_action" value="log_activity">
+      <input type="hidden" name="engagement_id" value="" data-log-activity-id>
+      <div class="rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
+        <p class="text-xs uppercase tracking-wide text-slate-500">Activity</p>
+        <p class="font-semibold text-emerald-100" data-log-activity-subject>—</p>
+        <p class="text-xs text-slate-500" data-log-activity-type>—</p>
+      </div>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Outcome</label>
+        <select name="outcome" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" required>
+          <option value="">Select outcome</option>
+          {% for value, label in activity_outcomes %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Details <span class="text-slate-500">(optional)</span></label>
+        <textarea name="log_details" rows="4" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="What happened, next steps, or notes."></textarea>
+      </div>
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 hover:text-emerald-100">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer" data-log-activity-submit>Log &amp; Close</button>
       </div>
     </form>
   </div>
@@ -1322,6 +1471,12 @@
     const activityReminderInput = activityModal?.querySelector('select[name="reminder_option"]');
     const activityNotesInput = activityModal?.querySelector('textarea[name="activity_notes"]');
     const activitySubmitButton = activityModal?.querySelector('[data-activity-submit]');
+    const activityTypeLabels = {
+      meeting: 'Meeting',
+      call: 'Call',
+      email: 'Email',
+      whatsapp: 'WhatsApp',
+    };
 
     function openActivityModal(mode = 'create', data = {}) {
       if (!activityModal || !activityForm) return;
@@ -1363,6 +1518,44 @@
           time: activityTime,
           reminder: activityReminder,
           notes: activityNotes,
+        });
+      });
+    });
+
+    const logActivityModal = document.getElementById('logActivityModal');
+    const logActivityForm = document.getElementById('logActivityForm');
+    const logActivityIdField = logActivityModal?.querySelector('[data-log-activity-id]');
+    const logActivitySubject = logActivityModal?.querySelector('[data-log-activity-subject]');
+    const logActivityType = logActivityModal?.querySelector('[data-log-activity-type]');
+    const logActivitySchedule = logActivityModal?.querySelector('[data-log-activity-schedule]');
+    const logOutcomeInput = logActivityModal?.querySelector('select[name="outcome"]');
+    const logDetailsInput = logActivityModal?.querySelector('textarea[name="log_details"]');
+
+    function openLogActivityModal(data = {}) {
+      if (!logActivityModal || !logActivityForm) return;
+      if (logActivityIdField) logActivityIdField.value = data.id || '';
+      if (logActivitySubject) logActivitySubject.textContent = data.subject || 'Activity';
+      if (logActivityType) logActivityType.textContent = data.typeLabel || data.type || '—';
+      if (logActivitySchedule) logActivitySchedule.textContent = data.schedule || 'Schedule not set';
+      if (logOutcomeInput) logOutcomeInput.value = data.outcome || '';
+      if (logDetailsInput) logDetailsInput.value = data.details || '';
+      toggleModal('logActivityModal', true);
+      logOutcomeInput?.focus();
+    }
+
+    document.querySelectorAll('[data-activity-log]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const { activityId, activitySubject, activityType, activityDate, activityTime } = button.dataset;
+        const typeLabel = activityTypeLabels[activityType] || (activityType || 'Activity').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        const scheduleLabel = activityDate
+          ? `${activityDate}${activityTime ? ` @ ${activityTime}` : ''}`
+          : 'Schedule not set';
+        openLogActivityModal({
+          id: activityId,
+          subject: activitySubject || 'Activity',
+          type: activityType,
+          typeLabel,
+          schedule: scheduleLabel,
         });
       });
     });

@@ -11,6 +11,7 @@ from eleva_app import db
 from app import (
     DEPARTMENT_BRANCHES,
     OPPORTUNITY_ACTIVITY_LABELS,
+    OPPORTUNITY_ACTIVITY_OUTCOMES,
     REMINDER_OPTION_LABELS,
     SALES_TASK_CATEGORY_LABELS,
     SERVICE_VISIT_STATUS_LABELS,
@@ -793,9 +794,15 @@ class SalesOpportunityEngagement(db.Model):
     notes = db.Column(db.Text, nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    status = db.Column(db.String(20), default="open")
+    completed_at = db.Column(db.DateTime, nullable=True)
+    completed_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    outcome = db.Column(db.String(120), nullable=True)
+    log_details = db.Column(db.Text, nullable=True)
 
     opportunity = db.relationship("SalesOpportunity", back_populates="engagements")
-    created_by = db.relationship("User")
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    completed_by = db.relationship("User", foreign_keys=[completed_by_id])
 
     @property
     def display_activity_type(self):
@@ -811,6 +818,23 @@ class SalesOpportunityEngagement(db.Model):
     def display_reminder(self):
         key = (self.reminder_option or "").strip()
         return REMINDER_OPTION_LABELS.get(key, "No reminder")
+
+    @property
+    def display_status(self):
+        status = (self.status or "open").lower()
+        if status == "done":
+            return "Completed"
+        if status == "cancelled":
+            return "Cancelled"
+        return "Open"
+
+    @property
+    def display_outcome(self):
+        outcomes = dict(OPPORTUNITY_ACTIVITY_OUTCOMES)
+        key = (self.outcome or "").strip()
+        if not key:
+            return None
+        return outcomes.get(key, key.replace("_", " ").title())
 
 
 class SalesOpportunityItem(db.Model):
