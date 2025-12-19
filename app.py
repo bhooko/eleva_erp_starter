@@ -19,6 +19,7 @@ from flask_login import (
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math
+from decimal import Decimal, InvalidOperation
 from datetime import datetime as datetime_cls, date
 import importlib.util
 import csv
@@ -10051,45 +10052,15 @@ def ensure_sales_opportunity_item_columns():
     cols = [row[1] for row in cur.fetchall()]
     added = []
 
-    if "name" not in cols:
-        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN name TEXT;")
-        added.append("name")
-
-    if "unit" not in cols:
-        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN unit TEXT;")
-        added.append("unit")
-
     if "item_value" not in cols:
-        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN item_value REAL;")
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN item_value NUMERIC;")
         added.append("item_value")
 
-    if "notes" not in cols:
-        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN notes TEXT;")
-        added.append("notes")
-
-    if "updated_at" not in cols:
-        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN updated_at DATETIME;")
-        added.append("updated_at")
-
-    cur.execute(
-        """
-        UPDATE sales_opportunity_item
-        SET name = COALESCE(NULLIF(name, ''), NULLIF(lift_type, ''), 'Item')
-        WHERE name IS NULL OR TRIM(name) = ''
-        """
-    )
     cur.execute(
         """
         UPDATE sales_opportunity_item
         SET quantity = 1
         WHERE quantity IS NULL OR quantity < 1
-        """
-    )
-    cur.execute(
-        """
-        UPDATE sales_opportunity_item
-        SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
-        WHERE updated_at IS NULL
         """
     )
 
@@ -13199,12 +13170,7 @@ def sales_opportunity_detail(opportunity_id):
 
         elif action in {"add_item", "create_item", "update_item"}:
             def parse_item_form():
-                name = (request.form.get("item_name") or "").strip()
-                if not name:
-                    flash("Item name is required.", "error")
-                    return None
-
-                qty_raw = (request.form.get("item_qty") or "1").strip()
+                qty_raw = (request.form.get("item_quantity") or "1").strip()
                 try:
                     qty_value = int(qty_raw or 1)
                     if qty_value < 1:
@@ -13213,26 +13179,33 @@ def sales_opportunity_detail(opportunity_id):
                     flash("Quantity must be at least 1.", "error")
                     return None
 
-                unit_value = (request.form.get("item_unit") or "").strip() or None
+                lift_type_value = (request.form.get("lift_type") or "").strip() or None
+                door_type_value = (request.form.get("door_type") or "").strip() or None
+                floors_value = (request.form.get("floors") or "").strip() or None
+                cabin_finish_value = (request.form.get("cabin_finish") or "").strip() or None
+                details_value = (request.form.get("details") or "").strip() or None
+                structure_required_value = bool(request.form.get("structure_required"))
+
                 item_value_raw = (request.form.get("item_value") or "").strip()
                 item_value = None
                 if item_value_raw:
                     try:
-                        item_value = float(item_value_raw)
+                        item_value = Decimal(item_value_raw)
                         if item_value < 0:
                             raise ValueError
-                    except ValueError:
+                    except (InvalidOperation, ValueError):
                         flash("Item value must be zero or greater.", "error")
                         return None
 
-                notes_value = (request.form.get("item_notes") or "").strip() or None
-
                 return {
-                    "name": name,
+                    "lift_type": lift_type_value,
+                    "door_type": door_type_value,
+                    "floors": floors_value,
+                    "cabin_finish": cabin_finish_value,
+                    "details": details_value,
                     "quantity": qty_value,
-                    "unit": unit_value,
+                    "structure_required": structure_required_value,
                     "item_value": item_value,
-                    "notes": notes_value,
                 }
 
             item_data = parse_item_form()
@@ -13242,20 +13215,20 @@ def sales_opportunity_detail(opportunity_id):
             if action in {"add_item", "create_item"}:
                 item = SalesOpportunityItem(
                     opportunity=opportunity,
-                    name=item_data["name"],
+                    lift_type=item_data["lift_type"],
+                    door_type=item_data["door_type"],
+                    floors=item_data["floors"],
+                    cabin_finish=item_data["cabin_finish"],
+                    details=item_data["details"],
                     quantity=item_data["quantity"],
-                    unit=item_data["unit"],
                     item_value=item_data["item_value"],
-                    notes=item_data["notes"],
-                    details=item_data["notes"],
+                    structure_required=item_data["structure_required"],
                 )
                 db.session.add(item)
                 summary_bits = [
-                    f"Name: {item.name}",
                     f"Qty: {item.quantity}",
+                    f"Structure: {item.structure_label}",
                 ]
-                if item.unit:
-                    summary_bits.append(f"Unit: {item.unit}")
                 if item.item_value is not None:
                     summary_bits.append(f"Value: {item.item_value}")
                 log_sales_activity(
@@ -13281,16 +13254,16 @@ def sales_opportunity_detail(opportunity_id):
                 flash("Item not found for this opportunity.", "error")
                 return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-            item.name = item_data["name"]
+            item.lift_type = item_data["lift_type"]
+            item.door_type = item_data["door_type"]
+            item.floors = item_data["floors"]
+            item.cabin_finish = item_data["cabin_finish"]
+            item.details = item_data["details"]
             item.quantity = item_data["quantity"]
-            item.unit = item_data["unit"]
             item.item_value = item_data["item_value"]
-            item.notes = item_data["notes"]
-            item.details = item_data["notes"]
+            item.structure_required = item_data["structure_required"]
 
-            summary_bits = [f"Updated: {item.name}", f"Qty: {item.quantity}"]
-            if item.unit:
-                summary_bits.append(f"Unit: {item.unit}")
+            summary_bits = [f"Qty: {item.quantity}", f"Structure: {item.structure_label}"]
             if item.item_value is not None:
                 summary_bits.append(f"Value: {item.item_value}")
 
@@ -13323,7 +13296,7 @@ def sales_opportunity_detail(opportunity_id):
                 "opportunity",
                 opportunity.id,
                 "Item removed",
-                notes=item.name or f"Item #{item.id}",
+                notes=item.lift_type or item.details or f"Item #{item.id}",
                 actor=current_user,
             )
             db.session.commit()
