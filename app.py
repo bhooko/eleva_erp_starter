@@ -4052,13 +4052,17 @@ OPPORTUNITY_REMINDER_OPTIONS = [
 ]
 
 REMINDER_OPTION_LABELS = {value: label for value, label in OPPORTUNITY_REMINDER_OPTIONS}
+OPPORTUNITY_REMINDER_VALUES = {value for value, _ in OPPORTUNITY_REMINDER_OPTIONS}
 
 OPPORTUNITY_ACTIVITY_LABELS = {
     "meeting": "Meeting",
     "call": "Call",
     "email": "Email",
     "whatsapp": "WhatsApp",
+    "site_visit": "Site Visit",
+    "callback": "Callback",
 }
+OPPORTUNITY_ACTIVITY_TYPES = set(OPPORTUNITY_ACTIVITY_LABELS.keys())
 
 OPPORTUNITY_ACTIVITY_OUTCOMES = [
     ("connected", "Connected"),
@@ -13404,14 +13408,14 @@ def sales_opportunity_detail(opportunity_id):
                     return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
             activity_type = (request.form.get("activity_type") or "meeting").strip().lower()
-            if activity_type not in {"meeting", "call", "email", "whatsapp"}:
+            if activity_type not in OPPORTUNITY_ACTIVITY_TYPES:
                 activity_type = "meeting"
 
             subject = (request.form.get("activity_subject") or "").strip()
             activity_date_raw = (request.form.get("activity_date") or "").strip()
             activity_time_raw = (request.form.get("activity_time") or "").strip()
             reminder_option = (request.form.get("reminder_option") or "").strip()
-            if reminder_option not in {value for value, _ in OPPORTUNITY_REMINDER_OPTIONS}:
+            if reminder_option not in OPPORTUNITY_REMINDER_VALUES:
                 reminder_option = ""
             additional_notes = (request.form.get("activity_notes") or "").strip()
 
@@ -13522,6 +13526,47 @@ def sales_opportunity_detail(opportunity_id):
                 flash("Select an outcome before logging the activity.", "error")
                 return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
+            next_action_type = (request.form.get("next_action_type") or "").strip().lower()
+            if next_action_type and next_action_type not in OPPORTUNITY_ACTIVITY_TYPES:
+                next_action_type = ""
+            next_action_subject = (request.form.get("next_action_subject") or "").strip()
+            next_action_date_raw = (request.form.get("next_action_date") or "").strip()
+            next_action_time_raw = (request.form.get("next_action_time") or "").strip()
+            next_action_reminder = (request.form.get("next_action_reminder") or "").strip()
+            if next_action_reminder not in OPPORTUNITY_REMINDER_VALUES:
+                next_action_reminder = ""
+            next_action_notes = (request.form.get("next_action_notes") or "").strip()
+
+            next_action_schedule_parts = []
+            next_action_scheduled_for = None
+            if next_action_type:
+                if next_action_date_raw:
+                    try:
+                        next_action_date = datetime.datetime.strptime(next_action_date_raw, "%Y-%m-%d").date()
+                        next_action_schedule_parts.append(next_action_date.strftime("%d %b %Y"))
+                    except ValueError:
+                        flash("Provide a valid date for the next action (YYYY-MM-DD).", "error")
+                        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                else:
+                    next_action_date = None
+
+                if next_action_time_raw:
+                    try:
+                        next_action_time = datetime.datetime.strptime(next_action_time_raw, "%H:%M").time()
+                        next_action_schedule_parts.append(next_action_time.strftime("%I:%M %p"))
+                    except ValueError:
+                        flash("Provide a valid time for the next action (HH:MM).", "error")
+                        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+                else:
+                    next_action_time = None
+
+                if next_action_date and next_action_time:
+                    next_action_scheduled_for = datetime.datetime.combine(next_action_date, next_action_time)
+                elif next_action_date:
+                    next_action_scheduled_for = datetime.datetime.combine(next_action_date, datetime.time())
+                elif next_action_time:
+                    next_action_scheduled_for = datetime.datetime.combine(datetime.date.today(), next_action_time)
+
             log_details = (request.form.get("log_details") or "").strip() or None
             engagement.status = "done"
             engagement.outcome = outcome
@@ -13534,6 +13579,11 @@ def sales_opportunity_detail(opportunity_id):
             detail_lines = [f"Outcome: {outcome_label}"]
             if log_details:
                 detail_lines.append(log_details)
+            next_action_label = None
+            if next_action_type:
+                next_action_label = OPPORTUNITY_ACTIVITY_LABELS.get(next_action_type, next_action_type.title())
+                schedule_suffix = f" scheduled for {' '.join(next_action_schedule_parts)}" if next_action_schedule_parts else ""
+                detail_lines.append(f"Next action: {next_action_label}{schedule_suffix}.")
             log_sales_activity(
                 "opportunity",
                 opportunity.id,
@@ -13541,8 +13591,41 @@ def sales_opportunity_detail(opportunity_id):
                 notes="\n\n".join(detail_lines),
                 actor=current_user,
             )
+
+            next_action_created = False
+            if next_action_type and next_action_label:
+                next_engagement = SalesOpportunityEngagement(
+                    opportunity=opportunity,
+                    activity_type=next_action_type,
+                    subject=next_action_subject or f"{next_action_label} follow-up",
+                    scheduled_for=next_action_scheduled_for,
+                    reminder_option=next_action_reminder or None,
+                    notes=next_action_notes or None,
+                    created_by=current_user if current_user.is_authenticated else None,
+                )
+                db.session.add(next_engagement)
+
+                next_action_notes_lines = []
+                if next_action_schedule_parts:
+                    next_action_notes_lines.append(f"Scheduled for {' '.join(next_action_schedule_parts)}.")
+                if next_action_reminder:
+                    next_action_notes_lines.append(f"Reminder set: {REMINDER_OPTION_LABELS.get(next_action_reminder, 'No reminder')}.")
+                if next_action_notes:
+                    next_action_notes_lines.append(next_action_notes)
+
+                log_sales_activity(
+                    "opportunity",
+                    opportunity.id,
+                    f"Next action created: {next_action_label}",
+                    notes="\n\n".join(next_action_notes_lines) if next_action_notes_lines else None,
+                    actor=current_user,
+                )
+                next_action_created = True
             db.session.commit()
-            flash("Activity logged and closed.", "success")
+            flash_message = "Activity logged and closed."
+            if next_action_created and next_action_label:
+                flash_message = f"Activity logged. Next {next_action_label.lower()} created."
+            flash(flash_message, "success")
             return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
         elif action == "cancel_activity":
