@@ -2371,6 +2371,23 @@ def _get_customer_support_ticket(ticket_id):
     return next((ticket for ticket in CUSTOMER_SUPPORT_TICKETS if ticket["id"] == ticket_id), None)
 
 
+def _get_linked_ticket_for_opportunity(opportunity_id: int):
+    """
+    Return the first linked Customer Support ticket for a Sales opportunity.
+    """
+    if not opportunity_id:
+        return None
+    for ticket in CUSTOMER_SUPPORT_TICKETS:
+        linked = ticket.get("linked_sales_opportunity") or {}
+        try:
+            linked_id = int(linked.get("id"))
+        except (TypeError, ValueError):
+            continue
+        if linked_id == int(opportunity_id):
+            return ticket
+    return None
+
+
 def _ticket_has_open_linked_tasks(ticket):
     if not ticket:
         return False
@@ -10026,6 +10043,21 @@ def ensure_sales_opportunity_columns():
     if "project_id" not in cols:
         cur.execute("ALTER TABLE sales_opportunity ADD COLUMN project_id INTEGER;")
         added.append("project_id")
+    if "final_crf_id" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN final_crf_id INTEGER;")
+        added.append("final_crf_id")
+    if "final_quotation_file_id" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN final_quotation_file_id INTEGER;")
+        added.append("final_quotation_file_id")
+    if "closed_status" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN closed_status TEXT;")
+        added.append("closed_status")
+    if "closed_at" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN closed_at DATETIME;")
+        added.append("closed_at")
+    if "closed_reason" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity ADD COLUMN closed_reason TEXT;")
+        added.append("closed_reason")
 
     if "created_at" not in cols:
         cur.execute("ALTER TABLE sales_opportunity ADD COLUMN created_at DATETIME;")
@@ -10074,6 +10106,9 @@ def ensure_sales_opportunity_item_columns():
     if "item_value" not in cols:
         cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN item_value NUMERIC;")
         added.append("item_value")
+    if "project_id" not in cols:
+        cur.execute("ALTER TABLE sales_opportunity_item ADD COLUMN project_id INTEGER;")
+        added.append("project_id")
 
     cur.execute(
         """
@@ -10342,6 +10377,7 @@ def ensure_project_columns():
     column_defs = [
         ("sales_won_at", "DATETIME"),
         ("sales_executive_name", "TEXT"),
+        ("opportunity_id", "INTEGER"),
     ]
 
     for column_name, column_type in column_defs:
@@ -14024,6 +14060,18 @@ def sales_opportunity_detail(opportunity_id):
         or opportunity.owner_id is None
         or opportunity.owner_id == current_user.id
     )
+    quotation_options = []
+    seen_quotation_ids = set()
+    for request in quotation_requests:
+        latest_file = request.files[0] if request.files else None
+        if latest_file and latest_file.id not in seen_quotation_ids:
+            quotation_options.append({"file": latest_file, "request": request})
+            seen_quotation_ids.add(latest_file.id)
+    for file in quotation_files:
+        if file.id in seen_quotation_ids:
+            continue
+        quotation_options.append({"file": file, "request": None})
+        seen_quotation_ids.add(file.id)
     design_task_filters = [
         and_(DesignTask.origin_type == "sales", DesignTask.origin_id == opportunity.id)
     ]
@@ -14078,6 +14126,18 @@ def sales_opportunity_detail(opportunity_id):
         temperature_choices=SALES_TEMPERATURES,
         pipeline_map=SALES_PIPELINES,
         client_requirement_forms=client_requirement_forms,
+        final_crf=opportunity.final_crf if getattr(opportunity, "final_crf_id", None) else None,
+        final_quotation_file=opportunity.final_quotation_file if getattr(opportunity, "final_quotation_file_id", None) else None,
+        final_crf_options=sorted(
+            client_requirement_forms,
+            key=lambda form: (
+                0 if (form.status or "").lower() == "design_confirmed" else 1,
+                -(form.version or 0),
+                form.updated_at or datetime.datetime.min,
+            ),
+        ),
+        final_quotation_options=quotation_options,
+        linked_ticket=_get_linked_ticket_for_opportunity(opportunity.id),
         available_client_forms=available_client_forms,
         quotation_files=quotation_files,
         quotation_requests=quotation_requests,
@@ -14150,6 +14210,111 @@ def convert_opportunity_to_project(opportunity: "SalesOpportunity") -> "Project"
     return project
 
 
+def _project_name_from_item(opportunity: "SalesOpportunity", item: "SalesOpportunityItem", index: int, client_name: Optional[str]) -> str:
+    client_label = client_name or getattr(opportunity, "client_name", None) or ""
+    type_label = (getattr(item, "lift_type", None) or getattr(item, "details", None) or "Item").strip()
+    return f"{client_label} - {opportunity.title} - Item {index} ({type_label})" if client_label else f"{opportunity.title} - Item {index} ({type_label})"
+
+
+def convert_opportunity_to_projects(opportunity_id, final_crf_id=None, final_quotation_file_id=None):
+    """
+    Create or return linked Projects from a SalesOpportunity.
+
+    - If an item's project already exists, it is reused.
+    - Otherwise, creates one Project per opportunity item.
+    - Links the created projects back to the opportunity and items.
+    """
+    opportunity = (
+        opportunity_id
+        if isinstance(opportunity_id, SalesOpportunity)
+        else db.session.get(SalesOpportunity, opportunity_id)
+    )
+    if opportunity is None:
+        raise ValueError("Opportunity not found for project conversion.")
+
+    client_name = None
+    if opportunity.client:
+        client_name = opportunity.client.display_name or opportunity.client.company_name
+    if not client_name:
+        client_name = getattr(opportunity, "client_name", None) or opportunity.title
+
+    created_projects: List[Project] = []
+    items = list(opportunity.items or [])
+
+    if not items:
+        base_name = (opportunity.related_project or "").strip()
+        if not base_name:
+            if client_name:
+                base_name = f"{opportunity.title} – {client_name}"
+            else:
+                base_name = opportunity.title
+        project = Project(
+            name=base_name,
+            customer_name=client_name,
+            opportunity_id=opportunity.id,
+        )
+        if not project.sales_won_at:
+            project.sales_won_at = datetime.datetime.utcnow()
+        if current_user and getattr(current_user, "is_authenticated", False):
+            project.sales_executive_name = current_user.display_name or current_user.email
+        db.session.add(project)
+        db.session.flush()
+        created_projects.append(project)
+    else:
+        for idx, item in enumerate(items, start=1):
+            project = item.project
+            if project is None:
+                project_name = _project_name_from_item(opportunity, item, idx, client_name)
+                project = Project(
+                    name=project_name,
+                    customer_name=client_name,
+                    lift_type=getattr(item, "lift_type", None),
+                    floors=getattr(item, "floors", None),
+                    stops=getattr(item, "stops", None),
+                    opening_type=getattr(item, "opening_type", None),
+                    location=getattr(item, "location", None),
+                    structure_type=getattr(item, "structure_type", None),
+                    cladding_type=getattr(item, "cladding_type", None),
+                    cabin_finish=getattr(item, "cabin_finish", None),
+                    door_operation_type=getattr(item, "door_operation_type", None) or getattr(item, "door_type", None),
+                    door_finish=getattr(item, "door_finish", None),
+                    opportunity_id=opportunity.id,
+                )
+                db.session.add(project)
+                db.session.flush()
+                item.project_id = project.id
+
+            if not project.sales_won_at:
+                project.sales_won_at = datetime.datetime.utcnow()
+            if current_user and getattr(current_user, "is_authenticated", False) and not project.sales_executive_name:
+                project.sales_executive_name = current_user.display_name or current_user.email
+            if not project.opportunity_id:
+                project.opportunity_id = opportunity.id
+
+            created_projects.append(project)
+
+    if created_projects and not opportunity.project_id:
+        opportunity.project_id = created_projects[0].id
+    if created_projects and not opportunity.related_project:
+        opportunity.related_project = created_projects[0].name
+
+    if final_crf_id:
+        final_form = db.session.get(ClientRequirementForm, final_crf_id)
+        if final_form and not final_form.project_id and created_projects:
+            final_form.project_id = created_projects[0].id
+
+    if created_projects and not opportunity.closed_at:
+        opportunity.closed_at = datetime.datetime.utcnow()
+
+    db.session.commit()
+    return created_projects
+
+
+def convert_opportunity_to_project(opportunity: "SalesOpportunity") -> Optional["Project"]:
+    projects = convert_opportunity_to_projects(opportunity, opportunity.final_crf_id, opportunity.final_quotation_file_id)
+    return projects[0] if projects else None
+
+
 @app.route("/sales/opportunities/<int:opportunity_id>/convert-to-project", methods=["POST"])
 @login_required
 def sales_opportunity_convert_to_project(opportunity_id):
@@ -14165,10 +14330,220 @@ def sales_opportunity_convert_to_project(opportunity_id):
         flash("You do not have Operations access to create projects.", "error")
         return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-    project = convert_opportunity_to_project(opportunity)
+    projects = convert_opportunity_to_projects(opportunity, opportunity.final_crf_id, opportunity.final_quotation_file_id)
+    if not projects:
+        flash("No projects were created. Add items to the opportunity and try again.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
-    flash(f"Project '{project.name}' created/linked successfully.", "success")
-    return redirect(url_for("project_detail", project_id=project.id))
+    primary_project = projects[0]
+    flash(f"Project{'s' if len(projects) > 1 else ''} created/linked successfully.", "success")
+    return redirect(url_for("project_detail", project_id=primary_project.id))
+
+
+@app.route("/sales/opportunities/<int:opportunity_id>/close", methods=["POST"])
+@login_required
+def sales_opportunity_close(opportunity_id):
+    _module_visibility_required("sales")
+    opportunity = SalesOpportunity.query.get_or_404(opportunity_id)
+
+    outcome = (request.form.get("closing_outcome") or "").strip().lower()
+    if outcome not in {"won", "lost"}:
+        flash("Choose whether the opportunity is Closed Won or Closed Lost.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    final_crf_id_raw = request.form.get("final_crf_id") or ""
+    final_crf = None
+    if final_crf_id_raw:
+        try:
+            final_crf = ClientRequirementForm.query.filter_by(
+                id=int(final_crf_id_raw), opportunity_id=opportunity.id
+            ).first()
+        except (TypeError, ValueError):
+            final_crf = None
+        if not final_crf:
+            flash("Select a valid Client Requirements Form for this opportunity.", "error")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+    elif outcome == "won":
+        flash("Select the final Client Requirements Form before closing as Won.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    if final_crf and (final_crf.status or "").lower() != "design_confirmed":
+        flash("The final Client Requirements Form must be confirmed.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    quotation_mode = (request.form.get("final_quotation_mode") or "existing").strip().lower()
+    final_quotation_file_id = None
+
+    if quotation_mode == "existing":
+        try:
+            selected_quote_id = int(request.form.get("final_quotation_file_id") or "0")
+        except (TypeError, ValueError):
+            selected_quote_id = 0
+        if selected_quote_id:
+            final_quotation = SalesOpportunityFile.query.filter_by(
+                id=selected_quote_id, opportunity_id=opportunity.id
+            ).first()
+            if not final_quotation:
+                flash("Choose a valid quotation uploaded for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+            final_quotation_file_id = final_quotation.id
+        else:
+            flash("Select a quotation file to close the opportunity.", "error")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+    elif quotation_mode == "upload":
+        uploaded_file = request.files.get("final_quotation_upload")
+        if not uploaded_file or not uploaded_file.filename:
+            flash("Upload a final quotation file to continue.", "error")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        safe_name = secure_filename(uploaded_file.filename)
+        if not safe_name:
+            flash("The selected file name is not valid.", "error")
+            return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        quote_root = os.path.join(
+            app.config["UPLOAD_FOLDER"], "opportunities", str(opportunity.id), "quotations"
+        )
+        os.makedirs(quote_root, exist_ok=True)
+
+        request_id_raw = (request.form.get("final_quotation_request_id") or "").strip()
+        linked_request = None
+        if request_id_raw:
+            try:
+                linked_request = (
+                    SalesQuotationRequest.query.filter_by(
+                        id=int(request_id_raw), opportunity_id=opportunity.id
+                    ).first()
+                )
+            except (TypeError, ValueError):
+                linked_request = None
+            if not linked_request:
+                flash("Selected quotation request not found for this opportunity.", "error")
+                return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+        existing_quotes = (
+            SalesOpportunityFile.query.filter(
+                SalesOpportunityFile.opportunity_id == opportunity.id,
+                or_(
+                    SalesOpportunityFile.stored_path.ilike("%/quotations/%"),
+                    SalesOpportunityFile.original_filename.ilike("%quotation%"),
+                    SalesOpportunityFile.original_filename.ilike("%quote%"),
+                ),
+            )
+            .order_by(SalesOpportunityFile.created_at.desc())
+            .all()
+        )
+        next_version = len(existing_quotes) + 1
+
+        unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+        destination_path = os.path.join(quote_root, unique_name)
+        uploaded_file.save(destination_path)
+
+        static_root = os.path.join(BASE_DIR, "static")
+        stored_relative = os.path.relpath(destination_path, static_root).replace(os.sep, "/")
+        versioned_name = f"Quotation V{next_version} – {uploaded_file.filename}"
+
+        record = SalesOpportunityFile(
+            opportunity=opportunity,
+            quotation_request=linked_request,
+            original_filename=versioned_name,
+            stored_path=stored_relative,
+            content_type=uploaded_file.mimetype,
+            file_size=os.path.getsize(destination_path),
+            uploaded_by=current_user if current_user.is_authenticated else None,
+        )
+        db.session.add(record)
+        db.session.flush()
+        final_quotation_file_id = record.id
+        log_sales_activity(
+            "opportunity",
+            opportunity.id,
+            f"Quotation uploaded (V{next_version})",
+            notes=uploaded_file.filename,
+            actor=current_user,
+        )
+    else:
+        flash("Choose how to attach the final quotation.", "error")
+        return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
+
+    lost_reason = (request.form.get("lost_reason") or "").strip() or None
+    close_ticket_flag = request.form.get("close_linked_ticket") == "1"
+    ticket_close_notes = (request.form.get("ticket_close_notes") or lost_reason or "").strip()
+    create_projects_flag = request.form.get("create_projects_per_item") == "1"
+    now = datetime.datetime.utcnow()
+
+    opportunity.final_crf_id = final_crf.id if final_crf else None
+    opportunity.final_quotation_file_id = final_quotation_file_id
+    opportunity.closed_status = outcome
+    opportunity.closed_at = now
+    opportunity.closed_reason = lost_reason if outcome == "lost" else None
+    opportunity.stage = "Closed Won" if outcome == "won" else "Closed Lost"
+    opportunity.status = "Closed"
+
+    db.session.flush()
+
+    projects = []
+    if outcome == "won" and create_projects_flag:
+        projects = convert_opportunity_to_projects(
+            opportunity, opportunity.final_crf_id, opportunity.final_quotation_file_id
+        )
+    else:
+        db.session.commit()
+
+    notes = []
+    if final_quotation_file_id:
+        notes.append(f"Final quotation file #{final_quotation_file_id}")
+    if final_crf:
+        notes.append(f"Final CRF v{final_crf.version}")
+    log_sales_activity(
+        "opportunity",
+        opportunity.id,
+        f"Opportunity marked Closed {'Won' if outcome == 'won' else 'Lost'}",
+        notes="; ".join(notes) if notes else None,
+        actor=current_user,
+    )
+    db.session.commit()
+
+    linked_ticket = _get_linked_ticket_for_opportunity(opportunity.id)
+    ticket_closed = False
+    if linked_ticket and close_ticket_flag:
+        if _ticket_has_open_linked_tasks(linked_ticket):
+            flash("Linked ticket still has open tasks and was not closed.", "warning")
+        else:
+            linked_ticket["status"] = "Closed"
+            linked_ticket["updated_at"] = now
+            actor_info = timeline_actor_context()
+            detail_parts = [
+                f"Opportunity {opportunity.title} closed as {'Won' if outcome == 'won' else 'Lost'}."
+            ]
+            if ticket_close_notes:
+                detail_parts.append(ticket_close_notes)
+            linked_ticket.setdefault("timeline", []).append(
+                {
+                    "timestamp": now,
+                    "type": "status",
+                    "label": "Linked sales opportunity closed",
+                    "visibility": "internal",
+                    "detail": " ".join(detail_parts),
+                    **actor_info,
+                }
+            )
+            _save_customer_support_state()
+            ticket_closed = True
+
+    if projects:
+        flash(
+            f"Opportunity closed as {'Won' if outcome == 'won' else 'Lost'}. "
+            f"Created {len(projects)} project(s){' and closed linked ticket' if ticket_closed else ''}.",
+            "success",
+        )
+    else:
+        flash(
+            f"Opportunity closed as {'Won' if outcome == 'won' else 'Lost'}"
+            f"{' and linked ticket closed.' if ticket_closed else '.'}",
+            "success",
+        )
+    return redirect(url_for("sales_opportunity_detail", opportunity_id=opportunity.id))
 
 
 def _missing_confirmed_client_requirement_forms(opportunity: SalesOpportunity):
@@ -14176,6 +14551,13 @@ def _missing_confirmed_client_requirement_forms(opportunity: SalesOpportunity):
 
     if not opportunity or not getattr(opportunity, "items", None):
         return []
+    try:
+        if opportunity.final_crf_id:
+            final_form = db.session.get(ClientRequirementForm, opportunity.final_crf_id)
+            if final_form and (final_form.status or "").lower() == "design_confirmed":
+                return []
+    except Exception:
+        pass
 
     confirmed_crfs = (
         ClientRequirementForm.query.filter_by(
@@ -14225,6 +14607,8 @@ def sales_opportunity_stage(opportunity_id):
         return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
 
     normalized_stage = (stage or "").strip().lower()
+    closing_won = normalized_stage == "closed won"
+    closing_lost = normalized_stage == "closed lost"
     if normalized_stage in {"quote submission", "closed won"}:
         missing_lifts = _missing_confirmed_client_requirement_forms(opportunity)
         if missing_lifts:
@@ -14238,14 +14622,34 @@ def sales_opportunity_stage(opportunity_id):
                 return jsonify({"success": False, "message": message}), 400
             flash(message, "error")
             return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
+        if closing_won and not opportunity.final_crf_id:
+            message = "Select a final Client Requirements Form using Close Opportunity before marking Closed Won."
+            if wants_json:
+                return jsonify({"success": False, "message": message}), 400
+            flash(message, "error")
+            return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
+
+    if closing_won or closing_lost:
+        if not opportunity.final_quotation_file_id:
+            message = "Choose a final quotation before closing this opportunity."
+            if wants_json:
+                return jsonify({"success": False, "message": message}), 400
+            flash(message, "error")
+            return redirect(url_for("sales_opportunities_pipeline", pipeline_key=pipeline_key))
 
     opportunity.stage = stage
     log_sales_activity("opportunity", opportunity.id, f"Stage moved to {stage}", actor=current_user)
+    if closing_won or closing_lost:
+        opportunity.closed_status = "won" if closing_won else "lost"
+        if not opportunity.closed_at:
+            opportunity.closed_at = datetime.datetime.utcnow()
+    else:
+        opportunity.closed_status = None
+        opportunity.closed_at = None
     db.session.commit()
 
-    closed_won = normalized_stage == "closed won"
     conversion_url = None
-    if closed_won and not opportunity.project_id and current_user.can_view_module("operations"):
+    if closing_won and not opportunity.project_id and current_user.can_view_module("operations"):
         conversion_url = url_for("sales_opportunity_convert_to_project", opportunity_id=opportunity.id)
         if not wants_json:
             flash(

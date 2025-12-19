@@ -121,6 +121,62 @@
           </dd>
         </div>
         <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Final Quotation</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if final_quotation_file %}
+              <a href="{{ url_for('static', filename=final_quotation_file.stored_path) }}" class="text-emerald-200 hover:underline" target="_blank" rel="noopener">
+                {{ final_quotation_file.original_filename }}
+              </a>
+            {% else %}
+              <span class="text-slate-400">Not selected</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Final Client Requirements Form</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if final_crf %}
+              <a href="{{ url_for('sales_client_requirement_form_detail', form_id=final_crf.id) }}" class="text-emerald-200 hover:underline">
+                V{{ final_crf.version }} · {{ final_crf.status|replace('_',' ')|title }}
+              </a>
+            {% else %}
+              <span class="text-slate-400">Not selected</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Closed On</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if opportunity.closed_at %}
+              {{ opportunity.closed_at|format_india_datetime('%d %b %Y, %I:%M %p') }}
+            {% else %}
+              <span class="text-slate-400">Open</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Closed Status</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if opportunity.closed_status %}
+              {{ opportunity.closed_status|capitalize }}
+            {% else %}
+              <span class="text-slate-400">Not closed</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Lost Reason</dt>
+          <dd class="mt-1 font-medium text-slate-100">
+            {% if opportunity.closed_status == 'lost' and opportunity.closed_reason %}
+              {{ opportunity.closed_reason }}
+            {% elif opportunity.closed_status == 'lost' %}
+              <span class="text-slate-400">No reason captured</span>
+            {% else %}
+              <span class="text-slate-400">Not applicable</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div>
           <dt class="text-xs uppercase tracking-wide text-slate-500">Created On</dt>
           <dd class="mt-1 font-medium text-slate-100">{{ opportunity.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if opportunity.created_at else '—' }}</dd>
         </div>
@@ -130,7 +186,7 @@
         </div>
       </dl>
     </div>
-    <div class="flex items-start gap-2 md:flex-col">
+    <div class="flex flex-col items-start gap-2 md:flex-col md:items-start">
       {% if opportunity.project_id %}
         <a href="{{ url_for('project_detail', project_id=opportunity.project_id) }}" class="inline-flex items-center gap-2 rounded-xl border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/30 btn-shimmer">View Project</a>
       {% else %}
@@ -141,6 +197,7 @@
           </form>
         {% endif %}
       {% endif %}
+      <button type="button" data-modal-open="closeOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/30 btn-shimmer">Close Opportunity</button>
       <button type="button" data-modal-open="editOpportunityModal" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">Edit Opportunity</button>
     </div>
   </div>
@@ -1112,6 +1169,152 @@
   </div>
 </div>
 {% endif %}
+
+<div id="closeOpportunityModal" data-modal-id="closeOpportunityModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
+  <div class="modal-panel relative w-full max-w-4xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+      <h3 class="text-lg font-semibold text-slate-100">Close Opportunity</h3>
+      <button type="button" data-modal-close class="rounded-full border border-slate-700 bg-slate-800/80 p-2 text-slate-300 hover:text-emerald-100" aria-label="Close close opportunity modal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('sales_opportunity_close', opportunity_id=opportunity.id) }}" enctype="multipart/form-data" class="space-y-4 px-6 py-5">
+      {{ csrf_field() }}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Outcome</p>
+          <div class="mt-3 flex flex-col gap-2 md:flex-row">
+            <label class="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+              <input type="radio" name="closing_outcome" value="won" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500" data-close-outcome {% if opportunity.closed_status == 'won' or opportunity.stage|lower == 'closed won' %}checked{% endif %}>
+              Closed Won
+            </label>
+            <label class="flex items-center gap-2 text-sm font-semibold text-amber-100">
+              <input type="radio" name="closing_outcome" value="lost" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500" data-close-outcome {% if opportunity.closed_status == 'lost' or opportunity.stage|lower == 'closed lost' %}checked{% endif %}>
+              Closed Lost
+            </label>
+          </div>
+          <div class="mt-3 space-y-2" data-lost-reason>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Reason for Lost (optional)</label>
+            <textarea name="lost_reason" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400/60" placeholder="Capture the reason the deal was lost">{{ opportunity.closed_reason or '' }}</textarea>
+          </div>
+        </div>
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Final Client Requirements Form</p>
+          <p class="mt-1 text-xs text-slate-500">Confirmed versions appear first.</p>
+          <select name="final_crf_id" class="mt-3 w-full rounded-xl border border-slate-800/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+            <option value="" disabled {% if not final_crf %}selected{% endif %}>Select final CRF</option>
+            {% for form in final_crf_options %}
+              <option value="{{ form.id }}" {% if final_crf and final_crf.id == form.id %}selected{% endif %}>V{{ form.version }} · {{ form.status|replace('_',' ')|title }} · {{ form.template.name if form.template else 'CRF' }}</option>
+            {% endfor %}
+          </select>
+          {% if not final_crf_options %}
+            <p class="mt-2 text-xs text-rose-300">No Client Requirements Forms available for this opportunity.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-500">Select Final Quotation</p>
+            <p class="text-xs text-slate-500">Pick the latest shared file or upload the final version.</p>
+          </div>
+          <span class="rounded-full border border-slate-800/70 bg-slate-900 px-2 py-1 text-[11px] text-slate-400">Required</span>
+        </div>
+        <div class="mt-3 space-y-3">
+          <label class="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+            <input type="radio" name="final_quotation_mode" value="existing" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500" data-quotation-mode {% if final_quotation_options %}checked{% endif %}>
+            Use existing quotation
+          </label>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3 space-y-2" data-quotation-existing>
+            {% if final_quotation_options %}
+              <select name="final_quotation_file_id" class="w-full rounded-lg border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                {% for option in final_quotation_options %}
+                  {% set file = option.file %}
+                  {% set request = option.request %}
+                  <option value="{{ file.id }}" {% if final_quotation_file and final_quotation_file.id == file.id %}selected{% endif %}>
+                    {{ file.original_filename }}{% if file.computed_version %} · V{{ file.computed_version }}{% endif %}{% if request %} · Request #{{ request.id }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <p class="text-sm text-slate-400">No quotations uploaded yet.</p>
+            {% endif %}
+          </div>
+          <label class="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+            <input type="radio" name="final_quotation_mode" value="upload" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500" data-quotation-mode {% if not final_quotation_options %}checked{% endif %}>
+            Upload final quotation
+          </label>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3 space-y-2 hidden" data-quotation-upload>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Upload file</label>
+            <input type="file" name="final_quotation_upload" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" class="block w-full text-sm text-slate-100" data-final-quotation-input>
+            <label class="text-xs uppercase tracking-wide text-slate-500">Link to quotation request (optional)</label>
+            <select name="final_quotation_request_id" class="w-full rounded-lg border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+              <option value="">Do not link</option>
+              {% for request in quotation_requests %}
+                <option value="{{ request.id }}">Request #{{ request.id }} · {{ request.status_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4" data-project-section>
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-slate-500">Projects</p>
+              <p class="text-xs text-slate-500">Closed Won will create one project per item.</p>
+            </div>
+            <label class="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+              <input type="checkbox" name="create_projects_per_item" value="1" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500" checked>
+              Create 1 project per item
+            </label>
+          </div>
+          <div class="mt-3 space-y-2">
+            {% if items %}
+              {% for item in items %}
+                <div class="rounded-lg border border-slate-800/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
+                  <div class="font-semibold">{{ item.lift_type or 'Item ' ~ loop.index }}</div>
+                  <div class="text-xs text-slate-400">{{ item.details or 'No details added' }}</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="text-sm text-slate-400">No items added. A single project will be created.</p>
+            {% endif %}
+          </div>
+        </div>
+        {% if linked_ticket %}
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-4">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Linked Support Ticket</p>
+          <div class="mt-2 flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold text-slate-100">{{ linked_ticket.id }}</p>
+              <p class="text-xs text-slate-400">{{ linked_ticket.subject or 'Support ticket' }}</p>
+              <p class="text-xs text-slate-500">Current status: {{ linked_ticket.status }}</p>
+            </div>
+            <label class="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+              <input type="checkbox" name="close_linked_ticket" value="1" class="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500" checked>
+              Close ticket with outcome
+            </label>
+          </div>
+          <div class="mt-3 space-y-2">
+            <label class="text-xs uppercase tracking-wide text-slate-500">Ticket closing note</label>
+            <textarea name="ticket_close_notes" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" placeholder="Add a note for the ticket timeline">{{ opportunity.closed_reason or '' }}</textarea>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="flex justify-end gap-3 border-t border-slate-800/80 pt-4">
+        <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:text-emerald-100" data-modal-close="closeOpportunityModal">Cancel</button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 btn-shimmer">
+          Save &amp; Close
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div id="editOpportunityModal" data-modal-id="editOpportunityModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur">
   <div class="modal-panel relative w-full max-w-3xl rounded-2xl border border-slate-800/80 bg-slate-900 shadow-2xl">
@@ -2183,7 +2386,7 @@
             }
             syncClientFields();
             showClientView();
-          })
+        })
           .catch((error) => {
             if (clientError) {
               clientError.textContent = error.message || 'Unable to update client right now.';
@@ -2191,6 +2394,62 @@
             }
           });
       });
+    }
+
+    const closeModal = document.getElementById('closeOpportunityModal');
+    if (closeModal) {
+      const outcomeInputs = closeModal.querySelectorAll('[data-close-outcome]');
+      const lostReasonBlock = closeModal.querySelector('[data-lost-reason]');
+      const projectSection = closeModal.querySelector('[data-project-section]');
+      const quotationModeInputs = closeModal.querySelectorAll('[data-quotation-mode]');
+      const quotationExisting = closeModal.querySelector('[data-quotation-existing]');
+      const quotationUpload = closeModal.querySelector('[data-quotation-upload]');
+      const quotationExistingSelect = closeModal.querySelector('select[name="final_quotation_file_id"]');
+      const quotationUploadInput = closeModal.querySelector('[data-final-quotation-input]');
+
+      function syncOutcomeFields() {
+        const selected = Array.from(outcomeInputs).find((input) => input.checked)?.value || 'won';
+        const isLost = selected === 'lost';
+        const isWon = selected === 'won';
+        if (lostReasonBlock) {
+          lostReasonBlock.classList.toggle('hidden', !isLost);
+        }
+        if (projectSection) {
+          projectSection.classList.toggle('hidden', !isWon);
+          projectSection.classList.toggle('opacity-50', !isWon);
+        }
+      }
+
+      function syncQuotationMode() {
+        const selected = Array.from(quotationModeInputs).find((input) => input.checked)?.value || 'existing';
+        const usingExisting = selected === 'existing';
+        if (quotationExisting) {
+          quotationExisting.classList.toggle('hidden', !usingExisting);
+        }
+        if (quotationUpload) {
+          quotationUpload.classList.toggle('hidden', usingExisting);
+        }
+        if (quotationExistingSelect) {
+          quotationExistingSelect.disabled = !usingExisting;
+          quotationExistingSelect.required = usingExisting;
+        }
+        if (quotationUploadInput) {
+          quotationUploadInput.disabled = usingExisting;
+          quotationUploadInput.required = !usingExisting;
+        }
+      }
+
+      outcomeInputs.forEach((input) => input.addEventListener('change', syncOutcomeFields));
+      quotationModeInputs.forEach((input) => input.addEventListener('change', syncQuotationMode));
+
+      const hasExistingQuotes = Boolean(quotationExistingSelect && quotationExistingSelect.options.length > 0);
+      if (!hasExistingQuotes) {
+        const uploadRadio = Array.from(quotationModeInputs).find((input) => input.value === 'upload');
+        if (uploadRadio) uploadRadio.checked = true;
+      }
+
+      syncOutcomeFields();
+      syncQuotationMode();
     }
 
     const fileInput = document.getElementById('opportunityFileInput');
