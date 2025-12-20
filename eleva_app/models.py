@@ -619,9 +619,66 @@ class SalesOpportunity(db.Model):
 
     @property
     def display_amount(self):
-        if self.amount is None:
+        amount_value = self._calculated_amount_value
+        if amount_value is None:
             return "—"
-        return f"{self.currency or '₹'}{self.amount:,.2f}"
+        return f"{self.currency or '₹'}{amount_value:,.2f}"
+
+    @property
+    def _calculated_amount_value(self):
+        final_amount = self._extract_quotation_value(getattr(self, "final_quotation_file", None))
+        if final_amount is not None:
+            return final_amount
+
+        sorted_requests = sorted(
+            getattr(self, "quotation_requests", []) or [],
+            key=lambda req: req.created_at or datetime.datetime.min,
+            reverse=True,
+        )
+        for request in sorted_requests:
+            latest_file = request.files[0] if getattr(request, "files", None) else None
+            request_amount = self._extract_quotation_value(latest_file)
+            if request_amount is not None:
+                return request_amount
+
+        item_total = 0.0
+        has_values = False
+        for item in getattr(self, "items", []) or []:
+            if item.item_value is None:
+                continue
+            try:
+                base_value = float(item.item_value)
+            except (TypeError, ValueError):
+                continue
+            try:
+                quantity = float(item.quantity) if item.quantity is not None else 1.0
+            except (TypeError, ValueError):
+                quantity = 0.0
+            item_total += base_value * quantity
+            has_values = True
+
+        if not has_values or item_total <= 0:
+            return None
+        return float(item_total)
+
+    def _extract_quotation_value(self, quotation_file):
+        if not quotation_file:
+            return None
+
+        potential_fields = [
+            getattr(quotation_file, "quoted_value", None),
+            getattr(quotation_file, "value", None),
+            getattr(quotation_file, "amount", None),
+        ]
+
+        for raw_value in potential_fields:
+            if raw_value is None:
+                continue
+            try:
+                return float(raw_value)
+            except (TypeError, ValueError):
+                continue
+        return None
 
     @property
     def is_closed(self):
