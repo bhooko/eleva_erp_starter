@@ -14062,10 +14062,10 @@ def sales_opportunity_detail(opportunity_id):
     )
     quotation_options = []
     seen_quotation_ids = set()
-    for request in quotation_requests:
-        latest_file = request.files[0] if request.files else None
+    for quotation_request in quotation_requests:
+        latest_file = quotation_request.files[0] if quotation_request.files else None
         if latest_file and latest_file.id not in seen_quotation_ids:
-            quotation_options.append({"file": latest_file, "request": request})
+            quotation_options.append({"file": latest_file, "request": quotation_request})
             seen_quotation_ids.add(latest_file.id)
     for file in quotation_files:
         if file.id in seen_quotation_ids:
