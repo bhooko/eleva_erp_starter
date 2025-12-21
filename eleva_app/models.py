@@ -22,6 +22,9 @@ from app import (
 )
 
 
+_AMOUNT_INFO_SENTINEL = object()
+
+
 class Department(db.Model):
     __tablename__ = "department"
 
@@ -619,16 +622,30 @@ class SalesOpportunity(db.Model):
 
     @property
     def display_amount(self):
-        amount_value = self._calculated_amount_value
+        amount_value, _ = self.calculated_amount_info
         if amount_value is None:
             return "—"
         return f"{self.currency or '₹'}{amount_value:,.2f}"
 
     @property
+    def calculated_amount_info(self):
+        cached = getattr(self, "_cached_amount_info", _AMOUNT_INFO_SENTINEL)
+        if cached is not _AMOUNT_INFO_SENTINEL:
+            return cached
+
+        amount_value, amount_source = self._compute_amount_info()
+        self._cached_amount_info = (amount_value, amount_source)
+        return amount_value, amount_source
+
+    @property
     def _calculated_amount_value(self):
+        amount_value, _ = self.calculated_amount_info
+        return amount_value
+
+    def _compute_amount_info(self):
         final_amount = self._extract_quotation_value(getattr(self, "final_quotation_file", None))
         if final_amount is not None:
-            return final_amount
+            return final_amount, "final_quotation"
 
         sorted_requests = sorted(
             getattr(self, "quotation_requests", []) or [],
@@ -639,7 +656,7 @@ class SalesOpportunity(db.Model):
             latest_file = request.files[0] if getattr(request, "files", None) else None
             request_amount = self._extract_quotation_value(latest_file)
             if request_amount is not None:
-                return request_amount
+                return request_amount, "quotation_request"
 
         item_total = 0.0
         has_values = False
@@ -658,8 +675,8 @@ class SalesOpportunity(db.Model):
             has_values = True
 
         if not has_values or item_total <= 0:
-            return None
-        return float(item_total)
+            return None, "none"
+        return float(item_total), "items"
 
     def _extract_quotation_value(self, quotation_file):
         if not quotation_file:
