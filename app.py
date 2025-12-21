@@ -14100,6 +14100,7 @@ def sales_opportunity_detail(opportunity_id):
     design_users = User.query.order_by(User.first_name, User.username).all()
     owners = get_assignable_users_for_module("sales", order_by="name")
     clients = SalesClient.query.order_by(SalesClient.display_name.asc()).all()
+    amount_value, amount_source = opportunity.calculated_amount_info
 
     return render_template(
         "sales/opportunity_detail.html",
@@ -14142,6 +14143,8 @@ def sales_opportunity_detail(opportunity_id):
         quotation_files=quotation_files,
         quotation_requests=quotation_requests,
         can_manage_opportunity_docs=can_manage_opportunity_docs,
+        amount_value=amount_value,
+        amount_source=amount_source,
     )
 
 
