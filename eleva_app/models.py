@@ -384,6 +384,8 @@ class ProjectTemplateTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     template_id = db.Column(db.Integer, db.ForeignKey("project_template.id"), nullable=False)
     task_type = db.Column(db.String(50), default="general")
+    module = db.Column(db.String(20), default="general")
+    task_subtype = db.Column(db.String(30), default="general")
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     order_index = db.Column(db.Integer, default=0)
@@ -455,6 +457,81 @@ class ProjectTemplateTaskDependency(db.Model):
         "ProjectTemplateTask",
         foreign_keys=[depends_on_id],
         backref=db.backref("dependent_links", cascade="all, delete-orphan")
+    )
+
+
+class ProjectTask(db.Model):
+    __tablename__ = "project_tasks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False)
+    template_task_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    order_index = db.Column(db.Integer, default=0)
+    duration_days = db.Column(db.Integer, nullable=True)
+    module = db.Column(db.String(20), default="general")
+    task_subtype = db.Column(db.String(30), default="general")
+    assignee_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    linked_record_type = db.Column(db.String(50), nullable=True)
+    linked_record_id = db.Column(db.Integer, nullable=True)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    project = db.relationship("Project", backref=db.backref("project_tasks", lazy="dynamic"))
+    template_task = db.relationship("ProjectTemplateTask")
+    assignee = db.relationship("User", foreign_keys=[assignee_id])
+    primary_dependency = db.relationship(
+        "ProjectTask",
+        remote_side=[id],
+        backref=db.backref("primary_dependents", cascade="all"),
+        foreign_keys=[depends_on_id],
+    )
+    dependency_links = db.relationship(
+        "ProjectTaskDependency",
+        foreign_keys="ProjectTaskDependency.task_id",
+        cascade="all, delete-orphan",
+        back_populates="task",
+    )
+
+    @property
+    def dependencies(self):
+        seen = set()
+        ordered = []
+        if self.primary_dependency and self.primary_dependency.id not in seen:
+            ordered.append(self.primary_dependency)
+            seen.add(self.primary_dependency.id)
+        for link in getattr(self, "dependency_links", []):
+            if link.dependency and link.dependency.id not in seen:
+                ordered.append(link.dependency)
+                seen.add(link.dependency.id)
+        return ordered
+
+    @property
+    def dependency_ids(self):
+        return [dep.id for dep in self.dependencies]
+
+
+class ProjectTaskDependency(db.Model):
+    __tablename__ = "project_task_dependency"
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=False)
+    depends_on_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("task_id", "depends_on_id", name="uq_project_task_dependency"),
+    )
+
+    task = db.relationship(
+        "ProjectTask",
+        foreign_keys=[task_id],
+        back_populates="dependency_links",
+    )
+    dependency = db.relationship(
+        "ProjectTask",
+        foreign_keys=[depends_on_id],
+        backref=db.backref("dependent_links", cascade="all, delete-orphan"),
     )
 
 
@@ -1050,6 +1127,7 @@ class SalesQuotationNegotiationLog(db.Model):
 class QCWork(db.Model):
     __tablename__ = "qc_work"
     id = db.Column(db.Integer, primary_key=True)
+    project_task_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=True)
     site_name = db.Column(db.String(200), nullable=False)
     client_name = db.Column(db.String(200), nullable=True)
     address = db.Column(db.Text, nullable=True)
@@ -1066,7 +1144,7 @@ class QCWork(db.Model):
     template_task_id = db.Column(db.Integer, db.ForeignKey("project_template_task.id"), nullable=True)
     depends_on_id = db.Column(db.Integer, db.ForeignKey("qc_work.id"), nullable=True)
 
-    status = db.Column(db.String(40), default="Open")  # Open / In Progress / Closed
+    status = db.Column(db.String(40), default="Pending Inspection")
     due_date = db.Column(db.DateTime, nullable=True)
     planned_start_date = db.Column(db.Date, nullable=True)
     planned_duration_days = db.Column(db.Integer, nullable=True)
@@ -1081,6 +1159,7 @@ class QCWork(db.Model):
     assignee = db.relationship("User", foreign_keys=[assigned_to])
     project = db.relationship("Project", backref=db.backref("tasks", lazy="dynamic"))
     template_task = db.relationship("ProjectTemplateTask", backref=db.backref("project_tasks", lazy="dynamic"))
+    project_task = db.relationship("ProjectTask")
     primary_dependency = db.relationship(
         "QCWork",
         remote_side=[id],
@@ -1861,6 +1940,7 @@ class DesignTask(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    project_task_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=True)
     project_name = db.Column(db.String(150), nullable=True)
     task_type = db.Column(db.String(50), nullable=False)
     subtype = db.Column(db.String(50), nullable=True)
@@ -1888,6 +1968,31 @@ class DesignTask(db.Model):
         if self.project:
             return self.project.name
         return self.project_name or "Unlinked"
+
+
+class SRTTask(db.Model):
+    __tablename__ = "srt_tasks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    project_task_id = db.Column(db.Integer, db.ForeignKey("project_tasks.id"), nullable=True)
+    site_name = db.Column(db.String(200), nullable=True)
+    summary = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(50), nullable=False, default="Scheduled")
+    priority = db.Column(db.String(50), nullable=False, default="Normal")
+    due_date = db.Column(db.Date, nullable=True)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    project = db.relationship("Project")
+    project_task = db.relationship("ProjectTask")
+    assignee = db.relationship("User", foreign_keys=[assigned_to_id])
+    creator = db.relationship("User", foreign_keys=[created_by_id])
 
 
 class DesignTaskComment(db.Model):

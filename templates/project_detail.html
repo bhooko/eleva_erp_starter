@@ -243,7 +243,7 @@
               <div class="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div class="space-y-1">
-                    <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="text-sm font-semibold text-emerald-300 hover:text-emerald-200">{{ task.display_title }}</a>
+                    <a href="{{ task.detail_url or '#' }}" class="text-sm font-semibold text-emerald-300 hover:text-emerald-200">{{ task.display_title }}</a>
                     {% if task.description %}
                       <p class="text-xs text-slate-400">{{ task.description }}</p>
                     {% endif %}
@@ -261,7 +261,7 @@
                     <div class="md:col-span-3 text-amber-200">
                       Depends on
                       {% for dependency in dependencies %}
-                        <a href="{{ url_for('qc_work_detail', work_id=dependency.id) }}" class="underline hover:text-amber-50">{{ dependency.display_title }}</a>{% if not loop.last %}, {% endif %}
+                        <a href="{{ dependency.detail_url or '#' }}" class="underline hover:text-amber-50">{{ dependency.display_title }}</a>{% if not loop.last %}, {% endif %}
                       {% endfor %}
                     </div>
                   {% endif %}
@@ -273,7 +273,7 @@
                   {% endif %}
                 </div>
                 <div class="mt-3 flex justify-end">
-                  <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="inline-flex items-center px-3 py-1.5 rounded-xl border border-emerald-500/40 text-xs text-emerald-200 hover:bg-emerald-500/10">Open</a>
+                  <a href="{{ task.detail_url or '#' }}" class="inline-flex items-center px-3 py-1.5 rounded-xl border border-emerald-500/40 text-xs text-emerald-200 hover:bg-emerald-500/10">Open</a>
                 </div>
               </div>
             {% endfor %}
@@ -300,7 +300,7 @@
                   {% set waiting_dependencies = task.dependencies %}
                   Awaiting completion of
                   {% for dependency in waiting_dependencies %}
-                    <a href="{{ url_for('qc_work_detail', work_id=dependency.id) }}" class="underline hover:text-amber-50">{{ dependency.display_title }}</a>{% if not loop.last %} &middot; {% endif %}
+                    <a href="{{ dependency.detail_url or '#' }}" class="underline hover:text-amber-50">{{ dependency.display_title }}</a>{% if not loop.last %} &middot; {% endif %}
                   {% endfor %}
                 </div>
               </div>
@@ -319,7 +319,7 @@
         {% if closed_tasks %}
           <div class="space-y-2">
             {% for task in closed_tasks %}
-              <a href="{{ url_for('qc_work_detail', work_id=task.id) }}" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-slate-800/60 bg-slate-950/30 hover:bg-slate-900/50 transition text-sm">
+              <a href="{{ task.detail_url or '#' }}" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-slate-800/60 bg-slate-950/30 hover:bg-slate-900/50 transition text-sm">
                 <span class="text-slate-100">{{ task.display_title }}</span>
                 <span class="text-xs text-slate-400">Closed {{ task.created_at.strftime('%Y-%m-%d') }}</span>
               </a>
