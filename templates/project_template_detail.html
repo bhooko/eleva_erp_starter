@@ -358,6 +358,7 @@
       const openModalButton = document.querySelector('[data-save-task-template]');
       const modal = document.getElementById('task-template-modal');
       const closeModalButtons = document.querySelectorAll('[data-close-task-template]');
+      const csrfToken = '{{ csrf_token() }}';
       let draggingItem = null;
       let metaDirty = false;
       let taskDirty = false;
@@ -399,7 +400,8 @@
           const response = await fetch(url, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ ordered_ids: orderedIds })
           });

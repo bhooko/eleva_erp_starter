@@ -5327,6 +5327,16 @@ def normalize_template_task_order(template_id):
         ProjectTemplateTask.order_index.asc(),
         ProjectTemplateTask.id.asc()
     ).all()
+    seen = set()
+    needs_normalization = False
+    for task in tasks:
+        order_value = task.order_index
+        if not order_value or order_value in seen:
+            needs_normalization = True
+            break
+        seen.add(order_value)
+    if not needs_normalization:
+        return tasks
     for idx, task in enumerate(tasks, start=1):
         task.order_index = idx
     return tasks
