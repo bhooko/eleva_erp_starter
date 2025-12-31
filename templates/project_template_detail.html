@@ -23,6 +23,8 @@
   {% set task_type_styles = {
     'general': 'bg-slate-800 text-slate-100 border border-slate-700',
     'qc': 'bg-purple-500/20 text-purple-100 border border-purple-400/50',
+    'design': 'bg-orange-500/20 text-orange-100 border border-orange-400/50',
+    'srt': 'bg-sky-500/20 text-sky-100 border border-sky-400/50',
     'milestone': 'bg-amber-500/20 text-amber-900 border border-amber-400/70',
     'sales': 'bg-teal-500/20 text-teal-100 border border-teal-400/50',
     'custom': 'bg-indigo-500/20 text-indigo-100 border border-indigo-400/50'
@@ -118,6 +120,8 @@
           {% for task in tasks %}
             {% set task_payload = {
               'task_type': task.task_type or '',
+              'module': task.module or '',
+              'task_subtype': task.task_subtype or '',
               'id': task.id,
               'name': task.name,
               'description': task.description or '',
@@ -130,9 +134,10 @@
               'duration_days': task.duration_days,
               'milestone': task.milestone or ''
             } %}
-            {% set task_type_value = (task.task_type or '').lower() %}
-            {% set task_type_label = TASK_TYPE_LABELS.get(task_type_value, TASK_TYPE_LABELS['custom']) %}
-            {% set type_style = task_type_styles.get(task_type_value, task_type_styles['custom']) %}
+            {% set module_value = (task.module or task.task_type or 'general').lower() %}
+            {% set subtype_value = (task.task_subtype or 'general').lower() %}
+            {% set badge_label = PROJECT_TEMPLATE_BADGES.get((module_value, subtype_value), TASK_TYPE_LABELS.get(module_value, TASK_TYPE_LABELS['custom'])) %}
+            {% set type_style = task_type_styles.get(module_value, task_type_styles['custom']) %}
             {% set dependencies = task.dependencies %}
             {% set dependency_count = dependencies|length %}
             {% set duration_label = task.duration_days is not none and (task.duration_days|string + ' day' + ('s' if task.duration_days != 1 else '')) or 'No duration set' %}
@@ -151,7 +156,7 @@
                     <div class="space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
                         <div class="text-sm font-semibold text-slate-100">{{ task.name }}</div>
-                        <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ type_style }}">{{ task_type_label }}</span>
+                        <span class="px-2 py-0.5 rounded-lg text-[11px] uppercase tracking-wide {{ type_style }}">{{ badge_label }}</span>
                       </div>
                       <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60" data-order-label>Order {{ task.order_index }}</span>
@@ -254,9 +259,17 @@
             data-default-order="{{ tasks|length + 1 }}">
         {{ csrf_field() }}
         <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Task type</label>
-          <select name="task_type" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
-            {% for value, label in PROJECT_TEMPLATE_TASK_TYPES %}
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Module</label>
+          <select name="module" data-template-module class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+            {% for value, label in PROJECT_TEMPLATE_TASK_MODULES %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Subtype</label>
+          <select name="task_subtype" data-template-subtype class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-400 focus:outline-none">
+            {% for value, label in PROJECT_TEMPLATE_TASK_SUBTYPES.get('general', []) %}
               <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
           </select>
@@ -579,7 +592,9 @@
       const editTemplate = form.dataset.editUrlTemplate;
       const defaultOrder = form.dataset.defaultOrder;
       const dependencySelect = form.querySelector('select[name="depends_on_ids"]');
-      const typeSelect = form.querySelector('select[name="task_type"]');
+      const moduleSelect = form.querySelector('[data-template-module]');
+      const subtypeSelect = form.querySelector('[data-template-subtype]');
+      const subtypeMap = {{ PROJECT_TEMPLATE_TASK_SUBTYPES|tojson }};
       let editingTaskId = null;
 
       function updateScheduledVisibility() {
@@ -621,9 +636,10 @@
         if (orderInput) {
           orderInput.value = defaultOrder || orderInput.getAttribute('value') || '';
         }
-        if (typeSelect) {
-          const defaultOption = typeSelect.querySelector('option');
-          typeSelect.value = defaultOption ? defaultOption.value : '';
+        if (moduleSelect) {
+          const defaultOption = moduleSelect.querySelector('option');
+          moduleSelect.value = defaultOption ? defaultOption.value : '';
+          updateSubtypeOptions();
         }
         if (scheduledWrapper) {
           scheduledWrapper.classList.add('opacity-60', 'pointer-events-none');
@@ -681,15 +697,12 @@
             if (assigneeSelect) assigneeSelect.value = data.default_assignee_id ? String(data.default_assignee_id) : '';
             const formSelect = form.querySelector('select[name="form_template_id"]');
             if (formSelect) formSelect.value = data.form_template_id ? String(data.form_template_id) : '';
-            if (typeSelect) {
-              const hasOption = Array.from(typeSelect.options).some((option) => option.value === data.task_type);
-              if (!hasOption && data.task_type) {
-                const fallbackOption = document.createElement('option');
-                fallbackOption.value = data.task_type;
-                fallbackOption.textContent = data.task_type.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-                typeSelect.appendChild(fallbackOption);
+            if (moduleSelect) {
+              moduleSelect.value = data.module || data.task_type || moduleSelect.querySelector('option')?.value || 'general';
+              updateSubtypeOptions();
+              if (subtypeSelect) {
+                subtypeSelect.value = data.task_subtype || subtypeSelect.querySelector('option')?.value || '';
               }
-              typeSelect.value = data.task_type || (typeSelect.querySelector('option')?.value || '');
             }
 
             const startModeInput = form.querySelector(`input[name="start_mode"][value="${data.start_mode || 'immediate'}"]`);
@@ -728,6 +741,27 @@
         }
         taskDirty = false;
       });
+
+      function updateSubtypeOptions() {
+        if (!subtypeSelect || !moduleSelect) return;
+        const moduleValue = moduleSelect.value || 'general';
+        const options = subtypeMap[moduleValue] || subtypeMap.general || [];
+        subtypeSelect.innerHTML = '';
+        options.forEach(([value, label]) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          subtypeSelect.appendChild(option);
+        });
+      }
+
+      if (moduleSelect) {
+        moduleSelect.addEventListener('change', () => {
+          updateSubtypeOptions();
+          taskDirty = true;
+        });
+        updateSubtypeOptions();
+      }
     })();
   </script>
 {% endblock %}

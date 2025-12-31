@@ -4,7 +4,7 @@
 {% block content %}
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
   <div class="rounded-2xl bg-slate-800/70 border border-slate-700/70 p-5">
-    <p class="text-sm text-slate-400">Pending SRT Tasks</p>
+    <p class="text-sm text-slate-400">Open SRT Tasks</p>
     <p class="text-3xl font-semibold text-theme-primary mt-2">{{ summary.total_pending }}</p>
     <p class="text-xs text-slate-500 mt-3">Includes all open and in-progress SRT activities.</p>
   </div>
@@ -34,12 +34,16 @@
     <div class="flex flex-wrap items-center gap-2">
       <a href="{{ url_for('srt_overview') }}"
          class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['all', ''] else 'text-slate-300 hover:bg-slate-800/80' }}">All</a>
-      <a href="{{ url_for('srt_overview', status='pending') }}"
-         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['pending', 'open'] else 'text-slate-300 hover:bg-slate-800/80' }}">Pending</a>
-      <a href="{{ url_for('srt_overview', status='in-progress') }}"
-         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['in-progress', 'in_progress'] else 'text-slate-300 hover:bg-slate-800/80' }}">In Progress</a>
+      <a href="{{ url_for('srt_overview', status='scheduled') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter == 'scheduled' else 'text-slate-300 hover:bg-slate-800/80' }}">Scheduled</a>
+      <a href="{{ url_for('srt_overview', status='site-visited') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['site-visited', 'site_visited'] else 'text-slate-300 hover:bg-slate-800/80' }}">Site Visited</a>
+      <a href="{{ url_for('srt_overview', status='pending-civil') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['pending-civil', 'pending_civil'] else 'text-slate-300 hover:bg-slate-800/80' }}">Pending Civil</a>
+      <a href="{{ url_for('srt_overview', status='ready') }}"
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter == 'ready' else 'text-slate-300 hover:bg-slate-800/80' }}">Ready</a>
       <a href="{{ url_for('srt_overview', status='closed') }}"
-         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter in ['closed', 'completed'] else 'text-slate-300 hover:bg-slate-800/80' }}">Closed</a>
+         class="px-3 py-1.5 rounded-full border border-slate-700/70 text-sm {{ 'bg-slate-800 text-white' if status_filter == 'closed' else 'text-slate-300 hover:bg-slate-800/80' }}">Closed</a>
       <button type="button"
               class="ml-0 md:ml-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 transition"
               data-srt-overview-open>
@@ -102,7 +106,7 @@
                 <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-rose-500/20 text-rose-300' if task.priority == 'High' else 'bg-amber-400/20 text-amber-200' if task.priority == 'Medium' else 'bg-emerald-500/20 text-emerald-200' }}">{{ task.priority }}</span>
               </td>
               <td class="px-6 py-4">
-                <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-sky-500/20 text-sky-200' if task.status == 'In Progress' else 'bg-emerald-500/20 text-emerald-200' if task.status == 'Closed' else 'bg-slate-500/20 text-slate-200' }}">{{ task.status }}</span>
+                <span class="px-2 py-1 text-xs font-semibold rounded-full {{ 'bg-emerald-500/20 text-emerald-200' if task.status == 'Closed' else 'bg-slate-500/20 text-slate-200' }}">{{ task.status }}</span>
               </td>
               <td class="px-6 py-4">{{ task.due_date_display or '—' }}</td>
               <td class="px-6 py-4">
@@ -225,7 +229,7 @@
         <div class="grid gap-4 md:grid-cols-2">
           <div>
             <p class="text-xs uppercase tracking-wide text-slate-400">Status</p>
-            <span class="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold" data-task-status-badge>Pending</span>
+            <span class="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold" data-task-status-badge>Scheduled</span>
           </div>
           <div>
             <p class="text-xs uppercase tracking-wide text-slate-400">Priority</p>
@@ -268,8 +272,10 @@
               <div>
                 <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Status</label>
                 <select name="status" class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" data-task-status-input>
-                  <option>Pending</option>
-                  <option>In Progress</option>
+                  <option>Scheduled</option>
+                  <option>Site Visited</option>
+                  <option>Pending Civil Work</option>
+                  <option>Ready for Installation</option>
                   <option>Closed</option>
                 </select>
               </div>
@@ -303,11 +309,11 @@
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div class="flex flex-wrap items-center gap-2">
-                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/20 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-500/30 transition" data-status-action="In Progress">
+                <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/20 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-500/30 transition" data-status-action="Site Visited">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 13.5m0-13.5L5.25 18.75" />
                   </svg>
-                  <span>Mark in progress</span>
+                  <span>Mark site visited</span>
                 </button>
                 <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 transition" data-status-action="Closed">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -513,11 +519,14 @@
       const statusClassFor = (value) => {
         const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ';
         const normalised = (value || '').toLowerCase();
-        if (normalised === 'in progress') {
-          return `${base}bg-sky-500/20 text-sky-200`;
-        }
         if (normalised === 'closed') {
           return `${base}bg-emerald-500/20 text-emerald-200`;
+        }
+        if (normalised === 'ready for installation') {
+          return `${base}bg-sky-500/20 text-sky-200`;
+        }
+        if (normalised === 'site visited') {
+          return `${base}bg-amber-400/20 text-amber-200`;
         }
         return `${base}bg-slate-500/20 text-slate-200`;
       };
@@ -817,7 +826,7 @@
         }
         if (statusBadge) {
           statusBadge.className = statusClassFor(task.status);
-          statusBadge.textContent = task.status || 'Pending';
+          statusBadge.textContent = task.status || 'Scheduled';
         }
         if (priorityBadge) {
           priorityBadge.className = priorityClassFor(task.priority);
@@ -840,7 +849,7 @@
           dueDisplay.textContent = dueText;
         }
         if (statusSelect) {
-          statusSelect.value = task.status || 'Pending';
+          statusSelect.value = task.status || 'Scheduled';
         }
         setOwnerOption(task.owner || '');
         if (dueInput) {

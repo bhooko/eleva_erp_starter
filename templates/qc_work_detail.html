@@ -13,18 +13,21 @@
         {% endif %}
       </div>
       <div class="ml-auto flex gap-2">
-        {% if work.status == 'Open' %}
-          <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='start') }}">
+        {% if work.status == 'Pending Inspection' %}
+          <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='inspect') }}">
             {{ csrf_field() }}
-            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Mark In Progress</button>
+            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Mark Inspection Done</button>
           </form>
-        {% elif work.status == 'In Progress' %}
+        {% elif work.status == 'Inspection Done' %}
+          <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='rectify') }}">
+            {{ csrf_field() }}
+            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Mark Rectification Pending</button>
+          </form>
+        {% elif work.status == 'Rectification Pending' %}
           <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='close') }}">
             {{ csrf_field() }}
-            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Mark Complete</button>
+            <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500">Close Task</button>
           </form>
-        {% elif work.status == 'Blocked' %}
-          <span class="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-100 border border-amber-400/40">Waiting on dependency</span>
         {% elif work.status == 'Closed' %}
           <form method="post" action="{{ url_for('qc_work_status', work_id=work.id, action='reopen') }}">
             {{ csrf_field() }}
