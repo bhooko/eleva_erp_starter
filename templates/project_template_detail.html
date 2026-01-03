@@ -184,6 +184,20 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
                       </svg>
                     </button>
+                    <form method="post"
+                          action="{{ url_for('project_template_task_delete', template_id=template.id, task_id=task.id) }}"
+                          class="inline"
+                          onsubmit="return confirm('Delete task {{ task.name }}? This will remove its dependency links.');">
+                      {{ csrf_field() }}
+                      <button type="submit"
+                              class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs uppercase tracking-wide text-rose-100 hover:bg-rose-500/20 active:scale-95 transition"
+                              data-skip-warning="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z" />
+                        </svg>
+                        Delete
+                      </button>
+                    </form>
                   </div>
                 </div>
                 <div id="task-details-{{ task.id }}" class="hidden rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300 space-y-2" data-task-details>
@@ -623,6 +637,18 @@
         });
       }
 
+      function updateDependencyOptions(currentTaskId) {
+        if (!dependencySelect) return;
+        Array.from(dependencySelect.options).forEach((option) => {
+          const optionId = Number(option.value);
+          const isCurrent = currentTaskId && optionId === Number(currentTaskId);
+          option.disabled = Boolean(isCurrent);
+          if (isCurrent) {
+            option.selected = false;
+          }
+        });
+      }
+
       function resetForm() {
         form.reset();
         form.action = createAction;
@@ -650,6 +676,7 @@
         }
         if (dependencySelect) {
           clearDependencySelection();
+          updateDependencyOptions(null);
         }
         editingTaskId = null;
         taskDirty = false;
@@ -687,6 +714,7 @@
             if (orderInput) orderInput.value = data.order_index || '';
 
             if (dependencySelect) {
+              updateDependencyOptions(data.id);
               const selectedDependencies = Array.isArray(data.dependency_ids) ? data.dependency_ids.map(Number) : [];
               const selectedSet = new Set(selectedDependencies);
               Array.from(dependencySelect.options).forEach((option) => {

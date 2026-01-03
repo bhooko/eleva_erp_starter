@@ -9704,6 +9704,9 @@ def ensure_qc_columns():
         if "task_type" not in template_cols:
             cur.execute("ALTER TABLE project_template_task ADD COLUMN task_type TEXT DEFAULT 'general';")
             added_template_cols.append("task_type")
+        if "depends_on_id" not in template_cols:
+            cur.execute("ALTER TABLE project_template_task ADD COLUMN depends_on_id INTEGER;")
+            added_template_cols.append("depends_on_id")
         if "start_mode" not in template_cols:
             cur.execute("ALTER TABLE project_template_task ADD COLUMN start_mode TEXT DEFAULT 'immediate';")
             added_template_cols.append("start_mode")
@@ -9743,6 +9746,36 @@ def ensure_qc_columns():
             "UPDATE project_template_task SET module = 'general', task_subtype = 'general' "
             "WHERE module IS NULL OR module = ''"
         )
+
+    dependency_tables = [
+        (
+            "project_template_task_dependency",
+            "project_template_task",
+        ),
+        (
+            "project_task_dependency",
+            "project_tasks",
+        ),
+        (
+            "qc_work_dependency",
+            "qc_work",
+        ),
+    ]
+    for table_name, parent_table in dependency_tables:
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if cur.fetchone() is None:
+            cur.execute(
+                f"""
+                CREATE TABLE {table_name} (
+                    id INTEGER PRIMARY KEY,
+                    task_id INTEGER NOT NULL,
+                    depends_on_id INTEGER NOT NULL,
+                    UNIQUE(task_id, depends_on_id),
+                    FOREIGN KEY(task_id) REFERENCES {parent_table}(id),
+                    FOREIGN KEY(depends_on_id) REFERENCES {parent_table}(id)
+                );
+                """
+            )
 
     # project additions
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project'")
@@ -18000,9 +18033,8 @@ def project_template_detail(template_id):
                 ProjectTemplateTask.template_id == template.id,
                 ProjectTemplateTask.id.in_(depends_on_ids)
             ).all()
-            if len(dependencies) != len(depends_on_ids):
-                flash("Select dependencies from the same template.", "error")
-                return redirect(url_for("project_template_detail", template_id=template.id))
+            valid_dependency_ids = {dep.id for dep in dependencies}
+            depends_on_ids = [dep_id for dep_id in depends_on_ids if dep_id in valid_dependency_ids]
 
         if default_assignee_id:
             assignee_candidate = db.session.get(User, default_assignee_id)
@@ -18221,9 +18253,8 @@ def project_template_task_edit(template_id, task_id):
             ProjectTemplateTask.template_id == template.id,
             ProjectTemplateTask.id.in_(depends_on_ids)
         ).all()
-        if len(dependencies) != len(depends_on_ids):
-            flash("Select dependencies from the same template.", "error")
-            return redirect(url_for("project_template_detail", template_id=template.id))
+        valid_dependency_ids = {dep.id for dep in dependencies}
+        depends_on_ids = [dep_id for dep_id in depends_on_ids if dep_id in valid_dependency_ids]
 
     if default_assignee_id:
         assignee_candidate = db.session.get(User, default_assignee_id)
@@ -18273,6 +18304,33 @@ def project_template_task_edit(template_id, task_id):
     normalize_template_task_order(template.id)
     db.session.commit()
     flash("Template task updated.", "success")
+    return redirect(url_for("project_template_detail", template_id=template.id))
+
+
+@app.route("/project-templates/<int:template_id>/tasks/<int:task_id>/delete", methods=["POST"])
+@login_required
+def project_template_task_delete(template_id, task_id):
+    _module_visibility_required("operations")
+    template = ProjectTemplate.query.get_or_404(template_id)
+    task = ProjectTemplateTask.query.filter_by(id=task_id, template_id=template.id).first()
+    if not task:
+        flash("Task not found for this template.", "error")
+        return redirect(url_for("project_template_detail", template_id=template.id))
+
+    ProjectTemplateTaskDependency.query.filter(
+        or_(
+            ProjectTemplateTaskDependency.task_id == task.id,
+            ProjectTemplateTaskDependency.depends_on_id == task.id,
+        )
+    ).delete(synchronize_session=False)
+    ProjectTemplateTask.query.filter_by(depends_on_id=task.id).update(
+        {"depends_on_id": None},
+        synchronize_session=False,
+    )
+    db.session.delete(task)
+    normalize_template_task_order(template.id)
+    db.session.commit()
+    flash("Template task deleted.", "success")
     return redirect(url_for("project_template_detail", template_id=template.id))
 
 
