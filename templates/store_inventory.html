@@ -147,19 +147,19 @@
       </div>
       <div class="max-h-[60vh] overflow-y-auto">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-600">
+          <thead class="bg-slate-800/60 text-slate-200 border-b border-slate-700/60">
             <tr class="text-left">
-              <th class="py-2 px-4">Item code</th>
-              <th class="py-2 px-4">Description</th>
-              <th class="py-2 px-4">Usable stock</th>
+              <th class="py-2 px-4 font-semibold">Item code</th>
+              <th class="py-2 px-4 font-semibold">Description</th>
+              <th class="py-2 px-4 font-semibold text-right">Usable stock</th>
             </tr>
           </thead>
-          <tbody class="divide-y">
+          <tbody class="divide-y divide-slate-800/70 text-slate-300">
             {% for item in low_stock %}
-            <tr>
-              <td class="py-2 px-4"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-900 font-semibold hover:underline">{{ item.item_code }}</a></td>
+            <tr class="{{ 'bg-slate-900/60' if loop.index0 % 2 == 0 else 'bg-slate-900/40' }} hover:bg-slate-800/70 transition-colors">
+              <td class="py-2 px-4"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-100 font-semibold hover:underline">{{ item.item_code }}</a></td>
               <td class="py-2 px-4">{{ item.description }}</td>
-              <td class="py-2 px-4">{{ item.current_stock }}</td>
+              <td class="py-2 px-4 text-right">{{ item.current_stock }}</td>
             </tr>
             {% else %}
             <tr><td colspan="3" class="py-3 px-4 text-slate-500">No items are low on stock.</td></tr>
@@ -185,32 +185,32 @@
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
     <table class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-slate-500">
-          <th class="py-2">Item code</th>
-          <th class="py-2">Description</th>
-          <th class="py-2">Physical stock</th>
-          <th class="py-2">Book stock</th>
-          <th class="py-2">Reserved</th>
-          <th class="py-2">Quarantine</th>
-          <th class="py-2">Location</th>
-          <th class="py-2 text-right">Actions</th>
+      <thead class="bg-slate-800/70 text-slate-200 border-b border-slate-700/60">
+        <tr class="text-left">
+          <th class="py-2 font-semibold">Item code</th>
+          <th class="py-2 font-semibold">Description</th>
+          <th class="py-2 font-semibold text-right">Physical stock</th>
+          <th class="py-2 font-semibold text-right">Book stock</th>
+          <th class="py-2 font-semibold text-right">Reserved</th>
+          <th class="py-2 font-semibold text-right">Quarantine</th>
+          <th class="py-2 font-semibold">Location</th>
+          <th class="py-2 text-right font-semibold">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y">
+      <tbody class="divide-y divide-slate-800/70 text-slate-300">
         {% for item in items %}
-        <tr>
-          <td class="py-2"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-900 font-semibold hover:underline">{{ item.item_code }}</a></td>
+        <tr class="{{ 'bg-slate-900/60' if loop.index0 % 2 == 0 else 'bg-slate-900/40' }} hover:bg-slate-800/70 transition-colors">
+          <td class="py-2"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-100 font-semibold hover:underline">{{ item.item_code }}</a></td>
           <td class="py-2">{{ item.description }}</td>
-          <td class="py-2">{{ item.current_stock }}</td>
-          <td class="py-2">{{ item.book_stock }}</td>
-          <td class="py-2">{{ (item.current_stock or 0) - (item.book_stock or 0) }}</td>
-          <td class="py-2">{{ item.quarantined_stock }}</td>
+          <td class="py-2 text-right">{{ item.current_stock }}</td>
+          <td class="py-2 text-right">{{ item.book_stock }}</td>
+          <td class="py-2 text-right">{{ (item.current_stock or 0) - (item.book_stock or 0) }}</td>
+          <td class="py-2 text-right">{{ item.quarantined_stock }}</td>
           <td class="py-2">{{ item.location or 'Main Store' }}</td>
           <td class="py-2 text-right space-x-2">
-            <a href="{{ url_for('inventory_item_movements', item_id=item.id) }}" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg border border-slate-200 text-slate-700 text-xs hover:bg-slate-50">History</a>
+            <a href="{{ url_for('inventory_item_movements', item_id=item.id) }}" class="btn-secondary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">History</a>
             {% if can_adjust %}
-            <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-900 text-white text-xs hover:shadow">Adjust</a>
+            <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="btn-primary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">Adjust</a>
             {% endif %}
           </td>
         </tr>
