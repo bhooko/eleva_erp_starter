@@ -56,28 +56,39 @@
       --stage-success-rgb: 34, 197, 94;
       --stage-glow: rgba(59, 130, 246, 0.45);
       --header-height: 56px;
+      --bg-app: var(--color-base);
+      --bg-app-rgb: var(--color-base-rgb);
+      --bg-surface: var(--color-card);
+      --bg-surface-rgb: var(--color-card-rgb);
+      --bg-surface-2: var(--color-neutral);
+      --bg-surface-2-rgb: var(--color-neutral-rgb);
+      --text-main: var(--text-primary);
+      --text-muted: var(--text-secondary);
+      --accent-blue: var(--color-primary);
+      --accent-blue-rgb: var(--color-primary-rgb);
     }
 
     html[data-theme="eleva-signature"] {
-      --color-base: #0F141A;
-      --color-base-rgb: 15, 20, 26;
-      --color-card: #1C2128;
-      --color-card-rgb: 28, 33, 40;
-      --color-primary: #007AFF;
-      --color-primary-rgb: 0, 122, 255;
-      --color-secondary: #39C0ED;
-      --color-secondary-rgb: 57, 192, 237;
-      --color-neutral: #2D333B;
-      --color-neutral-rgb: 45, 51, 59;
-      --text-primary: #E5E7EB;
-      --text-secondary: #9CA3AF;
+      color-scheme: dark;
+      --color-base: #0B1117;
+      --color-base-rgb: 11, 17, 23;
+      --color-card: #151C24;
+      --color-card-rgb: 21, 28, 36;
+      --color-primary: #3B82F6;
+      --color-primary-rgb: 59, 130, 246;
+      --color-secondary: #4C9BFF;
+      --color-secondary-rgb: 76, 155, 255;
+      --color-neutral: #202835;
+      --color-neutral-rgb: 32, 40, 53;
+      --text-primary: #E6EDF3;
+      --text-secondary: #B0BAC6;
       --accent-success: #00C58E;
       --accent-success-rgb: 0, 197, 142;
       --accent-warning: #FBBF24;
       --accent-warning-rgb: 251, 191, 36;
       --accent-error: #F87171;
       --accent-error-rgb: 248, 113, 113;
-      --border-subtle: #2D333B;
+      --border-subtle: #2F3946;
       --stage-cold: #39C0ED;
       --stage-cold-rgb: 57, 192, 237;
       --stage-warm: #007AFF;
@@ -88,25 +99,26 @@
     }
 
     html[data-theme="metallic-elevate"] {
-      --color-base: #121212;
-      --color-base-rgb: 18, 18, 18;
-      --color-card: #1A1F24;
-      --color-card-rgb: 26, 31, 36;
-      --color-primary: #A9B1B7;
-      --color-primary-rgb: 169, 177, 183;
-      --color-secondary: #3B82F6;
-      --color-secondary-rgb: 59, 130, 246;
-      --color-neutral: #2B3036;
-      --color-neutral-rgb: 43, 48, 54;
-      --text-primary: #F5F6F7;
-      --text-secondary: #9CA3AF;
+      color-scheme: dark;
+      --color-base: #0E141A;
+      --color-base-rgb: 14, 20, 26;
+      --color-card: #171F27;
+      --color-card-rgb: 23, 31, 39;
+      --color-primary: #4B8BFF;
+      --color-primary-rgb: 75, 139, 255;
+      --color-secondary: #63A0FF;
+      --color-secondary-rgb: 99, 160, 255;
+      --color-neutral: #232C36;
+      --color-neutral-rgb: 35, 44, 54;
+      --text-primary: #F0F4F8;
+      --text-secondary: #B4BDC8;
       --accent-success: #14B8A6;
       --accent-success-rgb: 20, 184, 166;
       --accent-warning: #00E0E0;
       --accent-warning-rgb: 0, 224, 224;
       --accent-error: #EF4444;
       --accent-error-rgb: 239, 68, 68;
-      --border-subtle: #2F343A;
+      --border-subtle: #313C48;
       --stage-cold: #3B82F6;
       --stage-cold-rgb: 59, 130, 246;
       --stage-warm: #00E0E0;
@@ -230,15 +242,15 @@
     .nav-item::before {
       content: "";
       position: absolute;
-      inset: 8px auto 8px 0;
-      width: 3px;
+      inset: 6px auto 6px 0;
+      width: 4px;
       border-radius: 999px;
-      background: linear-gradient(180deg, rgba(var(--color-primary-rgb), 0.8), rgba(var(--color-secondary-rgb), 0.55));
+      background: linear-gradient(180deg, rgba(var(--color-primary-rgb), 0.9), rgba(var(--color-secondary-rgb), 0.65));
       transform: scaleY(0);
       transform-origin: top;
       transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease;
       opacity: 0;
-      box-shadow: 0 0 12px rgba(var(--color-primary-rgb), 0.45);
+      box-shadow: 0 0 14px rgba(var(--color-primary-rgb), 0.5);
       pointer-events: none;
       z-index: 2;
     }
@@ -254,7 +266,7 @@
     }
     .nav-item:hover,
     .nav-item:focus-visible {
-      background: rgba(var(--color-neutral-rgb), 0.45);
+      background: rgba(var(--color-neutral-rgb), 0.6);
       transform: translateY(-1px);
     }
     .nav-item:hover::after,
@@ -263,10 +275,10 @@
       transform: scale(1.1);
     }
     .nav-item.active {
-      background: linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.2), rgba(var(--color-secondary-rgb), 0.12));
-      outline: 1px solid rgba(var(--color-primary-rgb), 0.35);
+      background: linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.3), rgba(var(--color-secondary-rgb), 0.18));
+      outline: 1px solid rgba(var(--color-primary-rgb), 0.5);
       color: var(--text-primary);
-      box-shadow: inset 0 0 0 1px rgba(var(--color-primary-rgb), 0.18), 0 0 24px rgba(var(--color-primary-rgb), 0.15);
+      box-shadow: inset 0 0 0 1px rgba(var(--color-primary-rgb), 0.25), 0 0 24px rgba(var(--color-primary-rgb), 0.2);
     }
     .nav-item.active::before {
       opacity: 1;
@@ -282,6 +294,10 @@
     .nav-item:focus-visible .nav-icon {
       transform: translateY(-2px);
     }
+
+    .bg-app { background-color: var(--bg-app) !important; }
+    .bg-surface { background-color: var(--bg-surface) !important; }
+    .bg-surface-2 { background-color: var(--bg-surface-2) !important; }
 
     /* Core backgrounds */
     .bg-slate-950 { background-color: var(--color-base) !important; }
@@ -320,6 +336,7 @@
     .bg-slate-700\/70 { background-color: rgba(var(--color-neutral-rgb), 0.7) !important; }
 
     /* Borders and outlines */
+    .border-subtle { border-color: var(--border-subtle) !important; }
     .border-slate-800 { border-color: var(--color-neutral) !important; }
     .border-slate-800\/60 { border-color: rgba(var(--color-neutral-rgb), 0.6) !important; }
     .border-slate-800\/80 { border-color: rgba(var(--color-neutral-rgb), 0.8) !important; }
@@ -345,6 +362,9 @@
     .text-slate-500 { color: var(--text-secondary) !important; }
     .text-slate-600,
     .text-slate-700 { color: var(--text-secondary) !important; }
+
+    .text-main { color: var(--text-main) !important; }
+    .text-muted { color: var(--text-muted) !important; }
 
     .text-theme-primary { color: var(--text-primary) !important; }
     .text-theme-secondary { color: var(--text-secondary) !important; }
@@ -378,6 +398,55 @@
     .hover\:text-emerald-300:hover,
     .hover\:text-emerald-200:hover,
     .hover\:text-emerald-100:hover { color: var(--color-secondary) !important; }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: #F8FAFC;
+      border: 1px solid rgba(var(--accent-blue-rgb), 0.4);
+      box-shadow: 0 8px 20px rgba(var(--accent-blue-rgb), 0.2);
+      transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+    }
+    .btn-primary:hover {
+      background: rgba(var(--accent-blue-rgb), 0.9);
+      box-shadow: 0 10px 24px rgba(var(--accent-blue-rgb), 0.3);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active {
+      background: rgba(var(--accent-blue-rgb), 0.8);
+      transform: translateY(0);
+      box-shadow: 0 6px 16px rgba(var(--accent-blue-rgb), 0.2);
+    }
+    .btn-primary:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.35);
+    }
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-secondary {
+      background: rgba(var(--bg-surface-2-rgb), 0.45);
+      color: var(--text-main);
+      border: 1px solid rgba(var(--bg-surface-2-rgb), 0.7);
+      transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+    }
+    .btn-secondary:hover {
+      background: rgba(var(--bg-surface-2-rgb), 0.65);
+      border-color: rgba(var(--bg-surface-2-rgb), 0.9);
+      box-shadow: 0 8px 18px rgba(var(--bg-surface-2-rgb), 0.25);
+      transform: translateY(-1px);
+    }
+    .btn-secondary:active {
+      background: rgba(var(--bg-surface-2-rgb), 0.7);
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    .btn-secondary:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.3);
+    }
 
     .focus\:ring-emerald-500\/50:focus,
     .focus\:ring-emerald-500\/40:focus { --tw-ring-color: rgba(var(--color-primary-rgb), 0.5) !important; }
