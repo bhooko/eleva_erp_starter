@@ -98,7 +98,7 @@
         <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Confirm Delivery Order</button>
       </form>
       {% endif %}
-      <a href="{{ url_for('create_delivery_challan_from_do', order_id=order.id) }}" class="px-5 py-2 bg-orange-500 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create Delivery Challan</a>
+      <a href="{{ url_for('create_delivery_challan_from_do', order_id=order.id) }}" class="px-5 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create Delivery Challan</a>
     </div>
     {% endif %}
   </div>
