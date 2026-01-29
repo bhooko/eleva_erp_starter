@@ -1,6 +1,32 @@
 # Ignore SQLite databases and generated JSON data in the instance directory
-instance/*.db
-instance/*.json
-venv/
+# ------------------------------
+# Python bytecode (EVERYWHERE)
+# ------------------------------
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ------------------------------
+# Virtual environment
+# ------------------------------
+venv/
+
+# ------------------------------
+# Flask instance & database
+# ------------------------------
+instance/
+*.db
+*.json
+
+# ------------------------------
+# Environment & local markers
+# ------------------------------
 .env
+.deps_installed
+
+# ------------------------------
+# OS junk
+# ------------------------------
+.DS_Store
+Thumbs.db
