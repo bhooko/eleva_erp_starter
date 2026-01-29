@@ -1,3 +1,6 @@
 # Ignore SQLite databases and generated JSON data in the instance directory
 instance/*.db
 instance/*.json
+venv/
+__pycache__/
+.env
