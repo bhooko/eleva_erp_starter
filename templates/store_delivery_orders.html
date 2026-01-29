@@ -9,7 +9,7 @@
       <p class="text-sm text-slate-600">Create and track delivery orders created by Store.</p>
     </div>
     {% if can_create %}
-    <a href="{{ url_for('create_delivery_order') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
+    <a href="{{ url_for('create_delivery_order') }}" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
       + Create Delivery Order
     </a>
     {% endif %}
