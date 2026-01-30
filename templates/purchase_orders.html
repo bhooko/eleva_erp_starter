@@ -412,6 +412,9 @@
       }
       const row = input.closest('.po-item-row');
       input.value = part.name;
+      if (row) {
+        row.dataset.selectedPartId = part.id ? String(part.id) : '';
+      }
       const partIdInput = row ? row.querySelector('[data-part-id]') : null;
       const itemCodeInput = row ? row.querySelector('[data-item-code]') : null;
       const descriptionInput = row ? row.querySelector('[name="description[]"]') : null;
@@ -423,11 +426,19 @@
       if (itemCodeInput) {
         itemCodeInput.value = part.item_code || '';
       }
-      if (descriptionInput && part.description) {
+      const hasDescriptionEdit = row && row.dataset.descriptionEdited === 'true';
+      const hasUnitEdit = row && row.dataset.unitEdited === 'true';
+      if (descriptionInput && part.description && !hasDescriptionEdit) {
         descriptionInput.value = part.description;
+        if (row) {
+          row.dataset.descriptionEdited = 'false';
+        }
       }
-      if (unitInput && part.unit) {
+      if (unitInput && part.unit && !hasUnitEdit) {
         unitInput.value = part.unit;
+        if (row) {
+          row.dataset.unitEdited = 'false';
+        }
       }
       if (row) {
         row.dataset.partNameFilled = input.value.trim() ? 'true' : 'false';
@@ -452,10 +463,17 @@
           option.className = 'flex w-full flex-col px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-100';
           const nameEl = document.createElement('span');
           nameEl.className = 'font-semibold text-slate-900';
-          nameEl.textContent = part.name;
+          const primaryName = part.name || part.item_code || part.description || 'Unnamed part';
+          nameEl.textContent = primaryName;
           const metaEl = document.createElement('span');
           metaEl.className = 'text-xs text-slate-500';
-          const metaBits = [part.description, part.unit].filter(Boolean);
+          const metaBits = [];
+          if (part.description && part.description !== primaryName) {
+            metaBits.push(part.description);
+          }
+          if (part.unit) {
+            metaBits.push(`Unit: ${part.unit}`);
+          }
           metaEl.textContent = metaBits.join(' · ') || 'No extra details';
           option.appendChild(nameEl);
           option.appendChild(metaEl);
@@ -521,6 +539,9 @@
         closePartDropdown();
         if (row) {
           row.dataset.partNameFilled = 'false';
+          row.dataset.selectedPartId = '';
+          row.dataset.descriptionEdited = 'false';
+          row.dataset.unitEdited = 'false';
         }
         return;
       }
@@ -615,6 +636,12 @@
       const row = event.target.closest('.po-item-row');
       if (row) {
         updateTotals();
+      }
+      if (row && event.target.matches('[name="description[]"]')) {
+        row.dataset.descriptionEdited = 'true';
+      }
+      if (row && event.target.matches('[name="unit[]"]')) {
+        row.dataset.unitEdited = 'true';
       }
       if (event.target.matches('[data-part-name]')) {
         handlePartInput(event.target);
