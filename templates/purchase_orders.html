@@ -156,19 +156,18 @@
               <table class="min-w-full text-sm">
                 <thead class="text-left text-slate-500 sticky top-0 bg-slate-50 z-10">
                   <tr>
-                    <th class="py-2 px-3 min-w-[180px]">Part name</th>
+                    <th class="py-2 px-3 min-w-[260px]">Part name</th>
                     <th class="py-2 px-3 min-w-[220px]">Description</th>
-                    <th class="py-2 px-3 min-w-[110px]">Unit</th>
                     <th class="py-2 px-3 min-w-[90px]">Qty</th>
+                    <th class="py-2 px-3 min-w-[110px]">Unit</th>
                     <th class="py-2 px-3 min-w-[120px]">Unit price</th>
-                    <th class="py-2 px-3 min-w-[110px]">Currency</th>
                     <th class="py-2 px-3 min-w-[120px] text-right">Line total</th>
                     <th class="py-2 px-3 min-w-[90px]"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y" data-items-body>
                   <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-                    <td class="py-2 px-3 min-w-[180px]">
+                    <td class="py-2 px-3 min-w-[260px]">
                       <div class="relative">
                         <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
                         <input type="hidden" name="part_id[]" data-part-id />
@@ -178,17 +177,14 @@
                     <td class="py-2 px-3 min-w-[220px]">
                       <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
                     </td>
-                    <td class="py-2 px-3 min-w-[110px]">
-                      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
-                    </td>
                     <td class="py-2 px-3 min-w-[90px]">
                       <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
                     </td>
+                    <td class="py-2 px-3 min-w-[110px]">
+                      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
+                    </td>
                     <td class="py-2 px-3 min-w-[120px]">
                       <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-                    </td>
-                    <td class="py-2 px-3 min-w-[110px]">
-                      <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="INR" />
                     </td>
                     <td class="py-2 px-3 min-w-[120px] text-right">
                       <span class="line-total font-semibold text-slate-700">0.00</span>
@@ -274,7 +270,7 @@
 
 <template id="po-item-row-template">
   <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-    <td class="py-2 px-3 min-w-[180px]">
+    <td class="py-2 px-3 min-w-[260px]">
       <div class="relative">
         <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
         <input type="hidden" name="part_id[]" data-part-id />
@@ -284,17 +280,14 @@
     <td class="py-2 px-3 min-w-[220px]">
       <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
     </td>
-    <td class="py-2 px-3 min-w-[110px]">
-      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
-    </td>
     <td class="py-2 px-3 min-w-[90px]">
       <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
     </td>
+    <td class="py-2 px-3 min-w-[110px]">
+      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
+    </td>
     <td class="py-2 px-3 min-w-[120px]">
       <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-    </td>
-    <td class="py-2 px-3 min-w-[110px]">
-      <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="INR" />
     </td>
     <td class="py-2 px-3 min-w-[120px] text-right">
       <span class="line-total font-semibold text-slate-700">0.00</span>
@@ -680,8 +673,6 @@
         row.querySelectorAll('input').forEach((input) => {
           if (input.type === 'number') {
             input.value = input.name === 'quantity_ordered[]' ? '1' : '';
-          } else if (input.name === 'currency[]') {
-            input.value = 'INR';
           } else {
             input.value = '';
           }
