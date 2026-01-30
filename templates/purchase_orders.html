@@ -1,6 +1,82 @@
 {% extends "base.html" %}
 {% block title %}Purchase Orders · Eleva ERP{% endblock %}
 {% block content %}
+<style>
+  .po-part-dropdown {
+    position: fixed;
+    z-index: 10000;
+    max-height: 18rem;
+    overflow-y: auto;
+    border-radius: 0.75rem;
+    border: 1px solid #E5E7EB;
+    background: #FFFFFF;
+    color: #111827;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .po-part-dropdown__item {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    text-align: left;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    border: none;
+  }
+
+  .po-part-dropdown__item:hover,
+  .po-part-dropdown__item:focus,
+  .po-part-dropdown__item.is-active {
+    background: #F1F5F9;
+    color: #0F172A;
+    outline: none;
+  }
+
+  .po-part-dropdown__name {
+    font-weight: 600;
+    color: inherit;
+  }
+
+  .po-part-dropdown__meta {
+    font-size: 0.75rem;
+    color: #64748B;
+  }
+
+  .po-part-dropdown__empty {
+    padding: 10px 12px;
+    color: #64748B;
+  }
+
+  html[data-theme="eleva-signature"] .po-part-dropdown,
+  html[data-theme="metallic-elevate"] .po-part-dropdown {
+    background: #111827;
+    color: #E5E7EB;
+    border-color: #273244;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  }
+
+  html[data-theme="eleva-signature"] .po-part-dropdown__item:hover,
+  html[data-theme="eleva-signature"] .po-part-dropdown__item:focus,
+  html[data-theme="eleva-signature"] .po-part-dropdown__item.is-active,
+  html[data-theme="metallic-elevate"] .po-part-dropdown__item:hover,
+  html[data-theme="metallic-elevate"] .po-part-dropdown__item:focus,
+  html[data-theme="metallic-elevate"] .po-part-dropdown__item.is-active {
+    background: #1F2937;
+    color: #FFFFFF;
+  }
+
+  html[data-theme="eleva-signature"] .po-part-dropdown__meta,
+  html[data-theme="metallic-elevate"] .po-part-dropdown__meta,
+  html[data-theme="eleva-signature"] .po-part-dropdown__empty,
+  html[data-theme="metallic-elevate"] .po-part-dropdown__empty {
+    color: #9CA3AF;
+  }
+</style>
 <div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
@@ -263,19 +339,7 @@
     let partRequestCounter = 0;
 
     const partDropdown = document.createElement('div');
-    partDropdown.className = [
-      'fixed',
-      'hidden',
-      'z-[10000]',
-      'max-h-72',
-      'w-80',
-      'overflow-auto',
-      'rounded-xl',
-      'border',
-      'border-slate-200',
-      'bg-white',
-      'shadow-xl',
-    ].join(' ');
+    partDropdown.className = 'po-part-dropdown hidden';
     document.body.appendChild(partDropdown);
 
     const formatDate = (date) => {
@@ -399,9 +463,9 @@
       const options = Array.from(partDropdown.querySelectorAll('[data-part-option]'));
       options.forEach((option, index) => {
         if (index === activePartIndex) {
-          option.classList.add('bg-slate-100');
+          option.classList.add('is-active');
         } else {
-          option.classList.remove('bg-slate-100');
+          option.classList.remove('is-active');
         }
       });
     };
@@ -451,7 +515,7 @@
       partDropdown.innerHTML = '';
       if (!parts.length) {
         const emptyState = document.createElement('div');
-        emptyState.className = 'px-4 py-3 text-sm text-slate-500';
+        emptyState.className = 'po-part-dropdown__empty';
         emptyState.textContent = 'No matching parts found.';
         partDropdown.appendChild(emptyState);
       } else {
@@ -460,13 +524,13 @@
           option.type = 'button';
           option.dataset.partOption = 'true';
           option.dataset.partIndex = String(index);
-          option.className = 'flex w-full flex-col px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-100';
+          option.className = 'po-part-dropdown__item';
           const nameEl = document.createElement('span');
-          nameEl.className = 'font-semibold text-slate-900';
+          nameEl.className = 'po-part-dropdown__name';
           const primaryName = part.name || part.item_code || part.description || 'Unnamed part';
           nameEl.textContent = primaryName;
           const metaEl = document.createElement('span');
-          metaEl.className = 'text-xs text-slate-500';
+          metaEl.className = 'po-part-dropdown__meta';
           const metaBits = [];
           if (part.description && part.description !== primaryName) {
             metaBits.push(part.description);
