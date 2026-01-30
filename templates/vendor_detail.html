@@ -185,33 +185,95 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-    <div>
-      <p class="text-xs uppercase text-slate-500">Quality &amp; Issues</p>
-      <h2 class="text-lg font-semibold">Complaints &amp; QC signals</h2>
+  <div class="grid gap-6 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Vendor issues</p>
+        <h2 class="text-lg font-semibold">Quality &amp; delivery signals</h2>
+        <p class="text-xs text-slate-500">Auto and manual issues are tracked together.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Date</th>
+              <th class="py-2 px-3">Issue Type</th>
+              <th class="py-2 px-3">Part</th>
+              <th class="py-2 px-3">PO</th>
+              <th class="py-2 px-3">Source</th>
+              <th class="py-2 px-3">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for issue in vendor_issues %}
+            <tr>
+              <td class="py-2 px-3 text-xs text-slate-500">{{ issue.created_at.strftime('%d %b %Y') if issue.created_at else '—' }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ issue.issue_type.replace('_', ' ') }}</td>
+              <td class="py-2 px-3">{{ issue.product.name if issue.product else '—' }}</td>
+              <td class="py-2 px-3">
+                {% if issue.purchase_order %}
+                <a href="{{ url_for('purchase_order_detail_view', po_id=issue.purchase_order.id) }}" class="text-amber-700 hover:underline">{{ issue.purchase_order.po_number }}</a>
+                {% else %}
+                —
+                {% endif %}
+              </td>
+              <td class="py-2 px-3">{{ issue.source.replace('_', ' ') }}</td>
+              <td class="py-2 px-3">{{ issue.status }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="py-3 px-3 text-slate-500">No vendor issues logged yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="grid gap-4 lg:grid-cols-3">
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-        <p class="text-xs uppercase text-slate-500">Vendor complaints</p>
-        <div class="space-y-2 text-sm">
-          {% for complaint in complaints %}
-          <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <p class="font-semibold text-slate-800">{{ complaint.description }}</p>
-            <p class="text-xs text-slate-500">Status: {{ complaint.status }} · {{ complaint.created_at.strftime('%d %b %Y') if complaint.created_at else '—' }}</p>
-          </div>
-          {% else %}
-          <p class="text-slate-500">No complaints logged.</p>
-          {% endfor %}
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Log vendor issue</p>
+        <h2 class="text-lg font-semibold">Manual entry</h2>
+        <p class="text-xs text-slate-500">Use this to record concerns raised after delivery.</p>
+      </div>
+      <form method="POST" action="{{ url_for('purchase_vendor_issue_create', vendor_id=vendor.id) }}" class="space-y-3">
+        {{ csrf_field() }}
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Vendor</span>
+          <input type="text" readonly value="{{ vendor.name }}" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Part (optional)</span>
+          <select name="product_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+            <option value="">—</option>
+            {% for part in vendor_parts %}
+            <option value="{{ part.id }}">{{ part.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Purchase order (optional)</span>
+          <select name="po_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+            <option value="">—</option>
+            {% for po in purchase_orders %}
+            <option value="{{ po.id }}">{{ po.po_number }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Issue type</span>
+          <select name="issue_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
+            {% for issue_value, issue_label in issue_type_options %}
+            <option value="{{ issue_value }}">{{ issue_label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Description</span>
+          <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
+        </label>
+        <div class="flex justify-end">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Log issue</button>
         </div>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs uppercase text-slate-500">Failed QC</p>
-        <p class="text-sm text-slate-500 mt-2">No failed QC data available yet.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs uppercase text-slate-500">Rejected materials</p>
-        <p class="text-sm text-slate-500 mt-2">No rejected material data available yet.</p>
-      </div>
+      </form>
     </div>
   </div>
 </div>

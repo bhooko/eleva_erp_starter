@@ -2300,6 +2300,27 @@ class VendorComplaint(db.Model):
     purchase_order = db.relationship("PurchaseOrder")
 
 
+class VendorIssue(db.Model):
+    __tablename__ = "vendor_issue"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
+    po_id = db.Column(db.Integer, db.ForeignKey("purchase_order.id"), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=True)
+    issue_type = db.Column(db.String(40), nullable=False)
+    source = db.Column(db.String(40), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="Open")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_by = db.Column(db.String(120), nullable=True)
+
+    vendor = db.relationship("Vendor")
+    product = db.relationship("Product")
+    purchase_order = db.relationship("PurchaseOrder")
+    project = db.relationship("Project")
+
+
 class VendorProductRate(db.Model):
     __tablename__ = "vendor_product_rate"
 

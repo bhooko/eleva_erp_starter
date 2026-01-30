@@ -5720,6 +5720,7 @@ from eleva_app.models import (
     VendorProductRate,
     VendorProductRateHistory,
     VendorContact,
+    VendorIssue,
     VendorComplaint,
     Vendor,
     PurchaseOrder,
@@ -7298,7 +7299,81 @@ def purchase_order_detail_view(po_id: int):
     if not po:
         abort(404)
 
-    return render_template("purchase_order_detail.html", po=po)
+    vendor_issues = (
+        VendorIssue.query.options(
+            joinedload(VendorIssue.product),
+            joinedload(VendorIssue.purchase_order),
+        )
+        .filter_by(po_id=po.id)
+        .order_by(VendorIssue.created_at.desc())
+        .all()
+    )
+    issue_products = []
+    seen_products = set()
+    for item in po.items or []:
+        product_id = item.product_id or item.part_id
+        if product_id and product_id not in seen_products:
+            issue_products.append(
+                {
+                    "id": product_id,
+                    "label": item.part_name or item.item_code or f"Item {item.id}",
+                }
+            )
+            seen_products.add(product_id)
+
+    return render_template(
+        "purchase_order_detail.html",
+        po=po,
+        vendor_issues=vendor_issues,
+        issue_products=issue_products,
+        issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
+    )
+
+
+@app.route("/purchase/orders/<int:po_id>/issues", methods=["POST"])
+@login_required
+def purchase_order_issue_create(po_id: int):
+    ensure_bootstrap()
+    po = PurchaseOrder.query.options(joinedload(PurchaseOrder.vendor)).get_or_404(po_id)
+    if not po.vendor_id:
+        flash("Assign a vendor before logging an issue for this PO.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    product_id_raw = request.form.get("product_id") or None
+    issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
+    description = (request.form.get("description") or "").strip()
+
+    if not description:
+        flash("Provide a description for the vendor issue.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    try:
+        product_id = int(product_id_raw) if product_id_raw else None
+    except (TypeError, ValueError):
+        product_id = None
+
+    product = Product.query.get(product_id) if product_id else None
+
+    issue = VendorIssue(
+        vendor_id=po.vendor_id,
+        product_id=product.id if product else None,
+        po_id=po.id,
+        project_id=po.project_id,
+        issue_type=issue_type,
+        source="MANUAL",
+        description=description,
+        status="Open",
+        created_by=current_user.display_name,
+    )
+    db.session.add(issue)
+    try:
+        db.session.commit()
+        flash("Vendor issue logged.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not log vendor issue right now.", "danger")
+
+    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
 
 @app.route("/purchase/procurement-stages", methods=["GET", "POST"])
@@ -9068,6 +9143,22 @@ def purchase_vendors():
     return render_template("purchase_vendors.html", vendors=vendors)
 
 
+VENDOR_ISSUE_TYPE_OPTIONS = [
+    ("QC_FAIL", "QC Fail"),
+    ("REJECTED_MATERIAL", "Rejected material"),
+    ("LATE_DELIVERY", "Late delivery"),
+    ("OTHER", "Other"),
+]
+VENDOR_ISSUE_TYPE_SET = {value for value, _ in VENDOR_ISSUE_TYPE_OPTIONS}
+
+
+def _normalize_vendor_issue_type(raw_value: str) -> str:
+    cleaned = (raw_value or "").strip().upper()
+    if cleaned in VENDOR_ISSUE_TYPE_SET:
+        return cleaned
+    return "OTHER"
+
+
 @app.route("/purchase/vendors/<int:vendor_id>", methods=["GET"])
 @login_required
 def purchase_vendor_detail(vendor_id: int):
@@ -9078,17 +9169,27 @@ def purchase_vendor_detail(vendor_id: int):
         .order_by(VendorContact.name.asc())
         .all()
     )
-    complaints = (
-        VendorComplaint.query.filter_by(vendor_id=vendor.id)
-        .order_by(VendorComplaint.created_at.desc())
-        .all()
-    )
     rate_rows = (
         VendorProductRate.query.options(joinedload(VendorProductRate.product))
         .filter_by(vendor_id=vendor.id)
         .order_by(VendorProductRate.updated_at.desc().nullslast())
         .all()
     )
+    vendor_issues = (
+        VendorIssue.query.options(
+            joinedload(VendorIssue.product),
+            joinedload(VendorIssue.purchase_order),
+        )
+        .filter_by(vendor_id=vendor.id)
+        .order_by(VendorIssue.created_at.desc())
+        .all()
+    )
+    vendor_parts = []
+    seen_parts = set()
+    for rate in rate_rows:
+        if rate.product and rate.product.id not in seen_parts:
+            vendor_parts.append(rate.product)
+            seen_parts.add(rate.product.id)
 
     purchase_orders = (
         PurchaseOrder.query.options(joinedload(PurchaseOrder.items))
@@ -9145,7 +9246,10 @@ def purchase_vendor_detail(vendor_id: int):
         rate_rows=rate_rows,
         open_pos=open_pos,
         received_pos=received_pos,
-        complaints=complaints,
+        vendor_issues=vendor_issues,
+        vendor_parts=vendor_parts,
+        purchase_orders=purchase_orders,
+        issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
         po_totals=po_totals,
         analytics={
             "month_total": month_total,
@@ -9154,6 +9258,56 @@ def purchase_vendor_detail(vendor_id: int):
             "last_year_total": last_year_total,
         },
     )
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/issues", methods=["POST"])
+@login_required
+def purchase_vendor_issue_create(vendor_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    product_id_raw = request.form.get("product_id") or None
+    po_id_raw = request.form.get("po_id") or None
+    issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
+    description = (request.form.get("description") or "").strip()
+
+    if not description:
+        flash("Provide a description for the vendor issue.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    try:
+        product_id = int(product_id_raw) if product_id_raw else None
+    except (TypeError, ValueError):
+        product_id = None
+    try:
+        po_id = int(po_id_raw) if po_id_raw else None
+    except (TypeError, ValueError):
+        po_id = None
+
+    product = Product.query.get(product_id) if product_id else None
+    po = PurchaseOrder.query.get(po_id) if po_id else None
+    if po and po.vendor_id != vendor.id:
+        po = None
+
+    issue = VendorIssue(
+        vendor_id=vendor.id,
+        product_id=product.id if product else None,
+        po_id=po.id if po else None,
+        project_id=po.project_id if po else None,
+        issue_type=issue_type,
+        source="MANUAL",
+        description=description,
+        status="Open",
+        created_by=current_user.display_name,
+    )
+    db.session.add(issue)
+    try:
+        db.session.commit()
+        flash("Vendor issue logged.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not log vendor issue right now.", "danger")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/edit", methods=["POST"])
@@ -9517,6 +9671,9 @@ def store_receive():
 
     if request.method == "POST":
         purchase_order_id = request.form.get("purchase_order_id")
+        purchase_order = (
+            PurchaseOrder.query.get(purchase_order_id) if purchase_order_id else None
+        )
         receipt_number = request.form.get("receipt_number") or f"RC-{uuid.uuid4().hex[:6].upper()}"
         received_date_raw = request.form.get("received_date")
         try:
@@ -9556,6 +9713,35 @@ def store_receive():
                     qc_notes=qc_notes,
                 )
                 db.session.add(receipt_item)
+
+                qc_status_normalized = (qc_status or "").strip().lower()
+                issue_type = None
+                source = None
+                if qc_status_normalized in {"ng", "fail", "failed", "nok", "not ok"}:
+                    issue_type = "QC_FAIL"
+                    source = "AUTO_QC"
+                elif qc_status_normalized in {"rejected", "damaged", "short"}:
+                    issue_type = "REJECTED_MATERIAL"
+                    source = "AUTO_STORE"
+
+                if issue_type and purchase_order and purchase_order.vendor_id:
+                    product_id = None
+                    if poi:
+                        product_id = poi.product_id or poi.part_id
+                    db.session.add(
+                        VendorIssue(
+                            vendor_id=purchase_order.vendor_id,
+                            product_id=product_id,
+                            po_id=purchase_order.id,
+                            project_id=purchase_order.project_id,
+                            issue_type=issue_type,
+                            source=source,
+                            description=qc_notes
+                            or f"QC status marked {qc_status} during receipt.",
+                            status="Open",
+                            created_by=current_user.display_name,
+                        )
+                    )
 
                 inv = InventoryItem.query.filter_by(item_code=receipt_item.item_code).first()
                 if not inv:
@@ -10920,6 +11106,7 @@ def ensure_tables():
         BOMItem.__table__,
         Product.__table__,
         Vendor.__table__,
+        VendorIssue.__table__,
         VendorProductRate.__table__,
         PurchaseOrder.__table__,
         PurchaseOrderLine.__table__,
@@ -11591,6 +11778,66 @@ def ensure_vendor_contact_table():
     conn.close()
 
 
+def ensure_vendor_issue_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_issue_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_issue';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_issue (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                product_id INTEGER,
+                po_id INTEGER,
+                project_id INTEGER,
+                issue_type TEXT NOT NULL,
+                source TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT DEFAULT 'Open',
+                created_at DATETIME,
+                created_by TEXT
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_issue")
+    else:
+        columns = {
+            row[1]: (row[2] or "").upper()
+            for row in cur.execute("PRAGMA table_info(vendor_issue)")
+        }
+        missing = []
+        for column_name, column_type in [
+            ("vendor_id", "INTEGER"),
+            ("product_id", "INTEGER"),
+            ("po_id", "INTEGER"),
+            ("project_id", "INTEGER"),
+            ("issue_type", "TEXT"),
+            ("source", "TEXT"),
+            ("description", "TEXT"),
+            ("status", "TEXT"),
+            ("created_at", "DATETIME"),
+            ("created_by", "TEXT"),
+        ]:
+            if column_name not in columns:
+                cur.execute(
+                    f"ALTER TABLE vendor_issue ADD COLUMN {column_name} {column_type};"
+                )
+                missing.append(column_name)
+        if missing:
+            print(f"✅ Added missing columns to vendor_issue: {', '.join(missing)}")
+
+    conn.commit()
+    conn.close()
+
+
 def ensure_vendor_complaint_table():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -11697,6 +11944,7 @@ def bootstrap_db():
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
     ensure_vendor_contact_table()
+    ensure_vendor_issue_table()
     ensure_vendor_complaint_table()
     ensure_qc_columns()    # adds missing columns safely
     ensure_project_task_backfill()
