@@ -2273,6 +2273,30 @@ class Vendor(db.Model):
     )
 
 
+class VendorProductRate(db.Model):
+    __tablename__ = "vendor_product_rate"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False, index=True)
+    unit_price = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(10), nullable=True, default="INR")
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    vendor = db.relationship("Vendor")
+    product = db.relationship("Product")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "vendor_id",
+            "product_id",
+            name="uq_vendor_product_rate_vendor_product",
+        ),
+    )
+
+
 class PurchaseOrder(db.Model):
     __tablename__ = "purchase_order"
 
@@ -2339,6 +2363,7 @@ class PurchaseOrderItem(db.Model):
         db.Integer, db.ForeignKey("purchase_order.id"), nullable=False
     )
     bom_item_id = db.Column(db.Integer, db.ForeignKey("bom_item.id"), nullable=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
     part_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
     part_name = db.Column(db.String(255), nullable=False, default="")
     item_code = db.Column(db.String(120), nullable=True)
@@ -2351,7 +2376,8 @@ class PurchaseOrderItem(db.Model):
 
     purchase_order = db.relationship("PurchaseOrder", backref="items")
     bom_item = db.relationship("BOMItem")
-    part = db.relationship("Product")
+    part = db.relationship("Product", foreign_keys=[part_id])
+    product = db.relationship("Product", foreign_keys=[product_id])
 
 
 class BookInventory(db.Model):

@@ -1,82 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Purchase Orders · Eleva ERP{% endblock %}
 {% block content %}
-<style>
-  .po-part-dropdown {
-    position: fixed;
-    z-index: 10000;
-    max-height: 18rem;
-    overflow-y: auto;
-    border-radius: 0.75rem;
-    border: 1px solid #E5E7EB;
-    background: #FFFFFF;
-    color: #111827;
-    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
-    font-size: 0.875rem;
-    line-height: 1.4;
-  }
-
-  .po-part-dropdown__item {
-    display: flex;
-    width: 100%;
-    flex-direction: column;
-    gap: 2px;
-    padding: 10px 12px;
-    text-align: left;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    border: none;
-  }
-
-  .po-part-dropdown__item:hover,
-  .po-part-dropdown__item:focus,
-  .po-part-dropdown__item.is-active {
-    background: #F1F5F9;
-    color: #0F172A;
-    outline: none;
-  }
-
-  .po-part-dropdown__name {
-    font-weight: 600;
-    color: inherit;
-  }
-
-  .po-part-dropdown__meta {
-    font-size: 0.75rem;
-    color: #64748B;
-  }
-
-  .po-part-dropdown__empty {
-    padding: 10px 12px;
-    color: #64748B;
-  }
-
-  html[data-theme="eleva-signature"] .po-part-dropdown,
-  html[data-theme="metallic-elevate"] .po-part-dropdown {
-    background: #111827;
-    color: #E5E7EB;
-    border-color: #273244;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-  }
-
-  html[data-theme="eleva-signature"] .po-part-dropdown__item:hover,
-  html[data-theme="eleva-signature"] .po-part-dropdown__item:focus,
-  html[data-theme="eleva-signature"] .po-part-dropdown__item.is-active,
-  html[data-theme="metallic-elevate"] .po-part-dropdown__item:hover,
-  html[data-theme="metallic-elevate"] .po-part-dropdown__item:focus,
-  html[data-theme="metallic-elevate"] .po-part-dropdown__item.is-active {
-    background: #1F2937;
-    color: #FFFFFF;
-  }
-
-  html[data-theme="eleva-signature"] .po-part-dropdown__meta,
-  html[data-theme="metallic-elevate"] .po-part-dropdown__meta,
-  html[data-theme="eleva-signature"] .po-part-dropdown__empty,
-  html[data-theme="metallic-elevate"] .po-part-dropdown__empty {
-    color: #9CA3AF;
-  }
-</style>
 <div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
@@ -152,75 +76,37 @@
               </div>
               <button type="button" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
             </div>
-            <div class="overflow-auto bg-slate-50 border border-slate-200 rounded-xl" data-items-wrapper>
-              <table class="min-w-full text-sm">
-                <thead class="text-left text-slate-500 sticky top-0 bg-slate-50 z-10">
-                  <tr>
-                    <th class="py-2 px-3 min-w-[260px]">Part name</th>
-                    <th class="py-2 px-3 min-w-[220px]">Description</th>
-                    <th class="py-2 px-3 min-w-[90px]">Qty</th>
-                    <th class="py-2 px-3 min-w-[110px]">Unit</th>
-                    <th class="py-2 px-3 min-w-[120px]">Unit price</th>
-                    <th class="py-2 px-3 min-w-[120px] text-right">Line total</th>
-                    <th class="py-2 px-3 min-w-[90px]"></th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y" data-items-body>
-                  <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-                    <td class="py-2 px-3 min-w-[260px]">
-                      <div class="relative">
-                        <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
-                        <input type="hidden" name="part_id[]" data-part-id />
-                        <input type="hidden" name="item_code[]" data-item-code />
-                      </div>
-                    </td>
-                    <td class="py-2 px-3 min-w-[220px]">
-                      <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-                    </td>
-                    <td class="py-2 px-3 min-w-[90px]">
-                      <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
-                    </td>
-                    <td class="py-2 px-3 min-w-[110px]">
-                      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
-                    </td>
-                    <td class="py-2 px-3 min-w-[120px]">
-                      <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-                    </td>
-                    <td class="py-2 px-3 min-w-[120px] text-right">
-                      <span class="line-total font-semibold text-slate-700">0.00</span>
-                    </td>
-                    <td class="py-2 px-3 min-w-[90px] text-right">
-                      <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition duration-150 hover:bg-rose-50 hover:text-rose-700 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:bg-transparent" data-remove-item aria-label="Remove line item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-1 0v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6m3 4v8m4-8v8" />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <div id="poItems" class="space-y-4"></div>
+            <datalist id="product-list">
+              {% for product in products %}
+              <option value="{{ product.name }}" data-product-id="{{ product.id }}" data-specs="{{ product.specifications|default('', true)|e }}"></option>
+              {% endfor %}
+            </datalist>
           </div>
 
           <label class="space-y-1 block">
             <span class="text-sm">Notes</span>
             <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
           </label>
-        </div>
-        <div class="px-5 py-4 border-t border-slate-200 bg-gradient-to-t from-white via-white to-slate-50">
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
-            <div class="flex flex-col sm:flex-row gap-3">
-              <div class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow">
-                Subtotal: <span data-subtotal>0.00</span>
+          <div class="flex justify-end">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm min-w-[220px]">
+              <div class="flex items-center justify-between text-slate-500">
+                <span>Subtotal</span>
+                <span class="font-semibold text-slate-900" data-subtotal>0.00</span>
               </div>
-              <div class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700">
-                Grand total: <span data-grand-total>0.00</span>
+              <div class="mt-2 flex items-center justify-between text-slate-500">
+                <span>Grand total</span>
+                <span class="font-semibold text-slate-900" data-grand-total>0.00</span>
               </div>
             </div>
-            <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
           </div>
           <input type="hidden" name="subtotal_amount" value="0" />
           <input type="hidden" name="grand_total_amount" value="0" />
+        </div>
+        <div class="px-5 py-4 border-t border-slate-200 bg-gradient-to-t from-white via-white to-slate-50">
+          <div class="flex justify-end">
+            <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
+          </div>
         </div>
       </form>
     </div>
@@ -268,39 +154,51 @@
   </div>
 </div>
 
-<template id="po-item-row-template">
-  <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-    <td class="py-2 px-3 min-w-[260px]">
-      <div class="relative">
-        <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
-        <input type="hidden" name="part_id[]" data-part-id />
-        <input type="hidden" name="item_code[]" data-item-code />
+<template id="poItemTemplate">
+  <div class="po-item-row group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 ease-out opacity-0 translate-y-2">
+    <div class="flex items-start gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 items-end">
+        <label class="md:col-span-5 space-y-1">
+          <span class="text-xs uppercase text-slate-500">Part name</span>
+          <input type="text" name="item_name[]" list="product-list" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="Start typing a part" data-part-name />
+        </label>
+        <label class="md:col-span-2 space-y-1">
+          <span class="text-xs uppercase text-slate-500">Qty</span>
+          <input type="number" step="0.01" min="0" name="item_qty[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
+        </label>
+        <label class="md:col-span-2 space-y-1">
+          <span class="text-xs uppercase text-slate-500">Unit</span>
+          <input type="text" name="item_unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
+        </label>
+        <label class="md:col-span-2 space-y-1">
+          <span class="text-xs uppercase text-slate-500">Unit price</span>
+          <input type="number" step="0.01" min="0" name="item_unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-unit-price />
+        </label>
+        <div class="md:col-span-1 text-right">
+          <p class="text-xs uppercase text-slate-500">Line total</p>
+          <p class="text-base font-semibold text-slate-700 line-total">0.00</p>
+        </div>
       </div>
-    </td>
-    <td class="py-2 px-3 min-w-[220px]">
-      <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-    </td>
-    <td class="py-2 px-3 min-w-[90px]">
-      <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
-    </td>
-    <td class="py-2 px-3 min-w-[110px]">
-      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
-    </td>
-    <td class="py-2 px-3 min-w-[120px]">
-      <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
-    </td>
-    <td class="py-2 px-3 min-w-[120px] text-right">
-      <span class="line-total font-semibold text-slate-700">0.00</span>
-    </td>
-    <td class="py-2 px-3 min-w-[90px] text-right">
       <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition duration-150 hover:bg-rose-50 hover:text-rose-700 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:bg-transparent" data-remove-item aria-label="Remove line item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-1 0v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6m3 4v8m4-8v8" />
         </svg>
       </button>
-    </td>
-  </tr>
+    </div>
+    <div class="mt-3">
+      <label class="space-y-1 block">
+        <span class="text-xs uppercase text-slate-500">Specifications</span>
+        <textarea name="item_specs[]" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2" data-specs></textarea>
+      </label>
+    </div>
+    <input type="hidden" name="item_product_id[]" data-product-id />
+    <input type="hidden" name="item_currency[]" value="INR" data-currency />
+  </div>
 </template>
+
+<script>
+  window.PRODUCT_INDEX = {{ product_index|tojson }};
+</script>
 
 <script>
   (() => {
@@ -312,28 +210,18 @@
 
     const poDateInput = form.querySelector('[name="po_date"]');
     const expectedInput = form.querySelector('[name="expected_delivery"]');
-    const itemsBody = form.querySelector('[data-items-body]');
-    const itemsWrapper = form.querySelector('[data-items-wrapper]');
+    const itemsContainer = document.getElementById('poItems');
     const addItemButton = form.querySelector('[data-add-item]');
-    const template = document.getElementById('po-item-row-template');
+    const template = document.getElementById('poItemTemplate');
     const subtotalDisplay = form.querySelector('[data-subtotal]');
     const grandTotalDisplay = form.querySelector('[data-grand-total]');
     const subtotalInput = form.querySelector('[name="subtotal_amount"]');
     const grandTotalInput = form.querySelector('[name="grand_total_amount"]');
-    const partSearchEndpoint = '/api/parts/search';
-    const partSearchLimit = 20;
+    const vendorSelect = form.querySelector('[name="vendor_id"]');
+    const productIndex = window.PRODUCT_INDEX || {};
 
     let lastAutoExpected = '';
     let autoUpdateExpected = true;
-    let partSearchTimer = null;
-    let activePartInput = null;
-    let activePartResults = [];
-    let activePartIndex = -1;
-    let partRequestCounter = 0;
-
-    const partDropdown = document.createElement('div');
-    partDropdown.className = 'po-part-dropdown hidden';
-    document.body.appendChild(partDropdown);
 
     const formatDate = (date) => {
       const year = date.getFullYear();
@@ -391,8 +279,8 @@
     };
 
     const updateRowTotal = (row) => {
-      const qtyInput = row.querySelector('[name="quantity_ordered[]"]');
-      const priceInput = row.querySelector('[name="unit_price[]"]');
+      const qtyInput = row.querySelector('[name="item_qty[]"]');
+      const priceInput = row.querySelector('[name="item_unit_price[]"]');
       const totalEl = row.querySelector('.line-total');
       const quantity = parseNumber(qtyInput ? qtyInput.value : 0);
       const unitPrice = parseNumber(priceInput ? priceInput.value : 0);
@@ -404,11 +292,11 @@
     };
 
     const updateTotals = () => {
-      if (!itemsBody) {
+      if (!itemsContainer) {
         return;
       }
       let subtotal = 0;
-      itemsBody.querySelectorAll('.po-item-row').forEach((row) => {
+      itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
         subtotal += updateRowTotal(row);
       });
       const totalValue = subtotal.toFixed(2);
@@ -426,208 +314,11 @@
       }
     };
 
-    const closePartDropdown = () => {
-      partDropdown.classList.add('hidden');
-      partDropdown.innerHTML = '';
-      activePartInput = null;
-      activePartResults = [];
-      activePartIndex = -1;
-    };
-
-    const positionPartDropdown = (input) => {
-      if (!input) {
-        return;
-      }
-      const rect = input.getBoundingClientRect();
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-      const dropdownHeight = Math.min(288, activePartResults.length * 52 + 24);
-      const spaceBelow = viewportHeight - rect.bottom;
-      const openAbove = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-      partDropdown.style.width = `${rect.width}px`;
-      partDropdown.style.left = `${rect.left}px`;
-      if (openAbove) {
-        partDropdown.style.top = `${rect.top - dropdownHeight}px`;
-      } else {
-        partDropdown.style.top = `${rect.bottom + 6}px`;
-      }
-    };
-
-    const highlightActiveOption = () => {
-      const options = Array.from(partDropdown.querySelectorAll('[data-part-option]'));
-      options.forEach((option, index) => {
-        if (index === activePartIndex) {
-          option.classList.add('is-active');
-        } else {
-          option.classList.remove('is-active');
-        }
-      });
-    };
-
-    const applyPartSelection = (part, input) => {
-      if (!input) {
-        return;
-      }
-      const row = input.closest('.po-item-row');
-      input.value = part.name;
-      if (row) {
-        row.dataset.selectedPartId = part.id ? String(part.id) : '';
-      }
-      const partIdInput = row ? row.querySelector('[data-part-id]') : null;
-      const itemCodeInput = row ? row.querySelector('[data-item-code]') : null;
-      const descriptionInput = row ? row.querySelector('[name="description[]"]') : null;
-      const unitInput = row ? row.querySelector('[name="unit[]"]') : null;
-
-      if (partIdInput) {
-        partIdInput.value = part.id || '';
-      }
-      if (itemCodeInput) {
-        itemCodeInput.value = part.item_code || '';
-      }
-      const hasDescriptionEdit = row && row.dataset.descriptionEdited === 'true';
-      const hasUnitEdit = row && row.dataset.unitEdited === 'true';
-      if (descriptionInput && part.description && !hasDescriptionEdit) {
-        descriptionInput.value = part.description;
-        if (row) {
-          row.dataset.descriptionEdited = 'false';
-        }
-      }
-      if (unitInput && part.unit && !hasUnitEdit) {
-        unitInput.value = part.unit;
-        if (row) {
-          row.dataset.unitEdited = 'false';
-        }
-      }
-      if (row) {
-        row.dataset.partNameFilled = input.value.trim() ? 'true' : 'false';
-      }
-      closePartDropdown();
-      updateTotals();
-    };
-
-    const renderPartDropdown = (parts, input) => {
-      partDropdown.innerHTML = '';
-      if (!parts.length) {
-        const emptyState = document.createElement('div');
-        emptyState.className = 'po-part-dropdown__empty';
-        emptyState.textContent = 'No matching parts found.';
-        partDropdown.appendChild(emptyState);
-      } else {
-        parts.forEach((part, index) => {
-          const option = document.createElement('button');
-          option.type = 'button';
-          option.dataset.partOption = 'true';
-          option.dataset.partIndex = String(index);
-          option.className = 'po-part-dropdown__item';
-          const nameEl = document.createElement('span');
-          nameEl.className = 'po-part-dropdown__name';
-          const primaryName = part.name || part.item_code || part.description || 'Unnamed part';
-          nameEl.textContent = primaryName;
-          const metaEl = document.createElement('span');
-          metaEl.className = 'po-part-dropdown__meta';
-          const metaBits = [];
-          if (part.description && part.description !== primaryName) {
-            metaBits.push(part.description);
-          }
-          if (part.unit) {
-            metaBits.push(`Unit: ${part.unit}`);
-          }
-          metaEl.textContent = metaBits.join(' · ') || 'No extra details';
-          option.appendChild(nameEl);
-          option.appendChild(metaEl);
-          option.addEventListener('mousedown', (event) => {
-            event.preventDefault();
-            applyPartSelection(part, input);
-          });
-          option.addEventListener('mouseenter', () => {
-            activePartIndex = index;
-            highlightActiveOption();
-          });
-          partDropdown.appendChild(option);
-        });
-      }
-      activePartIndex = -1;
-      activePartInput = input;
-      activePartResults = parts;
-      positionPartDropdown(input);
-      partDropdown.classList.remove('hidden');
-    };
-
-    const fetchPartMatches = async (query, input) => {
-      const currentRequest = ++partRequestCounter;
-      const url = `${partSearchEndpoint}?q=${encodeURIComponent(query)}&limit=${partSearchLimit}`;
-      try {
-        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (!response.ok) {
-          throw new Error('Failed to fetch parts');
-        }
-        const data = await response.json();
-        if (currentRequest !== partRequestCounter) {
-          return;
-        }
-        if (activePartInput !== input) {
-          activePartInput = input;
-        }
-        renderPartDropdown(Array.isArray(data) ? data : [], input);
-      } catch (error) {
-        if (currentRequest !== partRequestCounter) {
-          return;
-        }
-        renderPartDropdown([], input);
-      }
-    };
-
-    const handlePartInput = (input, { clearSelection = true } = {}) => {
-      if (!input) {
-        return;
-      }
-      const row = input.closest('.po-item-row');
-      const partIdInput = row ? row.querySelector('[data-part-id]') : null;
-      const itemCodeInput = row ? row.querySelector('[data-item-code]') : null;
-      if (clearSelection) {
-        if (partIdInput) {
-          partIdInput.value = '';
-        }
-        if (itemCodeInput) {
-          itemCodeInput.value = '';
-        }
-      }
-      const query = input.value.trim();
-      if (!query) {
-        closePartDropdown();
-        if (row) {
-          row.dataset.partNameFilled = 'false';
-          row.dataset.selectedPartId = '';
-          row.dataset.descriptionEdited = 'false';
-          row.dataset.unitEdited = 'false';
-        }
-        return;
-      }
-      if (row) {
-        row.dataset.partNameFilled = 'true';
-      }
-      if (partSearchTimer) {
-        clearTimeout(partSearchTimer);
-      }
-      partSearchTimer = setTimeout(() => {
-        fetchPartMatches(query, input);
-      }, 200);
-    };
-
-    const initializeRowState = (row) => {
-      if (!row) {
-        return;
-      }
-      const partNameInput = row.querySelector('[data-part-name]');
-      if (partNameInput) {
-        row.dataset.partNameFilled = partNameInput.value.trim() ? 'true' : 'false';
-      }
-    };
-
     const updateRemoveButtons = () => {
-      if (!itemsBody) {
+      if (!itemsContainer) {
         return;
       }
-      const rows = Array.from(itemsBody.querySelectorAll('.po-item-row'));
+      const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
       const disableRemove = rows.length <= 1;
       rows.forEach((row) => {
         const removeButton = row.querySelector('[data-remove-item]');
@@ -637,51 +328,122 @@
       });
     };
 
-    const scrollToNewRow = () => {
-      if (!itemsWrapper) {
-        return;
-      }
-      requestAnimationFrame(() => {
-        itemsWrapper.scrollTo({
-          top: itemsWrapper.scrollHeight,
-          behavior: 'smooth',
-        });
-      });
-    };
-
     const addRow = () => {
-      if (!template || !itemsBody) {
-        return;
+      if (!template || !itemsContainer) {
+        return null;
       }
       const row = template.content.firstElementChild.cloneNode(true);
-      itemsBody.appendChild(row);
-      initializeRowState(row);
+      itemsContainer.appendChild(row);
+      requestAnimationFrame(() => {
+        row.classList.remove('opacity-0', 'translate-y-2');
+      });
       updateTotals();
       updateRemoveButtons();
-      scrollToNewRow();
+      return row;
     };
 
-    const removeRow = (button) => {
-      if (!itemsBody) {
+    const ensureTrailingBlankRow = () => {
+      if (!itemsContainer) {
         return;
       }
-      const row = button.closest('.po-item-row');
+      const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
+      if (!rows.length) {
+        addRow();
+        return;
+      }
+      const lastRow = rows[rows.length - 1];
+      const partInput = lastRow.querySelector('[data-part-name]');
+      if (partInput && partInput.value.trim()) {
+        addRow();
+      }
+    };
+
+    const clearAutoSpecs = (specsInput) => {
+      if (!specsInput) {
+        return;
+      }
+      if (specsInput.dataset.autofilled === '1') {
+        specsInput.value = '';
+      }
+      delete specsInput.dataset.autofilled;
+      delete specsInput.dataset.autofilledValue;
+    };
+
+    const applyProductSpecs = (specsInput, specsValue) => {
+      if (!specsInput) {
+        return;
+      }
+      const previousAuto = specsInput.dataset.autofilledValue || '';
+      const currentValue = specsInput.value.trim();
+      if (!currentValue || specsInput.dataset.autofilled === '1' || currentValue === previousAuto) {
+        specsInput.value = specsValue || '';
+        specsInput.dataset.autofilled = '1';
+        specsInput.dataset.autofilledValue = specsValue || '';
+      }
+    };
+
+    const fetchVendorRate = async (row) => {
+      if (!row || !vendorSelect) {
+        return;
+      }
+      const vendorId = vendorSelect.value;
+      const productIdInput = row.querySelector('[data-product-id]');
+      const unitPriceInput = row.querySelector('[name="item_unit_price[]"]');
+      const currencyInput = row.querySelector('[data-currency]');
+      if (!vendorId || !productIdInput || !productIdInput.value) {
+        return;
+      }
+      const productId = productIdInput.value;
+      try {
+        const response = await fetch(`/purchase/vendor-rate?vendor_id=${vendorId}&product_id=${productId}`, {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (currencyInput && data.currency) {
+          currencyInput.value = data.currency;
+        }
+        if (!unitPriceInput) {
+          return;
+        }
+        const canAutofill = !unitPriceInput.value || unitPriceInput.dataset.autofilled === '1';
+        if (data.found && canAutofill) {
+          unitPriceInput.value = data.unit_price ?? '';
+          unitPriceInput.dataset.autofilled = '1';
+          updateTotals();
+        }
+      } catch (error) {
+        return;
+      }
+    };
+
+    const handlePartNameInput = (input) => {
+      const row = input.closest('.po-item-row');
       if (!row) {
         return;
       }
-      if (itemsBody.querySelectorAll('.po-item-row').length <= 1) {
-        row.querySelectorAll('input').forEach((input) => {
-          if (input.type === 'number') {
-            input.value = input.name === 'quantity_ordered[]' ? '1' : '';
-          } else {
-            input.value = '';
-          }
-        });
+      const productIdInput = row.querySelector('[data-product-id]');
+      const specsInput = row.querySelector('[data-specs]');
+      const partName = input.value.trim();
+      const product = partName ? productIndex[partName] : null;
+      if (product) {
+        if (productIdInput) {
+          productIdInput.value = product.id || '';
+        }
+        applyProductSpecs(specsInput, product.specs || '');
+        fetchVendorRate(row);
       } else {
-        row.remove();
+        if (productIdInput) {
+          productIdInput.value = '';
+        }
+        clearAutoSpecs(specsInput);
       }
-      updateTotals();
-      updateRemoveButtons();
+      const isLast = itemsContainer && row === itemsContainer.querySelector('.po-item-row:last-child');
+      if (isLast && partName) {
+        ensureTrailingBlankRow();
+      }
     };
 
     form.addEventListener('input', (event) => {
@@ -692,98 +454,67 @@
       if (row) {
         updateTotals();
       }
-      if (row && event.target.matches('[name="description[]"]')) {
-        row.dataset.descriptionEdited = 'true';
-      }
-      if (row && event.target.matches('[name="unit[]"]')) {
-        row.dataset.unitEdited = 'true';
-      }
       if (event.target.matches('[data-part-name]')) {
-        handlePartInput(event.target);
-        const lastRow = itemsBody ? itemsBody.querySelector('.po-item-row:last-child') : null;
-        if (lastRow && row === lastRow) {
-          const inputValue = event.target.value.trim();
-          if (inputValue && row.dataset.partNameFilled !== 'true') {
-            row.dataset.partNameFilled = 'true';
-            addRow();
-          } else if (!inputValue) {
-            row.dataset.partNameFilled = 'false';
-          }
-        }
+        handlePartNameInput(event.target);
       }
-    });
-
-    form.addEventListener('focusin', (event) => {
-      if (!event.target || !event.target.matches('[data-part-name]')) {
-        return;
+      if (event.target.matches('[data-specs]')) {
+        event.target.dataset.autofilled = '0';
       }
-      const query = event.target.value.trim();
-      if (query) {
-        handlePartInput(event.target, { clearSelection: false });
-      }
-    });
-
-    form.addEventListener('keydown', (event) => {
-      if (!event.target || !event.target.matches('[data-part-name]')) {
-        return;
-      }
-      if (partDropdown.classList.contains('hidden')) {
-        return;
-      }
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        activePartIndex = Math.min(activePartIndex + 1, activePartResults.length - 1);
-        highlightActiveOption();
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        activePartIndex = Math.max(activePartIndex - 1, 0);
-        highlightActiveOption();
-      } else if (event.key === 'Enter') {
-        if (activePartIndex >= 0 && activePartResults[activePartIndex]) {
-          event.preventDefault();
-          applyPartSelection(activePartResults[activePartIndex], event.target);
-        }
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        closePartDropdown();
+      if (event.target.matches('[name="item_unit_price[]"]')) {
+        event.target.dataset.autofilled = '0';
       }
     });
 
     form.addEventListener('click', (event) => {
       const removeButton = event.target.closest('[data-remove-item]');
-      if (removeButton) {
-        event.preventDefault();
-        removeRow(removeButton);
-      }
-    });
-
-    document.addEventListener('click', (event) => {
-      if (partDropdown.classList.contains('hidden')) {
+      if (!removeButton || !itemsContainer) {
         return;
       }
-      if (event.target === activePartInput || partDropdown.contains(event.target)) {
+      event.preventDefault();
+      const row = removeButton.closest('.po-item-row');
+      if (!row) {
         return;
       }
-      closePartDropdown();
-    });
-
-    window.addEventListener('resize', () => {
-      if (!partDropdown.classList.contains('hidden')) {
-        positionPartDropdown(activePartInput);
+      if (itemsContainer.querySelectorAll('.po-item-row').length <= 1) {
+        row.querySelectorAll('input, textarea').forEach((input) => {
+          if (input.type === 'number') {
+            input.value = input.name === 'item_qty[]' ? '1' : '';
+          } else if (input.name === 'item_currency[]') {
+            input.value = 'INR';
+          } else {
+            input.value = '';
+          }
+          delete input.dataset.autofilled;
+          delete input.dataset.autofilledValue;
+        });
+      } else {
+        row.remove();
       }
+      updateTotals();
+      updateRemoveButtons();
+      ensureTrailingBlankRow();
     });
 
-    if (itemsWrapper) {
-      itemsWrapper.addEventListener('scroll', () => {
-        if (!partDropdown.classList.contains('hidden')) {
-          positionPartDropdown(activePartInput);
+    if (vendorSelect) {
+      vendorSelect.addEventListener('change', () => {
+        if (!itemsContainer) {
+          return;
         }
+        itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
+          fetchVendorRate(row);
+        });
       });
     }
 
     if (addItemButton) {
       addItemButton.addEventListener('click', () => {
-        addRow();
+        const newRow = addRow();
+        if (newRow) {
+          const partInput = newRow.querySelector('[data-part-name]');
+          if (partInput) {
+            partInput.focus();
+          }
+        }
       });
     }
 
@@ -803,19 +534,16 @@
       modalToggle.addEventListener('change', () => {
         if (modalToggle.checked) {
           initializeDates();
+          ensureTrailingBlankRow();
           updateTotals();
           updateRemoveButtons();
         }
       });
     }
 
+    ensureTrailingBlankRow();
     updateTotals();
     updateRemoveButtons();
-    if (itemsBody) {
-      itemsBody.querySelectorAll('.po-item-row').forEach((row) => {
-        initializeRowState(row);
-      });
-    }
   })();
 </script>
 {% endblock %}
