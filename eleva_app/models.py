@@ -2266,6 +2266,7 @@ class Vendor(db.Model):
     address = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
+    last_used_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow

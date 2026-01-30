@@ -7022,6 +7022,15 @@ def purchase_orders():
             origin="erp",
         )
         db.session.add(po)
+        if vendor_id:
+            try:
+                vendor_id_int = int(vendor_id)
+            except (TypeError, ValueError):
+                vendor_id_int = None
+            if vendor_id_int:
+                vendor_record = Vendor.query.get(vendor_id_int)
+                if vendor_record:
+                    vendor_record.last_used_at = datetime.datetime.utcnow()
         db.session.flush()
 
         part_names = request.form.getlist("part_name[]") or request.form.getlist(
@@ -7534,6 +7543,8 @@ def generate_po_from_bom(bom_id):
                 else:
                     po.subtotal_amount = subtotal_amount
                     po.grand_total_amount = subtotal_amount
+                    if vendor_record:
+                        vendor_record.last_used_at = datetime.datetime.utcnow()
                     db.session.commit()
                     # TODO: create_notification for purchase/design teams about PO creation from this BOM.
                     flash(
@@ -7784,6 +7795,12 @@ def purchase_orders_upload_odoo():
         pol.source_document = source_document
         pol.total_amount = total_amount if total_amount is not None else 0
         pol.is_active = True if pol.is_active is None else pol.is_active
+        if vendor_name:
+            vendor_record = Vendor.query.filter(
+                func.lower(Vendor.name) == vendor_name.lower()
+            ).first()
+            if vendor_record:
+                vendor_record.last_used_at = datetime.datetime.utcnow()
 
     try:
         db.session.commit()
@@ -8871,8 +8888,41 @@ def purchase_vendors():
             flash("Vendor added.", "success")
             return redirect(url_for("purchase_vendors"))
 
-    vendors = Vendor.query.order_by(Vendor.name).all()
+    vendors = (
+        Vendor.query.order_by(
+            case((Vendor.last_used_at.is_(None), 1), else_=0),
+            Vendor.last_used_at.desc(),
+            Vendor.name.asc(),
+        ).all()
+    )
     return render_template("purchase_vendors.html", vendors=vendors)
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/edit", methods=["POST"])
+@login_required
+def purchase_vendor_edit(vendor_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    name = (request.form.get("name") or "").strip()
+    contact_person = (request.form.get("contact_person") or "").strip() or None
+    phone = (request.form.get("phone") or "").strip() or None
+    email = (request.form.get("email") or "").strip() or None
+    address = (request.form.get("address") or "").strip() or None
+    notes = (request.form.get("notes") or "").strip() or None
+
+    if not name:
+        flash("Vendor name is required.", "danger")
+        return redirect(url_for("purchase_vendors"))
+
+    vendor.name = name
+    vendor.contact_person = contact_person
+    vendor.phone = phone
+    vendor.email = email
+    vendor.address = address
+    vendor.notes = notes
+    db.session.commit()
+    flash("Vendor updated.", "success")
+    return redirect(url_for("purchase_vendors"))
 
 
 @app.route("/store/delivery-orders")
@@ -10179,6 +10229,7 @@ def ensure_vendor_columns():
         ("address", "TEXT"),
         ("notes", "TEXT"),
         ("is_active", "INTEGER DEFAULT 1"),
+        ("last_used_at", "DATETIME"),
         ("created_at", "DATETIME"),
         ("updated_at", "DATETIME"),
     ]
