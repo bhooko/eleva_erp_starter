@@ -18,7 +18,7 @@
   <input type="checkbox" id="new-po" class="hidden peer" />
   <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-po').checked=false;"></div>
   <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-    <div class="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+    <div class="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95 flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
         <div>
           <p class="text-xs text-slate-500 uppercase">Purchase</p>
@@ -27,121 +27,129 @@
         </div>
         <button class="text-slate-500" onclick="document.getElementById('new-po').checked=false;">✕</button>
       </div>
-      <form method="POST" class="p-5 space-y-4" id="purchase-order-form">
+      <form method="POST" class="flex flex-col flex-1 min-h-0" id="purchase-order-form">
         {{ csrf_field() }}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label class="space-y-1">
-            <span class="text-sm">PO Number</span>
-            <input type="text" name="po_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Project</span>
-            <select name="project_id" class="w-full rounded-lg border-slate-200">
-              <option value="">—</option>
-              {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Vendor</span>
-            <select name="vendor_id" class="w-full rounded-lg border-slate-200">
-              <option value="">—</option>
-              {% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.name }}</option>{% endfor %}
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">PO Date</span>
-            <input type="date" name="po_date" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Expected delivery</span>
-            <input type="date" name="expected_delivery" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1 md:col-span-3">
-            <span class="text-sm">Linked BOM</span>
-            <select name="bom_id" class="w-full rounded-lg border-slate-200">
-              <option value="">—</option>
-              {% for bom in bom_options %}
-              <option value="{{ bom.id }}">{{ bom.bom_name }} (ID {{ bom.id }})</option>
+        <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label class="space-y-1">
+              <span class="text-sm">PO Number</span>
+              <input type="text" name="po_number" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="auto" />
+            </label>
+            <label class="space-y-1">
+              <span class="text-sm">Project</span>
+              <select name="project_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+                <option value="">—</option>
+                {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="text-sm">Vendor</span>
+              <select name="vendor_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+                <option value="">—</option>
+                {% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.name }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="text-sm">PO Date</span>
+              <input type="date" name="po_date" class="w-full rounded-lg border-slate-200 h-10 px-3" />
+            </label>
+            <label class="space-y-1">
+              <span class="text-sm">Expected delivery</span>
+              <input type="date" name="expected_delivery" class="w-full rounded-lg border-slate-200 h-10 px-3" />
+            </label>
+            <label class="space-y-1 md:col-span-3">
+              <span class="text-sm">Linked BOM</span>
+              <select name="bom_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+                <option value="">—</option>
+                {% for bom in bom_options %}
+                <option value="{{ bom.id }}">{{ bom.bom_name }} (ID {{ bom.id }})</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs uppercase text-slate-500">Items</p>
+                <h3 class="text-base font-semibold">Line items</h3>
+              </div>
+              <button type="button" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
+            </div>
+            <div class="overflow-auto bg-slate-50 border border-slate-200 rounded-xl" data-items-wrapper>
+              <table class="min-w-full text-sm">
+                <thead class="text-left text-slate-500 sticky top-0 bg-slate-50 z-10">
+                  <tr>
+                    <th class="py-2 px-3 min-w-[140px]">Item code</th>
+                    <th class="py-2 px-3 min-w-[220px]">Description</th>
+                    <th class="py-2 px-3 min-w-[110px]">Unit</th>
+                    <th class="py-2 px-3 min-w-[90px]">Qty</th>
+                    <th class="py-2 px-3 min-w-[120px]">Unit price</th>
+                    <th class="py-2 px-3 min-w-[110px]">Currency</th>
+                    <th class="py-2 px-3 min-w-[120px] text-right">Line total</th>
+                    <th class="py-2 px-3 min-w-[90px]"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y" data-items-body>
+                  <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
+                    <td class="py-2 px-3 min-w-[140px]">
+                      <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200 h-10 px-3" list="bom-items" data-item-code />
+                    </td>
+                    <td class="py-2 px-3 min-w-[220px]">
+                      <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
+                    </td>
+                    <td class="py-2 px-3 min-w-[110px]">
+                      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
+                    </td>
+                    <td class="py-2 px-3 min-w-[90px]">
+                      <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
+                    </td>
+                    <td class="py-2 px-3 min-w-[120px]">
+                      <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
+                    </td>
+                    <td class="py-2 px-3 min-w-[110px]">
+                      <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="INR" />
+                    </td>
+                    <td class="py-2 px-3 min-w-[120px] text-right">
+                      <span class="line-total font-semibold text-slate-700">0.00</span>
+                    </td>
+                    <td class="py-2 px-3 min-w-[90px] text-right">
+                      <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition duration-150 hover:bg-rose-50 hover:text-rose-700 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:bg-transparent" data-remove-item aria-label="Remove line item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-1 0v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6m3 4v8m4-8v8" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <datalist id="bom-items">
+              {% for item in bom_items %}
+                <option value="{{ item.item_code }}">{{ item.description }}</option>
               {% endfor %}
-            </select>
+            </datalist>
+          </div>
+
+          <label class="space-y-1 block">
+            <span class="text-sm">Notes</span>
+            <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
           </label>
         </div>
-
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-xs uppercase text-slate-500">Items</p>
-              <h3 class="text-base font-semibold">Line items</h3>
+        <div class="px-5 py-4 border-t border-slate-200 bg-gradient-to-t from-white via-white to-slate-50">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow">
+                Subtotal: <span data-subtotal>0.00</span>
+              </div>
+              <div class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700">
+                Grand total: <span data-grand-total>0.00</span>
+              </div>
             </div>
-            <button type="button" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
+            <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
           </div>
-          <div class="overflow-x-auto bg-slate-50 border border-slate-200 rounded-xl">
-            <table class="min-w-full text-sm">
-              <thead class="text-left text-slate-500">
-                <tr>
-                  <th class="py-2 px-3">Item code</th>
-                  <th class="py-2 px-3">Description</th>
-                  <th class="py-2 px-3">Unit</th>
-                  <th class="py-2 px-3">Qty</th>
-                  <th class="py-2 px-3">Unit price</th>
-                  <th class="py-2 px-3">Currency</th>
-                  <th class="py-2 px-3 text-right">Line total</th>
-                  <th class="py-2 px-3"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y" data-items-body>
-                <tr class="po-item-row">
-                  <td class="py-2 px-3">
-                    <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200" list="bom-items" />
-                  </td>
-                  <td class="py-2 px-3">
-                    <input type="text" name="description[]" class="w-full rounded-lg border-slate-200" />
-                  </td>
-                  <td class="py-2 px-3">
-                    <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200" placeholder="nos" />
-                  </td>
-                  <td class="py-2 px-3">
-                    <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200" value="1" />
-                  </td>
-                  <td class="py-2 px-3">
-                    <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200" />
-                  </td>
-                  <td class="py-2 px-3">
-                    <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200" value="INR" />
-                  </td>
-                  <td class="py-2 px-3 text-right">
-                    <span class="line-total font-semibold text-slate-700">0.00</span>
-                  </td>
-                  <td class="py-2 px-3 text-right">
-                    <button type="button" class="text-xs text-rose-600 hover:text-rose-700" data-remove-item>Remove</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <datalist id="bom-items">
-            {% for item in bom_items %}
-              <option value="{{ item.item_code }}">{{ item.description }}</option>
-            {% endfor %}
-          </datalist>
-          <div class="flex flex-col md:flex-row md:items-center md:justify-end gap-3 text-sm">
-            <div class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow">
-              Subtotal: <span data-subtotal>0.00</span>
-            </div>
-            <div class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700">
-              Grand total: <span data-grand-total>0.00</span>
-            </div>
-            <input type="hidden" name="subtotal_amount" value="0" />
-            <input type="hidden" name="grand_total_amount" value="0" />
-          </div>
-        </div>
-
-        <label class="space-y-1 block">
-          <span class="text-sm">Notes</span>
-          <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
-        </label>
-        <div class="flex justify-end">
-          <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
+          <input type="hidden" name="subtotal_amount" value="0" />
+          <input type="hidden" name="grand_total_amount" value="0" />
         </div>
       </form>
     </div>
@@ -190,30 +198,34 @@
 </div>
 
 <template id="po-item-row-template">
-  <tr class="po-item-row">
-    <td class="py-2 px-3">
-      <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200" list="bom-items" />
+  <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
+    <td class="py-2 px-3 min-w-[140px]">
+      <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200 h-10 px-3" list="bom-items" data-item-code />
     </td>
-    <td class="py-2 px-3">
-      <input type="text" name="description[]" class="w-full rounded-lg border-slate-200" />
+    <td class="py-2 px-3 min-w-[220px]">
+      <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
     </td>
-    <td class="py-2 px-3">
-      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200" placeholder="nos" />
+    <td class="py-2 px-3 min-w-[110px]">
+      <input type="text" name="unit[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" />
     </td>
-    <td class="py-2 px-3">
-      <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200" value="1" />
+    <td class="py-2 px-3 min-w-[90px]">
+      <input type="number" step="0.01" min="0" name="quantity_ordered[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
     </td>
-    <td class="py-2 px-3">
-      <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200" />
+    <td class="py-2 px-3 min-w-[120px]">
+      <input type="number" step="0.01" min="0" name="unit_price[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
     </td>
-    <td class="py-2 px-3">
-      <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200" value="INR" />
+    <td class="py-2 px-3 min-w-[110px]">
+      <input type="text" name="currency[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="INR" />
     </td>
-    <td class="py-2 px-3 text-right">
+    <td class="py-2 px-3 min-w-[120px] text-right">
       <span class="line-total font-semibold text-slate-700">0.00</span>
     </td>
-    <td class="py-2 px-3 text-right">
-      <button type="button" class="text-xs text-rose-600 hover:text-rose-700" data-remove-item>Remove</button>
+    <td class="py-2 px-3 min-w-[90px] text-right">
+      <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-rose-600 transition duration-150 hover:bg-rose-50 hover:text-rose-700 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:bg-transparent" data-remove-item aria-label="Remove line item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-1 0v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6m3 4v8m4-8v8" />
+        </svg>
+      </button>
     </td>
   </tr>
 </template>
@@ -229,6 +241,7 @@
     const poDateInput = form.querySelector('[name="po_date"]');
     const expectedInput = form.querySelector('[name="expected_delivery"]');
     const itemsBody = form.querySelector('[data-items-body]');
+    const itemsWrapper = form.querySelector('[data-items-wrapper]');
     const addItemButton = form.querySelector('[data-add-item]');
     const template = document.getElementById('po-item-row-template');
     const subtotalDisplay = form.querySelector('[data-subtotal]');
@@ -330,13 +343,52 @@
       }
     };
 
+    const initializeRowState = (row) => {
+      if (!row) {
+        return;
+      }
+      const itemCodeInput = row.querySelector('[data-item-code]');
+      if (itemCodeInput) {
+        row.dataset.itemCodeFilled = itemCodeInput.value.trim() ? 'true' : 'false';
+      }
+    };
+
+    const updateRemoveButtons = () => {
+      if (!itemsBody) {
+        return;
+      }
+      const rows = Array.from(itemsBody.querySelectorAll('.po-item-row'));
+      const disableRemove = rows.length <= 1;
+      rows.forEach((row) => {
+        const removeButton = row.querySelector('[data-remove-item]');
+        if (removeButton) {
+          removeButton.disabled = disableRemove;
+        }
+      });
+    };
+
+    const scrollToNewRow = () => {
+      if (!itemsWrapper) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        itemsWrapper.scrollTo({
+          top: itemsWrapper.scrollHeight,
+          behavior: 'smooth',
+        });
+      });
+    };
+
     const addRow = () => {
       if (!template || !itemsBody) {
         return;
       }
       const row = template.content.firstElementChild.cloneNode(true);
       itemsBody.appendChild(row);
+      initializeRowState(row);
       updateTotals();
+      updateRemoveButtons();
+      scrollToNewRow();
     };
 
     const removeRow = (button) => {
@@ -361,11 +413,28 @@
         row.remove();
       }
       updateTotals();
+      updateRemoveButtons();
     };
 
     form.addEventListener('input', (event) => {
-      if (event.target && event.target.closest('.po-item-row')) {
+      if (!event.target) {
+        return;
+      }
+      const row = event.target.closest('.po-item-row');
+      if (row) {
         updateTotals();
+      }
+      if (event.target.matches('[data-item-code]')) {
+        const lastRow = itemsBody ? itemsBody.querySelector('.po-item-row:last-child') : null;
+        if (lastRow && row === lastRow) {
+          const inputValue = event.target.value.trim();
+          if (inputValue && row.dataset.itemCodeFilled !== 'true') {
+            row.dataset.itemCodeFilled = 'true';
+            addRow();
+          } else if (!inputValue) {
+            row.dataset.itemCodeFilled = 'false';
+          }
+        }
       }
     });
 
@@ -400,11 +469,18 @@
         if (modalToggle.checked) {
           initializeDates();
           updateTotals();
+          updateRemoveButtons();
         }
       });
     }
 
     updateTotals();
+    updateRemoveButtons();
+    if (itemsBody) {
+      itemsBody.querySelectorAll('.po-item-row').forEach((row) => {
+        initializeRowState(row);
+      });
+    }
   })();
 </script>
 {% endblock %}
