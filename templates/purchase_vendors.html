@@ -89,17 +89,64 @@
     </div>
   </div>
 
+  <input type="checkbox" id="edit-vendor" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('edit-vendor').checked=false;"></div>
+  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Vendor registry</p>
+          <h2 class="text-lg font-semibold">Edit vendor</h2>
+        </div>
+        <button class="text-slate-500" type="button" onclick="document.getElementById('edit-vendor').checked=false;">✕</button>
+      </div>
+      <form method="POST" id="editVendorForm" class="p-5 space-y-4">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Vendor name</span>
+            <input type="text" name="name" id="editVendorName" class="w-full rounded-lg border-slate-200" required />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Contact person</span>
+            <input type="text" name="contact_person" id="editVendorContact" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Phone</span>
+            <input type="text" name="phone" id="editVendorPhone" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-sm text-slate-600">Email</span>
+            <input type="email" name="email" id="editVendorEmail" class="w-full rounded-lg border-slate-200" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-sm text-slate-600">Address</span>
+          <textarea name="address" id="editVendorAddress" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-sm text-slate-600">Notes</span>
+          <textarea name="notes" id="editVendorNotes" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
+        </label>
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('edit-vendor').checked=false;">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Update Vendor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
     <label class="relative w-full md:max-w-sm">
       <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">🔍</span>
       <input
         id="vendors-search"
         type="search"
-        placeholder="Search vendors by name, contact, or address"
+        placeholder="Search vendors by name or address"
         class="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500/60"
       />
     </label>
-    <p class="text-xs text-slate-500">Filter vendors and click any column heading to sort.</p>
+    <p class="text-xs text-slate-500">Filter vendors and click a column heading to sort.</p>
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -110,34 +157,36 @@
             <span class="inline-flex items-center gap-1">Vendor <span class="sort-indicator text-xs">⇅</span></span>
           </th>
           <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="1">
-            <span class="inline-flex items-center gap-1">Contact <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="2">
-            <span class="inline-flex items-center gap-1">Phone <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="3">
-            <span class="inline-flex items-center gap-1">Email <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="4">
             <span class="inline-flex items-center gap-1">Address <span class="sort-indicator text-xs">⇅</span></span>
           </th>
-          <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="5">
-            <span class="inline-flex items-center gap-1">Notes <span class="sort-indicator text-xs">⇅</span></span>
-          </th>
+          <th class="py-3 px-4 text-center">Edit</th>
         </tr>
       </thead>
       <tbody class="divide-y">
         {% for vendor in vendors %}
         <tr>
           <td class="py-3 px-4 font-semibold text-slate-800">{{ vendor.name }}</td>
-          <td class="py-3 px-4">{{ vendor.contact_person or '—' }}</td>
-          <td class="py-3 px-4">{{ vendor.phone or '—' }}</td>
-          <td class="py-3 px-4">{{ vendor.email or '—' }}</td>
           <td class="py-3 px-4">{{ vendor.address or '—' }}</td>
-          <td class="py-3 px-4 text-slate-600">{{ vendor.notes or '—' }}</td>
+          <td class="py-3 px-4 text-center">
+            <button
+              type="button"
+              class="vendor-edit-button inline-flex items-center justify-center h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition"
+              data-id="{{ vendor.id }}"
+              data-name="{{ vendor.name|e }}"
+              data-address="{{ vendor.address|default('', true)|e }}"
+              data-contact="{{ vendor.contact_person|default('', true)|e }}"
+              data-phone="{{ vendor.phone|default('', true)|e }}"
+              data-email="{{ vendor.email|default('', true)|e }}"
+              data-notes="{{ vendor.notes|default('', true)|e }}"
+              data-edit-url="{{ url_for('purchase_vendor_edit', vendor_id=vendor.id) }}"
+              aria-label="Edit vendor"
+            >
+              ✎
+            </button>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="py-4 px-4 text-slate-500">No vendors have been added yet.</td></tr>
+        <tr data-empty-row="true"><td colspan="3" class="py-4 px-4 text-slate-500">No vendors have been added yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -186,6 +235,7 @@
       if (!table) return;
       const tbody = table.querySelector("tbody");
       const headers = Array.from(table.querySelectorAll("th[data-sort-index]"));
+      const searchableIndexes = [0, 1];
 
       let sortState = { key: null, direction: 1 };
 
@@ -221,7 +271,7 @@
       function applySort(columnIndex = sortState.key, direction = sortState.direction) {
         const query = (searchInput?.value || "").trim();
         const rows = Array.from(tbody.querySelectorAll("tr")).filter(
-          (row) => row.style.display !== "none",
+          (row) => row.style.display !== "none" && !row.dataset.emptyRow,
         );
 
         const sorted = rows.sort((a, b) => {
@@ -251,9 +301,16 @@
       function refresh() {
         const query = (searchInput?.value || "").trim().toLowerCase();
         Array.from(tbody.querySelectorAll("tr")).forEach((row) => {
-          const cellTexts = Array.from(row.cells).map((cell) =>
-            cell.textContent.trim().toLowerCase(),
-          );
+          if (row.dataset.emptyRow) {
+            row.dataset.score = "9999";
+            row.style.display = query ? "none" : "";
+            return;
+          }
+
+          const cellTexts = searchableIndexes.map((index) => {
+            const cell = row.cells[index];
+            return cell ? cell.textContent.trim().toLowerCase() : "";
+          });
           const combined = cellTexts.join(" ");
           if (!query) {
             row.dataset.score = "0";
@@ -289,6 +346,32 @@
     }
 
     setupInteractiveTable("vendors-table", "vendors-search");
+
+    const editToggle = document.getElementById("edit-vendor");
+    const editForm = document.getElementById("editVendorForm");
+    const editName = document.getElementById("editVendorName");
+    const editContact = document.getElementById("editVendorContact");
+    const editPhone = document.getElementById("editVendorPhone");
+    const editEmail = document.getElementById("editVendorEmail");
+    const editAddress = document.getElementById("editVendorAddress");
+    const editNotes = document.getElementById("editVendorNotes");
+
+    if (editToggle && editForm && editName) {
+      document.querySelectorAll(".vendor-edit-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          const vendorId = button.dataset.id;
+          editForm.action =
+            button.dataset.editUrl || `/purchase/vendors/${vendorId}/edit`;
+          editName.value = button.dataset.name || "";
+          if (editContact) editContact.value = button.dataset.contact || "";
+          if (editPhone) editPhone.value = button.dataset.phone || "";
+          if (editEmail) editEmail.value = button.dataset.email || "";
+          if (editAddress) editAddress.value = button.dataset.address || "";
+          if (editNotes) editNotes.value = button.dataset.notes || "";
+          editToggle.checked = true;
+        });
+      });
+    }
   })();
 </script>
 {% endblock %}
