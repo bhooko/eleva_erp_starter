@@ -5717,6 +5717,7 @@ from eleva_app.models import (
     Product,
     ProcurementStage,
     PurchaseOrderLine,
+    VendorProductRate,
     Vendor,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -7033,27 +7034,26 @@ def purchase_orders():
                     vendor_record.last_used_at = datetime.datetime.utcnow()
         db.session.flush()
 
-        part_names = request.form.getlist("part_name[]") or request.form.getlist(
-            "part_name"
+        item_product_ids = request.form.getlist("item_product_id[]") or request.form.getlist(
+            "item_product_id"
         )
-        part_ids = request.form.getlist("part_id[]") or request.form.getlist(
-            "part_id"
+        item_names = request.form.getlist("item_name[]") or request.form.getlist(
+            "item_name"
         )
-        item_codes = request.form.getlist("item_code[]") or request.form.getlist(
-            "item_code"
+        item_specs = request.form.getlist("item_specs[]") or request.form.getlist(
+            "item_specs"
         )
-        descriptions = request.form.getlist("description[]") or request.form.getlist(
-            "description"
+        item_units = request.form.getlist("item_unit[]") or request.form.getlist(
+            "item_unit"
         )
-        units = request.form.getlist("unit[]") or request.form.getlist("unit")
-        quantities = request.form.getlist("quantity_ordered[]") or request.form.getlist(
-            "quantity_ordered"
+        item_qtys = request.form.getlist("item_qty[]") or request.form.getlist(
+            "item_qty"
         )
-        unit_prices = request.form.getlist("unit_price[]") or request.form.getlist(
-            "unit_price"
+        item_unit_prices = request.form.getlist("item_unit_price[]") or request.form.getlist(
+            "item_unit_price"
         )
-        currencies = request.form.getlist("currency[]") or request.form.getlist(
-            "currency"
+        item_currencies = request.form.getlist("item_currency[]") or request.form.getlist(
+            "item_currency"
         )
 
         has_valid_items = False
@@ -7061,41 +7061,44 @@ def purchase_orders():
         subtotal_amount = 0.0
 
         row_count = max(
-            len(part_names),
-            len(part_ids),
-            len(item_codes),
-            len(descriptions),
-            len(units),
-            len(quantities),
-            len(unit_prices),
-            len(currencies),
+            len(item_product_ids),
+            len(item_names),
+            len(item_specs),
+            len(item_units),
+            len(item_qtys),
+            len(item_unit_prices),
+            len(item_currencies),
         )
 
         for idx in range(row_count):
-            part_name = (part_names[idx] if idx < len(part_names) else "").strip()
-            part_id_raw = (part_ids[idx] if idx < len(part_ids) else "").strip()
-            item_code = (item_codes[idx] if idx < len(item_codes) else "").strip()
-            description = (descriptions[idx] if idx < len(descriptions) else "").strip()
-            unit = (units[idx] if idx < len(units) else "").strip()
-            quantity_raw = quantities[idx] if idx < len(quantities) else ""
-            unit_price_raw = unit_prices[idx] if idx < len(unit_prices) else ""
+            item_name = (item_names[idx] if idx < len(item_names) else "").strip()
+            product_id_raw = (item_product_ids[idx] if idx < len(item_product_ids) else "").strip()
+            specs = (item_specs[idx] if idx < len(item_specs) else "").strip()
+            unit = (item_units[idx] if idx < len(item_units) else "").strip()
+            quantity_raw = item_qtys[idx] if idx < len(item_qtys) else ""
+            unit_price_raw = item_unit_prices[idx] if idx < len(item_unit_prices) else ""
             currency = (
-                (currencies[idx] if idx < len(currencies) else "").strip() or "INR"
+                (item_currencies[idx] if idx < len(item_currencies) else "").strip()
+                or "INR"
             )
 
-            if not part_name and not description and not unit and not quantity_raw and not unit_price_raw:
+            if (
+                not item_name
+                and not specs
+                and not unit
+                and not quantity_raw
+                and not unit_price_raw
+            ):
                 continue
-            if not part_name:
+            if not item_name:
                 invalid_rows = True
                 continue
-            part_id = None
-            if part_id_raw:
+            product_id = None
+            if product_id_raw:
                 try:
-                    part_id = int(part_id_raw)
+                    product_id = int(product_id_raw)
                 except (TypeError, ValueError):
-                    part_id = None
-            if not part_id:
-                item_code = None
+                    product_id = None
 
             try:
                 quantity = float(quantity_raw or 0)
@@ -7116,13 +7119,15 @@ def purchase_orders():
             if unit_price is not None:
                 subtotal_amount += line_total
 
+            item_code = item_name or None
             poi = PurchaseOrderItem(
                 purchase_order_id=po.id,
                 bom_item_id=None,
-                part_id=part_id,
-                part_name=part_name,
-                item_code=item_code or None,
-                description=description or None,
+                product_id=product_id,
+                part_id=product_id,
+                part_name=item_name,
+                item_code=item_code,
+                description=specs or None,
                 unit=unit or None,
                 quantity_ordered=quantity,
                 unit_price=unit_price,
@@ -7137,7 +7142,7 @@ def purchase_orders():
                 if not inv:
                     inv = InventoryItem(
                         item_code=item_code,
-                        description=description or None,
+                        description=specs or None,
                         unit=unit or None,
                     )
                     db.session.add(inv)
@@ -7179,6 +7184,11 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
+    products = Product.query.order_by(Product.name).all()
+    product_index = {
+        product.name: {"id": product.id, "specs": product.specifications or ""}
+        for product in products
+    }
     bom_options = (
         BillOfMaterials.query.order_by(BillOfMaterials.created_at.desc().nullslast())
         .limit(200)
@@ -7192,6 +7202,42 @@ def purchase_orders():
         projects=projects,
         bom_items=bom_items,
         bom_options=bom_options,
+        products=products,
+        product_index=product_index,
+    )
+
+
+@app.route("/purchase/vendor-rate")
+@login_required
+def purchase_vendor_rate():
+    ensure_bootstrap()
+    vendor_id_raw = request.args.get("vendor_id") or ""
+    product_id_raw = request.args.get("product_id") or ""
+    try:
+        vendor_id = int(vendor_id_raw)
+    except (TypeError, ValueError):
+        vendor_id = None
+    try:
+        product_id = int(product_id_raw)
+    except (TypeError, ValueError):
+        product_id = None
+
+    if not vendor_id or not product_id:
+        return jsonify({"unit_price": None, "currency": "INR", "found": False})
+
+    rate = VendorProductRate.query.filter_by(
+        vendor_id=vendor_id, product_id=product_id
+    ).first()
+    if not rate or rate.unit_price is None:
+        currency = rate.currency if rate and rate.currency else "INR"
+        return jsonify({"unit_price": None, "currency": currency, "found": False})
+
+    return jsonify(
+        {
+            "unit_price": float(rate.unit_price),
+            "currency": rate.currency or "INR",
+            "found": True,
+        }
     )
 
 
@@ -10662,6 +10708,7 @@ def ensure_tables():
         BOMItem.__table__,
         Product.__table__,
         Vendor.__table__,
+        VendorProductRate.__table__,
         PurchaseOrder.__table__,
         PurchaseOrderLine.__table__,
         PurchaseOrderItem.__table__,
@@ -11127,6 +11174,10 @@ def ensure_purchase_order_item_columns():
         cur.execute("ALTER TABLE purchase_order_item ADD COLUMN part_id INTEGER;")
         added.append("part_id")
         col_names.add("part_id")
+    if "product_id" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN product_id INTEGER;")
+        added.append("product_id")
+        col_names.add("product_id")
     if "item_code" not in col_names:
         cur.execute("ALTER TABLE purchase_order_item ADD COLUMN item_code TEXT;")
         added.append("item_code")
@@ -11141,6 +11192,7 @@ def ensure_purchase_order_item_columns():
                 id INTEGER PRIMARY KEY,
                 purchase_order_id INTEGER NOT NULL,
                 bom_item_id INTEGER,
+                product_id INTEGER,
                 part_id INTEGER,
                 part_name TEXT NOT NULL DEFAULT '',
                 item_code TEXT,
@@ -11158,6 +11210,7 @@ def ensure_purchase_order_item_columns():
             if "part_name" in col_names
             else "COALESCE(item_code, '')"
         )
+        product_id_expr = "product_id" if "product_id" in col_names else "NULL"
         part_id_expr = "part_id" if "part_id" in col_names else "NULL"
         item_code_expr = "item_code" if "item_code" in col_names else "NULL"
         cur.execute(
@@ -11166,6 +11219,7 @@ def ensure_purchase_order_item_columns():
                 id,
                 purchase_order_id,
                 bom_item_id,
+                product_id,
                 part_id,
                 part_name,
                 item_code,
@@ -11180,6 +11234,7 @@ def ensure_purchase_order_item_columns():
                 id,
                 purchase_order_id,
                 bom_item_id,
+                {product_id_expr},
                 {part_id_expr},
                 {part_name_expr},
                 {item_code_expr},
@@ -11203,6 +11258,44 @@ def ensure_purchase_order_item_columns():
         print(f"✅ Auto-added in purchase_order_item: {', '.join(added)}")
     if not added and not item_code_notnull:
         print("✔️ purchase_order_item OK")
+
+
+def ensure_vendor_product_rate_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_product_rate_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_product_rate';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_product_rate (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                unit_price REAL,
+                currency TEXT DEFAULT 'INR',
+                updated_at DATETIME
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_product_rate")
+
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        uq_vendor_product_rate_vendor_product
+        ON vendor_product_rate (vendor_id, product_id);
+        """
+    )
+
+    conn.commit()
+    conn.close()
 
 
 def ensure_procurement_stage_seed():
@@ -11278,6 +11371,7 @@ def bootstrap_db():
     ensure_design_task_columns()
     ensure_bom_columns()
     ensure_purchase_order_item_columns()
+    ensure_vendor_product_rate_table()
     ensure_qc_columns()    # adds missing columns safely
     ensure_project_task_backfill()
     ensure_lift_columns()
