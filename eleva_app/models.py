@@ -2282,10 +2282,13 @@ class PurchaseOrder(db.Model):
     bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=True)
     stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
     status = db.Column(db.String(50), nullable=False, default="draft")
+    po_date = db.Column(db.Date, nullable=True)
     order_date = db.Column(db.Date, nullable=True)
+    expected_delivery = db.Column(db.Date, nullable=True)
     expected_delivery_date = db.Column(db.Date, nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     subtotal_amount = db.Column(db.Float, nullable=True)
+    grand_total_amount = db.Column(db.Float, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     origin = db.Column(db.String(40), nullable=True, default="erp")
 
