@@ -2338,7 +2338,9 @@ class PurchaseOrderItem(db.Model):
         db.Integer, db.ForeignKey("purchase_order.id"), nullable=False
     )
     bom_item_id = db.Column(db.Integer, db.ForeignKey("bom_item.id"), nullable=True)
-    item_code = db.Column(db.String(120), nullable=False)
+    part_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
+    part_name = db.Column(db.String(255), nullable=False, default="")
+    item_code = db.Column(db.String(120), nullable=True)
     description = db.Column(db.String(255), nullable=True)
     unit = db.Column(db.String(20), nullable=True)
     quantity_ordered = db.Column(db.Float, nullable=False, default=1)
@@ -2348,6 +2350,7 @@ class PurchaseOrderItem(db.Model):
 
     purchase_order = db.relationship("PurchaseOrder", backref="items")
     bom_item = db.relationship("BOMItem")
+    part = db.relationship("Product")
 
 
 class BookInventory(db.Model):

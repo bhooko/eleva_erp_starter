@@ -80,7 +80,7 @@
               <table class="min-w-full text-sm">
                 <thead class="text-left text-slate-500 sticky top-0 bg-slate-50 z-10">
                   <tr>
-                    <th class="py-2 px-3 min-w-[140px]">Item code</th>
+                    <th class="py-2 px-3 min-w-[180px]">Part name</th>
                     <th class="py-2 px-3 min-w-[220px]">Description</th>
                     <th class="py-2 px-3 min-w-[110px]">Unit</th>
                     <th class="py-2 px-3 min-w-[90px]">Qty</th>
@@ -92,8 +92,12 @@
                 </thead>
                 <tbody class="divide-y" data-items-body>
                   <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-                    <td class="py-2 px-3 min-w-[140px]">
-                      <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200 h-10 px-3" list="bom-items" data-item-code />
+                    <td class="py-2 px-3 min-w-[180px]">
+                      <div class="relative">
+                        <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
+                        <input type="hidden" name="part_id[]" data-part-id />
+                        <input type="hidden" name="item_code[]" data-item-code />
+                      </div>
                     </td>
                     <td class="py-2 px-3 min-w-[220px]">
                       <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
@@ -124,11 +128,6 @@
                 </tbody>
               </table>
             </div>
-            <datalist id="bom-items">
-              {% for item in bom_items %}
-                <option value="{{ item.item_code }}">{{ item.description }}</option>
-              {% endfor %}
-            </datalist>
           </div>
 
           <label class="space-y-1 block">
@@ -199,8 +198,12 @@
 
 <template id="po-item-row-template">
   <tr class="po-item-row transition-colors duration-150 hover:bg-slate-100/70">
-    <td class="py-2 px-3 min-w-[140px]">
-      <input type="text" name="item_code[]" class="w-full rounded-lg border-slate-200 h-10 px-3" list="bom-items" data-item-code />
+    <td class="py-2 px-3 min-w-[180px]">
+      <div class="relative">
+        <input type="text" name="part_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" data-part-name autocomplete="off" />
+        <input type="hidden" name="part_id[]" data-part-id />
+        <input type="hidden" name="item_code[]" data-item-code />
+      </div>
     </td>
     <td class="py-2 px-3 min-w-[220px]">
       <input type="text" name="description[]" class="w-full rounded-lg border-slate-200 h-10 px-3" />
@@ -248,9 +251,32 @@
     const grandTotalDisplay = form.querySelector('[data-grand-total]');
     const subtotalInput = form.querySelector('[name="subtotal_amount"]');
     const grandTotalInput = form.querySelector('[name="grand_total_amount"]');
+    const partSearchEndpoint = '/api/parts/search';
+    const partSearchLimit = 20;
 
     let lastAutoExpected = '';
     let autoUpdateExpected = true;
+    let partSearchTimer = null;
+    let activePartInput = null;
+    let activePartResults = [];
+    let activePartIndex = -1;
+    let partRequestCounter = 0;
+
+    const partDropdown = document.createElement('div');
+    partDropdown.className = [
+      'fixed',
+      'hidden',
+      'z-[10000]',
+      'max-h-72',
+      'w-80',
+      'overflow-auto',
+      'rounded-xl',
+      'border',
+      'border-slate-200',
+      'bg-white',
+      'shadow-xl',
+    ].join(' ');
+    document.body.appendChild(partDropdown);
 
     const formatDate = (date) => {
       const year = date.getFullYear();
@@ -343,13 +369,179 @@
       }
     };
 
+    const closePartDropdown = () => {
+      partDropdown.classList.add('hidden');
+      partDropdown.innerHTML = '';
+      activePartInput = null;
+      activePartResults = [];
+      activePartIndex = -1;
+    };
+
+    const positionPartDropdown = (input) => {
+      if (!input) {
+        return;
+      }
+      const rect = input.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const dropdownHeight = Math.min(288, activePartResults.length * 52 + 24);
+      const spaceBelow = viewportHeight - rect.bottom;
+      const openAbove = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+      partDropdown.style.width = `${rect.width}px`;
+      partDropdown.style.left = `${rect.left}px`;
+      if (openAbove) {
+        partDropdown.style.top = `${rect.top - dropdownHeight}px`;
+      } else {
+        partDropdown.style.top = `${rect.bottom + 6}px`;
+      }
+    };
+
+    const highlightActiveOption = () => {
+      const options = Array.from(partDropdown.querySelectorAll('[data-part-option]'));
+      options.forEach((option, index) => {
+        if (index === activePartIndex) {
+          option.classList.add('bg-slate-100');
+        } else {
+          option.classList.remove('bg-slate-100');
+        }
+      });
+    };
+
+    const applyPartSelection = (part, input) => {
+      if (!input) {
+        return;
+      }
+      const row = input.closest('.po-item-row');
+      input.value = part.name;
+      const partIdInput = row ? row.querySelector('[data-part-id]') : null;
+      const itemCodeInput = row ? row.querySelector('[data-item-code]') : null;
+      const descriptionInput = row ? row.querySelector('[name="description[]"]') : null;
+      const unitInput = row ? row.querySelector('[name="unit[]"]') : null;
+
+      if (partIdInput) {
+        partIdInput.value = part.id || '';
+      }
+      if (itemCodeInput) {
+        itemCodeInput.value = part.item_code || '';
+      }
+      if (descriptionInput && part.description) {
+        descriptionInput.value = part.description;
+      }
+      if (unitInput && part.unit) {
+        unitInput.value = part.unit;
+      }
+      if (row) {
+        row.dataset.partNameFilled = input.value.trim() ? 'true' : 'false';
+      }
+      closePartDropdown();
+      updateTotals();
+    };
+
+    const renderPartDropdown = (parts, input) => {
+      partDropdown.innerHTML = '';
+      if (!parts.length) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'px-4 py-3 text-sm text-slate-500';
+        emptyState.textContent = 'No matching parts found.';
+        partDropdown.appendChild(emptyState);
+      } else {
+        parts.forEach((part, index) => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.dataset.partOption = 'true';
+          option.dataset.partIndex = String(index);
+          option.className = 'flex w-full flex-col px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-100';
+          const nameEl = document.createElement('span');
+          nameEl.className = 'font-semibold text-slate-900';
+          nameEl.textContent = part.name;
+          const metaEl = document.createElement('span');
+          metaEl.className = 'text-xs text-slate-500';
+          const metaBits = [part.description, part.unit].filter(Boolean);
+          metaEl.textContent = metaBits.join(' · ') || 'No extra details';
+          option.appendChild(nameEl);
+          option.appendChild(metaEl);
+          option.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            applyPartSelection(part, input);
+          });
+          option.addEventListener('mouseenter', () => {
+            activePartIndex = index;
+            highlightActiveOption();
+          });
+          partDropdown.appendChild(option);
+        });
+      }
+      activePartIndex = -1;
+      activePartInput = input;
+      activePartResults = parts;
+      positionPartDropdown(input);
+      partDropdown.classList.remove('hidden');
+    };
+
+    const fetchPartMatches = async (query, input) => {
+      const currentRequest = ++partRequestCounter;
+      const url = `${partSearchEndpoint}?q=${encodeURIComponent(query)}&limit=${partSearchLimit}`;
+      try {
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) {
+          throw new Error('Failed to fetch parts');
+        }
+        const data = await response.json();
+        if (currentRequest !== partRequestCounter) {
+          return;
+        }
+        if (activePartInput !== input) {
+          activePartInput = input;
+        }
+        renderPartDropdown(Array.isArray(data) ? data : [], input);
+      } catch (error) {
+        if (currentRequest !== partRequestCounter) {
+          return;
+        }
+        renderPartDropdown([], input);
+      }
+    };
+
+    const handlePartInput = (input, { clearSelection = true } = {}) => {
+      if (!input) {
+        return;
+      }
+      const row = input.closest('.po-item-row');
+      const partIdInput = row ? row.querySelector('[data-part-id]') : null;
+      const itemCodeInput = row ? row.querySelector('[data-item-code]') : null;
+      if (clearSelection) {
+        if (partIdInput) {
+          partIdInput.value = '';
+        }
+        if (itemCodeInput) {
+          itemCodeInput.value = '';
+        }
+      }
+      const query = input.value.trim();
+      if (!query) {
+        closePartDropdown();
+        if (row) {
+          row.dataset.partNameFilled = 'false';
+        }
+        return;
+      }
+      if (row) {
+        row.dataset.partNameFilled = 'true';
+      }
+      if (partSearchTimer) {
+        clearTimeout(partSearchTimer);
+      }
+      partSearchTimer = setTimeout(() => {
+        fetchPartMatches(query, input);
+      }, 200);
+    };
+
     const initializeRowState = (row) => {
       if (!row) {
         return;
       }
-      const itemCodeInput = row.querySelector('[data-item-code]');
-      if (itemCodeInput) {
-        row.dataset.itemCodeFilled = itemCodeInput.value.trim() ? 'true' : 'false';
+      const partNameInput = row.querySelector('[data-part-name]');
+      if (partNameInput) {
+        row.dataset.partNameFilled = partNameInput.value.trim() ? 'true' : 'false';
       }
     };
 
@@ -424,17 +616,54 @@
       if (row) {
         updateTotals();
       }
-      if (event.target.matches('[data-item-code]')) {
+      if (event.target.matches('[data-part-name]')) {
+        handlePartInput(event.target);
         const lastRow = itemsBody ? itemsBody.querySelector('.po-item-row:last-child') : null;
         if (lastRow && row === lastRow) {
           const inputValue = event.target.value.trim();
-          if (inputValue && row.dataset.itemCodeFilled !== 'true') {
-            row.dataset.itemCodeFilled = 'true';
+          if (inputValue && row.dataset.partNameFilled !== 'true') {
+            row.dataset.partNameFilled = 'true';
             addRow();
           } else if (!inputValue) {
-            row.dataset.itemCodeFilled = 'false';
+            row.dataset.partNameFilled = 'false';
           }
         }
+      }
+    });
+
+    form.addEventListener('focusin', (event) => {
+      if (!event.target || !event.target.matches('[data-part-name]')) {
+        return;
+      }
+      const query = event.target.value.trim();
+      if (query) {
+        handlePartInput(event.target, { clearSelection: false });
+      }
+    });
+
+    form.addEventListener('keydown', (event) => {
+      if (!event.target || !event.target.matches('[data-part-name]')) {
+        return;
+      }
+      if (partDropdown.classList.contains('hidden')) {
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        activePartIndex = Math.min(activePartIndex + 1, activePartResults.length - 1);
+        highlightActiveOption();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        activePartIndex = Math.max(activePartIndex - 1, 0);
+        highlightActiveOption();
+      } else if (event.key === 'Enter') {
+        if (activePartIndex >= 0 && activePartResults[activePartIndex]) {
+          event.preventDefault();
+          applyPartSelection(activePartResults[activePartIndex], event.target);
+        }
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closePartDropdown();
       }
     });
 
@@ -445,6 +674,30 @@
         removeRow(removeButton);
       }
     });
+
+    document.addEventListener('click', (event) => {
+      if (partDropdown.classList.contains('hidden')) {
+        return;
+      }
+      if (event.target === activePartInput || partDropdown.contains(event.target)) {
+        return;
+      }
+      closePartDropdown();
+    });
+
+    window.addEventListener('resize', () => {
+      if (!partDropdown.classList.contains('hidden')) {
+        positionPartDropdown(activePartInput);
+      }
+    });
+
+    if (itemsWrapper) {
+      itemsWrapper.addEventListener('scroll', () => {
+        if (!partDropdown.classList.contains('hidden')) {
+          positionPartDropdown(activePartInput);
+        }
+      });
+    }
 
     if (addItemButton) {
       addItemButton.addEventListener('click', () => {
