@@ -6981,30 +6981,41 @@ def purchase_orders():
         project_id = request.form.get("project_id") or None
         vendor_id = request.form.get("vendor_id") or None
         bom_id_raw = request.form.get("bom_id") or None
-        stage_id_raw = request.form.get("stage_id") or None
-        order_date_raw = request.form.get("order_date")
-        expected_raw = request.form.get("expected_delivery_date")
-        status_value = request.form.get("status") or "draft"
+        po_date_raw = request.form.get("po_date") or request.form.get("order_date")
+        expected_raw = request.form.get("expected_delivery") or request.form.get(
+            "expected_delivery_date"
+        )
         notes = request.form.get("notes")
         try:
-            order_date = datetime.datetime.strptime(order_date_raw, "%Y-%m-%d").date() if order_date_raw else None
+            po_date = (
+                datetime.datetime.strptime(po_date_raw, "%Y-%m-%d").date()
+                if po_date_raw
+                else None
+            )
         except ValueError:
-            order_date = None
+            po_date = None
         try:
             expected_delivery_date = (
-                datetime.datetime.strptime(expected_raw, "%Y-%m-%d").date() if expected_raw else None
+                datetime.datetime.strptime(expected_raw, "%Y-%m-%d").date()
+                if expected_raw
+                else None
             )
         except ValueError:
             expected_delivery_date = None
+        if not po_date:
+            po_date = date.today()
+        if not expected_delivery_date:
+            expected_delivery_date = po_date + datetime.timedelta(days=15)
 
         po = PurchaseOrder(
             po_number=po_number,
             project_id=project_id,
             vendor_id=vendor_id,
             bom_id=int(bom_id_raw) if bom_id_raw else None,
-            stage_id=int(stage_id_raw) if stage_id_raw else None,
-            status=status_value,
-            order_date=order_date,
+            status="draft",
+            po_date=po_date,
+            order_date=po_date,
+            expected_delivery=expected_delivery_date,
             expected_delivery_date=expected_delivery_date,
             created_by_user_id=current_user.id,
             notes=notes,
@@ -7013,30 +7024,91 @@ def purchase_orders():
         db.session.add(po)
         db.session.flush()
 
-        item_code = request.form.get("item_code")
-        if item_code:
-            quantity = float(request.form.get("quantity_ordered") or 0)
-            unit_price = float(request.form.get("unit_price") or 0)
-            total_amount = quantity * unit_price if unit_price else None
+        item_codes = request.form.getlist("item_code[]") or request.form.getlist(
+            "item_code"
+        )
+        descriptions = request.form.getlist("description[]") or request.form.getlist(
+            "description"
+        )
+        units = request.form.getlist("unit[]") or request.form.getlist("unit")
+        quantities = request.form.getlist("quantity_ordered[]") or request.form.getlist(
+            "quantity_ordered"
+        )
+        unit_prices = request.form.getlist("unit_price[]") or request.form.getlist(
+            "unit_price"
+        )
+        currencies = request.form.getlist("currency[]") or request.form.getlist(
+            "currency"
+        )
+
+        has_valid_items = False
+        invalid_rows = False
+        subtotal_amount = 0.0
+
+        row_count = max(
+            len(item_codes),
+            len(descriptions),
+            len(units),
+            len(quantities),
+            len(unit_prices),
+            len(currencies),
+        )
+
+        for idx in range(row_count):
+            item_code = (item_codes[idx] if idx < len(item_codes) else "").strip()
+            description = (descriptions[idx] if idx < len(descriptions) else "").strip()
+            unit = (units[idx] if idx < len(units) else "").strip()
+            quantity_raw = quantities[idx] if idx < len(quantities) else ""
+            unit_price_raw = unit_prices[idx] if idx < len(unit_prices) else ""
+            currency = (
+                (currencies[idx] if idx < len(currencies) else "").strip() or "INR"
+            )
+
+            if not item_code and not description and not unit and not quantity_raw and not unit_price_raw:
+                continue
+            if not item_code:
+                invalid_rows = True
+                continue
+
+            try:
+                quantity = float(quantity_raw or 0)
+            except (TypeError, ValueError):
+                quantity = 0
+            if quantity <= 0:
+                invalid_rows = True
+                continue
+
+            unit_price = None
+            if unit_price_raw not in (None, ""):
+                try:
+                    unit_price = float(unit_price_raw)
+                except (TypeError, ValueError):
+                    unit_price = None
+
+            line_total = quantity * unit_price if unit_price is not None else None
+            if unit_price is not None:
+                subtotal_amount += line_total
+
             poi = PurchaseOrderItem(
                 purchase_order_id=po.id,
-                bom_item_id=request.form.get("bom_item_id") or None,
+                bom_item_id=None,
                 item_code=item_code,
-                description=request.form.get("description"),
-                unit=request.form.get("unit"),
+                description=description or None,
+                unit=unit or None,
                 quantity_ordered=quantity,
                 unit_price=unit_price,
-                total_amount=total_amount,
-                currency=request.form.get("currency") or "INR",
+                total_amount=line_total,
+                currency=currency,
             )
             db.session.add(poi)
+            has_valid_items = True
 
             inv = InventoryItem.query.filter_by(item_code=item_code).first()
             if not inv:
                 inv = InventoryItem(
                     item_code=item_code,
-                    description=request.form.get("description"),
-                    unit=request.form.get("unit"),
+                    description=description or None,
+                    unit=unit or None,
                 )
                 db.session.add(inv)
             _initialize_book_stock(inv)
@@ -7049,6 +7121,17 @@ def purchase_orders():
             book.quantity_ordered_total = (book.quantity_ordered_total or 0) + quantity
             book.last_po_id = po.id
 
+        if not has_valid_items or invalid_rows:
+            db.session.rollback()
+            if not has_valid_items:
+                flash("Add at least one valid line item before saving.", "danger")
+            else:
+                flash("Each line item needs an item code and quantity.", "danger")
+            return redirect(url_for("purchase_orders"))
+
+        po.subtotal_amount = subtotal_amount
+        po.grand_total_amount = subtotal_amount
+
         db.session.commit()
         flash("Purchase order saved.", "success")
         return redirect(url_for("purchase_orders"))
@@ -7057,7 +7140,6 @@ def purchase_orders():
         PurchaseOrder.query.options(
             joinedload(PurchaseOrder.vendor),
             joinedload(PurchaseOrder.project),
-            joinedload(PurchaseOrder.stage),
             joinedload(PurchaseOrder.bom),
             subqueryload(PurchaseOrder.items),
         )
@@ -7067,7 +7149,6 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
-    stage_options = _get_active_procurement_stages(include_inactive=True)
     bom_options = (
         BillOfMaterials.query.order_by(BillOfMaterials.created_at.desc().nullslast())
         .limit(200)
@@ -7080,7 +7161,6 @@ def purchase_orders():
         vendors=vendors,
         projects=projects,
         bom_items=bom_items,
-        stage_options=stage_options,
         bom_options=bom_options,
     )
 
@@ -7093,7 +7173,6 @@ def purchase_order_detail_view(po_id: int):
         PurchaseOrder.query.options(
             joinedload(PurchaseOrder.vendor),
             joinedload(PurchaseOrder.project),
-            joinedload(PurchaseOrder.stage),
             joinedload(PurchaseOrder.bom),
             subqueryload(PurchaseOrder.items).joinedload(PurchaseOrderItem.bom_item),
         )
@@ -7318,7 +7397,10 @@ def generate_po_from_bom(bom_id):
                     bom_id=bom.id,
                     stage_id=stage_id_int,
                     status="draft",
+                    po_date=date.today(),
                     order_date=date.today(),
+                    expected_delivery=date.today() + datetime.timedelta(days=15),
+                    expected_delivery_date=date.today() + datetime.timedelta(days=15),
                     created_by_user_id=current_user.id,
                     notes=notes_combined,
                     origin="erp",
@@ -7328,6 +7410,7 @@ def generate_po_from_bom(bom_id):
 
                 item_ids = request.form.getlist("item_id")
                 created_items = 0
+                subtotal_amount = 0.0
                 for item_id in item_ids:
                     try:
                         parsed_id = int(item_id)
@@ -7351,6 +7434,8 @@ def generate_po_from_bom(bom_id):
                     except (TypeError, ValueError):
                         unit_price = None
                     total_amount = qty_value * unit_price if unit_price is not None else None
+                    if unit_price is not None:
+                        subtotal_amount += total_amount
 
                     db.session.add(
                         PurchaseOrderItem(
@@ -7388,6 +7473,8 @@ def generate_po_from_bom(bom_id):
                     db.session.rollback()
                     flash("No line items were selected for ordering.", "danger")
                 else:
+                    po.subtotal_amount = subtotal_amount
+                    po.grand_total_amount = subtotal_amount
                     db.session.commit()
                     # TODO: create_notification for purchase/design teams about PO creation from this BOM.
                     flash(
@@ -10861,6 +10948,18 @@ def ensure_bom_columns():
     if "stage_id" not in po_cols:
         cur.execute("ALTER TABLE purchase_order ADD COLUMN stage_id INTEGER;")
         po_added.append("stage_id")
+    if "po_date" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN po_date DATE;")
+        po_added.append("po_date")
+    if "expected_delivery" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN expected_delivery DATE;")
+        po_added.append("expected_delivery")
+    if "subtotal_amount" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN subtotal_amount REAL;")
+        po_added.append("subtotal_amount")
+    if "grand_total_amount" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN grand_total_amount REAL;")
+        po_added.append("grand_total_amount")
     if "origin" not in po_cols:
         cur.execute(
             "ALTER TABLE purchase_order ADD COLUMN origin TEXT DEFAULT 'erp';"
@@ -10870,6 +10969,16 @@ def ensure_bom_columns():
     if po_added:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS ix_purchase_order_bom_stage ON purchase_order (bom_id, stage_id);"
+        )
+
+    po_all_cols = po_cols.union(set(po_added))
+    if "po_date" in po_all_cols and "order_date" in po_cols:
+        cur.execute(
+            "UPDATE purchase_order SET po_date = order_date WHERE po_date IS NULL AND order_date IS NOT NULL;"
+        )
+    if "expected_delivery" in po_all_cols and "expected_delivery_date" in po_cols:
+        cur.execute(
+            "UPDATE purchase_order SET expected_delivery = expected_delivery_date WHERE expected_delivery IS NULL AND expected_delivery_date IS NOT NULL;"
         )
 
     conn.commit()

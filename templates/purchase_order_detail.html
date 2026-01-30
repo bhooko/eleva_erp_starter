@@ -7,14 +7,13 @@
       <p class="text-xs uppercase text-slate-500">Purchase</p>
       <h1 class="text-2xl font-semibold">Purchase Order {{ po.po_number }}</h1>
       <div class="flex items-center gap-2">
-        <p class="text-sm text-slate-600">Detailed view with linked BOM and stage information.</p>
+        <p class="text-sm text-slate-600">Detailed view with linked BOM information.</p>
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ (po.origin or 'ERP')|upper }}</span>
       </div>
       {% if po.bom %}
       <p class="mt-2 text-sm text-amber-700">
         Generated from BOM
         <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="font-semibold text-amber-800 hover:underline">{{ po.bom.bom_name }}</a>
-        {% if po.stage %} – Stage <strong>{{ po.stage.name }}</strong>{% endif %}
       </p>
       {% endif %}
     </div>
@@ -39,12 +38,12 @@
         <p class="px-2 py-1 inline-block rounded-full bg-slate-100 text-slate-800">{{ po.status|title }}</p>
       </div>
       <div>
-        <p class="text-xs uppercase text-slate-500">Order Date</p>
-        <p class="text-base font-semibold">{{ po.order_date or '—' }}</p>
+        <p class="text-xs uppercase text-slate-500">PO Date</p>
+        <p class="text-base font-semibold">{{ po.po_date or po.order_date or '—' }}</p>
       </div>
       <div>
         <p class="text-xs uppercase text-slate-500">Expected Delivery</p>
-        <p class="text-base font-semibold">{{ po.expected_delivery_date or '—' }}</p>
+        <p class="text-base font-semibold">{{ po.expected_delivery or po.expected_delivery_date or '—' }}</p>
       </div>
       <div>
         <p class="text-xs uppercase text-slate-500">Notes</p>
@@ -53,8 +52,7 @@
     </div>
     {% if po.bom %}
     <div class="text-sm text-slate-700 bg-slate-50 border rounded-lg p-3">
-      Generated from BOM <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="text-orange-600 hover:underline">{{ po.bom.bom_name }}</a>
-      {% if po.stage %}– Stage <strong>{{ po.stage.name }}</strong>{% endif %}.
+      Generated from BOM <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="text-orange-600 hover:underline">{{ po.bom.bom_name }}</a>.
     </div>
     {% endif %}
   </div>
@@ -65,6 +63,14 @@
         <p class="text-xs uppercase text-slate-500">Line items</p>
         <h2 class="text-lg font-semibold">{{ po.items|length }} item(s)</h2>
       </div>
+      <div class="text-right text-sm">
+        <div class="px-3 py-1 rounded-lg bg-slate-100 text-slate-700">
+          Subtotal: {{ '%.2f'|format(po.subtotal_amount or 0) }}
+        </div>
+        <div class="mt-1 px-3 py-1 rounded-lg bg-slate-900 text-white">
+          Grand total: {{ '%.2f'|format(po.grand_total_amount or po.subtotal_amount or 0) }}
+        </div>
+      </div>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
@@ -72,10 +78,10 @@
           <tr class="text-left text-slate-500">
             <th class="py-2 px-3">Item Code</th>
             <th class="py-2 px-3">Description</th>
-            <th class="py-2 px-3">Stage</th>
             <th class="py-2 px-3">Qty</th>
             <th class="py-2 px-3">Unit</th>
             <th class="py-2 px-3">Unit Price</th>
+            <th class="py-2 px-3">Currency</th>
             <th class="py-2 px-3">Total</th>
           </tr>
         </thead>
@@ -84,10 +90,10 @@
           <tr>
             <td class="py-2 px-3 font-semibold">{{ item.item_code }}</td>
             <td class="py-2 px-3">{{ item.description }}</td>
-            <td class="py-2 px-3 text-slate-600">{{ item.bom_item.stage.name if item.bom_item and item.bom_item.stage else (po.stage.name if po.stage else '—') }}</td>
             <td class="py-2 px-3">{{ item.quantity_ordered }}</td>
             <td class="py-2 px-3">{{ item.unit }}</td>
             <td class="py-2 px-3">{{ item.unit_price if item.unit_price is not none else '—' }}</td>
+            <td class="py-2 px-3">{{ item.currency or '—' }}</td>
             <td class="py-2 px-3">{{ item.total_amount if item.total_amount is not none else '—' }}</td>
           </tr>
           {% else %}

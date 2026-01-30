@@ -71,7 +71,7 @@
             <th class="py-2 px-3">Vendor</th>
             <th class="py-2 px-3">Stage</th>
             <th class="py-2 px-3">Status</th>
-            <th class="py-2 px-3">Order Date</th>
+            <th class="py-2 px-3">PO Date</th>
           </tr>
         </thead>
         <tbody class="divide-y">
@@ -83,7 +83,7 @@
             <td class="py-2 px-3">{{ po.vendor.name if po.vendor else '—' }}</td>
             <td class="py-2 px-3">{{ po.stage.name if po.stage else '—' }}</td>
             <td class="py-2 px-3">{{ po.status|title }}</td>
-            <td class="py-2 px-3">{{ po.order_date.strftime('%d %b %Y') if po.order_date else '—' }}</td>
+            <td class="py-2 px-3">{{ (po.po_date or po.order_date).strftime('%d %b %Y') if (po.po_date or po.order_date) else '—' }}</td>
           </tr>
           {% else %}
           <tr><td colspan="5" class="py-3 px-3 text-slate-500">No purchase orders generated from this BOM yet.</td></tr>
