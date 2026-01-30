@@ -2273,6 +2273,33 @@ class Vendor(db.Model):
     )
 
 
+class VendorContact(db.Model):
+    __tablename__ = "vendor_contact"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    role = db.Column(db.String(120), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+
+    vendor = db.relationship("Vendor")
+
+
+class VendorComplaint(db.Model):
+    __tablename__ = "vendor_complaint"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    po_id = db.Column(db.Integer, db.ForeignKey("purchase_order.id"), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="Open")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    vendor = db.relationship("Vendor")
+    purchase_order = db.relationship("PurchaseOrder")
+
+
 class VendorProductRate(db.Model):
     __tablename__ = "vendor_product_rate"
 
@@ -2281,9 +2308,11 @@ class VendorProductRate(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False, index=True)
     unit_price = db.Column(db.Float, nullable=True)
     currency = db.Column(db.String(10), nullable=True, default="INR")
+    vendor_part_name = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+    updated_by = db.Column(db.String(120), nullable=True)
 
     vendor = db.relationship("Vendor")
     product = db.relationship("Product")
@@ -2295,6 +2324,23 @@ class VendorProductRate(db.Model):
             name="uq_vendor_product_rate_vendor_product",
         ),
     )
+
+
+class VendorProductRateHistory(db.Model):
+    __tablename__ = "vendor_product_rate_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False, index=True)
+    old_unit_price = db.Column(db.Float, nullable=True)
+    new_unit_price = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(10), nullable=True, default="INR")
+    note = db.Column(db.Text, nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    changed_by = db.Column(db.String(120), nullable=True)
+
+    vendor = db.relationship("Vendor")
+    product = db.relationship("Product")
 
 
 class PurchaseOrder(db.Model):

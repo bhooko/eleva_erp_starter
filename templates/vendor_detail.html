@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Purchase · Vendor Details{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Purchase</p>
+      <h1 class="text-2xl font-semibold">{{ vendor.name }}</h1>
+      <p class="text-sm text-slate-600">Read-only vendor intelligence dashboard.</p>
+    </div>
+    <a href="{{ url_for('purchase_vendors') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 shadow hover:shadow-lg hover:scale-[1.02] transition">
+      ← Back to vendors
+    </a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Vendor overview</p>
+        <h2 class="text-lg font-semibold">Company profile</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Company name</p>
+          <p class="text-sm text-slate-700">{{ vendor.name }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">GST</p>
+          <p class="text-sm text-slate-700">{{ vendor.gstin or '—' }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Registered address</p>
+          <p class="text-sm text-slate-700">{{ vendor.address or '—' }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Pickup / Factory address</p>
+          <p class="text-sm text-slate-700">{{ vendor.address_line1 or vendor.address_line2 or '—' }}</p>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500 uppercase">Notes</p>
+        <p class="text-sm text-slate-700">{{ vendor.notes or '—' }}</p>
+      </div>
+    </div>
+
+    <div class="bg-slate-900/90 text-slate-50 rounded-2xl border border-slate-800 shadow p-6 space-y-3">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-amber-200">Vendor analytics</p>
+        <h2 class="text-lg font-semibold text-white">KPIs</h2>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-300">Total PO value (this month)</span>
+          <span class="font-semibold text-white">{{ analytics.month_total | round(2) }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-300">Total open PO value</span>
+          <span class="font-semibold text-white">{{ analytics.open_total | round(2) }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-300">YTD PO value</span>
+          <span class="font-semibold text-white">{{ analytics.ytd_total | round(2) }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-300">Last year PO value</span>
+          <span class="font-semibold text-white">{{ analytics.last_year_total | round(2) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2 items-start">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Contacts</p>
+        <h2 class="text-lg font-semibold">People at vendor</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Name</th>
+              <th class="py-2 px-3">Role</th>
+              <th class="py-2 px-3">Phone</th>
+              <th class="py-2 px-3">Email</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for contact in contacts %}
+            <tr>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ contact.name }}</td>
+              <td class="py-2 px-3">{{ contact.role or '—' }}</td>
+              <td class="py-2 px-3">{{ contact.phone or '—' }}</td>
+              <td class="py-2 px-3">{{ contact.email or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-3 px-3 text-slate-500">No contacts yet. Add them in the master data system.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Parts supplied</p>
+        <h2 class="text-lg font-semibold">Current vendor pricing</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Part (internal)</th>
+              <th class="py-2 px-3">Vendor Part Name</th>
+              <th class="py-2 px-3">Current Rate</th>
+              <th class="py-2 px-3">Last Updated</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for rate in rate_rows %}
+            <tr>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ rate.product.name if rate.product else '—' }}</td>
+              <td class="py-2 px-3">{{ rate.vendor_part_name or '—' }}</td>
+              <td class="py-2 px-3">{{ rate.unit_price if rate.unit_price is not none else '—' }} {{ rate.currency or 'INR' }}</td>
+              <td class="py-2 px-3 text-xs text-slate-500">{{ rate.updated_at.strftime('%d %b %Y, %I:%M %p') if rate.updated_at else '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-3 px-3 text-slate-500">No vendor rates recorded yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2 items-start">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Purchase orders</p>
+        <h2 class="text-lg font-semibold">Open POs</h2>
+      </div>
+      <div class="space-y-3">
+        {% for po in open_pos %}
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm flex items-center justify-between">
+          <div>
+            <p class="font-semibold text-slate-800">{{ po.po_number }}</p>
+            <p class="text-xs text-slate-500">Status: {{ po.status|title }} · Date: {{ po.po_date or po.order_date or '—' }}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Total</p>
+            <p class="font-semibold text-slate-900">{{ po_totals.get(po.id, 0) | round(2) }}</p>
+          </div>
+        </div>
+        {% else %}
+        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+          No open purchase orders for this vendor.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Purchase orders</p>
+        <h2 class="text-lg font-semibold">Received POs</h2>
+      </div>
+      <div class="space-y-3">
+        {% for po in received_pos %}
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm flex items-center justify-between">
+          <div>
+            <p class="font-semibold text-slate-800">{{ po.po_number }}</p>
+            <p class="text-xs text-slate-500">Status: {{ po.status|title }} · Date: {{ po.po_date or po.order_date or '—' }}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Total</p>
+            <p class="font-semibold text-slate-900">{{ po_totals.get(po.id, 0) | round(2) }}</p>
+          </div>
+        </div>
+        {% else %}
+        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+          No received purchase orders captured yet.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+    <div>
+      <p class="text-xs uppercase text-slate-500">Quality &amp; Issues</p>
+      <h2 class="text-lg font-semibold">Complaints &amp; QC signals</h2>
+    </div>
+    <div class="grid gap-4 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+        <p class="text-xs uppercase text-slate-500">Vendor complaints</p>
+        <div class="space-y-2 text-sm">
+          {% for complaint in complaints %}
+          <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <p class="font-semibold text-slate-800">{{ complaint.description }}</p>
+            <p class="text-xs text-slate-500">Status: {{ complaint.status }} · {{ complaint.created_at.strftime('%d %b %Y') if complaint.created_at else '—' }}</p>
+          </div>
+          {% else %}
+          <p class="text-slate-500">No complaints logged.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs uppercase text-slate-500">Failed QC</p>
+        <p class="text-sm text-slate-500 mt-2">No failed QC data available yet.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs uppercase text-slate-500">Rejected materials</p>
+        <p class="text-sm text-slate-500 mt-2">No rejected material data available yet.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
