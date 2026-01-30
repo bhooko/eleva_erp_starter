@@ -5718,6 +5718,9 @@ from eleva_app.models import (
     ProcurementStage,
     PurchaseOrderLine,
     VendorProductRate,
+    VendorProductRateHistory,
+    VendorContact,
+    VendorComplaint,
     Vendor,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -8122,10 +8125,53 @@ def purchase_part_detail(product_id):
     ensure_bootstrap()
     product = Product.query.get_or_404(product_id)
     vendors = Vendor.query.order_by(Vendor.name).all()
+    vendor_names = []
+    if product.primary_vendor:
+        vendor_names.append(product.primary_vendor)
+    linked_names = [
+        name.strip()
+        for name in (product.linked_vendors or "").split(",")
+        if name.strip()
+    ]
+    vendor_names.extend([name for name in linked_names if name not in vendor_names])
+    vendor_records = (
+        Vendor.query.filter(Vendor.name.in_(vendor_names)).all() if vendor_names else []
+    )
+    vendor_by_name = {vendor.name: vendor for vendor in vendor_records}
+    vendor_ids = [vendor.id for vendor in vendor_records]
+    rate_rows = []
+    rate_lookup = {}
+    if vendor_ids:
+        for rate in VendorProductRate.query.filter(
+            VendorProductRate.product_id == product.id,
+            VendorProductRate.vendor_id.in_(vendor_ids),
+        ).all():
+            rate_lookup[rate.vendor_id] = rate
+    for name in vendor_names:
+        vendor = vendor_by_name.get(name)
+        rate = rate_lookup.get(vendor.id) if vendor else None
+        rate_rows.append(
+            {
+                "vendor": vendor,
+                "vendor_name": name,
+                "vendor_type": "Primary" if name == product.primary_vendor else "Linked",
+                "rate": rate,
+            }
+        )
+
+    history_rows = (
+        VendorProductRateHistory.query.filter_by(product_id=product.id)
+        .order_by(VendorProductRateHistory.changed_at.desc())
+        .all()
+    )
+    recent_history = history_rows[:10]
     return render_template(
         "purchase_part_detail.html",
         product=product,
         vendors=vendors,
+        vendor_rates=rate_rows,
+        recent_rate_history=recent_history,
+        all_rate_history=history_rows,
     )
 
 
@@ -8192,6 +8238,84 @@ def purchase_parts_update(product_id):
     except Exception:
         db.session.rollback()
         flash("Could not update part details right now.", "danger")
+
+    return redirect(url_for("purchase_part_detail", product_id=product.id))
+
+
+@app.route("/purchase/parts/<int:product_id>/vendor-rate", methods=["POST"])
+@login_required
+def purchase_part_rate_update(product_id):
+    ensure_bootstrap()
+    product = Product.query.get_or_404(product_id)
+    vendor_id_raw = request.form.get("vendor_id")
+    vendor_part_name = (request.form.get("vendor_part_name") or "").strip() or None
+    currency = (request.form.get("currency") or "INR").strip() or "INR"
+    note = (request.form.get("note") or "").strip() or None
+
+    unit_price, price_error = parse_float_field(request.form.get("unit_price"), "Unit price")
+    if price_error:
+        flash(price_error, "danger")
+        return redirect(url_for("purchase_part_detail", product_id=product.id))
+
+    try:
+        vendor_id = int(vendor_id_raw)
+    except (TypeError, ValueError):
+        flash("Select a valid vendor for this part.", "danger")
+        return redirect(url_for("purchase_part_detail", product_id=product.id))
+
+    allowed_vendor_names = []
+    if product.primary_vendor:
+        allowed_vendor_names.append(product.primary_vendor)
+    allowed_vendor_names.extend(
+        [
+            name.strip()
+            for name in (product.linked_vendors or "").split(",")
+            if name.strip()
+        ]
+    )
+    allowed_vendors = (
+        Vendor.query.filter(Vendor.name.in_(allowed_vendor_names)).all()
+        if allowed_vendor_names
+        else []
+    )
+    allowed_vendor_ids = {vendor.id for vendor in allowed_vendors}
+    if vendor_id not in allowed_vendor_ids:
+        flash("Vendor is not linked to this part.", "danger")
+        return redirect(url_for("purchase_part_detail", product_id=product.id))
+
+    rate = VendorProductRate.query.filter_by(
+        vendor_id=vendor_id, product_id=product.id
+    ).first()
+    old_unit_price = rate.unit_price if rate else None
+    price_changed = old_unit_price != unit_price
+
+    if not rate:
+        rate = VendorProductRate(vendor_id=vendor_id, product_id=product.id)
+        db.session.add(rate)
+
+    rate.unit_price = unit_price
+    rate.currency = currency
+    rate.vendor_part_name = vendor_part_name
+    rate.updated_by = current_user.display_name
+
+    if price_changed:
+        history = VendorProductRateHistory(
+            vendor_id=vendor_id,
+            product_id=product.id,
+            old_unit_price=old_unit_price,
+            new_unit_price=unit_price,
+            currency=currency,
+            note=note,
+            changed_by=current_user.display_name,
+        )
+        db.session.add(history)
+
+    try:
+        db.session.commit()
+        flash("Vendor rate updated.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not update vendor rate right now.", "danger")
 
     return redirect(url_for("purchase_part_detail", product_id=product.id))
 
@@ -8942,6 +9066,94 @@ def purchase_vendors():
         ).all()
     )
     return render_template("purchase_vendors.html", vendors=vendors)
+
+
+@app.route("/purchase/vendors/<int:vendor_id>", methods=["GET"])
+@login_required
+def purchase_vendor_detail(vendor_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    contacts = (
+        VendorContact.query.filter_by(vendor_id=vendor.id)
+        .order_by(VendorContact.name.asc())
+        .all()
+    )
+    complaints = (
+        VendorComplaint.query.filter_by(vendor_id=vendor.id)
+        .order_by(VendorComplaint.created_at.desc())
+        .all()
+    )
+    rate_rows = (
+        VendorProductRate.query.options(joinedload(VendorProductRate.product))
+        .filter_by(vendor_id=vendor.id)
+        .order_by(VendorProductRate.updated_at.desc().nullslast())
+        .all()
+    )
+
+    purchase_orders = (
+        PurchaseOrder.query.options(joinedload(PurchaseOrder.items))
+        .filter_by(vendor_id=vendor.id)
+        .order_by(PurchaseOrder.po_date.desc().nullslast(), PurchaseOrder.id.desc())
+        .all()
+    )
+    closed_statuses = {"received", "closed", "completed", "done", "cancelled"}
+    open_pos = []
+    received_pos = []
+    for po in purchase_orders:
+        status = (po.status or "").strip().lower()
+        if status in closed_statuses:
+            received_pos.append(po)
+        else:
+            open_pos.append(po)
+
+    def _po_total(po):
+        if po.grand_total_amount is not None:
+            return float(po.grand_total_amount or 0)
+        if po.subtotal_amount is not None:
+            return float(po.subtotal_amount or 0)
+        total = 0.0
+        for item in po.items or []:
+            if item.total_amount is not None:
+                total += float(item.total_amount or 0)
+            else:
+                total += float(item.quantity_ordered or 0) * float(item.unit_price or 0)
+        return total
+
+    today = date.today()
+    month_total = 0.0
+    ytd_total = 0.0
+    last_year_total = 0.0
+    po_totals = {po.id: _po_total(po) for po in purchase_orders}
+    open_total = sum(po_totals.get(po.id, 0) for po in open_pos)
+
+    for po in purchase_orders:
+        po_date = po.po_date or po.order_date
+        if not po_date:
+            continue
+        po_total = po_totals.get(po.id, 0)
+        if po_date.year == today.year and po_date.month == today.month:
+            month_total += po_total
+        if po_date.year == today.year and po_date <= today:
+            ytd_total += po_total
+        if po_date.year == today.year - 1:
+            last_year_total += po_total
+
+    return render_template(
+        "vendor_detail.html",
+        vendor=vendor,
+        contacts=contacts,
+        rate_rows=rate_rows,
+        open_pos=open_pos,
+        received_pos=received_pos,
+        complaints=complaints,
+        po_totals=po_totals,
+        analytics={
+            "month_total": month_total,
+            "open_total": open_total,
+            "ytd_total": ytd_total,
+            "last_year_total": last_year_total,
+        },
+    )
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/edit", methods=["POST"])
@@ -11280,11 +11492,27 @@ def ensure_vendor_product_rate_table():
                 product_id INTEGER NOT NULL,
                 unit_price REAL,
                 currency TEXT DEFAULT 'INR',
+                vendor_part_name TEXT,
+                updated_by TEXT,
                 updated_at DATETIME
             );
             """
         )
         print("✅ Created missing table: vendor_product_rate")
+    else:
+        columns = {
+            row[1]: (row[2] or "").upper()
+            for row in cur.execute("PRAGMA table_info(vendor_product_rate)")
+        }
+        if "vendor_part_name" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN vendor_part_name TEXT;")
+            print("✅ Added vendor_part_name to vendor_product_rate")
+        if "updated_by" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN updated_by TEXT;")
+            print("✅ Added updated_by to vendor_product_rate")
+        if "updated_at" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN updated_at DATETIME;")
+            print("✅ Added updated_at to vendor_product_rate")
 
     cur.execute(
         """
@@ -11293,6 +11521,101 @@ def ensure_vendor_product_rate_table():
         ON vendor_product_rate (vendor_id, product_id);
         """
     )
+
+    conn.commit()
+    conn.close()
+
+
+def ensure_vendor_product_rate_history_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print(
+            "⚠️ Skipping ensure_vendor_product_rate_history_table: database is not a SQLite file."
+        )
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_product_rate_history';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_product_rate_history (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                old_unit_price REAL,
+                new_unit_price REAL,
+                currency TEXT DEFAULT 'INR',
+                note TEXT,
+                changed_at DATETIME,
+                changed_by TEXT
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_product_rate_history")
+
+    conn.commit()
+    conn.close()
+
+
+def ensure_vendor_contact_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_contact_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_contact';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_contact (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                role TEXT,
+                phone TEXT,
+                email TEXT
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_contact")
+
+    conn.commit()
+    conn.close()
+
+
+def ensure_vendor_complaint_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_complaint_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_complaint';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_complaint (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                po_id INTEGER,
+                description TEXT NOT NULL,
+                status TEXT DEFAULT 'Open',
+                created_at DATETIME
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_complaint")
 
     conn.commit()
     conn.close()
@@ -11372,6 +11695,9 @@ def bootstrap_db():
     ensure_bom_columns()
     ensure_purchase_order_item_columns()
     ensure_vendor_product_rate_table()
+    ensure_vendor_product_rate_history_table()
+    ensure_vendor_contact_table()
+    ensure_vendor_complaint_table()
     ensure_qc_columns()    # adds missing columns safely
     ensure_project_task_backfill()
     ensure_lift_columns()

@@ -145,5 +145,215 @@
       </div>
     </div>
   </div>
+
+  <div class="grid gap-6 lg:grid-cols-2 items-start">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Vendor rates</p>
+          <h2 class="text-lg font-semibold">Vendor-wise pricing</h2>
+          <p class="text-xs text-slate-500">Rates are only maintained for the primary and linked vendors.</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Vendor</th>
+              <th class="py-2 px-3">Type</th>
+              <th class="py-2 px-3">Vendor Part Name</th>
+              <th class="py-2 px-3">Rate</th>
+              <th class="py-2 px-3">Currency</th>
+              <th class="py-2 px-3">Last Updated</th>
+              <th class="py-2 px-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for row in vendor_rates %}
+            <tr>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ row.vendor_name }}</td>
+              <td class="py-2 px-3">
+                <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700' if row.vendor_type == 'Primary' else 'bg-slate-100 text-slate-600' }}">{{ row.vendor_type }}</span>
+              </td>
+              <td class="py-2 px-3">{{ row.rate.vendor_part_name if row.rate and row.rate.vendor_part_name else '—' }}</td>
+              <td class="py-2 px-3">{{ row.rate.unit_price if row.rate and row.rate.unit_price is not none else '—' }}</td>
+              <td class="py-2 px-3">{{ row.rate.currency if row.rate and row.rate.currency else 'INR' }}</td>
+              <td class="py-2 px-3 text-xs text-slate-500">{{ row.rate.updated_at.strftime('%d %b %Y, %I:%M %p') if row.rate and row.rate.updated_at else '—' }}</td>
+              <td class="py-2 px-3 text-right">
+                {% if row.vendor %}
+                <button
+                  type="button"
+                  class="rate-edit-button inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  data-vendor-id="{{ row.vendor.id }}"
+                  data-vendor-name="{{ row.vendor_name|e }}"
+                  data-vendor-part-name="{{ row.rate.vendor_part_name|default('', true)|e if row.rate else '' }}"
+                  data-unit-price="{{ row.rate.unit_price if row.rate and row.rate.unit_price is not none else '' }}"
+                  data-currency="{{ row.rate.currency if row.rate and row.rate.currency else 'INR' }}"
+                >
+                  Update rate
+                </button>
+                {% else %}
+                <span class="text-xs text-slate-400">Vendor not in registry</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="py-3 px-3 text-slate-500">Link a vendor to start maintaining rates.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Rate history</p>
+        <h2 class="text-lg font-semibold">Recent changes</h2>
+        <p class="text-xs text-slate-500">Last 10 rate adjustments for this part.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Date</th>
+              <th class="py-2 px-3">Vendor</th>
+              <th class="py-2 px-3">Old</th>
+              <th class="py-2 px-3">New</th>
+              <th class="py-2 px-3">Note</th>
+              <th class="py-2 px-3">By</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for item in recent_rate_history %}
+            <tr>
+              <td class="py-2 px-3 text-xs text-slate-500">{{ item.changed_at.strftime('%d %b %Y, %I:%M %p') if item.changed_at else '—' }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ item.vendor.name if item.vendor else '—' }}</td>
+              <td class="py-2 px-3">{{ item.old_unit_price if item.old_unit_price is not none else '—' }}</td>
+              <td class="py-2 px-3">{{ item.new_unit_price if item.new_unit_price is not none else '—' }}</td>
+              <td class="py-2 px-3 text-slate-500">{{ item.note or '—' }}</td>
+              <td class="py-2 px-3 text-slate-500">{{ item.changed_by or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="py-3 px-3 text-slate-500">No rate changes captured yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if all_rate_history|length > 10 %}
+      <details class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+        <summary class="cursor-pointer text-slate-700 font-semibold">View full history</summary>
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2 px-3">Date</th>
+                <th class="py-2 px-3">Vendor</th>
+                <th class="py-2 px-3">Old</th>
+                <th class="py-2 px-3">New</th>
+                <th class="py-2 px-3">Note</th>
+                <th class="py-2 px-3">By</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% for item in all_rate_history %}
+              <tr>
+                <td class="py-2 px-3 text-xs text-slate-500">{{ item.changed_at.strftime('%d %b %Y, %I:%M %p') if item.changed_at else '—' }}</td>
+                <td class="py-2 px-3 font-semibold text-slate-800">{{ item.vendor.name if item.vendor else '—' }}</td>
+                <td class="py-2 px-3">{{ item.old_unit_price if item.old_unit_price is not none else '—' }}</td>
+                <td class="py-2 px-3">{{ item.new_unit_price if item.new_unit_price is not none else '—' }}</td>
+                <td class="py-2 px-3 text-slate-500">{{ item.note or '—' }}</td>
+                <td class="py-2 px-3 text-slate-500">{{ item.changed_by or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="relative">
+    <input type="checkbox" id="update-rate" class="hidden peer" />
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('update-rate').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+          <div>
+            <p class="text-xs text-slate-500 uppercase">Vendor rate</p>
+            <h2 class="text-lg font-semibold">Update vendor pricing</h2>
+          </div>
+          <button class="text-slate-500" type="button" onclick="document.getElementById('update-rate').checked=false;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('purchase_part_rate_update', product_id=product.id) }}" class="p-5 space-y-4">
+          {{ csrf_field() }}
+          <input type="hidden" name="vendor_id" id="rateVendorId" />
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Vendor</span>
+            <input type="text" id="rateVendorName" readonly class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Vendor Part Name</span>
+            <input type="text" name="vendor_part_name" id="rateVendorPartName" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Unit price</span>
+              <input type="number" step="0.01" min="0" name="unit_price" id="rateUnitPrice" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Currency</span>
+              <input type="text" name="currency" id="rateCurrency" class="w-full rounded-lg border border-slate-200 px-3 py-2" value="INR" />
+            </label>
+          </div>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Note</span>
+            <textarea name="note" rows="2" class="w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Reason for update (optional)"></textarea>
+          </label>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('update-rate').checked=false;">Cancel</button>
+            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Save rate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (() => {
+    const toggle = document.getElementById('update-rate');
+    const vendorIdInput = document.getElementById('rateVendorId');
+    const vendorNameInput = document.getElementById('rateVendorName');
+    const vendorPartInput = document.getElementById('rateVendorPartName');
+    const unitPriceInput = document.getElementById('rateUnitPrice');
+    const currencyInput = document.getElementById('rateCurrency');
+
+    document.querySelectorAll('.rate-edit-button').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (vendorIdInput) {
+          vendorIdInput.value = button.dataset.vendorId || '';
+        }
+        if (vendorNameInput) {
+          vendorNameInput.value = button.dataset.vendorName || '';
+        }
+        if (vendorPartInput) {
+          vendorPartInput.value = button.dataset.vendorPartName || '';
+        }
+        if (unitPriceInput) {
+          unitPriceInput.value = button.dataset.unitPrice || '';
+        }
+        if (currencyInput) {
+          currencyInput.value = button.dataset.currency || 'INR';
+        }
+        if (toggle) {
+          toggle.checked = true;
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
