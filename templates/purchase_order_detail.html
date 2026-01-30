@@ -76,7 +76,7 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-slate-500">
-            <th class="py-2 px-3">Item Code</th>
+            <th class="py-2 px-3">Part Name</th>
             <th class="py-2 px-3">Description</th>
             <th class="py-2 px-3">Qty</th>
             <th class="py-2 px-3">Unit</th>
@@ -88,7 +88,12 @@
         <tbody class="divide-y">
           {% for item in po.items %}
           <tr>
-            <td class="py-2 px-3 font-semibold">{{ item.item_code }}</td>
+            <td class="py-2 px-3 font-semibold">
+              <div>{{ item.part_name or item.item_code }}</div>
+              {% if item.item_code %}
+              <div class="text-xs text-slate-500">{{ item.item_code }}</div>
+              {% endif %}
+            </td>
             <td class="py-2 px-3">{{ item.description }}</td>
             <td class="py-2 px-3">{{ item.quantity_ordered }}</td>
             <td class="py-2 px-3">{{ item.unit }}</td>
