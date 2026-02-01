@@ -48,7 +48,9 @@
             {% for w in work_items %}
               <tr class="hover:bg-slate-800/40">
                 <td class="py-2 pr-3 align-top">
-                  <div class="font-medium text-slate-100">{{ w.display_title }}</div>
+                  <div class="font-medium text-slate-100">
+                    <a href="{{ url_for('qc_work_detail', work_id=w.id) }}" class="clickable-text">{{ w.display_title }}</a>
+                  </div>
                   {% if w.description %}
                     <div class="text-xs text-slate-400 max-w-xs truncate">{{ w.description }}</div>
                   {% elif w.address %}

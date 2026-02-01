@@ -88,7 +88,9 @@
           <tbody class="divide-y">
             {% for row in po_rows %}
             <tr>
-              <td class="py-2 px-3 font-semibold text-slate-800">{{ row.po.po_number }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">
+                <a href="{{ url_for('purchase_order_detail_view', po_id=row.po.id) }}" class="clickable-text">{{ row.po.po_number }}</a>
+              </td>
               <td class="py-2 px-3">{{ row.status_label }}</td>
               <td class="py-2 px-3 text-xs text-slate-500">{{ row.po.po_date or row.po.order_date or '—' }}</td>
               <td class="py-2 px-3 text-right font-semibold text-slate-900">{{ po_totals.get(row.po.id, 0) | round(2) }}</td>
@@ -128,7 +130,7 @@
               <td class="py-2 px-3 font-semibold text-slate-800">
                 <button
                   type="button"
-                  class="text-amber-700 hover:underline"
+                  class="clickable-text"
                   data-contact-open="contact-detail-modal"
                   data-id="{{ contact.id }}"
                   data-name="{{ contact.name | e }}"
@@ -175,7 +177,13 @@
           <tbody class="divide-y">
             {% for rate in rate_rows %}
             <tr>
-              <td class="py-2 px-3 font-semibold text-slate-800">{{ rate.product.name if rate.product else '—' }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">
+                {% if rate.product %}
+                <a href="{{ url_for('purchase_part_detail', product_id=rate.product.id) }}" class="clickable-text">{{ rate.product.name }}</a>
+                {% else %}
+                —
+                {% endif %}
+              </td>
               <td class="py-2 px-3">{{ rate.vendor_part_name or '—' }}</td>
               <td class="py-2 px-3">{{ rate.unit_price if rate.unit_price is not none else '—' }} {{ rate.currency or 'INR' }}</td>
               <td class="py-2 px-3 text-xs text-slate-500">{{ rate.updated_at.strftime('%d %b %Y, %I:%M %p') if rate.updated_at else '—' }}</td>
@@ -228,12 +236,14 @@
               data-update-url="{{ url_for('purchase_vendor_issue_update', vendor_id=vendor.id, issue_id=issue.id) }}"
               data-delete-url="{{ url_for('purchase_vendor_issue_delete', vendor_id=vendor.id, issue_id=issue.id) }}"
             >
-              <td class="py-2 px-3 text-xs text-slate-500">{{ issue.created_at.strftime('%d %b %Y') if issue.created_at else '—' }}</td>
+              <td class="py-2 px-3 text-xs text-slate-500">
+                <span class="clickable-text">{{ issue.created_at.strftime('%d %b %Y') if issue.created_at else '—' }}</span>
+              </td>
               <td class="py-2 px-3 font-semibold text-slate-800">{{ issue.issue_type.replace('_', ' ') }}</td>
               <td class="py-2 px-3">{{ issue.product.name if issue.product else '—' }}</td>
               <td class="py-2 px-3">
                 {% if issue.purchase_order %}
-                <a data-ignore-modal href="{{ url_for('purchase_order_detail_view', po_id=issue.purchase_order.id) }}" class="text-amber-700 hover:underline">{{ issue.purchase_order.po_number }}</a>
+                <a data-ignore-modal href="{{ url_for('purchase_order_detail_view', po_id=issue.purchase_order.id) }}" class="clickable-text">{{ issue.purchase_order.po_number }}</a>
                 {% else %}
                 —
                 {% endif %}
@@ -241,7 +251,7 @@
               <td class="py-2 px-3">{{ issue.source.replace('_', ' ') }}</td>
               <td class="py-2 px-3">{{ issue.status }}</td>
               <td class="py-2 px-3 text-right">
-                <button type="button" class="text-amber-700 hover:underline" data-issue-view>View</button>
+                <button type="button" class="clickable-text" data-issue-view>View</button>
               </td>
             </tr>
             {% else %}

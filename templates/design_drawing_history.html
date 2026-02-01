@@ -109,7 +109,7 @@
             <td class="py-3 px-4">{{ site.site_location or '—' }}</td>
             <td class="py-3 px-4">{{ site.lift_type or '—' }}</td>
             <td class="py-3 px-4">{{ site.lift_identifier or '—' }}</td>
-            <td class="py-3 px-4">{{ site.latest_drawing_number or '—' }}</td>
+            <td class="py-3 px-4"><span class="clickable-text">{{ site.latest_drawing_number or '—' }}</span></td>
             <td class="py-3 px-4">{{ site.latest_revision or '—' }}</td>
             <td class="py-3 px-4">
               {% if site.approval_status %}

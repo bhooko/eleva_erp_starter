@@ -87,7 +87,7 @@
       <tbody class="divide-y">
         {% for product in products %}
         <tr data-product-id="{{ product.id }}" data-detail-url="{{ url_for('purchase_part_detail', product_id=product.id) }}" class="hover:bg-amber-50/60 transition">
-          <td class="py-3 px-4 font-semibold text-slate-800">{{ product.name }}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800"><span class="clickable-text">{{ product.name }}</span></td>
           <td class="py-3 px-4">{{ (product.sale_price or 0) | round(2) }}</td>
           <td class="py-3 px-4">{{ (product.cost or 0) | round(2) }}</td>
           <td class="py-3 px-4">{{ product.uom or '—' }}</td>
