@@ -69,32 +69,32 @@
     </div>
   </div>
 
-  <div class="grid gap-6 lg:grid-cols-2 items-start">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+  <div class="grid gap-6 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
       <div>
-        <p class="text-xs uppercase text-slate-500">Contacts</p>
-        <h2 class="text-lg font-semibold">People at vendor</h2>
+        <p class="text-xs uppercase text-slate-500">Purchase orders</p>
+        <h2 class="text-lg font-semibold">Open &amp; received POs</h2>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-slate-500">
-              <th class="py-2 px-3">Name</th>
-              <th class="py-2 px-3">Role</th>
-              <th class="py-2 px-3">Phone</th>
-              <th class="py-2 px-3">Email</th>
+              <th class="py-2 px-3">PO</th>
+              <th class="py-2 px-3">Status</th>
+              <th class="py-2 px-3">Date</th>
+              <th class="py-2 px-3 text-right">Total</th>
             </tr>
           </thead>
           <tbody class="divide-y">
-            {% for contact in contacts %}
+            {% for row in po_rows %}
             <tr>
-              <td class="py-2 px-3 font-semibold text-slate-800">{{ contact.name }}</td>
-              <td class="py-2 px-3">{{ contact.role or '—' }}</td>
-              <td class="py-2 px-3">{{ contact.phone or '—' }}</td>
-              <td class="py-2 px-3">{{ contact.email or '—' }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">{{ row.po.po_number }}</td>
+              <td class="py-2 px-3">{{ row.status_label }}</td>
+              <td class="py-2 px-3 text-xs text-slate-500">{{ row.po.po_date or row.po.order_date or '—' }}</td>
+              <td class="py-2 px-3 text-right font-semibold text-slate-900">{{ po_totals.get(row.po.id, 0) | round(2) }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="py-3 px-3 text-slate-500">No contacts yet. Add them in the master data system.</td></tr>
+            <tr><td colspan="4" class="py-3 px-3 text-slate-500">No purchase orders for this vendor yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -102,6 +102,79 @@
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">Contacts</p>
+        <h2 class="text-lg font-semibold">People at vendor</h2>
+        <p class="text-xs text-slate-500">Lower priority numbers are contacted first.</p>
+      </div>
+      <form method="POST" action="{{ url_for('purchase_vendor_contact_create', vendor_id=vendor.id) }}" class="space-y-3">
+        {{ csrf_field() }}
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Name</span>
+          <input type="text" name="name" required class="w-full rounded-lg border-slate-200 px-3 py-2" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Role</span>
+          <input type="text" name="role" list="vendor-contact-roles" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Sales Exec, Accounts, Owner" />
+          <datalist id="vendor-contact-roles">
+            <option value="Sales Exec"></option>
+            <option value="Accounts"></option>
+            <option value="Owner"></option>
+          </datalist>
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Phone</span>
+            <input type="text" name="phone" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Email</span>
+            <input type="email" name="email" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Priority</span>
+          <input type="number" min="1" name="priority" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="1" />
+        </label>
+        <button type="submit" class="w-full px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Add contact</button>
+      </form>
+      <form method="POST" action="{{ url_for('purchase_vendor_contact_order', vendor_id=vendor.id) }}" class="space-y-3">
+        {{ csrf_field() }}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500">
+                <th class="py-2 px-3">Priority</th>
+                <th class="py-2 px-3">Name</th>
+                <th class="py-2 px-3">Role</th>
+                <th class="py-2 px-3">Phone</th>
+                <th class="py-2 px-3">Email</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {% for contact in contacts %}
+              <tr>
+                <td class="py-2 px-3">
+                  <input type="number" min="1" name="priority_{{ contact.id }}" value="{{ contact.priority or '' }}" class="w-20 rounded-lg border-slate-200 px-2 py-1" />
+                </td>
+                <td class="py-2 px-3 font-semibold text-slate-800">{{ contact.name }}</td>
+                <td class="py-2 px-3">{{ contact.role or '—' }}</td>
+                <td class="py-2 px-3">{{ contact.phone or '—' }}</td>
+                <td class="py-2 px-3">{{ contact.email or '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="py-3 px-3 text-slate-500">No contacts yet. Add a contact above.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <button type="submit" class="w-full px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Save contact order</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
       <div>
         <p class="text-xs uppercase text-slate-500">Parts supplied</p>
         <h2 class="text-lg font-semibold">Current vendor pricing</h2>
@@ -129,58 +202,6 @@
             {% endfor %}
           </tbody>
         </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid gap-6 lg:grid-cols-2 items-start">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Purchase orders</p>
-        <h2 class="text-lg font-semibold">Open POs</h2>
-      </div>
-      <div class="space-y-3">
-        {% for po in open_pos %}
-        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm flex items-center justify-between">
-          <div>
-            <p class="font-semibold text-slate-800">{{ po.po_number }}</p>
-            <p class="text-xs text-slate-500">Status: {{ po.status|title }} · Date: {{ po.po_date or po.order_date or '—' }}</p>
-          </div>
-          <div class="text-right">
-            <p class="text-xs text-slate-500">Total</p>
-            <p class="font-semibold text-slate-900">{{ po_totals.get(po.id, 0) | round(2) }}</p>
-          </div>
-        </div>
-        {% else %}
-        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-          No open purchase orders for this vendor.
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Purchase orders</p>
-        <h2 class="text-lg font-semibold">Received POs</h2>
-      </div>
-      <div class="space-y-3">
-        {% for po in received_pos %}
-        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm flex items-center justify-between">
-          <div>
-            <p class="font-semibold text-slate-800">{{ po.po_number }}</p>
-            <p class="text-xs text-slate-500">Status: {{ po.status|title }} · Date: {{ po.po_date or po.order_date or '—' }}</p>
-          </div>
-          <div class="text-right">
-            <p class="text-xs text-slate-500">Total</p>
-            <p class="font-semibold text-slate-900">{{ po_totals.get(po.id, 0) | round(2) }}</p>
-          </div>
-        </div>
-        {% else %}
-        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-          No received purchase orders captured yet.
-        </div>
-        {% endfor %}
       </div>
     </div>
   </div>
