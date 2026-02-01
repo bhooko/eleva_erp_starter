@@ -102,74 +102,57 @@
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Contacts</p>
-        <h2 class="text-lg font-semibold">People at vendor</h2>
-        <p class="text-xs text-slate-500">Lower priority numbers are contacted first.</p>
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Contacts</p>
+          <h2 class="text-lg font-semibold">People at vendor</h2>
+          <p class="text-xs text-slate-500">Lower priority numbers are contacted first.</p>
+        </div>
+        <button type="button" data-modal-open="contact-add-modal" class="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100" aria-label="Add contact">+</button>
       </div>
-      <form method="POST" action="{{ url_for('purchase_vendor_contact_create', vendor_id=vendor.id) }}" class="space-y-3">
-        {{ csrf_field() }}
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Name</span>
-          <input type="text" name="name" required class="w-full rounded-lg border-slate-200 px-3 py-2" />
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Role</span>
-          <input type="text" name="role" list="vendor-contact-roles" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Sales Exec, Accounts, Owner" />
-          <datalist id="vendor-contact-roles">
-            <option value="Sales Exec"></option>
-            <option value="Accounts"></option>
-            <option value="Owner"></option>
-          </datalist>
-        </label>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="space-y-1 block">
-            <span class="text-xs text-slate-600">Phone</span>
-            <input type="text" name="phone" class="w-full rounded-lg border-slate-200 px-3 py-2" />
-          </label>
-          <label class="space-y-1 block">
-            <span class="text-xs text-slate-600">Email</span>
-            <input type="email" name="email" class="w-full rounded-lg border-slate-200 px-3 py-2" />
-          </label>
-        </div>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Priority</span>
-          <input type="number" min="1" name="priority" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="1" />
-        </label>
-        <button type="submit" class="w-full px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Add contact</button>
-      </form>
-      <form method="POST" action="{{ url_for('purchase_vendor_contact_order', vendor_id=vendor.id) }}" class="space-y-3">
-        {{ csrf_field() }}
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-slate-500">
-                <th class="py-2 px-3">Priority</th>
-                <th class="py-2 px-3">Name</th>
-                <th class="py-2 px-3">Role</th>
-                <th class="py-2 px-3">Phone</th>
-                <th class="py-2 px-3">Email</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">
-              {% for contact in contacts %}
-              <tr>
-                <td class="py-2 px-3">
-                  <input type="number" min="1" name="priority_{{ contact.id }}" value="{{ contact.priority or '' }}" class="w-20 rounded-lg border-slate-200 px-2 py-1" />
-                </td>
-                <td class="py-2 px-3 font-semibold text-slate-800">{{ contact.name }}</td>
-                <td class="py-2 px-3">{{ contact.role or '—' }}</td>
-                <td class="py-2 px-3">{{ contact.phone or '—' }}</td>
-                <td class="py-2 px-3">{{ contact.email or '—' }}</td>
-              </tr>
-              {% else %}
-              <tr><td colspan="5" class="py-3 px-3 text-slate-500">No contacts yet. Add a contact above.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <button type="submit" class="w-full px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Save contact order</button>
-      </form>
+      <div class="overflow-x-auto max-h-64 overflow-y-auto border border-slate-100 rounded-lg">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0 bg-slate-50">
+            <tr class="text-left text-slate-500">
+              <th class="py-2 px-3">Priority</th>
+              <th class="py-2 px-3">Name</th>
+              <th class="py-2 px-3">Role</th>
+              <th class="py-2 px-3">Phone</th>
+              <th class="py-2 px-3">Email</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for contact in contacts %}
+            <tr>
+              <td class="py-2 px-3">{{ contact.priority or '—' }}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">
+                <button
+                  type="button"
+                  class="text-amber-700 hover:underline"
+                  data-contact-open="contact-detail-modal"
+                  data-id="{{ contact.id }}"
+                  data-name="{{ contact.name | e }}"
+                  data-role="{{ contact.role | default('', true) | e }}"
+                  data-phone="{{ contact.phone | default('', true) | e }}"
+                  data-email="{{ contact.email | default('', true) | e }}"
+                  data-priority="{{ contact.priority or '' }}"
+                  data-update-url="{{ url_for('purchase_vendor_contact_update', vendor_id=vendor.id, contact_id=contact.id) }}"
+                  data-delete-url="{{ url_for('purchase_vendor_contact_delete', vendor_id=vendor.id, contact_id=contact.id) }}"
+                  data-transfer-url="{{ url_for('purchase_vendor_contact_transfer', vendor_id=vendor.id, contact_id=contact.id) }}"
+                >
+                  {{ contact.name }}
+                </button>
+              </td>
+              <td class="py-2 px-3">{{ contact.role or '—' }}</td>
+              <td class="py-2 px-3">{{ contact.phone or '—' }}</td>
+              <td class="py-2 px-3">{{ contact.email or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="py-3 px-3 text-slate-500">No contacts yet. Use the + button to add one.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -207,95 +190,425 @@
   </div>
 
   <div class="grid gap-6 lg:grid-cols-3 items-start">
-    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Vendor issues</p>
-        <h2 class="text-lg font-semibold">Quality &amp; delivery signals</h2>
-        <p class="text-xs text-slate-500">Auto and manual issues are tracked together.</p>
+    <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Vendor issues</p>
+          <h2 class="text-lg font-semibold">Quality &amp; delivery signals</h2>
+          <p class="text-xs text-slate-500">Auto and manual issues are tracked together.</p>
+        </div>
+        <button type="button" data-modal-open="issue-add-modal" class="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100" aria-label="Log vendor issue">+</button>
       </div>
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto max-h-72 overflow-y-auto border border-slate-100 rounded-lg">
         <table class="w-full text-sm">
-          <thead>
+          <thead class="sticky top-0 bg-slate-50">
             <tr class="text-left text-slate-500">
               <th class="py-2 px-3">Date</th>
-              <th class="py-2 px-3">Issue Type</th>
+              <th class="py-2 px-3">Type</th>
               <th class="py-2 px-3">Part</th>
               <th class="py-2 px-3">PO</th>
               <th class="py-2 px-3">Source</th>
               <th class="py-2 px-3">Status</th>
+              <th class="py-2 px-3 text-right">View</th>
             </tr>
           </thead>
           <tbody class="divide-y">
             {% for issue in vendor_issues %}
-            <tr>
+            <tr
+              class="cursor-pointer hover:bg-slate-50"
+              data-issue-open="issue-detail-modal"
+              data-id="{{ issue.id }}"
+              data-issue-type="{{ issue.issue_type | e }}"
+              data-description="{{ issue.description | e }}"
+              data-status="{{ issue.status | e }}"
+              data-product-id="{{ issue.product_id or '' }}"
+              data-po-id="{{ issue.po_id or '' }}"
+              data-project-id="{{ issue.project_id or '' }}"
+              data-source="{{ issue.source | e }}"
+              data-update-url="{{ url_for('purchase_vendor_issue_update', vendor_id=vendor.id, issue_id=issue.id) }}"
+              data-delete-url="{{ url_for('purchase_vendor_issue_delete', vendor_id=vendor.id, issue_id=issue.id) }}"
+            >
               <td class="py-2 px-3 text-xs text-slate-500">{{ issue.created_at.strftime('%d %b %Y') if issue.created_at else '—' }}</td>
               <td class="py-2 px-3 font-semibold text-slate-800">{{ issue.issue_type.replace('_', ' ') }}</td>
               <td class="py-2 px-3">{{ issue.product.name if issue.product else '—' }}</td>
               <td class="py-2 px-3">
                 {% if issue.purchase_order %}
-                <a href="{{ url_for('purchase_order_detail_view', po_id=issue.purchase_order.id) }}" class="text-amber-700 hover:underline">{{ issue.purchase_order.po_number }}</a>
+                <a data-ignore-modal href="{{ url_for('purchase_order_detail_view', po_id=issue.purchase_order.id) }}" class="text-amber-700 hover:underline">{{ issue.purchase_order.po_number }}</a>
                 {% else %}
                 —
                 {% endif %}
               </td>
               <td class="py-2 px-3">{{ issue.source.replace('_', ' ') }}</td>
               <td class="py-2 px-3">{{ issue.status }}</td>
+              <td class="py-2 px-3 text-right">
+                <button type="button" class="text-amber-700 hover:underline" data-issue-view>View</button>
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="py-3 px-3 text-slate-500">No vendor issues logged yet.</td></tr>
+            <tr><td colspan="7" class="py-3 px-3 text-slate-500">No vendor issues logged yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
+  </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Log vendor issue</p>
-        <h2 class="text-lg font-semibold">Manual entry</h2>
-        <p class="text-xs text-slate-500">Use this to record concerns raised after delivery.</p>
+  <div id="contact-add-modal" data-modal-overlay class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4 py-6">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div class="flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">Add contact</h3>
+          <p class="text-xs text-slate-500">Capture vendor contact details.</p>
+        </div>
+        <button type="button" data-modal-close="contact-add-modal" class="text-slate-400 hover:text-slate-600">✕</button>
       </div>
-      <form method="POST" action="{{ url_for('purchase_vendor_issue_create', vendor_id=vendor.id) }}" class="space-y-3">
+      <form method="POST" action="{{ url_for('purchase_vendor_contact_create', vendor_id=vendor.id) }}" class="mt-4 space-y-3">
         {{ csrf_field() }}
         <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Vendor</span>
-          <input type="text" readonly value="{{ vendor.name }}" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
+          <span class="text-xs text-slate-600">Name</span>
+          <input type="text" name="name" required class="w-full rounded-lg border-slate-200 px-3 py-2" />
         </label>
         <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Part (optional)</span>
-          <select name="product_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
-            <option value="">—</option>
-            {% for part in vendor_parts %}
-            <option value="{{ part.id }}">{{ part.name }}</option>
-            {% endfor %}
-          </select>
+          <span class="text-xs text-slate-600">Role</span>
+          <input type="text" name="role" list="vendor-contact-roles" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Sales Exec, Accounts, Owner" />
         </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Phone</span>
+            <input type="text" name="phone" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Email</span>
+            <input type="email" name="email" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+        </div>
         <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Purchase order (optional)</span>
-          <select name="po_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
-            <option value="">—</option>
-            {% for po in purchase_orders %}
-            <option value="{{ po.id }}">{{ po.po_number }}</option>
-            {% endfor %}
-          </select>
+          <span class="text-xs text-slate-600">Priority</span>
+          <input type="number" min="1" name="priority" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="1" />
         </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Issue type</span>
-          <select name="issue_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
-            {% for issue_value, issue_label in issue_type_options %}
-            <option value="{{ issue_value }}">{{ issue_label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Description</span>
-          <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
-        </label>
-        <div class="flex justify-end">
-          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Log issue</button>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-modal-close="contact-add-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Add contact</button>
         </div>
       </form>
     </div>
   </div>
+
+  <div id="contact-detail-modal" data-modal-overlay class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4 py-6">
+    <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+      <div class="flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">Contact details</h3>
+          <p class="text-xs text-slate-500">Edit, transfer, or remove this contact.</p>
+        </div>
+        <button type="button" data-modal-close="contact-detail-modal" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <form method="POST" data-contact-update-form class="mt-4 space-y-3">
+        {{ csrf_field() }}
+        <input type="hidden" name="contact_id" id="contact-id-field" />
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Name</span>
+          <input type="text" name="name" id="contact-name-field" required class="w-full rounded-lg border-slate-200 px-3 py-2" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Role</span>
+          <input type="text" name="role" id="contact-role-field" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Phone</span>
+            <input type="text" name="phone" id="contact-phone-field" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Email</span>
+            <input type="email" name="email" id="contact-email-field" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Priority</span>
+          <input type="number" min="1" name="priority" id="contact-priority-field" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+        </label>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-modal-close="contact-detail-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Save changes</button>
+        </div>
+      </form>
+      <div class="mt-6 border-t border-slate-100 pt-4 space-y-4">
+        <form method="POST" data-contact-transfer-form class="space-y-2">
+          {{ csrf_field() }}
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Transfer to another vendor</span>
+            <select name="target_vendor_id" id="contact-transfer-vendor" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">Select vendor</option>
+              {% for row_vendor in vendors %}
+              <option value="{{ row_vendor.id }}">{{ row_vendor.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit" class="px-4 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">Transfer contact</button>
+        </form>
+        <form method="POST" data-contact-delete-form class="flex justify-end">
+          {{ csrf_field() }}
+          <button type="submit" onclick="return confirm('Delete this contact?');" class="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">Delete contact</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="issue-add-modal" data-modal-overlay class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4 py-6">
+    <div class="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+      <div class="flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">Log vendor issue</h3>
+          <p class="text-xs text-slate-500">Record a manual quality or delivery concern.</p>
+        </div>
+        <button type="button" data-modal-close="issue-add-modal" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <form method="POST" action="{{ url_for('purchase_vendor_issue_create', vendor_id=vendor.id) }}" class="mt-4 space-y-3">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Issue type</span>
+            <select name="issue_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              {% for issue_value, issue_label in issue_type_options %}
+              <option value="{{ issue_value }}">{{ issue_label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Status</span>
+            <select name="status" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="Open">Open</option>
+              <option value="In Review">In Review</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Description</span>
+          <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Part (optional)</span>
+            <select name="product_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for part in products %}
+              <option value="{{ part.id }}">{{ part.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Purchase order (optional)</span>
+            <select name="po_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for po in purchase_orders %}
+              <option value="{{ po.id }}">{{ po.po_number }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Project (optional)</span>
+            <select name="project_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for project in projects %}
+              <option value="{{ project.id }}">{{ project.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-modal-close="issue-add-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Log issue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="issue-detail-modal" data-modal-overlay class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4 py-6">
+    <div class="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+      <div class="flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">Issue details</h3>
+          <p class="text-xs text-slate-500">Edit status, notes, and linked records.</p>
+        </div>
+        <button type="button" data-modal-close="issue-detail-modal" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <form method="POST" data-issue-update-form class="mt-4 space-y-3">
+        {{ csrf_field() }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Issue type</span>
+            <select name="issue_type" id="issue-type-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              {% for issue_value, issue_label in issue_type_options %}
+              <option value="{{ issue_value }}">{{ issue_label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Status</span>
+            <select name="status" id="issue-status-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="Open">Open</option>
+              <option value="In Review">In Review</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Description / notes</span>
+          <textarea name="description" id="issue-description-field" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Source</span>
+          <input type="text" id="issue-source-field" readonly class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Part</span>
+            <select name="product_id" id="issue-product-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for part in products %}
+              <option value="{{ part.id }}">{{ part.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">PO</span>
+            <select name="po_id" id="issue-po-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for po in purchase_orders %}
+              <option value="{{ po.id }}">{{ po.po_number }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Project</span>
+            <select name="project_id" id="issue-project-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              {% for project in projects %}
+              <option value="{{ project.id }}">{{ project.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-modal-close="issue-detail-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800">Save changes</button>
+        </div>
+      </form>
+      <form method="POST" data-issue-delete-form class="flex justify-end mt-4">
+        {{ csrf_field() }}
+        <button type="submit" onclick="return confirm('Delete this vendor issue?');" class="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">Delete issue</button>
+      </form>
+    </div>
+  </div>
 </div>
+
+<datalist id="vendor-contact-roles">
+  <option value="Sales Exec"></option>
+  <option value="Accounts"></option>
+  <option value="Owner"></option>
+</datalist>
+
+<script>
+  const modalOpeners = document.querySelectorAll("[data-modal-open]");
+  const modalClosers = document.querySelectorAll("[data-modal-close]");
+
+  const openModal = (modalId) => {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+  };
+
+  const closeModal = (modalId) => {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+  };
+
+  modalOpeners.forEach((button) => {
+    button.addEventListener("click", () => openModal(button.dataset.modalOpen));
+  });
+
+  modalClosers.forEach((button) => {
+    button.addEventListener("click", () => closeModal(button.dataset.modalClose));
+  });
+
+  document.querySelectorAll("[data-contact-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const modalId = button.dataset.contactOpen;
+      document.getElementById("contact-id-field").value = button.dataset.id || "";
+      document.getElementById("contact-name-field").value = button.dataset.name || "";
+      document.getElementById("contact-role-field").value = button.dataset.role || "";
+      document.getElementById("contact-phone-field").value = button.dataset.phone || "";
+      document.getElementById("contact-email-field").value = button.dataset.email || "";
+      document.getElementById("contact-priority-field").value = button.dataset.priority || "";
+
+      const updateForm = document.querySelector("[data-contact-update-form]");
+      const deleteForm = document.querySelector("[data-contact-delete-form]");
+      const transferForm = document.querySelector("[data-contact-transfer-form]");
+
+      if (updateForm) {
+        updateForm.action = button.dataset.updateUrl;
+      }
+      if (deleteForm) {
+        deleteForm.action = button.dataset.deleteUrl;
+      }
+      if (transferForm) {
+        transferForm.action = button.dataset.transferUrl;
+      }
+
+      openModal(modalId);
+    });
+  });
+
+  const issueRows = document.querySelectorAll("[data-issue-open]");
+  issueRows.forEach((row) => {
+    const openIssueModal = (event) => {
+      if (event && event.target && event.target.closest("[data-ignore-modal]")) {
+        return;
+      }
+      document.getElementById("issue-type-field").value = row.dataset.issueType || "";
+      document.getElementById("issue-status-field").value = row.dataset.status || "";
+      document.getElementById("issue-description-field").value = row.dataset.description || "";
+      document.getElementById("issue-source-field").value = row.dataset.source || "";
+      document.getElementById("issue-product-field").value = row.dataset.productId || "";
+      document.getElementById("issue-po-field").value = row.dataset.poId || "";
+      document.getElementById("issue-project-field").value = row.dataset.projectId || "";
+
+      const updateForm = document.querySelector("[data-issue-update-form]");
+      const deleteForm = document.querySelector("[data-issue-delete-form]");
+      if (updateForm) {
+        updateForm.action = row.dataset.updateUrl;
+      }
+      if (deleteForm) {
+        deleteForm.action = row.dataset.deleteUrl;
+      }
+      openModal(row.dataset.issueOpen);
+    };
+
+    row.addEventListener("click", openIssueModal);
+    const viewButton = row.querySelector("[data-issue-view]");
+    if (viewButton) {
+      viewButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openIssueModal(event);
+      });
+    }
+  });
+
+  document.querySelectorAll("[data-modal-overlay]").forEach((overlay) => {
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeModal(overlay.id);
+      }
+    });
+  });
+</script>
 {% endblock %}

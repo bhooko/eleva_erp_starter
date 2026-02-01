@@ -7342,6 +7342,7 @@ def purchase_order_issue_create(po_id: int):
     product_id_raw = request.form.get("product_id") or None
     issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
     description = (request.form.get("description") or "").strip()
+    status = (request.form.get("status") or "").strip() or "Open"
 
     if not description:
         flash("Provide a description for the vendor issue.", "danger")
@@ -7362,7 +7363,7 @@ def purchase_order_issue_create(po_id: int):
         issue_type=issue_type,
         source="MANUAL",
         description=description,
-        status="Open",
+        status=status,
         created_by=current_user.display_name,
     )
     db.session.add(issue)
@@ -9179,6 +9180,7 @@ def purchase_vendor_detail(vendor_id: int):
         VendorIssue.query.options(
             joinedload(VendorIssue.product),
             joinedload(VendorIssue.purchase_order),
+            joinedload(VendorIssue.project),
         )
         .filter_by(vendor_id=vendor.id)
         .order_by(VendorIssue.created_at.desc())
@@ -9197,6 +9199,9 @@ def purchase_vendor_detail(vendor_id: int):
         .order_by(PurchaseOrder.po_date.desc().nullslast(), PurchaseOrder.id.desc())
         .all()
     )
+    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    products = Product.query.order_by(Product.name.asc()).all()
+    projects = Project.query.order_by(Project.name.asc()).all()
     closed_statuses = {"received", "closed", "completed", "done", "cancelled"}
     open_pos = []
     received_pos = []
@@ -9257,6 +9262,9 @@ def purchase_vendor_detail(vendor_id: int):
         vendor_issues=vendor_issues,
         vendor_parts=vendor_parts,
         purchase_orders=purchase_orders,
+        vendors=vendors,
+        products=products,
+        projects=projects,
         issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
         po_totals=po_totals,
         analytics={
@@ -9269,6 +9277,7 @@ def purchase_vendor_detail(vendor_id: int):
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/contacts", methods=["POST"])
+@app.route("/purchase/vendors/<int:vendor_id>/contacts/create", methods=["POST"])
 @login_required
 def purchase_vendor_contact_create(vendor_id: int):
     ensure_bootstrap()
@@ -9307,6 +9316,91 @@ def purchase_vendor_contact_create(vendor_id: int):
     return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
 
+@app.route("/purchase/vendors/<int:vendor_id>/contacts/<int:contact_id>/update", methods=["POST"])
+@login_required
+def purchase_vendor_contact_update(vendor_id: int, contact_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    contact = VendorContact.query.filter_by(id=contact_id, vendor_id=vendor.id).first_or_404()
+    name = (request.form.get("name") or "").strip()
+    role = (request.form.get("role") or "").strip() or None
+    phone = (request.form.get("phone") or "").strip() or None
+    email = (request.form.get("email") or "").strip() or None
+    priority_raw = (request.form.get("priority") or "").strip()
+
+    if not name:
+        flash("Contact name is required.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    try:
+        priority = int(priority_raw) if priority_raw else None
+    except (TypeError, ValueError):
+        priority = None
+
+    contact.name = name
+    contact.role = role
+    contact.phone = phone
+    contact.email = email
+    contact.priority = priority
+    try:
+        db.session.commit()
+        flash("Contact updated.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not update contact right now.", "danger")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/contacts/<int:contact_id>/delete", methods=["POST"])
+@login_required
+def purchase_vendor_contact_delete(vendor_id: int, contact_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    contact = VendorContact.query.filter_by(id=contact_id, vendor_id=vendor.id).first_or_404()
+    try:
+        db.session.delete(contact)
+        db.session.commit()
+        flash("Contact deleted.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not delete contact right now.", "danger")
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/contacts/<int:contact_id>/transfer", methods=["POST"])
+@login_required
+def purchase_vendor_contact_transfer(vendor_id: int, contact_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    contact = VendorContact.query.filter_by(id=contact_id, vendor_id=vendor.id).first_or_404()
+    target_vendor_id_raw = (request.form.get("target_vendor_id") or "").strip()
+    try:
+        target_vendor_id = int(target_vendor_id_raw)
+    except (TypeError, ValueError):
+        target_vendor_id = None
+
+    if not target_vendor_id:
+        flash("Select a vendor to transfer this contact.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    target_vendor = Vendor.query.get(target_vendor_id)
+    if not target_vendor:
+        flash("Target vendor not found.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    contact.vendor_id = target_vendor.id
+    try:
+        db.session.commit()
+        flash("Contact transferred.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not transfer contact right now.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=target_vendor.id))
+
+
 @app.route("/purchase/vendors/<int:vendor_id>/contacts/order", methods=["POST"])
 @login_required
 def purchase_vendor_contact_order(vendor_id: int):
@@ -9337,14 +9431,17 @@ def purchase_vendor_contact_order(vendor_id: int):
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/issues", methods=["POST"])
+@app.route("/purchase/vendors/<int:vendor_id>/issues/create", methods=["POST"])
 @login_required
 def purchase_vendor_issue_create(vendor_id: int):
     ensure_bootstrap()
     vendor = Vendor.query.get_or_404(vendor_id)
     product_id_raw = request.form.get("product_id") or None
     po_id_raw = request.form.get("po_id") or None
+    project_id_raw = request.form.get("project_id") or None
     issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
     description = (request.form.get("description") or "").strip()
+    status = (request.form.get("status") or "").strip() or "Open"
 
     if not description:
         flash("Provide a description for the vendor issue.", "danger")
@@ -9358,21 +9455,26 @@ def purchase_vendor_issue_create(vendor_id: int):
         po_id = int(po_id_raw) if po_id_raw else None
     except (TypeError, ValueError):
         po_id = None
+    try:
+        project_id = int(project_id_raw) if project_id_raw else None
+    except (TypeError, ValueError):
+        project_id = None
 
     product = Product.query.get(product_id) if product_id else None
     po = PurchaseOrder.query.get(po_id) if po_id else None
     if po and po.vendor_id != vendor.id:
         po = None
+    project = Project.query.get(project_id) if project_id else None
 
     issue = VendorIssue(
         vendor_id=vendor.id,
         product_id=product.id if product else None,
         po_id=po.id if po else None,
-        project_id=po.project_id if po else None,
+        project_id=project.id if project else (po.project_id if po else None),
         issue_type=issue_type,
         source="MANUAL",
         description=description,
-        status="Open",
+        status=status,
         created_by=current_user.display_name,
     )
     db.session.add(issue)
@@ -9382,6 +9484,75 @@ def purchase_vendor_issue_create(vendor_id: int):
     except Exception:
         db.session.rollback()
         flash("Could not log vendor issue right now.", "danger")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/issues/<int:issue_id>/update", methods=["POST"])
+@login_required
+def purchase_vendor_issue_update(vendor_id: int, issue_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    issue = VendorIssue.query.filter_by(id=issue_id, vendor_id=vendor.id).first_or_404()
+    issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
+    description = (request.form.get("description") or "").strip()
+    status = (request.form.get("status") or "").strip() or issue.status
+    product_id_raw = request.form.get("product_id") or None
+    po_id_raw = request.form.get("po_id") or None
+    project_id_raw = request.form.get("project_id") or None
+
+    if not description:
+        flash("Description is required for vendor issues.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    try:
+        product_id = int(product_id_raw) if product_id_raw else None
+    except (TypeError, ValueError):
+        product_id = None
+    try:
+        po_id = int(po_id_raw) if po_id_raw else None
+    except (TypeError, ValueError):
+        po_id = None
+    try:
+        project_id = int(project_id_raw) if project_id_raw else None
+    except (TypeError, ValueError):
+        project_id = None
+
+    product = Product.query.get(product_id) if product_id else None
+    po = PurchaseOrder.query.get(po_id) if po_id else None
+    if po and po.vendor_id != vendor.id:
+        po = None
+    project = Project.query.get(project_id) if project_id else None
+
+    issue.issue_type = issue_type
+    issue.description = description
+    issue.status = status
+    issue.product_id = product.id if product else None
+    issue.po_id = po.id if po else None
+    issue.project_id = project.id if project else None
+    try:
+        db.session.commit()
+        flash("Vendor issue updated.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not update vendor issue right now.", "danger")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/issues/<int:issue_id>/delete", methods=["POST"])
+@login_required
+def purchase_vendor_issue_delete(vendor_id: int, issue_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    issue = VendorIssue.query.filter_by(id=issue_id, vendor_id=vendor.id).first_or_404()
+    try:
+        db.session.delete(issue)
+        db.session.commit()
+        flash("Vendor issue deleted.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not delete vendor issue right now.", "danger")
 
     return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
