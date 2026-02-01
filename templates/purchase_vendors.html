@@ -166,7 +166,7 @@
         {% for vendor in vendors %}
         <tr>
           <td class="py-3 px-4 font-semibold text-slate-800">
-            <a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id) }}" class="hover:underline">{{ vendor.name }}</a>
+            <a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id) }}" class="clickable-text">{{ vendor.name }}</a>
           </td>
           <td class="py-3 px-4">{{ vendor.address or '—' }}</td>
           <td class="py-3 px-4 text-center">
