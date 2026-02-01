@@ -11844,11 +11844,18 @@ def ensure_vendor_contact_table():
                 name TEXT NOT NULL,
                 role TEXT,
                 phone TEXT,
-                email TEXT
+                email TEXT,
+                priority INTEGER
             );
             """
         )
         print("✅ Created missing table: vendor_contact")
+    else:
+        cur.execute("PRAGMA table_info(vendor_contact)")
+        contact_cols = [row[1] for row in cur.fetchall()]
+        if "priority" not in contact_cols:
+            cur.execute("ALTER TABLE vendor_contact ADD COLUMN priority INTEGER;")
+            print("✅ Added missing column: vendor_contact.priority")
 
     conn.commit()
     conn.close()
