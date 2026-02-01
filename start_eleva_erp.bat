@@ -3,7 +3,7 @@ setlocal
 title Eleva ERP Starter
 
 REM -------------------------------------------------
-REM Set project root (this folder)
+REM Set project root
 REM -------------------------------------------------
 cd /d C:\eleva_erp_starter
 
@@ -66,22 +66,41 @@ if errorlevel 1 (
 )
 
 REM -------------------------------------------------
-REM Check database folder
+REM Ensure instance folder exists
 REM -------------------------------------------------
 if not exist instance (
-  echo Creating instance folder...
   mkdir instance
 )
 
 REM -------------------------------------------------
-REM Start server
+REM Start server in a separate window
 REM -------------------------------------------------
-echo Opening browser...
+echo Starting Eleva ERP server...
+start "Eleva ERP Server" cmd /k ^
+  "cd /d C:\eleva_erp_starter && call venv\Scripts\activate && python app.py"
+
+REM -------------------------------------------------
+REM Wait until server responds
+REM -------------------------------------------------
+echo Waiting for server to be ready...
+powershell -NoProfile -Command ^
+  "$url='http://127.0.0.1:5000/';" ^
+  "$max=60; $ok=$false;" ^
+  "for($i=0; $i -lt $max; $i++){" ^
+  "  try { Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2 | Out-Null; $ok=$true; break } catch { Start-Sleep -Seconds 1 }" ^
+  "}" ^
+  "if($ok){ exit 0 } else { exit 1 }"
+
+if errorlevel 1 (
+  echo ERROR: Server did not become ready within 60 seconds.
+  echo Check the 'Eleva ERP Server' window for errors.
+  pause
+  exit /b 1
+)
+
+REM -------------------------------------------------
+REM Open browser and exit starter
+REM -------------------------------------------------
 start "" http://127.0.0.1:5000
 
-echo Starting Eleva ERP server...
-python app.py
-
-echo.
-echo Server stopped.
-pause
+exit /b 0
