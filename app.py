@@ -9166,7 +9166,7 @@ def purchase_vendor_detail(vendor_id: int):
     vendor = Vendor.query.get_or_404(vendor_id)
     contacts = (
         VendorContact.query.filter_by(vendor_id=vendor.id)
-        .order_by(VendorContact.name.asc())
+        .order_by(VendorContact.priority.asc().nullslast(), VendorContact.name.asc())
         .all()
     )
     rate_rows = (
@@ -9200,12 +9200,21 @@ def purchase_vendor_detail(vendor_id: int):
     closed_statuses = {"received", "closed", "completed", "done", "cancelled"}
     open_pos = []
     received_pos = []
+    po_rows = []
     for po in purchase_orders:
         status = (po.status or "").strip().lower()
         if status in closed_statuses:
             received_pos.append(po)
+            status_label = "Received"
         else:
             open_pos.append(po)
+            status_label = "Open"
+        po_rows.append(
+            {
+                "po": po,
+                "status_label": status_label,
+            }
+        )
 
     def _po_total(po):
         if po.grand_total_amount is not None:
@@ -9244,8 +9253,7 @@ def purchase_vendor_detail(vendor_id: int):
         vendor=vendor,
         contacts=contacts,
         rate_rows=rate_rows,
-        open_pos=open_pos,
-        received_pos=received_pos,
+        po_rows=po_rows,
         vendor_issues=vendor_issues,
         vendor_parts=vendor_parts,
         purchase_orders=purchase_orders,
@@ -9258,6 +9266,74 @@ def purchase_vendor_detail(vendor_id: int):
             "last_year_total": last_year_total,
         },
     )
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/contacts", methods=["POST"])
+@login_required
+def purchase_vendor_contact_create(vendor_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    name = (request.form.get("name") or "").strip()
+    role = (request.form.get("role") or "").strip() or None
+    phone = (request.form.get("phone") or "").strip() or None
+    email = (request.form.get("email") or "").strip() or None
+    priority_raw = (request.form.get("priority") or "").strip()
+
+    if not name:
+        flash("Contact name is required.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    try:
+        priority = int(priority_raw) if priority_raw else None
+    except (TypeError, ValueError):
+        priority = None
+
+    contact = VendorContact(
+        vendor_id=vendor.id,
+        name=name,
+        role=role,
+        phone=phone,
+        email=email,
+        priority=priority,
+    )
+    db.session.add(contact)
+    try:
+        db.session.commit()
+        flash("Vendor contact added.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Could not add vendor contact right now.", "danger")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/contacts/order", methods=["POST"])
+@login_required
+def purchase_vendor_contact_order(vendor_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    contacts = VendorContact.query.filter_by(vendor_id=vendor.id).all()
+    updates = 0
+    for contact in contacts:
+        raw_value = (request.form.get(f"priority_{contact.id}") or "").strip()
+        try:
+            new_priority = int(raw_value) if raw_value else None
+        except (TypeError, ValueError):
+            new_priority = None
+        if contact.priority != new_priority:
+            contact.priority = new_priority
+            updates += 1
+    if updates:
+        try:
+            db.session.commit()
+            flash("Contact order updated.", "success")
+        except Exception:
+            db.session.rollback()
+            flash("Could not update contact order right now.", "danger")
+    else:
+        flash("No contact order changes detected.", "info")
+
+    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/issues", methods=["POST"])
