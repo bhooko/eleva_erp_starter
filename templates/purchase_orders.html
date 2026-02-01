@@ -132,7 +132,7 @@
         {% for po in pos %}
         <tr>
           <td class="py-3 px-4 font-semibold text-slate-800">
-            <a href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}" class="hover:underline">{{ po.po_number }}</a>
+            <a href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}" class="clickable-text">{{ po.po_number }}</a>
           </td>
           <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ (po.origin or 'erp')|upper }}</span></td>
           <td class="py-3 px-4">{{ po.vendor.name if po.vendor else 'No vendor' }}</td>
