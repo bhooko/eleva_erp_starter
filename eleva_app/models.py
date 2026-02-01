@@ -2282,6 +2282,7 @@ class VendorContact(db.Model):
     role = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(120), nullable=True)
+    priority = db.Column(db.Integer, nullable=True)
 
     vendor = db.relationship("Vendor")
 
