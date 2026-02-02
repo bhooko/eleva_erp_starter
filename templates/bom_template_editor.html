@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}Design · BOM Template · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <p class="text-sm uppercase text-slate-500">Design · BOM Templates</p>
+    <h1 class="text-2xl font-semibold text-slate-100">{{ template.name }}</h1>
+    <p class="text-sm text-slate-400 mt-1">Edit inputs, stages, sections, and BOM lines. Live validation is available under Test &amp; Validate.</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <form method="post" class="grid lg:grid-cols-4 gap-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="update_template" />
+      <div class="lg:col-span-2">
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+        <input name="name" value="{{ template.name }}" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Lift type</label>
+        <select name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">
+          {% for lift in LIFT_TYPES %}
+            <option value="{{ lift }}" {% if template.lift_type == lift %}selected{% endif %}>{{ lift }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex items-end">
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" name="is_active" value="1" {% if template.is_active %}checked{% endif %} />
+          Active template
+        </label>
+      </div>
+      <div class="lg:col-span-4">
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+        <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">{{ template.description or '' }}</textarea>
+      </div>
+      <div class="lg:col-span-4">
+        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Save Template</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-inner shadow-black/20">
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-800 px-6 py-3">
+      <button type="button" class="tab-btn px-3 py-2 rounded-lg text-sm bg-slate-800 text-slate-100" data-tab="inputs">Inputs</button>
+      <button type="button" class="tab-btn px-3 py-2 rounded-lg text-sm text-slate-300" data-tab="structure">Structure</button>
+      <button type="button" class="tab-btn px-3 py-2 rounded-lg text-sm text-slate-300" data-tab="test">Test &amp; Validate</button>
+    </div>
+
+    <div class="tab-panel p-6 space-y-6" data-panel="inputs">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100 mb-4">Input Sheet</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-2">Input Key</th>
+                <th class="px-3 py-2">Label</th>
+                <th class="px-3 py-2">Unit</th>
+                <th class="px-3 py-2">Default</th>
+                <th class="px-3 py-2">Type</th>
+                <th class="px-3 py-2">Required</th>
+                <th class="px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              {% for input in template.inputs %}
+              <tr>
+                <td colspan="7" class="px-3 py-2">
+                  <div class="grid lg:grid-cols-7 gap-2 items-center">
+                    <form method="post" class="grid lg:grid-cols-6 gap-2 items-center lg:col-span-6">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="action" value="update_input" />
+                      <input type="hidden" name="input_id" value="{{ input.id }}" />
+                      <input name="input_key" value="{{ input.input_key }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" />
+                      <input name="label" value="{{ input.label }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" />
+                      <input name="unit" value="{{ input.unit or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" />
+                      <input name="default_value" value="{{ input.default_value or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" />
+                      <select name="data_type" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                        {% for dtype in BOM_INPUT_DATA_TYPES %}
+                          <option value="{{ dtype }}" {% if input.data_type == dtype %}selected{% endif %}>{{ dtype }}</option>
+                        {% endfor %}
+                      </select>
+                      <label class="flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" name="required" value="1" {% if input.required %}checked{% endif %} />
+                        Required
+                      </label>
+                      <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
+                    </form>
+                    <form method="post" class="flex items-center">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="action" value="delete_input" />
+                      <input type="hidden" name="input_id" value="{{ input.id }}" />
+                      <button class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7" class="px-3 py-6 text-center text-slate-500">No inputs yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800 pt-6">
+        <h3 class="text-base font-semibold text-slate-100 mb-3">Add Input</h3>
+        <form method="post" class="grid lg:grid-cols-6 gap-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="add_input" />
+          <input name="input_key" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="travel_height" />
+          <input name="label" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Travel height" />
+          <input name="unit" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="mm" />
+          <input name="default_value" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Default value" />
+          <select name="data_type" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">
+            {% for dtype in BOM_INPUT_DATA_TYPES %}
+              <option value="{{ dtype }}">{{ dtype }}</option>
+            {% endfor %}
+          </select>
+          <label class="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" name="required" value="1" />
+            Required
+          </label>
+          <div class="lg:col-span-6">
+            <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Input</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-panel hidden p-6 space-y-6" data-panel="structure">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-slate-100">Stages &amp; Sections</h2>
+        <p class="text-xs text-slate-400">Drag to reorder, then save each row to persist the new display order.</p>
+      </div>
+
+      <div class="space-y-6">
+        <div class="space-y-4" data-sortable>
+          {% for stage in template.stages|sort(attribute='display_order') %}
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4 sortable-item" draggable="true">
+            <div class="flex flex-wrap items-center gap-3">
+              <form method="post" class="flex flex-wrap items-center gap-2 flex-1">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="update_stage" />
+                <input type="hidden" name="stage_id" value="{{ stage.id }}" />
+                <input name="stage_name" value="{{ stage.stage_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[200px]" />
+                <input name="display_order" value="{{ stage.display_order }}" type="number" class="w-24 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 order-input" />
+                <button class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
+              </form>
+              <form method="post">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="delete_stage" />
+                <input type="hidden" name="stage_id" value="{{ stage.id }}" />
+                <button class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
+              </form>
+            </div>
+
+            <div class="space-y-3" data-sortable>
+              {% for section in stage.sections|sort(attribute='display_order') %}
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4 sortable-item" draggable="true">
+                <div class="flex flex-wrap items-center gap-2">
+                  <form method="post" class="flex flex-wrap items-center gap-2 flex-1">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="action" value="update_section" />
+                    <input type="hidden" name="section_id" value="{{ section.id }}" />
+                    <input name="section_name" value="{{ section.section_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[180px]" />
+                    <input name="display_order" value="{{ section.display_order }}" type="number" class="w-24 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 order-input" />
+                    <button class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
+                  </form>
+                  <form method="post">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="action" value="delete_section" />
+                    <input type="hidden" name="section_id" value="{{ section.id }}" />
+                    <button class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
+                  </form>
+                </div>
+
+                <div class="space-y-3" data-sortable>
+                  {% for line in section.lines|sort(attribute='display_order') %}
+                  <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3 sortable-item" draggable="true">
+                    <form method="post" class="grid lg:grid-cols-6 gap-2">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="action" value="update_line" />
+                      <input type="hidden" name="line_id" value="{{ line.id }}" />
+                      <input name="ref_key" value="{{ line.ref_key }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="ref_key" />
+                      <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                        {% for part in part_classes %}
+                          <option value="{{ part.id }}" {% if line.part_class_id == part.id %}selected{% endif %}>{{ part.name }}</option>
+                        {% endfor %}
+                      </select>
+                      <input name="unit" value="{{ line.unit }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="unit" />
+                      <input name="display_order" value="{{ line.display_order }}" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 order-input" />
+                      <input name="specification_text" value="{{ line.specification_text or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Specification" />
+                      <input name="include_if_expr" value="{{ line.include_if_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
+                      <input name="qty_expr" value="{{ line.qty_expr }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
+                      <input name="override_if_expr" value="{{ line.override_if_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
+                      <input name="override_qty_expr" value="{{ line.override_qty_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
+                      <div class="lg:col-span-6 flex flex-wrap gap-2">
+                        <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
+                      </div>
+                    </form>
+                    <form method="post">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="action" value="delete_line" />
+                      <input type="hidden" name="line_id" value="{{ line.id }}" />
+                      <button class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
+                    </form>
+                  </div>
+                  {% else %}
+                  <div class="text-xs text-slate-500">No lines yet.</div>
+                  {% endfor %}
+                </div>
+
+                <form method="post" class="grid lg:grid-cols-6 gap-2">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="action" value="add_line" />
+                  <input type="hidden" name="section_id" value="{{ section.id }}" />
+                  <input name="ref_key" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="ref_key" />
+                  <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                    <option value="">Select part class</option>
+                    {% for part in part_classes %}
+                      <option value="{{ part.id }}">{{ part.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <input name="unit" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="unit" />
+                  <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="order" />
+                  <input name="specification_text" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Specification" />
+                  <input name="include_if_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
+                  <input name="qty_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
+                  <input name="override_if_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
+                  <input name="override_qty_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
+                  <div class="lg:col-span-6">
+                    <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Line</button>
+                  </div>
+                </form>
+              </div>
+              {% endfor %}
+            </div>
+
+            <form method="post" class="grid lg:grid-cols-4 gap-2">
+              {{ csrf_field() }}
+              <input type="hidden" name="action" value="add_section" />
+              <input type="hidden" name="stage_id" value="{{ stage.id }}" />
+              <input name="section_name" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Section name" />
+              <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="Order" />
+              <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Section</button>
+            </form>
+          </div>
+          {% else %}
+          <div class="text-sm text-slate-500">No stages yet.</div>
+          {% endfor %}
+        </div>
+
+        <form method="post" class="grid lg:grid-cols-4 gap-2">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="add_stage" />
+          <input name="stage_name" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Stage name" />
+          <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="Order" />
+          <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Stage</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-panel hidden p-6 space-y-6" data-panel="test" id="test-panel">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100 mb-2">Test &amp; Validate</h2>
+        <p class="text-sm text-slate-400">Enter sample values to validate formulas. Errors do not block saving but will block BOM generation.</p>
+      </div>
+
+      <form method="post" class="grid lg:grid-cols-3 gap-3">
+        {{ csrf_field() }}
+        <input type="hidden" name="action" value="test_inputs" />
+        {% for input in template.inputs %}
+          <div>
+            <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">{{ input.label }}</label>
+            <input name="test_input_{{ input.input_key }}" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="{{ input.input_key }}" />
+            <p class="text-xs text-slate-500 mt-1">{{ input.unit or input.data_type }}</p>
+          </div>
+        {% endfor %}
+        <div class="lg:col-span-3">
+          <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Run Validation</button>
+        </div>
+      </form>
+
+      {% if evaluation %}
+      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+        <h3 class="text-base font-semibold text-slate-100">Validation Results</h3>
+        {% if evaluation.errors %}
+          <div class="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-amber-100 text-sm">
+            <ul class="list-disc list-inside space-y-1">
+              {% for error in evaluation.errors %}
+                <li>{{ error.message }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% else %}
+          <p class="text-sm text-emerald-200">No template-level errors found.</p>
+        {% endif %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-2">Ref Key</th>
+                <th class="px-3 py-2">Part Class</th>
+                <th class="px-3 py-2">Final Qty</th>
+                <th class="px-3 py-2">Errors</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              {% for line in evaluation.lines %}
+              <tr>
+                <td class="px-3 py-2 text-slate-100">{{ line.ref_key }}</td>
+                <td class="px-3 py-2 text-slate-300">{{ line.line.part_class.name if line.line.part_class else '—' }}</td>
+                <td class="px-3 py-2 text-slate-100">{{ "%.2f"|format(line.final_qty) }}</td>
+                <td class="px-3 py-2">
+                  {% if line.errors %}
+                    <ul class="list-disc list-inside text-xs text-amber-200 space-y-1">
+                      {% for error in line.errors %}
+                        <li>{{ error }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <span class="text-xs text-emerald-200">OK</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      tabButtons.forEach((b) => b.classList.remove('bg-slate-800', 'text-slate-100'));
+      tabButtons.forEach((b) => b.classList.add('text-slate-300'));
+      btn.classList.add('bg-slate-800', 'text-slate-100');
+      btn.classList.remove('text-slate-300');
+      panels.forEach((panel) => {
+        panel.classList.toggle('hidden', panel.dataset.panel !== target);
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-sortable]').forEach((container) => {
+    let dragged = null;
+    container.querySelectorAll('.sortable-item').forEach((item) => {
+      item.addEventListener('dragstart', () => {
+        dragged = item;
+        item.classList.add('opacity-60');
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('opacity-60');
+      });
+      item.addEventListener('dragover', (event) => {
+        event.preventDefault();
+      });
+      item.addEventListener('drop', (event) => {
+        event.preventDefault();
+        if (!dragged || dragged === item) return;
+        const items = Array.from(container.querySelectorAll('.sortable-item'));
+        const draggedIndex = items.indexOf(dragged);
+        const targetIndex = items.indexOf(item);
+        if (draggedIndex < targetIndex) {
+          item.after(dragged);
+        } else {
+          item.before(dragged);
+        }
+        Array.from(container.children).forEach((child, idx) => {
+          if (!child.classList.contains('sortable-item')) {
+            return;
+          }
+          const input = child.querySelector('.order-input');
+          if (input) {
+            input.value = (idx + 1) * 10;
+          }
+        });
+      });
+    });
+  });
+</script>
+{% endblock %}

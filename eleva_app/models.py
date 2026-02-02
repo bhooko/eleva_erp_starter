@@ -2207,6 +2207,166 @@ class ProcurementStage(db.Model):
     )
 
 
+class PartClass(db.Model):
+    __tablename__ = "part_class"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+
+
+class BomTemplate(db.Model):
+    __tablename__ = "bom_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    lift_type = db.Column(db.String(40), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    created_by = db.relationship("User")
+    inputs = db.relationship(
+        "BomTemplateInput", backref="template", cascade="all, delete-orphan"
+    )
+    stages = db.relationship(
+        "BomTemplateStage", backref="template", cascade="all, delete-orphan"
+    )
+
+
+class BomTemplateInput(db.Model):
+    __tablename__ = "bom_template_input"
+
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template.id"), nullable=False, index=True
+    )
+    input_key = db.Column(db.String(120), nullable=False)
+    label = db.Column(db.String(200), nullable=False)
+    unit = db.Column(db.String(40), nullable=True)
+    default_value = db.Column(db.String(120), nullable=True)
+    data_type = db.Column(db.String(20), nullable=False, default="number")
+    required = db.Column(db.Boolean, default=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("template_id", "input_key", name="uq_bom_template_input_key"),
+    )
+
+
+class BomTemplateStage(db.Model):
+    __tablename__ = "bom_template_stage"
+
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template.id"), nullable=False, index=True
+    )
+    stage_name = db.Column(db.String(200), nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+
+    sections = db.relationship(
+        "BomTemplateSection", backref="stage", cascade="all, delete-orphan"
+    )
+
+
+class BomTemplateSection(db.Model):
+    __tablename__ = "bom_template_section"
+
+    id = db.Column(db.Integer, primary_key=True)
+    stage_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template_stage.id"), nullable=False, index=True
+    )
+    section_name = db.Column(db.String(200), nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+
+    lines = db.relationship(
+        "BomTemplateLine", backref="section", cascade="all, delete-orphan"
+    )
+
+
+class BomTemplateLine(db.Model):
+    __tablename__ = "bom_template_line"
+
+    id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template_section.id"), nullable=False, index=True
+    )
+    ref_key = db.Column(db.String(120), nullable=False)
+    part_class_id = db.Column(
+        db.Integer, db.ForeignKey("part_class.id"), nullable=False, index=True
+    )
+    specification_text = db.Column(db.Text, nullable=True)
+    unit = db.Column(db.String(40), nullable=False)
+    include_if_expr = db.Column(db.Text, nullable=True)
+    qty_expr = db.Column(db.Text, nullable=False)
+    override_if_expr = db.Column(db.Text, nullable=True)
+    override_qty_expr = db.Column(db.Text, nullable=True)
+    display_order = db.Column(db.Integer, default=0)
+
+    part_class = db.relationship("PartClass")
+
+    __table_args__ = (
+        db.UniqueConstraint("section_id", "ref_key", name="uq_bom_template_ref_key"),
+    )
+
+
+class ProjectBom(db.Model):
+    __tablename__ = "project_bom"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey("bom_template.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    project = db.relationship("Project")
+    template = db.relationship("BomTemplate")
+    created_by = db.relationship("User")
+    inputs = db.relationship(
+        "ProjectBomInput", backref="project_bom", cascade="all, delete-orphan"
+    )
+    lines = db.relationship(
+        "ProjectBomLine", backref="project_bom", cascade="all, delete-orphan"
+    )
+
+
+class ProjectBomInput(db.Model):
+    __tablename__ = "project_bom_input"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_bom_id = db.Column(
+        db.Integer, db.ForeignKey("project_bom.id"), nullable=False, index=True
+    )
+    input_key = db.Column(db.String(120), nullable=False)
+    input_value = db.Column(db.String(120), nullable=True)
+
+
+class ProjectBomLine(db.Model):
+    __tablename__ = "project_bom_line"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_bom_id = db.Column(
+        db.Integer, db.ForeignKey("project_bom.id"), nullable=False, index=True
+    )
+    ref_key = db.Column(db.String(120), nullable=False)
+    part_class_id = db.Column(
+        db.Integer, db.ForeignKey("part_class.id"), nullable=False, index=True
+    )
+    specification_text = db.Column(db.Text, nullable=True)
+    unit = db.Column(db.String(40), nullable=False)
+    final_qty = db.Column(db.Float, nullable=False, default=0)
+    source_template_line_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template_line.id"), nullable=True
+    )
+    qty_expr_snapshot = db.Column(db.Text, nullable=True)
+    include_if_expr_snapshot = db.Column(db.Text, nullable=True)
+    override_expr_snapshot = db.Column(db.Text, nullable=True)
+
+    part_class = db.relationship("PartClass")
+    source_template_line = db.relationship("BomTemplateLine")
+
+
 class BillOfMaterials(db.Model):
     __tablename__ = "bill_of_materials"
 
@@ -2476,6 +2636,7 @@ class Product(db.Model):
     forecast_qty = db.Column(db.Float, default=0)
     is_favorite = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    part_class_id = db.Column(db.Integer, db.ForeignKey("part_class.id"), nullable=True)
     primary_vendor = db.Column(db.String(255), nullable=True)
     linked_vendors = db.Column(db.Text, nullable=True)
     specifications = db.Column(db.Text, nullable=True)
@@ -2484,6 +2645,8 @@ class Product(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+    part_class = db.relationship("PartClass")
 
 
 # ----------------------------
