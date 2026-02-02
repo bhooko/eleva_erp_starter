@@ -18,7 +18,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast
 from decimal import Decimal, InvalidOperation
 from datetime import datetime as datetime_cls, date
 import importlib.util
@@ -258,6 +258,390 @@ def _normalize_extension(extension):
     if ext and not ext.startswith("."):
         ext = f".{ext}"
     return ext
+
+
+BOM_INPUT_DATA_TYPES = ["number", "integer", "boolean", "text"]
+_BOM_ALLOWED_FUNCS = {"roundup", "min", "max"}
+
+
+def _parse_bom_input_value(raw_value, data_type, required=False):
+    value = raw_value if raw_value is not None else ""
+    value = value.strip() if isinstance(value, str) else value
+    if value in ("", None):
+        if required:
+            return None, "Required input missing."
+        return None, None
+
+    if data_type == "integer":
+        try:
+            return int(value), None
+        except (TypeError, ValueError):
+            return None, "Expected an integer."
+    if data_type == "boolean":
+        if isinstance(value, bool):
+            return value, None
+        if isinstance(value, (int, float)):
+            return bool(value), None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "y", "on"}:
+                return True, None
+            if lowered in {"0", "false", "no", "n", "off"}:
+                return False, None
+        return None, "Expected a boolean (true/false)."
+    if data_type == "text":
+        return str(value), None
+    try:
+        return float(value), None
+    except (TypeError, ValueError):
+        return None, "Expected a number."
+
+
+def _roundup(value, decimals=0):
+    try:
+        decimals = int(decimals)
+    except (TypeError, ValueError):
+        raise ValueError("roundup decimals must be an integer.")
+    if decimals not in {0, 1}:
+        raise ValueError("roundup only supports 0 or 1 decimal places.")
+    factor = 10 ** decimals
+    return math.ceil(float(value) * factor) / factor
+
+
+def _validate_expression_ast(expr):
+    parsed = ast.parse(expr, mode="eval")
+    allowed_nodes = (
+        ast.Expression,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.BoolOp,
+        ast.Compare,
+        ast.Call,
+        ast.Name,
+        ast.Constant,
+        ast.Load,
+    )
+    allowed_ops = (
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.UAdd,
+        ast.USub,
+        ast.And,
+        ast.Or,
+        ast.Not,
+        ast.Eq,
+        ast.NotEq,
+        ast.Lt,
+        ast.LtE,
+        ast.Gt,
+        ast.GtE,
+    )
+    for node in ast.walk(parsed):
+        if not isinstance(node, allowed_nodes):
+            raise ValueError(f"Unsupported expression element: {node.__class__.__name__}")
+        if isinstance(node, ast.BinOp) and not isinstance(node.op, allowed_ops):
+            raise ValueError("Unsupported arithmetic operator.")
+        if isinstance(node, ast.UnaryOp) and not isinstance(node.op, allowed_ops):
+            raise ValueError("Unsupported unary operator.")
+        if isinstance(node, ast.BoolOp) and not isinstance(node.op, allowed_ops):
+            raise ValueError("Unsupported boolean operator.")
+        if isinstance(node, ast.Compare):
+            for op in node.ops:
+                if not isinstance(op, allowed_ops):
+                    raise ValueError("Unsupported comparison operator.")
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only simple function calls are allowed.")
+            if node.func.id not in _BOM_ALLOWED_FUNCS:
+                raise ValueError(f"Function '{node.func.id}' is not allowed.")
+    return parsed
+
+
+def _safe_eval_expr(expr, variables):
+    parsed = _validate_expression_ast(expr)
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in variables:
+                return variables[node.id]
+            raise ValueError(f"Unknown reference '{node.id}'.")
+        if isinstance(node, ast.BinOp):
+            left = _eval(node.left)
+            right = _eval(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            raise ValueError("Unsupported arithmetic operator.")
+        if isinstance(node, ast.UnaryOp):
+            operand = _eval(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.Not):
+                return not operand
+            raise ValueError("Unsupported unary operator.")
+        if isinstance(node, ast.BoolOp):
+            values = [_eval(value) for value in node.values]
+            if isinstance(node.op, ast.And):
+                return all(values)
+            if isinstance(node.op, ast.Or):
+                return any(values)
+            raise ValueError("Unsupported boolean operator.")
+        if isinstance(node, ast.Compare):
+            left = _eval(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                right = _eval(comparator)
+                if isinstance(op, ast.Eq) and not (left == right):
+                    return False
+                if isinstance(op, ast.NotEq) and not (left != right):
+                    return False
+                if isinstance(op, ast.Lt) and not (left < right):
+                    return False
+                if isinstance(op, ast.LtE) and not (left <= right):
+                    return False
+                if isinstance(op, ast.Gt) and not (left > right):
+                    return False
+                if isinstance(op, ast.GtE) and not (left >= right):
+                    return False
+                left = right
+            return True
+        if isinstance(node, ast.Call):
+            func_name = node.func.id
+            args = [_eval(arg) for arg in node.args]
+            if func_name == "roundup":
+                if len(args) == 1:
+                    return _roundup(args[0], 0)
+                if len(args) == 2:
+                    return _roundup(args[0], args[1])
+                raise ValueError("roundup expects 1 or 2 arguments.")
+            if func_name == "min":
+                if len(args) < 2:
+                    raise ValueError("min expects at least 2 arguments.")
+                return min(args)
+            if func_name == "max":
+                if len(args) < 2:
+                    raise ValueError("max expects at least 2 arguments.")
+                return max(args)
+        raise ValueError("Unsupported expression.")
+
+    return _eval(parsed)
+
+
+def _collect_expr_names(expr):
+    try:
+        parsed = ast.parse(expr, mode="eval")
+    except (SyntaxError, ValueError):
+        return set()
+    names = set()
+    for node in ast.walk(parsed):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+    return names
+
+
+def evaluate_bom_template(template, input_values=None):
+    input_values = input_values or {}
+    results = []
+    errors = []
+    input_map = {}
+    input_errors = {}
+    input_keys = []
+
+    for template_input in template.inputs:
+        key = (template_input.input_key or "").strip()
+        if not key:
+            input_errors[template_input.id] = "Input key is required."
+            continue
+        if key in input_map:
+            input_errors[template_input.id] = "Duplicate input key."
+            continue
+        input_keys.append(key)
+        raw_value = input_values.get(key, template_input.default_value)
+        parsed, error = _parse_bom_input_value(
+            raw_value,
+            template_input.data_type or "number",
+            required=bool(template_input.required),
+        )
+        if error:
+            input_errors[template_input.id] = error
+        input_map[key] = parsed
+
+    if input_errors:
+        for input_id, message in input_errors.items():
+            errors.append({"type": "input", "id": input_id, "message": message})
+
+    lines = []
+    for stage in sorted(template.stages, key=lambda st: (st.display_order or 0, st.id)):
+        for section in sorted(stage.sections, key=lambda sec: (sec.display_order or 0, sec.id)):
+            lines.extend(sorted(section.lines, key=lambda ln: (ln.display_order or 0, ln.id)))
+
+    ref_map = {}
+    ref_duplicates = set()
+    for line in lines:
+        ref_key = (line.ref_key or "").strip()
+        if not ref_key:
+            errors.append({"type": "line", "id": line.id, "message": "Missing ref_key."})
+            continue
+        if ref_key in ref_map:
+            ref_duplicates.add(ref_key)
+        else:
+            ref_map[ref_key] = line
+
+    for ref_key in ref_duplicates:
+        errors.append({"type": "line", "ref_key": ref_key, "message": "Duplicate ref_key in template."})
+
+    if set(input_keys) & set(ref_map.keys()):
+        overlap = sorted(set(input_keys) & set(ref_map.keys()))
+        errors.append({"type": "template", "message": f"Input keys overlap with line ref_keys: {', '.join(overlap)}"})
+
+    dependencies = {}
+    line_errors = {line.id: [] for line in lines}
+    for line in lines:
+        ref_key = (line.ref_key or "").strip()
+        deps = set()
+        expressions = [
+            line.include_if_expr,
+            line.qty_expr,
+            line.override_if_expr,
+            line.override_qty_expr,
+        ]
+        for expr in expressions:
+            if not expr:
+                continue
+            names = _collect_expr_names(expr)
+            for name in names:
+                if name in _BOM_ALLOWED_FUNCS:
+                    continue
+                if name in input_map:
+                    continue
+                if name in ref_map:
+                    deps.add(name)
+                else:
+                    line_errors[line.id].append(f"Unknown reference '{name}'.")
+        dependencies[ref_key] = deps
+
+    sorted_lines = []
+    visiting = set()
+    visited = set()
+
+    def _visit(line_key, line_obj):
+        if line_key in visited:
+            return
+        if line_key in visiting:
+            line_errors[line_obj.id].append("Circular dependency detected.")
+            return
+        visiting.add(line_key)
+        for dep in dependencies.get(line_key, set()):
+            dep_line = ref_map.get(dep)
+            if dep_line:
+                _visit(dep, dep_line)
+        visiting.remove(line_key)
+        visited.add(line_key)
+        sorted_lines.append(line_obj)
+
+    for line in lines:
+        ref_key = (line.ref_key or "").strip()
+        if ref_key:
+            _visit(ref_key, line)
+
+    values = {}
+    for line in sorted_lines:
+        ref_key = (line.ref_key or "").strip()
+        line_result = {
+            "id": line.id,
+            "ref_key": ref_key,
+            "line": line,
+            "final_qty": 0,
+            "errors": [],
+        }
+
+        if line_errors.get(line.id):
+            line_result["errors"].extend(line_errors[line.id])
+            results.append(line_result)
+            values[ref_key] = 0
+            continue
+
+        context = {**input_map, **values}
+        include_expr = (line.include_if_expr or "").strip()
+        qty_expr = (line.qty_expr or "").strip()
+        override_if_expr = (line.override_if_expr or "").strip()
+        override_qty_expr = (line.override_qty_expr or "").strip()
+
+        try:
+            include = True
+            if include_expr:
+                include = bool(_safe_eval_expr(include_expr, context))
+        except Exception as exc:
+            line_result["errors"].append(f"include_if_expr error: {exc}")
+            include = False
+
+        if include:
+            try:
+                qty_value = _safe_eval_expr(qty_expr, context)
+            except Exception as exc:
+                line_result["errors"].append(f"qty_expr error: {exc}")
+                qty_value = 0
+
+            if not isinstance(qty_value, (int, float)):
+                line_result["errors"].append("qty_expr did not return a number.")
+                qty_value = 0
+        else:
+            qty_value = 0
+
+        final_qty = qty_value
+        if include and override_if_expr:
+            try:
+                override = bool(_safe_eval_expr(override_if_expr, context))
+            except Exception as exc:
+                line_result["errors"].append(f"override_if_expr error: {exc}")
+                override = False
+
+            if override:
+                if not override_qty_expr:
+                    line_result["errors"].append("override_qty_expr missing.")
+                    final_qty = 0
+                else:
+                    try:
+                        override_qty = _safe_eval_expr(override_qty_expr, context)
+                    except Exception as exc:
+                        line_result["errors"].append(f"override_qty_expr error: {exc}")
+                        override_qty = 0
+
+                    if not isinstance(override_qty, (int, float)):
+                        line_result["errors"].append("override_qty_expr did not return a number.")
+                        override_qty = 0
+                    final_qty = override_qty
+
+        if line_result["errors"]:
+            final_qty = 0
+
+        line_result["final_qty"] = float(final_qty or 0)
+        values[ref_key] = float(final_qty or 0)
+        results.append(line_result)
+
+    for line in lines:
+        if line_errors.get(line.id):
+            for message in line_errors[line.id]:
+                errors.append({"type": "line", "id": line.id, "message": message})
+
+    return {
+        "inputs": input_map,
+        "input_errors": input_errors,
+        "lines": results,
+        "errors": errors,
+    }
 
 
 def _to_india_time(value):
@@ -5679,6 +6063,12 @@ from eleva_app.models import (
     BillOfMaterials,
     BOMItem,
     BookInventory,
+    BomTemplate,
+    BomTemplateInput,
+    BomTemplateLine,
+    BomTemplateSection,
+    BomTemplateStage,
+    PartClass,
     DrawingComment,
     DrawingHistory,
     DrawingSite,
@@ -5716,6 +6106,9 @@ from eleva_app.models import (
     DeliveryOrderItem,
     Product,
     ProcurementStage,
+    ProjectBom,
+    ProjectBomInput,
+    ProjectBomLine,
     PurchaseOrderLine,
     VendorProductRate,
     VendorProductRateHistory,
@@ -6745,6 +7138,486 @@ def design_drawing_history_upload():
 
     result = process_drawing_history_upload(upload)
     return _render_result(result)
+
+
+@app.route("/design/bom-templates", methods=["GET", "POST"])
+@login_required
+def design_bom_templates():
+    _module_visibility_required("design")
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        if action == "create_template":
+            name = (request.form.get("name") or "").strip()
+            lift_type = (request.form.get("lift_type") or "").strip()
+            description = (request.form.get("description") or "").strip() or None
+            if not name:
+                flash("Template name is required.", "error")
+            elif lift_type not in LIFT_TYPES:
+                flash("Select a valid lift type.", "error")
+            else:
+                template = BomTemplate(
+                    name=name,
+                    lift_type=lift_type,
+                    description=description,
+                    is_active=True,
+                    created_by_id=current_user.id,
+                )
+                db.session.add(template)
+                db.session.commit()
+                flash("Template created.", "success")
+                return redirect(url_for("design_bom_template_edit", template_id=template.id))
+        elif action == "toggle_template":
+            template_id = request.form.get("template_id")
+            template = BomTemplate.query.get_or_404(template_id)
+            template.is_active = not bool(template.is_active)
+            db.session.commit()
+            flash("Template updated.", "success")
+        elif action == "duplicate_template":
+            template_id = request.form.get("template_id")
+            template = BomTemplate.query.get_or_404(template_id)
+            new_template = BomTemplate(
+                name=f"{template.name} (Copy)",
+                lift_type=template.lift_type,
+                description=template.description,
+                is_active=template.is_active,
+                created_by_id=current_user.id,
+            )
+            db.session.add(new_template)
+            db.session.flush()
+            for stage in template.stages:
+                new_stage = BomTemplateStage(
+                    template_id=new_template.id,
+                    stage_name=stage.stage_name,
+                    display_order=stage.display_order,
+                )
+                db.session.add(new_stage)
+                db.session.flush()
+                for section in stage.sections:
+                    new_section = BomTemplateSection(
+                        stage_id=new_stage.id,
+                        section_name=section.section_name,
+                        display_order=section.display_order,
+                    )
+                    db.session.add(new_section)
+                    db.session.flush()
+                    for line in section.lines:
+                        new_line = BomTemplateLine(
+                            section_id=new_section.id,
+                            ref_key=line.ref_key,
+                            part_class_id=line.part_class_id,
+                            specification_text=line.specification_text,
+                            unit=line.unit,
+                            include_if_expr=line.include_if_expr,
+                            qty_expr=line.qty_expr,
+                            override_if_expr=line.override_if_expr,
+                            override_qty_expr=line.override_qty_expr,
+                            display_order=line.display_order,
+                        )
+                        db.session.add(new_line)
+            for template_input in template.inputs:
+                new_input = BomTemplateInput(
+                    template_id=new_template.id,
+                    input_key=template_input.input_key,
+                    label=template_input.label,
+                    unit=template_input.unit,
+                    default_value=template_input.default_value,
+                    data_type=template_input.data_type,
+                    required=template_input.required,
+                )
+                db.session.add(new_input)
+            db.session.commit()
+            flash("Template duplicated.", "success")
+            return redirect(url_for("design_bom_template_edit", template_id=new_template.id))
+        elif action == "create_part_class":
+            name = (request.form.get("part_class_name") or "").strip()
+            description = (request.form.get("part_class_description") or "").strip() or None
+            if not name:
+                flash("Part Class name is required.", "error")
+            elif PartClass.query.filter(func.lower(PartClass.name) == name.lower()).first():
+                flash("Part Class name must be unique.", "error")
+            else:
+                part_class = PartClass(name=name, description=description, active=True)
+                db.session.add(part_class)
+                db.session.commit()
+                flash("Part Class created.", "success")
+        elif action == "toggle_part_class":
+            part_class_id = request.form.get("part_class_id")
+            part_class = PartClass.query.get_or_404(part_class_id)
+            part_class.active = not bool(part_class.active)
+            db.session.commit()
+            flash("Part Class updated.", "success")
+
+    lift_filter = (request.args.get("lift_type") or "").strip()
+    query = BomTemplate.query
+    if lift_filter:
+        query = query.filter(BomTemplate.lift_type == lift_filter)
+    templates = query.order_by(BomTemplate.name.asc()).all()
+    status_map = {}
+    for template in templates:
+        evaluation = evaluate_bom_template(template)
+        has_errors = any(err.get("type") != "input" for err in evaluation["errors"])
+        for line in evaluation["lines"]:
+            if line["errors"]:
+                has_errors = True
+        status_map[template.id] = "Has Errors" if has_errors else "OK"
+
+    part_classes = PartClass.query.order_by(PartClass.name.asc()).all()
+    return render_template(
+        "bom_templates.html",
+        templates=templates,
+        status_map=status_map,
+        lift_filter=lift_filter,
+        LIFT_TYPES=LIFT_TYPES,
+        part_classes=part_classes,
+    )
+
+
+@app.route("/design/bom-templates/<int:template_id>", methods=["GET", "POST"])
+@login_required
+def design_bom_template_edit(template_id):
+    _module_visibility_required("design")
+    template = (
+        BomTemplate.query.options(
+            joinedload(BomTemplate.inputs),
+            joinedload(BomTemplate.stages)
+            .joinedload(BomTemplateStage.sections)
+            .joinedload(BomTemplateSection.lines),
+        )
+        .get_or_404(template_id)
+    )
+    evaluation = None
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        if action == "update_template":
+            name = (request.form.get("name") or "").strip()
+            lift_type = (request.form.get("lift_type") or "").strip()
+            description = (request.form.get("description") or "").strip() or None
+            is_active = bool(request.form.get("is_active"))
+            if not name:
+                flash("Template name is required.", "error")
+            elif lift_type not in LIFT_TYPES:
+                flash("Select a valid lift type.", "error")
+            else:
+                template.name = name
+                template.lift_type = lift_type
+                template.description = description
+                template.is_active = is_active
+                db.session.commit()
+                flash("Template updated.", "success")
+        elif action == "add_input":
+            input_key = (request.form.get("input_key") or "").strip()
+            label = (request.form.get("label") or "").strip()
+            unit = (request.form.get("unit") or "").strip() or None
+            default_value = (request.form.get("default_value") or "").strip() or None
+            data_type = (request.form.get("data_type") or "number").strip()
+            required = bool(request.form.get("required"))
+            if not input_key or not label:
+                flash("Input key and label are required.", "error")
+            elif data_type not in BOM_INPUT_DATA_TYPES:
+                flash("Select a valid data type.", "error")
+            else:
+                new_input = BomTemplateInput(
+                    template_id=template.id,
+                    input_key=input_key,
+                    label=label,
+                    unit=unit,
+                    default_value=default_value,
+                    data_type=data_type,
+                    required=required,
+                )
+                db.session.add(new_input)
+                db.session.commit()
+                flash("Input added.", "success")
+        elif action == "update_input":
+            input_id = request.form.get("input_id")
+            template_input = BomTemplateInput.query.get_or_404(input_id)
+            if template_input.template_id != template.id:
+                abort(404)
+            template_input.input_key = (request.form.get("input_key") or "").strip()
+            template_input.label = (request.form.get("label") or "").strip()
+            template_input.unit = (request.form.get("unit") or "").strip() or None
+            template_input.default_value = (request.form.get("default_value") or "").strip() or None
+            template_input.data_type = (request.form.get("data_type") or "number").strip()
+            template_input.required = bool(request.form.get("required"))
+            db.session.commit()
+            flash("Input updated.", "success")
+        elif action == "delete_input":
+            input_id = request.form.get("input_id")
+            template_input = BomTemplateInput.query.get_or_404(input_id)
+            if template_input.template_id != template.id:
+                abort(404)
+            db.session.delete(template_input)
+            db.session.commit()
+            flash("Input deleted.", "info")
+        elif action == "add_stage":
+            stage_name = (request.form.get("stage_name") or "").strip()
+            display_order = int(request.form.get("display_order") or 0)
+            if not stage_name:
+                flash("Stage name is required.", "error")
+            else:
+                stage = BomTemplateStage(
+                    template_id=template.id,
+                    stage_name=stage_name,
+                    display_order=display_order,
+                )
+                db.session.add(stage)
+                db.session.commit()
+                flash("Stage added.", "success")
+        elif action == "update_stage":
+            stage_id = request.form.get("stage_id")
+            stage = BomTemplateStage.query.get_or_404(stage_id)
+            if stage.template_id != template.id:
+                abort(404)
+            stage.stage_name = (request.form.get("stage_name") or "").strip()
+            stage.display_order = int(request.form.get("display_order") or 0)
+            db.session.commit()
+            flash("Stage updated.", "success")
+        elif action == "delete_stage":
+            stage_id = request.form.get("stage_id")
+            stage = BomTemplateStage.query.get_or_404(stage_id)
+            if stage.template_id != template.id:
+                abort(404)
+            db.session.delete(stage)
+            db.session.commit()
+            flash("Stage deleted.", "info")
+        elif action == "add_section":
+            stage_id = request.form.get("stage_id")
+            section_name = (request.form.get("section_name") or "").strip()
+            display_order = int(request.form.get("display_order") or 0)
+            stage = BomTemplateStage.query.get_or_404(stage_id)
+            if stage.template_id != template.id:
+                abort(404)
+            if not section_name:
+                flash("Section name is required.", "error")
+            else:
+                section = BomTemplateSection(
+                    stage_id=stage.id,
+                    section_name=section_name,
+                    display_order=display_order,
+                )
+                db.session.add(section)
+                db.session.commit()
+                flash("Section added.", "success")
+        elif action == "update_section":
+            section_id = request.form.get("section_id")
+            section = BomTemplateSection.query.get_or_404(section_id)
+            if section.stage.template_id != template.id:
+                abort(404)
+            section.section_name = (request.form.get("section_name") or "").strip()
+            section.display_order = int(request.form.get("display_order") or 0)
+            db.session.commit()
+            flash("Section updated.", "success")
+        elif action == "delete_section":
+            section_id = request.form.get("section_id")
+            section = BomTemplateSection.query.get_or_404(section_id)
+            if section.stage.template_id != template.id:
+                abort(404)
+            db.session.delete(section)
+            db.session.commit()
+            flash("Section deleted.", "info")
+        elif action == "add_line":
+            section_id = request.form.get("section_id")
+            section = BomTemplateSection.query.get_or_404(section_id)
+            if section.stage.template_id != template.id:
+                abort(404)
+            ref_key = (request.form.get("ref_key") or "").strip()
+            part_class_id = request.form.get("part_class_id")
+            specification_text = (request.form.get("specification_text") or "").strip() or None
+            unit = (request.form.get("unit") or "").strip()
+            include_if_expr = (request.form.get("include_if_expr") or "").strip() or None
+            qty_expr = (request.form.get("qty_expr") or "").strip()
+            override_if_expr = (request.form.get("override_if_expr") or "").strip() or None
+            override_qty_expr = (request.form.get("override_qty_expr") or "").strip() or None
+            display_order = int(request.form.get("display_order") or 0)
+            if not ref_key or not unit or not qty_expr or not part_class_id:
+                flash("Ref key, part class, unit, and qty expression are required.", "error")
+            else:
+                line = BomTemplateLine(
+                    section_id=section.id,
+                    ref_key=ref_key,
+                    part_class_id=part_class_id,
+                    specification_text=specification_text,
+                    unit=unit,
+                    include_if_expr=include_if_expr,
+                    qty_expr=qty_expr,
+                    override_if_expr=override_if_expr,
+                    override_qty_expr=override_qty_expr,
+                    display_order=display_order,
+                )
+                db.session.add(line)
+                db.session.commit()
+                flash("Line added.", "success")
+        elif action == "update_line":
+            line_id = request.form.get("line_id")
+            line = BomTemplateLine.query.get_or_404(line_id)
+            if line.section.stage.template_id != template.id:
+                abort(404)
+            line.ref_key = (request.form.get("ref_key") or "").strip()
+            line.part_class_id = request.form.get("part_class_id")
+            line.specification_text = (request.form.get("specification_text") or "").strip() or None
+            line.unit = (request.form.get("unit") or "").strip()
+            line.include_if_expr = (request.form.get("include_if_expr") or "").strip() or None
+            line.qty_expr = (request.form.get("qty_expr") or "").strip()
+            line.override_if_expr = (request.form.get("override_if_expr") or "").strip() or None
+            line.override_qty_expr = (request.form.get("override_qty_expr") or "").strip() or None
+            line.display_order = int(request.form.get("display_order") or 0)
+            db.session.commit()
+            flash("Line updated.", "success")
+        elif action == "delete_line":
+            line_id = request.form.get("line_id")
+            line = BomTemplateLine.query.get_or_404(line_id)
+            if line.section.stage.template_id != template.id:
+                abort(404)
+            db.session.delete(line)
+            db.session.commit()
+            flash("Line deleted.", "info")
+        elif action == "save_stage_order":
+            for key, value in request.form.items():
+                if not key.startswith("stage_order_"):
+                    continue
+                stage_id = key.replace("stage_order_", "")
+                stage = BomTemplateStage.query.get(stage_id)
+                if stage and stage.template_id == template.id:
+                    stage.display_order = int(value or 0)
+            db.session.commit()
+            flash("Stage order saved.", "success")
+        elif action == "save_section_order":
+            for key, value in request.form.items():
+                if not key.startswith("section_order_"):
+                    continue
+                section_id = key.replace("section_order_", "")
+                section = BomTemplateSection.query.get(section_id)
+                if section and section.stage.template_id == template.id:
+                    section.display_order = int(value or 0)
+            db.session.commit()
+            flash("Section order saved.", "success")
+        elif action == "save_line_order":
+            for key, value in request.form.items():
+                if not key.startswith("line_order_"):
+                    continue
+                line_id = key.replace("line_order_", "")
+                line = BomTemplateLine.query.get(line_id)
+                if line and line.section.stage.template_id == template.id:
+                    line.display_order = int(value or 0)
+            db.session.commit()
+            flash("Line order saved.", "success")
+        elif action == "test_inputs":
+            input_values = {
+                key.replace("test_input_", ""): value
+                for key, value in request.form.items()
+                if key.startswith("test_input_")
+            }
+            evaluation = evaluate_bom_template(template, input_values)
+        if action != "test_inputs":
+            return redirect(url_for("design_bom_template_edit", template_id=template.id))
+
+    part_classes = PartClass.query.order_by(PartClass.name.asc()).all()
+    if evaluation is None:
+        evaluation = evaluate_bom_template(template)
+    return render_template(
+        "bom_template_editor.html",
+        template=template,
+        part_classes=part_classes,
+        LIFT_TYPES=LIFT_TYPES,
+        BOM_INPUT_DATA_TYPES=BOM_INPUT_DATA_TYPES,
+        evaluation=evaluation,
+    )
+
+
+@app.route("/projects/<int:project_id>/bom/generate", methods=["GET", "POST"])
+@login_required
+def project_bom_generate(project_id):
+    _module_visibility_required("design")
+    project = Project.query.get_or_404(project_id)
+    templates_query = BomTemplate.query.filter(BomTemplate.is_active.is_(True))
+    if project.lift_type:
+        templates_query = templates_query.filter(BomTemplate.lift_type == project.lift_type)
+    templates = templates_query.order_by(BomTemplate.name.asc()).all()
+    template_id = request.args.get("template_id") or request.form.get("template_id")
+    selected_template = None
+    evaluation = None
+    errors = []
+
+    if template_id:
+        selected_template = (
+            BomTemplate.query.options(
+                joinedload(BomTemplate.inputs),
+                joinedload(BomTemplate.stages)
+                .joinedload(BomTemplateStage.sections)
+                .joinedload(BomTemplateSection.lines),
+            )
+            .get(template_id)
+        )
+
+    if request.method == "POST" and selected_template:
+        input_values = {
+            key.replace("input_", ""): value
+            for key, value in request.form.items()
+            if key.startswith("input_")
+        }
+        evaluation = evaluate_bom_template(selected_template, input_values)
+        errors = list(evaluation["errors"])
+        for line in evaluation["lines"]:
+            if line["errors"]:
+                errors.append({"type": "line", "id": line["id"], "message": "; ".join(line["errors"])})
+
+        action = (request.form.get("action") or "").strip()
+        if action == "generate":
+            if errors:
+                flash("Resolve template errors before generating the BOM.", "error")
+            else:
+                project_bom = ProjectBom(
+                    project_id=project.id,
+                    template_id=selected_template.id,
+                    created_by_id=current_user.id,
+                )
+                db.session.add(project_bom)
+                db.session.flush()
+                for template_input in selected_template.inputs:
+                    key = template_input.input_key
+                    raw_value = input_values.get(key, template_input.default_value)
+                    bom_input = ProjectBomInput(
+                        project_bom_id=project_bom.id,
+                        input_key=key,
+                        input_value=str(raw_value) if raw_value is not None else None,
+                    )
+                    db.session.add(bom_input)
+                for line_result in evaluation["lines"]:
+                    line = line_result["line"]
+                    override_snapshot = None
+                    if line.override_if_expr or line.override_qty_expr:
+                        override_snapshot = json.dumps(
+                            {
+                                "override_if_expr": line.override_if_expr,
+                                "override_qty_expr": line.override_qty_expr,
+                            },
+                            ensure_ascii=False,
+                        )
+                    bom_line = ProjectBomLine(
+                        project_bom_id=project_bom.id,
+                        ref_key=line.ref_key,
+                        part_class_id=line.part_class_id,
+                        specification_text=line.specification_text,
+                        unit=line.unit,
+                        final_qty=line_result["final_qty"],
+                        source_template_line_id=line.id,
+                        qty_expr_snapshot=line.qty_expr,
+                        include_if_expr_snapshot=line.include_if_expr,
+                        override_expr_snapshot=override_snapshot,
+                    )
+                    db.session.add(bom_line)
+                db.session.commit()
+                flash("Project BOM generated.", "success")
+                return redirect(url_for("project_detail", project_id=project.id))
+
+    return render_template(
+        "project_bom_generate.html",
+        project=project,
+        templates=templates,
+        selected_template=selected_template,
+        evaluation=evaluation,
+        errors=errors,
+    )
 
 
 def _parse_date_field(raw_value: str):
@@ -11093,6 +11966,7 @@ def ensure_product_columns():
         ("forecast_qty", "REAL DEFAULT 0"),
         ("is_favorite", "INTEGER DEFAULT 0"),
         ("is_active", "INTEGER DEFAULT 1"),
+        ("part_class_id", "INTEGER"),
         ("primary_vendor", "TEXT"),
         ("linked_vendors", "TEXT"),
         ("specifications", "TEXT"),
@@ -11483,6 +12357,15 @@ def ensure_tables():
         DrawingHistory.__table__,
         SRTTask.__table__,
         ProcurementStage.__table__,
+        PartClass.__table__,
+        BomTemplate.__table__,
+        BomTemplateInput.__table__,
+        BomTemplateStage.__table__,
+        BomTemplateSection.__table__,
+        BomTemplateLine.__table__,
+        ProjectBom.__table__,
+        ProjectBomInput.__table__,
+        ProjectBomLine.__table__,
         BillOfMaterials.__table__,
         BOMItem.__table__,
         Product.__table__,
@@ -11512,6 +12395,173 @@ def ensure_tables():
 
     if created_tables:
         print(f"✅ Created missing tables: {', '.join(created_tables)}")
+
+
+def _ensure_sqlite_table(table_name, table_obj, column_defs):
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print(f"⚠️ Skipping ensure_{table_name}_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        conn.close()
+        table_obj.create(bind=db.engine, checkfirst=True)
+        print(f"✅ Created missing table: {table_name}")
+        return
+
+    cur.execute(f"PRAGMA table_info({table_name})")
+    cols = {row[1] for row in cur.fetchall()}
+    added = []
+    for column_name, column_type in column_defs:
+        if column_name not in cols:
+            cur.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type};"
+            )
+            added.append(column_name)
+
+    conn.commit()
+    conn.close()
+
+    if added:
+        print(f"✅ Auto-added in {table_name}: {', '.join(added)}")
+    else:
+        print(f"✔️ {table_name} OK")
+
+
+def ensure_part_class_table():
+    _ensure_sqlite_table(
+        "part_class",
+        PartClass.__table__,
+        [
+            ("name", "TEXT"),
+            ("description", "TEXT"),
+            ("active", "INTEGER DEFAULT 1"),
+        ],
+    )
+
+
+def ensure_bom_template_table():
+    _ensure_sqlite_table(
+        "bom_template",
+        BomTemplate.__table__,
+        [
+            ("name", "TEXT"),
+            ("lift_type", "TEXT"),
+            ("description", "TEXT"),
+            ("is_active", "INTEGER DEFAULT 1"),
+            ("created_at", "DATETIME"),
+            ("created_by_id", "INTEGER"),
+        ],
+    )
+
+
+def ensure_bom_template_input_table():
+    _ensure_sqlite_table(
+        "bom_template_input",
+        BomTemplateInput.__table__,
+        [
+            ("template_id", "INTEGER"),
+            ("input_key", "TEXT"),
+            ("label", "TEXT"),
+            ("unit", "TEXT"),
+            ("default_value", "TEXT"),
+            ("data_type", "TEXT"),
+            ("required", "INTEGER DEFAULT 0"),
+        ],
+    )
+
+
+def ensure_bom_template_stage_table():
+    _ensure_sqlite_table(
+        "bom_template_stage",
+        BomTemplateStage.__table__,
+        [
+            ("template_id", "INTEGER"),
+            ("stage_name", "TEXT"),
+            ("display_order", "INTEGER DEFAULT 0"),
+        ],
+    )
+
+
+def ensure_bom_template_section_table():
+    _ensure_sqlite_table(
+        "bom_template_section",
+        BomTemplateSection.__table__,
+        [
+            ("stage_id", "INTEGER"),
+            ("section_name", "TEXT"),
+            ("display_order", "INTEGER DEFAULT 0"),
+        ],
+    )
+
+
+def ensure_bom_template_line_table():
+    _ensure_sqlite_table(
+        "bom_template_line",
+        BomTemplateLine.__table__,
+        [
+            ("section_id", "INTEGER"),
+            ("ref_key", "TEXT"),
+            ("part_class_id", "INTEGER"),
+            ("specification_text", "TEXT"),
+            ("unit", "TEXT"),
+            ("include_if_expr", "TEXT"),
+            ("qty_expr", "TEXT"),
+            ("override_if_expr", "TEXT"),
+            ("override_qty_expr", "TEXT"),
+            ("display_order", "INTEGER DEFAULT 0"),
+        ],
+    )
+
+
+def ensure_project_bom_table():
+    _ensure_sqlite_table(
+        "project_bom",
+        ProjectBom.__table__,
+        [
+            ("project_id", "INTEGER"),
+            ("template_id", "INTEGER"),
+            ("created_at", "DATETIME"),
+            ("created_by_id", "INTEGER"),
+        ],
+    )
+
+
+def ensure_project_bom_input_table():
+    _ensure_sqlite_table(
+        "project_bom_input",
+        ProjectBomInput.__table__,
+        [
+            ("project_bom_id", "INTEGER"),
+            ("input_key", "TEXT"),
+            ("input_value", "TEXT"),
+        ],
+    )
+
+
+def ensure_project_bom_line_table():
+    _ensure_sqlite_table(
+        "project_bom_line",
+        ProjectBomLine.__table__,
+        [
+            ("project_bom_id", "INTEGER"),
+            ("ref_key", "TEXT"),
+            ("part_class_id", "INTEGER"),
+            ("specification_text", "TEXT"),
+            ("unit", "TEXT"),
+            ("final_qty", "REAL DEFAULT 0"),
+            ("source_template_line_id", "INTEGER"),
+            ("qty_expr_snapshot", "TEXT"),
+            ("include_if_expr_snapshot", "TEXT"),
+            ("override_expr_snapshot", "TEXT"),
+        ],
+    )
 
 
 def ensure_project_comment_table():
@@ -12384,6 +13434,15 @@ def bootstrap_db():
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
+    ensure_part_class_table()
+    ensure_bom_template_table()
+    ensure_bom_template_input_table()
+    ensure_bom_template_stage_table()
+    ensure_bom_template_section_table()
+    ensure_bom_template_line_table()
+    ensure_project_bom_table()
+    ensure_project_bom_input_table()
+    ensure_project_bom_line_table()
     ensure_procurement_stage_seed()
     ensure_dropdown_options_seed()
     ensure_client_requirement_template_seed()

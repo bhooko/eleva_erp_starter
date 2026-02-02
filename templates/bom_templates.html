@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Design · BOM Templates · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <div>
+    <p class="text-sm uppercase text-slate-500">Design</p>
+    <h1 class="text-2xl font-semibold text-slate-100">BOM Templates</h1>
+    <p class="text-sm text-slate-400 mt-1">Excel-style templates grouped by lift type, with inputs and rule-driven BOM lines.</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
+    <h2 class="text-lg font-semibold text-slate-100 mb-4">Create Template</h2>
+    <form method="post" class="grid lg:grid-cols-4 gap-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="create_template" />
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template name</label>
+        <input name="name" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="HYD – Structure" />
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Lift type</label>
+        <select name="lift_type" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">
+          <option value="">Select lift type</option>
+          {% for lift in LIFT_TYPES %}
+            <option value="{{ lift }}">{{ lift }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="lg:col-span-2">
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+        <input name="description" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Optional description" />
+      </div>
+      <div class="lg:col-span-4">
+        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Create Template</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-lg font-semibold text-slate-100">Template Library</h2>
+      <form method="get" class="flex items-center gap-2">
+        <select name="lift_type" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm">
+          <option value="">All lift types</option>
+          {% for lift in LIFT_TYPES %}
+            <option value="{{ lift }}" {% if lift_filter == lift %}selected{% endif %}>{{ lift }}</option>
+          {% endfor %}
+        </select>
+        <button class="px-3 py-2 rounded-xl bg-slate-800 text-sm text-slate-100">Filter</button>
+      </form>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+            <th class="px-3 py-2">Name</th>
+            <th class="px-3 py-2">Lift Type</th>
+            <th class="px-3 py-2">Status</th>
+            <th class="px-3 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for template in templates %}
+          <tr>
+            <td class="px-3 py-2">
+              <div class="text-slate-100 font-semibold">{{ template.name }}</div>
+              <div class="text-xs text-slate-500">{{ template.description or 'No description' }}</div>
+            </td>
+            <td class="px-3 py-2 text-slate-300">{{ template.lift_type }}</td>
+            <td class="px-3 py-2">
+              {% if not template.is_active %}
+                <span class="inline-flex items-center rounded-full bg-slate-700/40 px-3 py-1 text-xs text-slate-200">Inactive</span>
+              {% elif status_map.get(template.id) == 'Has Errors' %}
+                <span class="inline-flex items-center rounded-full bg-amber-500/20 px-3 py-1 text-xs text-amber-100 border border-amber-400/30">Has Errors</span>
+              {% else %}
+                <span class="inline-flex items-center rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 border border-emerald-400/30">OK</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">
+              <div class="flex flex-wrap gap-2">
+                <a href="{{ url_for('design_bom_template_edit', template_id=template.id) }}" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Edit</a>
+                <form method="post">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="action" value="duplicate_template" />
+                  <input type="hidden" name="template_id" value="{{ template.id }}" />
+                  <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Duplicate</button>
+                </form>
+                <form method="post">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="action" value="toggle_template" />
+                  <input type="hidden" name="template_id" value="{{ template.id }}" />
+                  <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
+                    {{ 'Deactivate' if template.is_active else 'Activate' }}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="px-3 py-6 text-center text-slate-500">No templates yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 space-y-4">
+    <h2 class="text-lg font-semibold text-slate-100">Part Classes</h2>
+    <form method="post" class="grid lg:grid-cols-3 gap-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="create_part_class" />
+      <div>
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Name</label>
+        <input name="part_class_name" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Guide Rail" />
+      </div>
+      <div class="lg:col-span-2">
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Description</label>
+        <input name="part_class_description" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Optional notes" />
+      </div>
+      <div class="lg:col-span-3">
+        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Part Class</button>
+      </div>
+    </form>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+            <th class="px-3 py-2">Name</th>
+            <th class="px-3 py-2">Status</th>
+            <th class="px-3 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for part_class in part_classes %}
+          <tr>
+            <td class="px-3 py-2">
+              <div class="text-slate-100 font-semibold">{{ part_class.name }}</div>
+              <div class="text-xs text-slate-500">{{ part_class.description or '—' }}</div>
+            </td>
+            <td class="px-3 py-2">
+              {% if part_class.active %}
+                <span class="inline-flex items-center rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-100 border border-emerald-400/30">Active</span>
+              {% else %}
+                <span class="inline-flex items-center rounded-full bg-slate-700/40 px-3 py-1 text-xs text-slate-200">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">
+              <form method="post">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="toggle_part_class" />
+                <input type="hidden" name="part_class_id" value="{{ part_class.id }}" />
+                <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
+                  {{ 'Deactivate' if part_class.active else 'Activate' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="3" class="px-3 py-6 text-center text-slate-500">No part classes yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

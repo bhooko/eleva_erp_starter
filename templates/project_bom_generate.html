@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Design · Generate BOM · Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <p class="text-sm uppercase text-slate-500">Design · Project BOM</p>
+    <h1 class="text-2xl font-semibold text-slate-100">Generate BOM for {{ project.name }}</h1>
+    <p class="text-sm text-slate-400 mt-1">Select a template, enter inputs, validate, and generate a snapshot BOM.</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 space-y-4">
+    <form method="post" class="grid lg:grid-cols-3 gap-4">
+      {{ csrf_field() }}
+      <div class="lg:col-span-2">
+        <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">Template</label>
+        <select name="template_id" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">
+          <option value="">Select template</option>
+          {% for template in templates %}
+            <option value="{{ template.id }}" {% if selected_template and selected_template.id == template.id %}selected{% endif %}>{{ template.name }} ({{ template.lift_type }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button name="action" value="validate" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-100 text-sm">Load / Validate</button>
+      </div>
+
+      {% if selected_template %}
+        <div class="lg:col-span-3 grid lg:grid-cols-3 gap-4 border-t border-slate-800 pt-4">
+          {% for input in selected_template.inputs %}
+            <div>
+              <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">{{ input.label }}</label>
+              <input name="input_{{ input.input_key }}" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="{{ input.input_key }}" />
+              <p class="text-xs text-slate-500 mt-1">{{ input.unit or input.data_type }}</p>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="lg:col-span-3 flex flex-wrap gap-3">
+          <button name="action" value="validate" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-100 text-sm">Validate</button>
+          <button name="action" value="generate" class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white text-sm font-semibold">Generate BOM</button>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if errors %}
+  <div class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100 text-sm">
+    <h3 class="font-semibold mb-2">Validation Errors</h3>
+    <ul class="list-disc list-inside space-y-1">
+      {% for error in errors %}
+        <li>{{ error.message }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if evaluation %}
+  <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-inner shadow-black/20 space-y-4">
+    <h2 class="text-lg font-semibold text-slate-100">Preview</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+            <th class="px-3 py-2">Ref Key</th>
+            <th class="px-3 py-2">Part Class</th>
+            <th class="px-3 py-2">Unit</th>
+            <th class="px-3 py-2">Final Qty</th>
+            <th class="px-3 py-2">Errors</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for line in evaluation.lines %}
+          <tr>
+            <td class="px-3 py-2 text-slate-100">{{ line.ref_key }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ line.line.part_class.name if line.line.part_class else '—' }}</td>
+            <td class="px-3 py-2 text-slate-300">{{ line.line.unit }}</td>
+            <td class="px-3 py-2 text-slate-100">{{ "%.2f"|format(line.final_qty) }}</td>
+            <td class="px-3 py-2">
+              {% if line.errors %}
+                <ul class="list-disc list-inside text-xs text-amber-200 space-y-1">
+                  {% for err in line.errors %}
+                    <li>{{ err }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-xs text-emerald-200">OK</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
