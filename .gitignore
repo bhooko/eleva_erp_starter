@@ -30,3 +30,4 @@ instance/
 # ------------------------------
 .DS_Store
 Thumbs.db
+/static/uploads
