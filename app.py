@@ -6317,6 +6317,17 @@ def design_task_detail(task_id):
     can_edit_bom = current_user.is_admin or any(
         keyword in role for keyword in ["design", "purchase", "project", "installation"]
     )
+    can_link_project = current_user.is_admin or "project" in role
+    drawing_type_options = [
+        {"value": "GAD", "label": "GAD"},
+        {"value": "Fabrication", "label": "Fabrication Drawing"},
+        {"value": "Civil", "label": "Civil Drawing"},
+        {"value": "Other", "label": "Other"},
+    ]
+    drawing_status_options = ["Draft", "Sent", "Approved", "Superseded"]
+    allowed_drawing_types = {option["value"] for option in drawing_type_options}
+    allowed_drawing_statuses = set(drawing_status_options)
+    task_status_options = _design_status_options_for(task.task_type)
     stage_options = _get_active_procurement_stages()
     default_stage = _get_default_procurement_stage()
 
@@ -6348,44 +6359,138 @@ def design_task_detail(task_id):
                 )
                 db.session.commit()
                 flash("Comment added.", "success")
-        elif action == "revision":
-            drawing_id = request.form.get("drawing_id")
-            drawing_name = request.form.get("drawing_name") or "Untitled Drawing"
-            file = request.files.get("revision_file")
-            if not file or not file.filename:
-                flash("Please attach a drawing file for the revision.", "danger")
+        elif action == "upload_new_drawing":
+            drawing_name = (request.form.get("drawing_name") or "").strip()
+            drawing_type = request.form.get("drawing_type") or "Other"
+            notes = request.form.get("change_reason") or None
+            file = request.files.get("drawing_file")
+            if not drawing_name:
+                flash("Please provide a drawing name.", "danger")
+            elif not file or not file.filename:
+                flash("Please attach a drawing file.", "danger")
             else:
+                if drawing_type not in allowed_drawing_types:
+                    drawing_type = "Other"
                 filename = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
                 save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
                 file.save(save_path)
-                if drawing_id:
-                    drawing = DesignDrawing.query.get(drawing_id)
-                else:
-                    drawing = DesignDrawing(
-                        project_id=task.project_id,
-                        design_task_id=task.id,
-                        name=drawing_name,
-                        created_by_user_id=current_user.id,
-                    )
-                    db.session.add(drawing)
-                    db.session.flush()
-                latest = max([rev.version_number for rev in drawing.revisions], default=0)
-                next_version = latest + 1
+                drawing = DesignDrawing(
+                    project_id=task.project_id,
+                    design_task_id=task.id,
+                    name=drawing_name,
+                    drawing_type=drawing_type,
+                    status="Draft",
+                    created_by_user_id=current_user.id,
+                )
+                db.session.add(drawing)
+                db.session.flush()
+                revision = DesignDrawingRevision(
+                    drawing_id=drawing.id,
+                    version_number=1,
+                    file_name=filename,
+                    change_reason=notes,
+                    changed_by_user_id=current_user.id,
+                )
+                drawing.current_version_number = 1
+                drawing.updated_at = datetime.datetime.utcnow()
+                db.session.add(revision)
+                _notify_assignee(
+                    f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+                )
+                db.session.commit()
+                flash("New drawing uploaded.", "success")
+        elif action == "upload_revision":
+            drawing_id = request.form.get("drawing_id")
+            notes = request.form.get("change_reason") or None
+            file = request.files.get("revision_file")
+            if not drawing_id:
+                flash("Please choose a drawing to upload a revision.", "danger")
+            elif not file or not file.filename:
+                flash("Please attach a drawing file for the revision.", "danger")
+            else:
+                drawing = DesignDrawing.query.get(drawing_id)
+                if not drawing or drawing.design_task_id != task.id:
+                    abort(404)
+                filename = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
+                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                file.save(save_path)
+                latest_version = (
+                    db.session.query(func.max(DesignDrawingRevision.version_number))
+                    .filter(DesignDrawingRevision.drawing_id == drawing.id)
+                    .scalar()
+                    or 0
+                )
+                next_version = latest_version + 1
                 drawing.current_version_number = next_version
+                drawing.updated_at = datetime.datetime.utcnow()
                 revision = DesignDrawingRevision(
                     drawing_id=drawing.id,
                     version_number=next_version,
                     file_name=filename,
-                    change_reason=request.form.get("change_reason"),
+                    change_reason=notes,
                     changed_by_user_id=current_user.id,
-                    )
+                )
                 db.session.add(revision)
                 _notify_assignee(
                     f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
                 )
                 db.session.commit()
                 flash("Drawing revision uploaded.", "success")
+        elif action == "update_drawing_status":
+            drawing_id = request.form.get("drawing_id")
+            status_value = request.form.get("status")
+            drawing = DesignDrawing.query.get(drawing_id) if drawing_id else None
+            if not drawing or drawing.design_task_id != task.id:
+                abort(404)
+            if status_value not in allowed_drawing_statuses:
+                flash("Invalid drawing status.", "danger")
+            else:
+                drawing.status = status_value
+                drawing.updated_at = datetime.datetime.utcnow()
+                db.session.commit()
+                flash("Drawing status updated.", "success")
+        elif action == "update_task":
+            title = (request.form.get("title") or "").strip()
+            priority = request.form.get("priority") or task.priority
+            due_date_raw = request.form.get("due_date")
+            assignee_id = request.form.get("assigned_to_user_id") or None
+            status_value = request.form.get("task_status") or task.status
+            project_id = request.form.get("project_id") or None
+
+            if not title:
+                flash("Task title is required.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+
+            try:
+                due_date = (
+                    datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+                    if due_date_raw
+                    else None
+                )
+            except ValueError:
+                due_date = None
+
+            if status_value in task_status_options:
+                task.status = status_value
+            task.description = title
+            task.priority = priority
+            task.due_date = due_date
+            task.assigned_to_user_id = int(assignee_id) if assignee_id else None
+
+            if can_link_project:
+                if project_id:
+                    project = Project.query.get(project_id)
+                    if project:
+                        task.project_id = project.id
+                        task.project_name = project.name
+                else:
+                    task.project_id = None
+
+            task.updated_at = datetime.datetime.utcnow()
+            db.session.commit()
+            flash("Design task updated.", "success")
         elif action == "bom_item":
             bom_id = request.form.get("bom_id")
             bom_status = request.form.get("bom_status") or "draft"
@@ -6459,8 +6564,30 @@ def design_task_detail(task_id):
         return redirect(url_for("design_task_detail", task_id=task.id))
 
     drawings = DesignDrawing.query.filter_by(design_task_id=task.id).all()
+
+    def _latest_revision_at(drawing):
+        latest = max(
+            (rev.created_at for rev in drawing.revisions if rev.created_at),
+            default=None,
+        )
+        return latest or drawing.updated_at or drawing.created_at
+
+    drawings_sorted = sorted(drawings, key=_latest_revision_at, reverse=True)
+    drawings_by_type = {option["value"]: [] for option in drawing_type_options}
+    drawings_by_type.setdefault("Other", [])
+    latest_revisions = {}
+    for drawing in drawings_sorted:
+        drawing_type = drawing.drawing_type or "Other"
+        if drawing_type not in drawings_by_type:
+            drawing_type = "Other"
+        drawings_by_type[drawing_type].append(drawing)
+        revisions_sorted = sorted(
+            drawing.revisions, key=lambda rev: rev.version_number, reverse=True
+        )
+        latest_revisions[drawing.id] = revisions_sorted[0] if revisions_sorted else None
     bom_list = BillOfMaterials.query.filter_by(design_task_id=task.id).all()
     related_drawing_sites = []
+    users = User.query.order_by(User.first_name, User.username).all()
     project_options = (
         Project.query.order_by(Project.created_at.desc().nullslast()).limit(100).all()
     )
@@ -6485,10 +6612,17 @@ def design_task_detail(task_id):
         boms=bom_list,
         related_drawing_sites=related_drawing_sites,
         can_edit_bom=can_edit_bom,
+        can_link_project=can_link_project,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
         stage_options=stage_options,
         default_stage=default_stage,
+        drawing_type_options=drawing_type_options,
+        drawing_status_options=drawing_status_options,
+        task_status_options=task_status_options,
+        drawings_by_type=drawings_by_type,
+        latest_revisions=latest_revisions,
+        users=users,
     )
 
 
@@ -11651,6 +11785,42 @@ def ensure_design_task_columns():
         print("✔️ design_task OK")
 
 
+def ensure_design_drawing_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_design_drawing_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='design_drawing'")
+    exists = cur.fetchone() is not None
+
+    if not exists:
+        conn.close()
+        print("ℹ️ design_drawing table does not exist; skipping ensure_design_drawing_columns.")
+        return
+
+    cur.execute("PRAGMA table_info(design_drawing)")
+    drawing_cols = {row[1] for row in cur.fetchall()}
+    added_cols = []
+
+    if "drawing_type" not in drawing_cols:
+        cur.execute("ALTER TABLE design_drawing ADD COLUMN drawing_type TEXT DEFAULT 'Other';")
+        added_cols.append("drawing_type")
+
+    if "status" not in drawing_cols:
+        cur.execute("ALTER TABLE design_drawing ADD COLUMN status TEXT DEFAULT 'Draft';")
+        added_cols.append("status")
+
+    conn.commit()
+    conn.close()
+
+    if added_cols:
+        print(f"✅ Auto-added in design_drawing: {', '.join(added_cols)}")
+    else:
+        print("✔️ design_drawing OK")
+
+
 def ensure_project_task_backfill():
     created = 0
     order_map = {}
@@ -12193,6 +12363,7 @@ def bootstrap_db():
     ensure_delivery_order_item_columns()
     ensure_delivery_challan_columns()
     ensure_design_task_columns()
+    ensure_design_drawing_columns()
     ensure_bom_columns()
     ensure_purchase_order_item_columns()
     ensure_vendor_product_rate_table()

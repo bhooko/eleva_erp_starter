@@ -2019,6 +2019,8 @@ class DesignDrawing(db.Model):
         db.Integer, db.ForeignKey("design_task.id"), nullable=True, index=True
     )
     name = db.Column(db.String(150), nullable=False)
+    drawing_type = db.Column(db.String(50), nullable=False, default="Other")
+    status = db.Column(db.String(50), nullable=False, default="Draft")
     current_version_number = db.Column(db.Integer, default=1)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)

@@ -8,7 +8,11 @@
       <p class="text-sm uppercase text-slate-500">Design Task · {{ task.task_type.replace('_',' ').title() }}</p>
       <h1 class="text-2xl font-semibold">{{ task.description or task.project_label }}</h1>
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        {% if task.project_id %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Project: {{ task.project_label }}</span>
+        {% else %}
+        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-100 text-red-700">Unlinked project</span>
+        {% endif %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-orange-100 text-orange-800">Status: {{ task.status.replace('_',' ').title() }}</span>
         {% if task.origin_type %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-900 text-white">Origin: {{ task.origin_type.title() }} {% if task.origin_reference %}· {{ task.origin_reference }}{% endif %}</span>
@@ -16,6 +20,13 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
+      <button
+        type="button"
+        data-modal-target="editDesignTaskModal"
+        class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50"
+      >
+        Edit Task
+      </button>
       {% if task.task_type == 'sales_query' or task.origin_type == 'sales' %}
       <button id="openClarificationModal" class="px-4 py-2 rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100">Request Clarification from Sales</button>
       {% endif %}
@@ -44,54 +55,101 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-xs uppercase text-slate-500">Drawings</p>
-            <h2 class="text-lg font-semibold">Revisions timeline</h2>
+            <h2 class="text-lg font-semibold">Drawing packages</h2>
           </div>
+          <button
+            type="button"
+            data-modal-target="newDrawingModal"
+            class="px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition"
+          >
+            + Upload new drawing
+          </button>
         </div>
-        <form method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50 border rounded-xl p-3">
-          {{ csrf_field() }}
-          <input type="hidden" name="action" value="revision" />
-          <label class="space-y-1">
-            <span class="text-sm">Drawing name</span>
-            <input type="text" name="drawing_name" class="w-full rounded-lg border-slate-200" placeholder="Lift GA Drawing" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Attach file</span>
-            <input type="file" name="revision_file" class="w-full text-sm" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Reason / notes</span>
-            <input type="text" name="change_reason" class="w-full rounded-lg border-slate-200" placeholder="Updated shaft details" />
-          </label>
-          <div class="md:col-span-2 lg:col-span-3 flex items-center justify-end">
-            <button type="submit" class="px-4 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Upload revision</button>
-          </div>
-        </form>
-        <div class="space-y-3">
-          {% for drawing in drawings %}
-          <div class="border rounded-xl p-3">
+        {% if not task.project_id %}
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          This task is unlinked to a project. Link it to keep drawings organized.
+        </div>
+        {% endif %}
+        <div class="space-y-4">
+          {% for type_option in drawing_type_options %}
+          {% set drawings_for_type = drawings_by_type.get(type_option.value, []) %}
+          <div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
             <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-semibold">{{ drawing.name }}</p>
-                <p class="text-xs text-slate-500">Current v{{ drawing.current_version_number }}</p>
-              </div>
+              <h3 class="text-sm font-semibold text-slate-800">{{ type_option.label }}</h3>
+              <span class="text-xs text-slate-500">{{ drawings_for_type|length }} drawings</span>
             </div>
-            <div class="mt-2 space-y-2">
-              {% for rev in drawing.revisions|sort(attribute='version_number', reverse=True) %}
-              <div class="flex items-start gap-3 text-sm">
-                <div class="px-2 py-1 bg-slate-100 rounded-lg">v{{ rev.version_number }}</div>
-                <div class="flex-1">
-                  <p class="font-semibold">{{ rev.change_reason or 'Uploaded revision' }}</p>
-                  <p class="text-xs text-slate-500">{{ rev.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if rev.created_at else '' }} · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}</p>
-                  <a href="{{ url_for('static', filename='uploads/' ~ rev.file_name) }}" class="text-orange-600 text-xs" download>Download</a>
+            <div class="mt-3 space-y-3">
+              {% for drawing in drawings_for_type %}
+              {% set latest_revision = latest_revisions.get(drawing.id) %}
+              {% set last_updated = latest_revision.created_at if latest_revision and latest_revision.created_at else drawing.updated_at %}
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold">{{ drawing.name }}</p>
+                    <p class="text-xs text-slate-500">Current v{{ drawing.current_version_number }}</p>
+                    <p class="text-xs text-slate-500">Last updated {{ last_updated|format_india_datetime('%d %b %Y, %I:%M %p') if last_updated else '—' }}</p>
+                  </div>
+                  <div class="flex flex-col items-end gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="px-2 py-1 rounded-lg text-xs bg-slate-100 text-slate-700">{{ drawing.status }}</span>
+                      <form method="POST" class="flex items-center gap-1">
+                        {{ csrf_field() }}
+                        <input type="hidden" name="action" value="update_drawing_status" />
+                        <input type="hidden" name="drawing_id" value="{{ drawing.id }}" />
+                        <select name="status" class="rounded-lg border-slate-200 text-xs">
+                          {% for status in drawing_status_options %}
+                          <option value="{{ status }}" {% if drawing.status == status %}selected{% endif %}>{{ status }}</option>
+                          {% endfor %}
+                        </select>
+                        <button type="submit" class="px-2 py-1 rounded-lg border text-xs">Update</button>
+                      </form>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        data-revision-modal="revisionUploadModal"
+                        data-drawing-id="{{ drawing.id }}"
+                        data-drawing-name="{{ drawing.name }}"
+                        class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50"
+                      >
+                        Upload revision
+                      </button>
+                      {% if latest_revision %}
+                      <a
+                        href="{{ url_for('static', filename='uploads/' ~ latest_revision.file_name) }}"
+                        class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50"
+                        download
+                      >
+                        Download latest
+                      </a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-3 max-h-48 overflow-y-auto space-y-2 border-t border-slate-100 pt-3">
+                  {% set sorted_revisions = drawing.revisions|sort(attribute='version_number', reverse=True) %}
+                  {% for rev in sorted_revisions %}
+                  <div class="flex items-start gap-3 text-xs text-slate-600">
+                    <div class="px-2 py-1 bg-slate-100 rounded-lg text-slate-700">v{{ rev.version_number }}</div>
+                    <div class="flex-1">
+                      <p class="text-sm font-semibold text-slate-800">{{ rev.change_reason or 'Uploaded revision' }}</p>
+                      <p class="text-xs text-slate-500">
+                        {{ rev.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if rev.created_at else '' }}
+                        · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}
+                      </p>
+                      <a href="{{ url_for('static', filename='uploads/' ~ rev.file_name) }}" class="text-orange-600 text-xs" download>Download</a>
+                    </div>
+                  </div>
+                  {% else %}
+                  <p class="text-xs text-slate-500">No revisions yet.</p>
+                  {% endfor %}
                 </div>
               </div>
               {% else %}
-              <p class="text-sm text-slate-500">No revisions yet.</p>
+              <p class="text-sm text-slate-500">No drawings in this category.</p>
               {% endfor %}
             </div>
           </div>
-          {% else %}
-          <p class="text-sm text-slate-500">No drawings uploaded yet.</p>
           {% endfor %}
         </div>
       </div>
@@ -355,6 +413,148 @@
   </div>
 </div>
 
+<div id="editDesignTaskModal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-modal-overlay></div>
+  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <div>
+        <p class="text-xs text-slate-500 uppercase">Edit task</p>
+        <h2 class="text-lg font-semibold">Update design task</h2>
+      </div>
+      <button class="text-slate-500" type="button" data-close-modal>✕</button>
+    </div>
+    <form method="POST" class="p-5 space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="update_task" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Task title</span>
+          <input type="text" name="title" class="w-full rounded-lg border-slate-200" value="{{ task.description or task.project_label }}" required />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Priority</span>
+          <select name="priority" class="w-full rounded-lg border-slate-200">
+            <option value="low" {% if task.priority == 'low' %}selected{% endif %}>Low</option>
+            <option value="medium" {% if task.priority == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="high" {% if task.priority == 'high' %}selected{% endif %}>High</option>
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Due date</span>
+          <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" value="{{ task.due_date.strftime('%Y-%m-%d') if task.due_date else '' }}" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Designer</span>
+          <select name="assigned_to_user_id" class="w-full rounded-lg border-slate-200">
+            <option value="">Unassigned</option>
+            {% for user in users %}
+            <option value="{{ user.id }}" {% if task.assigned_to_user_id == user.id %}selected{% endif %}>{{ user.display_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Status</span>
+          <select name="task_status" class="w-full rounded-lg border-slate-200">
+            {% for status in task_status_options %}
+            <option value="{{ status }}" {% if task.status == status %}selected{% endif %}>{{ status.replace('_',' ').title() }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if can_link_project %}
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Project link</span>
+          <select name="project_id" class="w-full rounded-lg border-slate-200">
+            <option value="">Unlinked</option>
+            {% for project in project_options %}
+            <option value="{{ project.id }}" {% if task.project_id == project.id %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="newDrawingModal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-modal-overlay></div>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <div>
+        <p class="text-xs text-slate-500 uppercase">New drawing</p>
+        <h2 class="text-lg font-semibold">Upload a new drawing</h2>
+      </div>
+      <button class="text-slate-500" type="button" data-close-modal>✕</button>
+    </div>
+    <form method="POST" enctype="multipart/form-data" class="p-5 space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="upload_new_drawing" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Drawing name</span>
+          <input type="text" name="drawing_name" class="w-full rounded-lg border-slate-200" placeholder="Lift GA Drawing" required />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">Drawing type</span>
+          <select name="drawing_type" class="w-full rounded-lg border-slate-200">
+            {% for option in drawing_type_options %}
+            <option value="{{ option.value }}">{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm text-slate-600">File</span>
+          <input type="file" name="drawing_file" class="w-full text-sm" required />
+        </label>
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Notes / reason</span>
+          <input type="text" name="change_reason" class="w-full rounded-lg border-slate-200" placeholder="Initial issue for review" />
+        </label>
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="revisionUploadModal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-modal-overlay></div>
+  <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <div>
+        <p class="text-xs text-slate-500 uppercase">Upload revision</p>
+        <h2 class="text-lg font-semibold">Add revision for <span data-revision-name>Drawing</span></h2>
+      </div>
+      <button class="text-slate-500" type="button" data-close-modal>✕</button>
+    </div>
+    <form method="POST" enctype="multipart/form-data" class="p-5 space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="upload_revision" />
+      <input type="hidden" name="drawing_id" value="" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Revision file</span>
+          <input type="file" name="revision_file" class="w-full text-sm" required />
+        </label>
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Notes / reason</span>
+          <input type="text" name="change_reason" class="w-full rounded-lg border-slate-200" placeholder="Updated shaft details" />
+        </label>
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Upload revision</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="clarificationModal" class="fixed inset-0 z-40 hidden items-center justify-center">
   <div class="absolute inset-0 bg-slate-900/60 backdrop-blur" onclick="toggleClarification(false)"></div>
   <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
@@ -381,6 +581,48 @@
 </div>
 
 <script>
+  const modals = document.querySelectorAll('[data-modal]');
+  const toggleModal = (modal, state) => {
+    if (!modal) return;
+    const shouldShow = state !== false;
+    modal.classList.toggle('hidden', !shouldShow);
+    modal.classList.toggle('flex', shouldShow);
+  };
+
+  modals.forEach(modal => {
+    modal.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => toggleModal(modal, false));
+    });
+    modal.querySelectorAll('[data-modal-overlay]').forEach(overlay => {
+      overlay.addEventListener('click', () => toggleModal(modal, false));
+    });
+  });
+
+  document.querySelectorAll('[data-modal-target]').forEach(trigger => {
+    trigger.addEventListener('click', event => {
+      event.preventDefault();
+      const target = document.getElementById(trigger.dataset.modalTarget);
+      toggleModal(target, true);
+    });
+  });
+
+  const revisionModal = document.getElementById('revisionUploadModal');
+  const revisionName = revisionModal?.querySelector('[data-revision-name]');
+  const revisionInput = revisionModal?.querySelector('input[name="drawing_id"]');
+  document.querySelectorAll('[data-revision-modal]').forEach(trigger => {
+    trigger.addEventListener('click', event => {
+      event.preventDefault();
+      if (!revisionModal) return;
+      if (revisionInput) {
+        revisionInput.value = trigger.dataset.drawingId || '';
+      }
+      if (revisionName) {
+        revisionName.textContent = trigger.dataset.drawingName || 'Drawing';
+      }
+      toggleModal(revisionModal, true);
+    });
+  });
+
   const clarificationModal = document.getElementById('clarificationModal');
   function toggleClarification(state){
     if(!clarificationModal) return;
