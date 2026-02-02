@@ -16255,6 +16255,7 @@ def _org_upload_template(kind: str):
 
 # ---------------------- ADMINISTRATION ----------------------
 def _admin_users_context(create_defaults=None, show_create=False):
+    admin_settings = _load_admin_settings()
     departments = sorted(
         Department.query.options(joinedload(Department.parent)).order_by(Department.name.asc()).all(),
         key=lambda d: (d.full_name or "").lower(),
@@ -16277,6 +16278,7 @@ def _admin_users_context(create_defaults=None, show_create=False):
         category_url=url_for("admin_users"),
         create_user_defaults=defaults,
         show_create_user_form=show_create,
+        admin_settings=admin_settings,
     )
 
 
