@@ -7419,7 +7419,8 @@ def design_bom_template_edit(template_id):
             joinedload(BomTemplate.inputs),
             joinedload(BomTemplate.stages)
             .joinedload(BomTemplateStage.sections)
-            .joinedload(BomTemplateSection.lines),
+            .joinedload(BomTemplateSection.lines)
+            .joinedload(BomTemplateLine.part_class),
         )
         .get_or_404(template_id)
     )
@@ -7671,6 +7672,30 @@ def design_bom_template_edit(template_id):
         .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
         .all()
     )
+    input_keys = [
+        {
+            "key": template_input.input_key,
+            "label": template_input.label or "",
+        }
+        for template_input in template.inputs
+        if template_input.input_key
+    ]
+    line_keys = []
+    for stage in sorted(template.stages, key=lambda item: item.display_order or 0):
+        for section in sorted(stage.sections, key=lambda item: item.display_order or 0):
+            for line in sorted(section.lines, key=lambda item: item.display_order or 0):
+                if not line.ref_key:
+                    continue
+                line_keys.append(
+                    {
+                        "ref_key": line.ref_key,
+                        "specification_text": line.specification_text or "",
+                        "unit": line.unit or "",
+                        "part_class": line.part_class.name if line.part_class else "",
+                        "section": section.section_name or "",
+                        "stage": stage.stage_name or "",
+                    }
+                )
     if evaluation is None:
         evaluation = evaluate_bom_template(template)
     return render_template(
@@ -7680,6 +7705,8 @@ def design_bom_template_edit(template_id):
         LIFT_TYPES=LIFT_TYPES,
         BOM_INPUT_DATA_TYPES=BOM_INPUT_DATA_TYPES,
         evaluation=evaluation,
+        input_keys=input_keys,
+        line_keys=line_keys,
     )
 
 
