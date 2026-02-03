@@ -2444,6 +2444,23 @@ def slugify(value):
     return value or _random_digits(6)
 
 
+def _slugify_ref_key(value, fallback="item"):
+    value = (value or "").lower()
+    value = re.sub(r"\s+", "_", value)
+    value = re.sub(r"[^a-z0-9_]", "", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value or fallback
+
+
+def _generate_unique_ref_key(base_value, existing_keys):
+    base = _slugify_ref_key(base_value)
+    while True:
+        suffix = uuid.uuid4().hex[:4]
+        candidate = f"{base}_{suffix}"
+        if candidate not in existing_keys:
+            return candidate
+
+
 SRT_SAMPLE_TASKS = []
 
 
@@ -7550,9 +7567,24 @@ def design_bom_template_edit(template_id):
             override_if_expr = (request.form.get("override_if_expr") or "").strip() or None
             override_qty_expr = (request.form.get("override_qty_expr") or "").strip() or None
             display_order = int(request.form.get("display_order") or 0)
-            if not ref_key or not unit or not qty_expr or not part_class_id:
-                flash("Ref key, part class, unit, and qty expression are required.", "error")
+            if not unit or not qty_expr or not part_class_id:
+                flash("Part class, unit, and qty expression are required.", "error")
             else:
+                if not ref_key:
+                    existing_ref_keys = {
+                        (line.ref_key or "").strip()
+                        for stage in template.stages
+                        for sec in stage.sections
+                        for line in sec.lines
+                        if (line.ref_key or "").strip()
+                    }
+                    part_class = PartClass.query.get(part_class_id)
+                    base_value = (
+                        (part_class.name if part_class else None)
+                        or specification_text
+                        or "item"
+                    )
+                    ref_key = _generate_unique_ref_key(base_value, existing_ref_keys)
                 line = BomTemplateLine(
                     section_id=section.id,
                     ref_key=ref_key,
@@ -7573,7 +7605,9 @@ def design_bom_template_edit(template_id):
             line = BomTemplateLine.query.get_or_404(line_id)
             if line.section.stage.template_id != template.id:
                 abort(404)
-            line.ref_key = (request.form.get("ref_key") or "").strip()
+            submitted_ref_key = (request.form.get("ref_key") or "").strip()
+            if submitted_ref_key:
+                line.ref_key = submitted_ref_key
             line.part_class_id = request.form.get("part_class_id")
             line.specification_text = (request.form.get("specification_text") or "").strip() or None
             line.unit = (request.form.get("unit") or "").strip()
