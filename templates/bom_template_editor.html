@@ -198,8 +198,8 @@
                       <input name="unit" value="{{ line.unit }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="unit" />
                       <input name="display_order" value="{{ line.display_order }}" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 order-input" />
                       <input name="specification_text" value="{{ line.specification_text or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Specification" />
-                      <input name="include_if_expr" value="{{ line.include_if_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
-                      <input name="qty_expr" value="{{ line.qty_expr }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
+                      <input name="include_if_expr" value="{{ line.include_if_expr or '' }}" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
+                      <input name="qty_expr" value="{{ line.qty_expr }}" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
                       <input name="override_if_expr" value="{{ line.override_if_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
                       <input name="override_qty_expr" value="{{ line.override_qty_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
                       <div class="lg:col-span-6 flex flex-wrap gap-2">
@@ -232,8 +232,8 @@
                   <input name="unit" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="unit" />
                   <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="order" />
                   <input name="specification_text" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Specification" />
-                  <input name="include_if_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
-                  <input name="qty_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
+                  <input name="include_if_expr" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="include_if_expr" />
+                  <input name="qty_expr" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="qty_expr" />
                   <input name="override_if_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
                   <input name="override_qty_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
                   <div class="lg:col-span-6">
@@ -339,7 +339,74 @@
   </div>
 </div>
 
+<div id="expr-helper" class="expr-helper hidden rounded-xl border border-slate-700 bg-slate-950/95 text-slate-200 shadow-xl">
+  <div class="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+    <div class="text-xs uppercase tracking-wide text-slate-400">Insert Variable</div>
+    <div class="text-[10px] text-slate-500">Esc to close</div>
+  </div>
+  <div class="p-3 space-y-3">
+    <input id="expr-helper-search" type="text" class="w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm" placeholder="Search inputs or line keys..." />
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="expr-fn-btn rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs" data-token="roundup(">roundup()</button>
+      <button type="button" class="expr-fn-btn rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs" data-token="min(">min()</button>
+      <button type="button" class="expr-fn-btn rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs" data-token="max(">max()</button>
+    </div>
+    <div class="expr-helper-scroll space-y-4">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Inputs</div>
+        <div id="expr-helper-inputs" class="space-y-1"></div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Line Keys</div>
+        <div id="expr-helper-lines" class="space-y-1"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .expr-helper {
+    position: absolute;
+    width: 340px;
+    max-width: calc(100vw - 24px);
+    max-height: 420px;
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 80;
+  }
+  .expr-helper.is-open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .expr-helper-scroll {
+    max-height: 280px;
+    overflow: auto;
+    padding-right: 4px;
+  }
+  .expr-helper-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 8px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+  }
+  .expr-helper-item.is-active {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(148, 163, 184, 0.4);
+  }
+  .expr-helper-item button {
+    border-radius: 6px;
+  }
+</style>
+
 <script>
+  window.BOM_INPUT_KEYS = {{ input_keys|tojson }};
+  window.BOM_LINE_KEYS = {{ line_keys|tojson }};
+
   const templateId = {{ template.id }};
   const scrollStorageKey = `bomTemplateScroll:${templateId}`;
   const tabStorageKey = `bomTemplateTab:${templateId}`;
@@ -422,5 +489,268 @@
       });
     });
   });
+
+  const helper = document.getElementById('expr-helper');
+  const helperSearch = document.getElementById('expr-helper-search');
+  const helperInputs = document.getElementById('expr-helper-inputs');
+  const helperLines = document.getElementById('expr-helper-lines');
+  const helperFnButtons = helper.querySelectorAll('.expr-fn-btn');
+  const inputKeys = window.BOM_INPUT_KEYS || [];
+  const lineKeys = window.BOM_LINE_KEYS || [];
+  let activeField = null;
+  let activeIndex = -1;
+  let visibleItems = [];
+  let pendingPositionFrame = null;
+
+  const buildInputLabel = (item) => {
+    const label = (item.label || '').trim();
+    return label ? `${item.key} — ${label}` : item.key;
+  };
+
+  const buildLineLabel = (item) => {
+    const details = [
+      item.specification_text,
+      item.unit,
+      item.part_class,
+      item.section,
+      item.stage,
+    ]
+      .map((value) => (value || '').trim())
+      .filter(Boolean);
+    return details.length ? `${item.ref_key} — ${details.join(' · ')}` : item.ref_key;
+  };
+
+  const buildFilterText = (item, type) => {
+    if (type === 'input') {
+      return `${item.key} ${item.label || ''}`.toLowerCase();
+    }
+    return [
+      item.ref_key,
+      item.specification_text,
+      item.unit,
+      item.part_class,
+      item.section,
+      item.stage,
+    ]
+      .join(' ')
+      .toLowerCase();
+  };
+
+  const renderHelperLists = () => {
+    const term = (helperSearch.value || '').trim().toLowerCase();
+    const filteredInputs = inputKeys.filter((item) =>
+      buildFilterText(item, 'input').includes(term),
+    );
+    const filteredLines = lineKeys.filter((item) =>
+      buildFilterText(item, 'line').includes(term),
+    );
+
+    const combined = [
+      ...filteredInputs.map((item) => ({
+        type: 'input',
+        key: item.key,
+        id: `input:${item.key}`,
+        label: buildInputLabel(item),
+      })),
+      ...filteredLines.map((item) => ({
+        type: 'line',
+        key: item.ref_key,
+        id: `line:${item.ref_key}`,
+        label: buildLineLabel(item),
+      })),
+    ];
+
+    helperInputs.innerHTML = filteredInputs.length
+      ? filteredInputs
+          .map((item) => {
+            const label = buildInputLabel(item);
+            return `
+              <div class="expr-helper-item" data-key="${item.key}" data-id="input:${item.key}" data-type="input">
+                <button type="button" class="flex-1 text-left text-sm text-slate-100" data-token="${item.key}">
+                  ${label}
+                </button>
+                <button type="button" class="text-xs text-slate-400 hover:text-slate-200" data-copy="${item.key}">Copy</button>
+              </div>
+            `;
+          })
+          .join('')
+      : '<div class="text-xs text-slate-500">No inputs found.</div>';
+
+    helperLines.innerHTML = filteredLines.length
+      ? filteredLines
+          .map((item) => {
+            const label = buildLineLabel(item);
+            return `
+              <div class="expr-helper-item" data-key="${item.ref_key}" data-id="line:${item.ref_key}" data-type="line">
+                <button type="button" class="flex-1 text-left text-sm text-slate-100" data-token="${item.ref_key}">
+                  ${label}
+                </button>
+                <button type="button" class="text-xs text-slate-400 hover:text-slate-200" data-copy="${item.ref_key}">Copy</button>
+              </div>
+            `;
+          })
+          .join('')
+      : '<div class="text-xs text-slate-500">No line keys found.</div>';
+
+    visibleItems = combined;
+    activeIndex = visibleItems.length ? 0 : -1;
+    syncActiveHighlight();
+  };
+
+  const syncActiveHighlight = () => {
+    helper.querySelectorAll('.expr-helper-item').forEach((item) => {
+      item.classList.remove('is-active');
+    });
+    if (activeIndex < 0 || activeIndex >= visibleItems.length) {
+      return;
+    }
+    const target = visibleItems[activeIndex];
+    const targetEl = helper.querySelector(
+      `.expr-helper-item[data-id="${CSS.escape(target.id)}"]`,
+    );
+    if (targetEl) {
+      targetEl.classList.add('is-active');
+      targetEl.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
+  const insertToken = (token) => {
+    if (!activeField) return;
+    const start = activeField.selectionStart ?? activeField.value.length;
+    const end = activeField.selectionEnd ?? activeField.value.length;
+    const value = activeField.value || '';
+    activeField.value = value.slice(0, start) + token + value.slice(end);
+    const cursorPosition = start + token.length;
+    activeField.setSelectionRange(cursorPosition, cursorPosition);
+    activeField.dispatchEvent(new Event('input', { bubbles: true }));
+    activeField.focus();
+  };
+
+  const copyToken = async (token) => {
+    try {
+      await navigator.clipboard.writeText(token);
+    } catch (error) {
+      const temp = document.createElement('textarea');
+      temp.value = token;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+    }
+  };
+
+  const positionHelper = () => {
+    if (!activeField) return;
+    const rect = activeField.getBoundingClientRect();
+    helper.style.top = '0px';
+    helper.style.left = '0px';
+    const helperRect = helper.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 8;
+    let left = rect.left + window.scrollX;
+    if (left + helperRect.width > window.scrollX + window.innerWidth) {
+      left = window.scrollX + window.innerWidth - helperRect.width - 12;
+    }
+    if (top + helperRect.height > window.scrollY + window.innerHeight) {
+      top = rect.top + window.scrollY - helperRect.height - 8;
+    }
+    helper.style.top = `${Math.max(12, top)}px`;
+    helper.style.left = `${Math.max(12, left)}px`;
+  };
+
+  const openHelper = (field) => {
+    activeField = field;
+    helper.classList.remove('hidden');
+    helper.classList.add('is-open');
+    helperSearch.value = '';
+    renderHelperLists();
+    requestAnimationFrame(positionHelper);
+  };
+
+  const closeHelper = () => {
+    helper.classList.remove('is-open');
+    activeField = null;
+    window.setTimeout(() => {
+      if (!helper.classList.contains('is-open')) {
+        helper.classList.add('hidden');
+      }
+    }, 160);
+  };
+
+  const schedulePosition = () => {
+    if (!activeField) return;
+    if (pendingPositionFrame) {
+      cancelAnimationFrame(pendingPositionFrame);
+    }
+    pendingPositionFrame = requestAnimationFrame(positionHelper);
+  };
+
+  document.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.classList.contains('expr-field')) return;
+    openHelper(target);
+  });
+
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (helper.contains(target)) {
+      const token = target.dataset.token;
+      const copyValue = target.dataset.copy;
+      if (token) {
+        insertToken(token);
+      }
+      if (copyValue) {
+        copyToken(copyValue);
+      }
+      return;
+    }
+    if (target.classList.contains('expr-field')) {
+      return;
+    }
+    closeHelper();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (!activeField || helper.classList.contains('hidden')) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeHelper();
+      activeField.blur();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!visibleItems.length) return;
+      event.preventDefault();
+      if (event.key === 'ArrowDown') {
+        activeIndex = (activeIndex + 1) % visibleItems.length;
+      } else {
+        activeIndex = (activeIndex - 1 + visibleItems.length) % visibleItems.length;
+      }
+      syncActiveHighlight();
+      return;
+    }
+    if (event.key === 'Enter') {
+      if (activeIndex < 0 || activeIndex >= visibleItems.length) return;
+      event.preventDefault();
+      insertToken(visibleItems[activeIndex].key);
+    }
+  });
+
+  helperSearch.addEventListener('input', () => {
+    renderHelperLists();
+  });
+
+  helperFnButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const token = btn.dataset.token;
+      if (token) {
+        insertToken(token);
+      }
+    });
+  });
+
+  window.addEventListener('scroll', schedulePosition, true);
+  window.addEventListener('resize', schedulePosition);
 </script>
 {% endblock %}
