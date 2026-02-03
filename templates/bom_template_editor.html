@@ -366,20 +366,24 @@
 
 <style>
   .expr-helper {
-    position: absolute;
+    position: fixed;
     width: 340px;
     max-width: calc(100vw - 24px);
     max-height: 420px;
     opacity: 0;
     transform: translateY(6px);
     pointer-events: none;
-    transition: opacity 0.15s ease, transform 0.15s ease;
-    z-index: 80;
+    transition: opacity 0.15s ease, transform 0.15s ease, top 0.1s ease, left 0.1s ease;
+    z-index: 9999;
   }
   .expr-helper.is-open {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
+  }
+  .expr-helper.is-measuring {
+    opacity: 0;
+    pointer-events: none;
   }
   .expr-helper-scroll {
     max-height: 280px;
@@ -501,6 +505,8 @@
   let activeIndex = -1;
   let visibleItems = [];
   let pendingPositionFrame = null;
+  let activeScrollParent = null;
+  let activeScrollParentHandler = null;
 
   const buildInputLabel = (item) => {
     const label = (item.label || '').trim();
@@ -639,36 +645,78 @@
     }
   };
 
-  const positionHelper = () => {
-    if (!activeField) return;
-    const rect = activeField.getBoundingClientRect();
+  const findScrollableParent = (element) => {
+    let current = element?.parentElement;
+    while (current && current !== document.body) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      const canScrollY = ['auto', 'scroll', 'overlay'].includes(overflowY);
+      const canScrollX = ['auto', 'scroll', 'overlay'].includes(overflowX);
+      if ((canScrollY && current.scrollHeight > current.clientHeight) ||
+          (canScrollX && current.scrollWidth > current.clientWidth)) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  };
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  const positionHelper = (field = activeField) => {
+    if (!field || helper.classList.contains('hidden')) return;
+    const rect = field.getBoundingClientRect();
     helper.style.top = '0px';
     helper.style.left = '0px';
     const helperRect = helper.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 8;
-    let left = rect.left + window.scrollX;
-    if (left + helperRect.width > window.scrollX + window.innerWidth) {
-      left = window.scrollX + window.innerWidth - helperRect.width - 12;
+    let left = rect.right + 8;
+    let top = rect.top;
+    if (left + helperRect.width > window.innerWidth - 8) {
+      left = rect.left - helperRect.width - 8;
     }
-    if (top + helperRect.height > window.scrollY + window.innerHeight) {
-      top = rect.top + window.scrollY - helperRect.height - 8;
+    if (top + helperRect.height > window.innerHeight - 8) {
+      top = window.innerHeight - helperRect.height - 8;
     }
-    helper.style.top = `${Math.max(12, top)}px`;
-    helper.style.left = `${Math.max(12, left)}px`;
+    const maxLeft = window.innerWidth - helperRect.width - 8;
+    const maxTop = window.innerHeight - helperRect.height - 8;
+    helper.style.left = `${clamp(left, 8, maxLeft)}px`;
+    helper.style.top = `${clamp(top, 8, maxTop)}px`;
   };
 
   const openHelper = (field) => {
     activeField = field;
     helper.classList.remove('hidden');
     helper.classList.add('is-open');
+    helper.classList.add('is-measuring');
     helperSearch.value = '';
     renderHelperLists();
-    requestAnimationFrame(positionHelper);
+    if (activeScrollParent && activeScrollParentHandler) {
+      activeScrollParent.removeEventListener('scroll', activeScrollParentHandler);
+    }
+    activeScrollParent = findScrollableParent(field);
+    if (activeScrollParent) {
+      activeScrollParentHandler = () => schedulePosition();
+      activeScrollParent.addEventListener('scroll', activeScrollParentHandler, {
+        passive: true,
+      });
+    } else {
+      activeScrollParentHandler = null;
+    }
+    requestAnimationFrame(() => {
+      positionHelper(field);
+      helper.classList.remove('is-measuring');
+    });
   };
 
   const closeHelper = () => {
     helper.classList.remove('is-open');
     activeField = null;
+    if (activeScrollParent && activeScrollParentHandler) {
+      activeScrollParent.removeEventListener('scroll', activeScrollParentHandler);
+    }
+    activeScrollParent = null;
+    activeScrollParentHandler = null;
     window.setTimeout(() => {
       if (!helper.classList.contains('is-open')) {
         helper.classList.add('hidden');
