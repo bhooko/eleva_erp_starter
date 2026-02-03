@@ -77,11 +77,6 @@
               <button type="button" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
             </div>
             <div id="poItems" class="space-y-4"></div>
-            <datalist id="product-list">
-              {% for product in products %}
-              <option value="{{ product.name }}" data-product-id="{{ product.id }}" data-specs="{{ product.specifications|default('', true)|e }}"></option>
-              {% endfor %}
-            </datalist>
           </div>
 
           <label class="space-y-1 block">
@@ -160,7 +155,10 @@
       <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 items-end">
         <label class="md:col-span-5 space-y-1">
           <span class="text-xs uppercase text-slate-500">Part name</span>
-          <input type="text" name="item_name[]" list="product-list" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="Start typing a part" data-part-name />
+          <div class="relative">
+            <input type="text" name="item_name[]" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="Start typing a part" data-part-name autocomplete="off" />
+            <div class="part-dropdown hidden" data-part-dropdown></div>
+          </div>
         </label>
         <label class="md:col-span-2 space-y-1">
           <span class="text-xs uppercase text-slate-500">Qty</span>
@@ -196,9 +194,102 @@
   </div>
 </template>
 
-<script>
-  window.PRODUCT_INDEX = {{ product_index|tojson }};
-</script>
+<div id="part-create-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur" data-create-overlay></div>
+  <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-xs uppercase text-slate-500">New part</p>
+        <h3 class="text-lg font-semibold text-slate-900">Create part</h3>
+        <p class="text-xs text-slate-500">Save a new part into the master list without leaving this PO.</p>
+      </div>
+      <button type="button" class="text-slate-500" data-create-cancel>✕</button>
+    </div>
+    <form class="mt-4 space-y-4" data-part-create-form>
+      <label class="space-y-1 block">
+        <span class="text-sm">Name</span>
+        <input type="text" required minlength="2" class="w-full rounded-lg border-slate-200 h-10 px-3" data-create-name />
+      </label>
+      <label class="space-y-1 block">
+        <span class="text-sm">Unit</span>
+        <input type="text" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" data-create-unit />
+      </label>
+      <label class="space-y-1 block">
+        <span class="text-sm">Specifications</span>
+        <textarea rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" data-create-description></textarea>
+      </label>
+      <p class="text-sm text-rose-600 hidden" data-create-error></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700" data-create-cancel>Cancel</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white" data-create-submit>Create part</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .part-dropdown {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+    max-height: 16rem;
+    overflow-y: auto;
+  }
+  .part-dropdown-item,
+  .part-dropdown-create {
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .part-dropdown-item:hover,
+  .part-dropdown-create:hover {
+    background: #f1f5f9;
+  }
+  .part-dropdown-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .part-dropdown-create {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2563eb;
+  }
+  html[data-theme="eleva-signature"] .part-dropdown,
+  html[data-theme="metallic-elevate"] .part-dropdown {
+    background: #0f172a;
+    border-color: #334155;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  }
+  html[data-theme="eleva-signature"] .part-dropdown-item,
+  html[data-theme="metallic-elevate"] .part-dropdown-item,
+  html[data-theme="eleva-signature"] .part-dropdown-create,
+  html[data-theme="metallic-elevate"] .part-dropdown-create {
+    color: #e2e8f0;
+  }
+  html[data-theme="eleva-signature"] .part-dropdown-item:hover,
+  html[data-theme="metallic-elevate"] .part-dropdown-item:hover,
+  html[data-theme="eleva-signature"] .part-dropdown-create:hover,
+  html[data-theme="metallic-elevate"] .part-dropdown-create:hover {
+    background: #1e293b;
+  }
+  html[data-theme="eleva-signature"] .part-dropdown-meta,
+  html[data-theme="metallic-elevate"] .part-dropdown-meta {
+    color: #94a3b8;
+  }
+  html[data-theme="eleva-signature"] .part-dropdown-item .text-slate-900,
+  html[data-theme="metallic-elevate"] .part-dropdown-item .text-slate-900 {
+    color: #f8fafc;
+  }
+</style>
 
 <script>
   (() => {
@@ -218,7 +309,7 @@
     const subtotalInput = form.querySelector('[name="subtotal_amount"]');
     const grandTotalInput = form.querySelector('[name="grand_total_amount"]');
     const vendorSelect = form.querySelector('[name="vendor_id"]');
-    const productIndex = window.PRODUCT_INDEX || {};
+    const csrfToken = '{{ csrf_token() }}';
 
     let lastAutoExpected = '';
     let autoUpdateExpected = true;
@@ -358,28 +449,178 @@
       }
     };
 
-    const clearAutoSpecs = (specsInput) => {
-      if (!specsInput) {
+    const clearAutoField = (input) => {
+      if (!input) {
         return;
       }
-      if (specsInput.dataset.autofilled === '1') {
-        specsInput.value = '';
+      if (input.dataset.autofilled === '1') {
+        input.value = '';
       }
-      delete specsInput.dataset.autofilled;
-      delete specsInput.dataset.autofilledValue;
+      delete input.dataset.autofilled;
+      delete input.dataset.autofilledValue;
     };
 
-    const applyProductSpecs = (specsInput, specsValue) => {
-      if (!specsInput) {
+    const applyAutofill = (input, value) => {
+      if (!input) {
         return;
       }
-      const previousAuto = specsInput.dataset.autofilledValue || '';
-      const currentValue = specsInput.value.trim();
-      if (!currentValue || specsInput.dataset.autofilled === '1' || currentValue === previousAuto) {
-        specsInput.value = specsValue || '';
-        specsInput.dataset.autofilled = '1';
-        specsInput.dataset.autofilledValue = specsValue || '';
+      const previousAuto = input.dataset.autofilledValue || '';
+      const currentValue = input.value.trim();
+      if (!currentValue || input.dataset.autofilled === '1' || currentValue === previousAuto) {
+        input.value = value || '';
+        input.dataset.autofilled = '1';
+        input.dataset.autofilledValue = value || '';
       }
+    };
+
+    const searchTimers = new WeakMap();
+    const searchTokens = new WeakMap();
+    let activeCreateRow = null;
+
+    const hideDropdown = (row) => {
+      if (!row) {
+        return;
+      }
+      const dropdown = row.querySelector('[data-part-dropdown]');
+      if (dropdown) {
+        dropdown.classList.add('hidden');
+      }
+    };
+
+    const showDropdown = (row) => {
+      if (!row) {
+        return;
+      }
+      const dropdown = row.querySelector('[data-part-dropdown]');
+      if (dropdown) {
+        dropdown.classList.remove('hidden');
+      }
+    };
+
+    const renderDropdown = (row, items, query) => {
+      const dropdown = row.querySelector('[data-part-dropdown]');
+      if (!dropdown) {
+        return;
+      }
+      dropdown.innerHTML = '';
+      const content = document.createElement('div');
+      content.className = 'py-2';
+
+      if (!items.length) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'px-3 py-2 text-xs text-slate-500';
+        emptyState.textContent = 'No matching parts found.';
+        content.appendChild(emptyState);
+      }
+
+      items.forEach((part) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'part-dropdown-item';
+        button.dataset.partOption = '1';
+        button.dataset.partId = part.id;
+        button.dataset.partName = part.name;
+        button.dataset.partUnit = part.unit || '';
+        button.dataset.partDescription = part.description || '';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'font-semibold text-slate-900';
+        nameEl.textContent = part.name;
+        const metaEl = document.createElement('span');
+        metaEl.className = 'part-dropdown-meta';
+        const metaParts = [];
+        if (part.unit) {
+          metaParts.push(part.unit);
+        }
+        if (part.description) {
+          metaParts.push(part.description);
+        }
+        metaEl.textContent = metaParts.join(' • ');
+
+        button.appendChild(nameEl);
+        if (metaEl.textContent) {
+          button.appendChild(metaEl);
+        }
+        content.appendChild(button);
+      });
+
+      if (query) {
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'part-dropdown-create';
+        createButton.dataset.createPart = '1';
+        createButton.dataset.createName = query;
+        createButton.textContent = `+ Create new part: ${query}`;
+        content.appendChild(createButton);
+      }
+
+      dropdown.appendChild(content);
+      showDropdown(row);
+    };
+
+    const selectPartForRow = (row, part) => {
+      if (!row || !part) {
+        return;
+      }
+      const partInput = row.querySelector('[data-part-name]');
+      const productIdInput = row.querySelector('[data-product-id]');
+      const unitInput = row.querySelector('[name="item_unit[]"]');
+      const specsInput = row.querySelector('[data-specs]');
+      if (partInput) {
+        partInput.value = part.name || '';
+        partInput.dataset.selectedName = part.name || '';
+      }
+      if (productIdInput) {
+        productIdInput.value = part.id || '';
+      }
+      applyAutofill(unitInput, part.unit || '');
+      applyAutofill(specsInput, part.description || '');
+      fetchVendorRate(row);
+      hideDropdown(row);
+      ensureTrailingBlankRow();
+    };
+
+    const queuePartSearch = (input) => {
+      if (!input) {
+        return;
+      }
+      const row = input.closest('.po-item-row');
+      const query = input.value.trim();
+      if (!row) {
+        return;
+      }
+
+      const currentTimer = searchTimers.get(input);
+      if (currentTimer) {
+        clearTimeout(currentTimer);
+      }
+
+      if (!query) {
+        hideDropdown(row);
+        return;
+      }
+
+      const timer = setTimeout(async () => {
+        const token = Symbol('search');
+        searchTokens.set(input, token);
+        try {
+          const response = await fetch(`/api/parts/search?q=${encodeURIComponent(query)}&limit=12`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          if (!response.ok) {
+            return;
+          }
+          const data = await response.json();
+          if (searchTokens.get(input) !== token) {
+            return;
+          }
+          renderDropdown(row, Array.isArray(data) ? data : [], query);
+        } catch (error) {
+          return;
+        }
+      }, 200);
+
+      searchTimers.set(input, timer);
     };
 
     const fetchVendorRate = async (row) => {
@@ -425,21 +666,18 @@
         return;
       }
       const productIdInput = row.querySelector('[data-product-id]');
+      const unitInput = row.querySelector('[name="item_unit[]"]');
       const specsInput = row.querySelector('[data-specs]');
       const partName = input.value.trim();
-      const product = partName ? productIndex[partName] : null;
-      if (product) {
-        if (productIdInput) {
-          productIdInput.value = product.id || '';
-        }
-        applyProductSpecs(specsInput, product.specs || '');
-        fetchVendorRate(row);
-      } else {
+      const selectedName = input.dataset.selectedName || '';
+      if (!partName || partName !== selectedName) {
         if (productIdInput) {
           productIdInput.value = '';
         }
-        clearAutoSpecs(specsInput);
+        clearAutoField(unitInput);
+        clearAutoField(specsInput);
       }
+      queuePartSearch(input);
       const isLast = itemsContainer && row === itemsContainer.querySelector('.po-item-row:last-child');
       if (isLast && partName) {
         ensureTrailingBlankRow();
@@ -460,8 +698,69 @@
       if (event.target.matches('[data-specs]')) {
         event.target.dataset.autofilled = '0';
       }
+      if (event.target.matches('[name="item_unit[]"]')) {
+        event.target.dataset.autofilled = '0';
+      }
       if (event.target.matches('[name="item_unit_price[]"]')) {
         event.target.dataset.autofilled = '0';
+      }
+    });
+
+    form.addEventListener('focusin', (event) => {
+      if (event.target && event.target.matches('[data-part-name]')) {
+        queuePartSearch(event.target);
+      }
+    });
+
+    form.addEventListener('focusout', (event) => {
+      if (event.target && event.target.matches('[data-part-name]')) {
+        const row = event.target.closest('.po-item-row');
+        setTimeout(() => hideDropdown(row), 150);
+      }
+    });
+
+    form.addEventListener('click', (event) => {
+      const option = event.target.closest('[data-part-option]');
+      if (option) {
+        event.preventDefault();
+        const row = option.closest('.po-item-row');
+        selectPartForRow(row, {
+          id: option.dataset.partId,
+          name: option.dataset.partName,
+          unit: option.dataset.partUnit,
+          description: option.dataset.partDescription,
+        });
+        return;
+      }
+
+      const createButton = event.target.closest('[data-create-part]');
+      if (createButton) {
+        event.preventDefault();
+        activeCreateRow = createButton.closest('.po-item-row');
+        const modal = document.getElementById('part-create-modal');
+        const nameInput = modal ? modal.querySelector('[data-create-name]') : null;
+        const unitInput = modal ? modal.querySelector('[data-create-unit]') : null;
+        const descInput = modal ? modal.querySelector('[data-create-description]') : null;
+        const errorEl = modal ? modal.querySelector('[data-create-error]') : null;
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+        if (nameInput) {
+          nameInput.value = createButton.dataset.createName || '';
+          nameInput.focus();
+          nameInput.select();
+        }
+        if (unitInput) {
+          unitInput.value = '';
+        }
+        if (descInput) {
+          descInput.value = '';
+        }
+        if (errorEl) {
+          errorEl.classList.add('hidden');
+          errorEl.textContent = '';
+        }
       }
     });
 
@@ -494,6 +793,110 @@
       updateRemoveButtons();
       ensureTrailingBlankRow();
     });
+
+    document.addEventListener('click', (event) => {
+      if (!form.contains(event.target)) {
+        if (itemsContainer) {
+          itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
+            dropdown.classList.add('hidden');
+          });
+        }
+        return;
+      }
+      if (
+        event.target.closest('[data-part-dropdown]') ||
+        event.target.closest('[data-part-name]')
+      ) {
+        return;
+      }
+      if (itemsContainer) {
+        itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
+          dropdown.classList.add('hidden');
+        });
+      }
+    });
+
+    const createModal = document.getElementById('part-create-modal');
+    if (createModal) {
+      const modalForm = createModal.querySelector('[data-part-create-form]');
+      const nameInput = createModal.querySelector('[data-create-name]');
+      const unitInput = createModal.querySelector('[data-create-unit]');
+      const descriptionInput = createModal.querySelector('[data-create-description]');
+      const errorEl = createModal.querySelector('[data-create-error]');
+      const submitButton = createModal.querySelector('[data-create-submit]');
+
+      const closeModal = () => {
+        createModal.classList.add('hidden');
+        createModal.classList.remove('flex');
+        activeCreateRow = null;
+        if (errorEl) {
+          errorEl.classList.add('hidden');
+          errorEl.textContent = '';
+        }
+      };
+
+      createModal.querySelectorAll('[data-create-cancel], [data-create-overlay]').forEach((btn) => {
+        btn.addEventListener('click', closeModal);
+      });
+
+      if (modalForm) {
+        modalForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          if (!activeCreateRow || !nameInput) {
+            return;
+          }
+          const payload = {
+            name: nameInput.value.trim(),
+            unit: unitInput ? unitInput.value.trim() : '',
+            description: descriptionInput ? descriptionInput.value.trim() : '',
+          };
+          if (payload.name.length < 2) {
+            if (errorEl) {
+              errorEl.textContent = 'Name must be at least 2 characters.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Creating...';
+          }
+          try {
+            const response = await fetch('/api/parts/create', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken,
+              },
+              body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+              const errorPayload = await response.json().catch(() => ({}));
+              const message = errorPayload.error || 'Unable to create part.';
+              if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+              }
+              return;
+            }
+            const data = await response.json();
+            selectPartForRow(activeCreateRow, data);
+            closeModal();
+          } catch (error) {
+            if (errorEl) {
+              errorEl.textContent = 'Unable to create part right now.';
+              errorEl.classList.remove('hidden');
+            }
+          } finally {
+            if (submitButton) {
+              submitButton.disabled = false;
+              submitButton.textContent = 'Create part';
+            }
+          }
+        });
+      }
+    }
 
     if (vendorSelect) {
       vendorSelect.addEventListener('change', () => {

@@ -2628,6 +2628,7 @@ class Product(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, unique=True)
+    sku = db.Column(db.String(120), nullable=True, unique=True)
     sale_price = db.Column(db.Float, nullable=True)
     cost = db.Column(db.Float, nullable=True)
     uom = db.Column(db.String(120), nullable=True)

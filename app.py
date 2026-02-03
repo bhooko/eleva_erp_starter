@@ -8130,7 +8130,10 @@ def purchase_orders():
             if unit_price is not None:
                 subtotal_amount += line_total
 
-            item_code = item_name or None
+            product_record = Product.query.get(product_id) if product_id else None
+            if product_record and not item_name:
+                item_name = product_record.name
+            item_code = _ensure_product_sku(product_record) if product_record else None
             poi = PurchaseOrderItem(
                 purchase_order_id=po.id,
                 bom_item_id=None,
@@ -8148,13 +8151,13 @@ def purchase_orders():
             db.session.add(poi)
             has_valid_items = True
 
-            if item_code:
+            if product_record and item_code:
                 inv = InventoryItem.query.filter_by(item_code=item_code).first()
                 if not inv:
                     inv = InventoryItem(
                         item_code=item_code,
-                        description=specs or None,
-                        unit=unit or None,
+                        description=product_record.name or specs or None,
+                        unit=unit or product_record.purchase_uom or product_record.uom or None,
                     )
                     db.session.add(inv)
                 _initialize_book_stock(inv)
@@ -8195,11 +8198,6 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
-    products = Product.query.order_by(Product.name).all()
-    product_index = {
-        product.name: {"id": product.id, "specs": product.specifications or ""}
-        for product in products
-    }
     bom_options = (
         BillOfMaterials.query.order_by(BillOfMaterials.created_at.desc().nullslast())
         .limit(200)
@@ -8213,8 +8211,6 @@ def purchase_orders():
         projects=projects,
         bom_items=bom_items,
         bom_options=bom_options,
-        products=products,
-        product_index=product_index,
     )
 
 
@@ -8287,6 +8283,55 @@ def parts_search():
         )
 
     return jsonify(payload)
+
+
+@app.route("/api/parts/create", methods=["POST"])
+@login_required
+def parts_create():
+    ensure_bootstrap()
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    unit = (payload.get("unit") or "").strip()
+    description = (payload.get("description") or "").strip()
+
+    if len(name) < 2:
+        return jsonify({"error": "Name must be at least 2 characters."}), 400
+
+    existing = Product.query.filter(func.lower(Product.name) == name.lower()).first()
+    if existing:
+        sku = _ensure_product_sku(existing)
+        db.session.commit()
+        return jsonify(
+            {
+                "id": existing.id,
+                "name": existing.name,
+                "unit": existing.purchase_uom or existing.uom or "",
+                "description": existing.specifications or existing.notes or "",
+                "sku": sku or "",
+            }
+        )
+
+    product = Product(name=name)
+    if unit:
+        product.purchase_uom = unit
+        if not product.uom:
+            product.uom = unit
+    if description:
+        product.specifications = description
+    db.session.add(product)
+    db.session.flush()
+    sku = _ensure_product_sku(product)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "id": product.id,
+            "name": product.name,
+            "unit": product.purchase_uom or product.uom or "",
+            "description": product.specifications or product.notes or "",
+            "sku": sku or "",
+        }
+    )
 
 
 @app.route("/purchase/orders/<int:po_id>")
@@ -9596,7 +9641,10 @@ def _sync_inventory_with_products():
     updates_made = False
 
     for product in products:
-        item_code = (product.name or "").strip()
+        sku_before = product.sku
+        item_code = _ensure_product_sku(product)
+        if sku_before != product.sku:
+            updates_made = True
         if not item_code:
             continue
 
@@ -9641,6 +9689,31 @@ def _sync_inventory_with_products():
             current_app.logger.exception(
                 "Failed to sync products into inventory records"
             )
+
+
+def _ensure_product_sku(product: Product) -> Optional[str]:
+    if not product:
+        return None
+    sku = (product.sku or "").strip()
+    if sku:
+        return sku
+    if not product.id:
+        return None
+    candidate = f"ELV-{product.id:06d}"
+    existing = Product.query.filter(Product.sku == candidate, Product.id != product.id).first()
+    if existing:
+        suffix = 1
+        while True:
+            alternate = f"{candidate}-{suffix}"
+            conflict = Product.query.filter(
+                Product.sku == alternate, Product.id != product.id
+            ).first()
+            if not conflict:
+                candidate = alternate
+                break
+            suffix += 1
+    product.sku = candidate
+    return product.sku
 
 
 def _initialize_book_stock(inventory_item):
@@ -11971,6 +12044,7 @@ def ensure_product_columns():
         ("linked_vendors", "TEXT"),
         ("specifications", "TEXT"),
         ("notes", "TEXT"),
+        ("sku", "TEXT"),
         ("created_at", "DATETIME"),
         ("updated_at", "DATETIME"),
     ]
