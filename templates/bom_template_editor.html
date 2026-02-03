@@ -186,7 +186,7 @@
                       {{ csrf_field() }}
                       <input type="hidden" name="action" value="update_line" />
                       <input type="hidden" name="line_id" value="{{ line.id }}" />
-                      <input name="ref_key" value="{{ line.ref_key }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="ref_key" />
+                      <input type="hidden" name="ref_key" value="{{ line.ref_key }}" />
                       <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
                         {% if line.part_class and not line.part_class.active %}
                           <option value="{{ line.part_class.id }}" selected>{{ line.part_class.name }} (Inactive)</option>
@@ -222,7 +222,7 @@
                   {{ csrf_field() }}
                   <input type="hidden" name="action" value="add_line" />
                   <input type="hidden" name="section_id" value="{{ section.id }}" />
-                  <input name="ref_key" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="ref_key" />
+                  <input type="hidden" name="ref_key" />
                   <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
                     <option value="">Select part class</option>
                     {% for part in part_classes %}
@@ -307,7 +307,6 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
-                <th class="px-3 py-2">Ref Key</th>
                 <th class="px-3 py-2">Part Class</th>
                 <th class="px-3 py-2">Final Qty</th>
                 <th class="px-3 py-2">Errors</th>
@@ -316,7 +315,6 @@
             <tbody class="divide-y divide-slate-800">
               {% for line in evaluation.lines %}
               <tr>
-                <td class="px-3 py-2 text-slate-100">{{ line.ref_key }}</td>
                 <td class="px-3 py-2 text-slate-300">{{ line.line.part_class.name if line.line.part_class else '—' }}</td>
                 <td class="px-3 py-2 text-slate-100">{{ "%.2f"|format(line.final_qty) }}</td>
                 <td class="px-3 py-2">
