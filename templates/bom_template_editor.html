@@ -342,19 +342,50 @@
 </div>
 
 <script>
+  const templateId = {{ template.id }};
+  const scrollStorageKey = `bomTemplateScroll:${templateId}`;
+  const tabStorageKey = `bomTemplateTab:${templateId}`;
+  let activeTab = sessionStorage.getItem(tabStorageKey) || 'inputs';
+
   const tabButtons = document.querySelectorAll('.tab-btn');
   const panels = document.querySelectorAll('.tab-panel');
+  const setActiveTab = (target) => {
+    activeTab = target;
+    sessionStorage.setItem(tabStorageKey, target);
+    tabButtons.forEach((b) => b.classList.remove('bg-slate-800', 'text-slate-100'));
+    tabButtons.forEach((b) => b.classList.add('text-slate-300'));
+    tabButtons.forEach((btn) => {
+      if (btn.dataset.tab === target) {
+        btn.classList.add('bg-slate-800', 'text-slate-100');
+        btn.classList.remove('text-slate-300');
+      }
+    });
+    panels.forEach((panel) => {
+      panel.classList.toggle('hidden', panel.dataset.panel !== target);
+    });
+  };
+
   tabButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const target = btn.dataset.tab;
-      tabButtons.forEach((b) => b.classList.remove('bg-slate-800', 'text-slate-100'));
-      tabButtons.forEach((b) => b.classList.add('text-slate-300'));
-      btn.classList.add('bg-slate-800', 'text-slate-100');
-      btn.classList.remove('text-slate-300');
-      panels.forEach((panel) => {
-        panel.classList.toggle('hidden', panel.dataset.panel !== target);
-      });
+      setActiveTab(btn.dataset.tab);
     });
+  });
+
+  setActiveTab(activeTab);
+
+  document.querySelectorAll('form').forEach((form) => {
+    form.addEventListener('submit', () => {
+      sessionStorage.setItem(scrollStorageKey, window.scrollY.toString());
+      sessionStorage.setItem(tabStorageKey, activeTab);
+    });
+  });
+
+  window.addEventListener('load', () => {
+    const savedScroll = sessionStorage.getItem(scrollStorageKey);
+    if (savedScroll) {
+      window.scrollTo({ top: Number(savedScroll), left: 0, behavior: 'auto' });
+      sessionStorage.removeItem(scrollStorageKey);
+    }
   });
 
   document.querySelectorAll('[data-sortable]').forEach((container) => {
