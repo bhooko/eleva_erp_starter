@@ -211,6 +211,17 @@
         <input type="text" required minlength="2" class="w-full rounded-lg border-slate-200 h-10 px-3" data-create-name />
       </label>
       <label class="space-y-1 block">
+        <span class="text-sm">Category</span>
+        <select required class="w-full rounded-lg border-slate-200 h-10 px-3" data-create-category>
+          <option value="">Select category</option>
+          <option value="Mechanical">Mechanical</option>
+          <option value="Electrical">Electrical</option>
+          <option value="Cabin / Finish">Cabin / Finish</option>
+          <option value="Safety">Safety</option>
+          <option value="Others">Others</option>
+        </select>
+      </label>
+      <label class="space-y-1 block">
         <span class="text-sm">Unit</span>
         <input type="text" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="nos" data-create-unit />
       </label>
@@ -233,13 +244,22 @@
     top: calc(100% + 0.35rem);
     left: 0;
     right: 0;
-    z-index: 40;
+    z-index: 60;
     border-radius: 0.75rem;
     border: 1px solid #e2e8f0;
     background: #ffffff;
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
     max-height: 16rem;
     overflow-y: auto;
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    transition: opacity 140ms ease, transform 140ms ease;
+    pointer-events: none;
+  }
+  .part-dropdown.is-open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
   }
   .part-dropdown-item,
   .part-dropdown-create {
@@ -257,6 +277,10 @@
   .part-dropdown-meta {
     font-size: 0.75rem;
     color: #64748b;
+  }
+  .part-dropdown-desc {
+    font-size: 0.75rem;
+    color: #475569;
   }
   .part-dropdown-create {
     font-size: 0.75rem;
@@ -284,6 +308,10 @@
   html[data-theme="eleva-signature"] .part-dropdown-meta,
   html[data-theme="metallic-elevate"] .part-dropdown-meta {
     color: #94a3b8;
+  }
+  html[data-theme="eleva-signature"] .part-dropdown-desc,
+  html[data-theme="metallic-elevate"] .part-dropdown-desc {
+    color: #cbd5f5;
   }
   html[data-theme="eleva-signature"] .part-dropdown-item .text-slate-900,
   html[data-theme="metallic-elevate"] .part-dropdown-item .text-slate-900 {
@@ -483,7 +511,8 @@
       }
       const dropdown = row.querySelector('[data-part-dropdown]');
       if (dropdown) {
-        dropdown.classList.add('hidden');
+        dropdown.classList.remove('is-open');
+        setTimeout(() => dropdown.classList.add('hidden'), 140);
       }
     };
 
@@ -494,6 +523,7 @@
       const dropdown = row.querySelector('[data-part-dropdown]');
       if (dropdown) {
         dropdown.classList.remove('hidden');
+        requestAnimationFrame(() => dropdown.classList.add('is-open'));
       }
     };
 
@@ -522,6 +552,8 @@
         button.dataset.partName = part.name;
         button.dataset.partUnit = part.unit || '';
         button.dataset.partDescription = part.description || '';
+        button.dataset.partCategory = part.category || '';
+        button.dataset.partSku = part.sku || '';
 
         const nameEl = document.createElement('span');
         nameEl.className = 'font-semibold text-slate-900';
@@ -529,17 +561,26 @@
         const metaEl = document.createElement('span');
         metaEl.className = 'part-dropdown-meta';
         const metaParts = [];
+        if (part.category) {
+          metaParts.push(part.category);
+        }
         if (part.unit) {
           metaParts.push(part.unit);
         }
-        if (part.description) {
-          metaParts.push(part.description);
+        if (part.sku) {
+          metaParts.push(part.sku);
         }
         metaEl.textContent = metaParts.join(' • ');
+        const descEl = document.createElement('span');
+        descEl.className = 'part-dropdown-desc';
+        descEl.textContent = part.description || '';
 
         button.appendChild(nameEl);
         if (metaEl.textContent) {
           button.appendChild(metaEl);
+        }
+        if (descEl.textContent) {
+          button.appendChild(descEl);
         }
         content.appendChild(button);
       });
@@ -729,6 +770,8 @@
           name: option.dataset.partName,
           unit: option.dataset.partUnit,
           description: option.dataset.partDescription,
+          category: option.dataset.partCategory,
+          sku: option.dataset.partSku,
         });
         return;
       }
@@ -739,6 +782,7 @@
         activeCreateRow = createButton.closest('.po-item-row');
         const modal = document.getElementById('part-create-modal');
         const nameInput = modal ? modal.querySelector('[data-create-name]') : null;
+        const categoryInput = modal ? modal.querySelector('[data-create-category]') : null;
         const unitInput = modal ? modal.querySelector('[data-create-unit]') : null;
         const descInput = modal ? modal.querySelector('[data-create-description]') : null;
         const errorEl = modal ? modal.querySelector('[data-create-error]') : null;
@@ -750,6 +794,9 @@
           nameInput.value = createButton.dataset.createName || '';
           nameInput.focus();
           nameInput.select();
+        }
+        if (categoryInput) {
+          categoryInput.value = '';
         }
         if (unitInput) {
           unitInput.value = '';
@@ -798,7 +845,8 @@
       if (!form.contains(event.target)) {
         if (itemsContainer) {
           itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
-            dropdown.classList.add('hidden');
+            dropdown.classList.remove('is-open');
+            setTimeout(() => dropdown.classList.add('hidden'), 140);
           });
         }
         return;
@@ -811,7 +859,8 @@
       }
       if (itemsContainer) {
         itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
-          dropdown.classList.add('hidden');
+          dropdown.classList.remove('is-open');
+          setTimeout(() => dropdown.classList.add('hidden'), 140);
         });
       }
     });
@@ -820,6 +869,7 @@
     if (createModal) {
       const modalForm = createModal.querySelector('[data-part-create-form]');
       const nameInput = createModal.querySelector('[data-create-name]');
+      const categoryInput = createModal.querySelector('[data-create-category]');
       const unitInput = createModal.querySelector('[data-create-unit]');
       const descriptionInput = createModal.querySelector('[data-create-description]');
       const errorEl = createModal.querySelector('[data-create-error]');
@@ -847,12 +897,20 @@
           }
           const payload = {
             name: nameInput.value.trim(),
+            category: categoryInput ? categoryInput.value.trim() : '',
             unit: unitInput ? unitInput.value.trim() : '',
             description: descriptionInput ? descriptionInput.value.trim() : '',
           };
           if (payload.name.length < 2) {
             if (errorEl) {
               errorEl.textContent = 'Name must be at least 2 characters.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+          if (!payload.category) {
+            if (errorEl) {
+              errorEl.textContent = 'Category is required.';
               errorEl.classList.remove('hidden');
             }
             return;
@@ -897,6 +955,22 @@
         });
       }
     }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      if (itemsContainer) {
+        itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
+          dropdown.classList.remove('is-open');
+          setTimeout(() => dropdown.classList.add('hidden'), 140);
+        });
+      }
+      if (createModal && !createModal.classList.contains('hidden')) {
+        createModal.classList.add('hidden');
+        createModal.classList.remove('flex');
+      }
+    });
 
     if (vendorSelect) {
       vendorSelect.addEventListener('change', () => {

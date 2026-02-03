@@ -8133,7 +8133,9 @@ def purchase_orders():
             product_record = Product.query.get(product_id) if product_id else None
             if product_record and not item_name:
                 item_name = product_record.name
-            item_code = _ensure_product_sku(product_record) if product_record else None
+            item_code = None
+            if product_record and product_id:
+                item_code = _ensure_product_sku(product_record) or f"PROD-{product_id}"
             poi = PurchaseOrderItem(
                 purchase_order_id=po.id,
                 bom_item_id=None,
@@ -8253,11 +8255,11 @@ def purchase_vendor_rate():
 def parts_search():
     ensure_bootstrap()
     query = (request.args.get("q") or "").strip()
-    limit_raw = request.args.get("limit") or "20"
+    limit_raw = request.args.get("limit") or "12"
     try:
         limit = max(1, min(int(limit_raw), 50))
     except (TypeError, ValueError):
-        limit = 20
+        limit = 12
 
     if not query:
         return jsonify([])
@@ -8272,13 +8274,16 @@ def parts_search():
 
     payload = []
     for part in parts:
+        description = part.specifications or part.notes or ""
+        unit = part.purchase_uom or part.uom or ""
         payload.append(
             {
                 "id": part.id,
                 "name": part.name,
-                "description": part.notes or part.specifications or "",
-                "unit": part.purchase_uom or part.uom or "",
-                "item_code": None,
+                "description": description,
+                "unit": unit,
+                "sku": part.sku or "",
+                "category": part.category or "",
             }
         )
 
@@ -8293,9 +8298,12 @@ def parts_create():
     name = (payload.get("name") or "").strip()
     unit = (payload.get("unit") or "").strip()
     description = (payload.get("description") or "").strip()
+    category = (payload.get("category") or "").strip()
 
     if len(name) < 2:
         return jsonify({"error": "Name must be at least 2 characters."}), 400
+    if not category:
+        return jsonify({"error": "Category is required."}), 400
 
     existing = Product.query.filter(func.lower(Product.name) == name.lower()).first()
     if existing:
@@ -8308,10 +8316,11 @@ def parts_create():
                 "unit": existing.purchase_uom or existing.uom or "",
                 "description": existing.specifications or existing.notes or "",
                 "sku": sku or "",
+                "category": existing.category or "",
             }
         )
 
-    product = Product(name=name)
+    product = Product(name=name, category=category)
     if unit:
         product.purchase_uom = unit
         if not product.uom:
@@ -8330,6 +8339,7 @@ def parts_create():
             "unit": product.purchase_uom or product.uom or "",
             "description": product.specifications or product.notes or "",
             "sku": sku or "",
+            "category": product.category or "",
         }
     )
 
@@ -12045,6 +12055,7 @@ def ensure_product_columns():
         ("specifications", "TEXT"),
         ("notes", "TEXT"),
         ("sku", "TEXT"),
+        ("category", "TEXT"),
         ("created_at", "DATETIME"),
         ("updated_at", "DATETIME"),
     ]
