@@ -2214,6 +2214,7 @@ class PartClass(db.Model):
     name = db.Column(db.String(150), nullable=False, unique=True)
     description = db.Column(db.Text, nullable=True)
     active = db.Column(db.Boolean, default=True)
+    sort_order = db.Column(db.Integer, default=0)
 
 
 class BomTemplate(db.Model):

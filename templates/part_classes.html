@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+
+{% block title %}Part Classes | Eleva ERP{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-100">Part Classes</h1>
+      <p class="text-sm text-slate-400">Manage categories for parts without breaking existing assignments.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="relative">
+        <input id="searchInput" type="text" placeholder="Search classes"
+               class="w-64 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" />
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">⌘K</span>
+      </div>
+      <button id="addClassBtn"
+              class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white text-sm font-semibold shadow-lg shadow-emerald-500/20 hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition">
+        Add Class
+      </button>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden">
+    <div class="grid grid-cols-12 gap-2 px-4 py-3 text-xs uppercase tracking-wide text-slate-500 border-b border-slate-800">
+      <div class="col-span-3">Name</div>
+      <div class="col-span-4">Description</div>
+      <div class="col-span-2">Sort Order</div>
+      <div class="col-span-1">Status</div>
+      <div class="col-span-2 text-right">Actions</div>
+    </div>
+    <div id="classesBody" class="divide-y divide-slate-800">
+      {% for part_class in part_classes %}
+      <div class="part-class-row grid grid-cols-12 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition"
+           data-id="{{ part_class.id }}"
+           data-name="{{ part_class.name }}"
+           data-description="{{ part_class.description or '' }}"
+           data-active="{{ 1 if part_class.active else 0 }}"
+           data-sort="{{ part_class.sort_order or 0 }}">
+        <div class="col-span-3 font-semibold text-slate-100">
+          <span class="name-text">{{ part_class.name }}</span>
+        </div>
+        <div class="col-span-4 text-slate-400 description-text">{{ part_class.description or '—' }}</div>
+        <div class="col-span-2 text-slate-300 sort-text">{{ part_class.sort_order or 0 }}</div>
+        <div class="col-span-1">
+          <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-500/20 text-emerald-300' if part_class.active else 'bg-amber-500/20 text-amber-300' }}">
+            {{ 'Active' if part_class.active else 'Inactive' }}
+          </span>
+        </div>
+        <div class="col-span-2 flex justify-end gap-2">
+          <button class="edit-btn px-3 py-1.5 rounded-lg bg-slate-800 text-slate-100 text-xs hover:bg-slate-700 transition">
+            Edit
+          </button>
+          <button class="toggle-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition {{ 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30' if part_class.active else 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30' }}">
+            {{ 'Disable' if part_class.active else 'Enable' }}
+          </button>
+        </div>
+      </div>
+      {% else %}
+      <div class="px-4 py-10 text-center text-slate-500">No part classes yet. Add the first one to get started.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div id="modalOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm opacity-0 pointer-events-none transition duration-200">
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div id="modalPanel" class="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950/90 shadow-2xl shadow-black/40 transform transition duration-200 scale-95 translate-y-4">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+        <div>
+          <h2 id="modalTitle" class="text-lg font-semibold text-slate-100">Edit Part Class</h2>
+          <p class="text-xs text-slate-500">Update names, descriptions, and availability.</p>
+        </div>
+        <button id="closeModalBtn" class="w-9 h-9 inline-flex items-center justify-center rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition">✕</button>
+      </div>
+      <div class="px-6 py-4 space-y-4">
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-slate-400">Class Name</label>
+          <input id="classNameInput" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Guide Rail" />
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-slate-400">Description</label>
+          <textarea id="classDescriptionInput" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-xs uppercase tracking-wide text-slate-400">Sort Order</label>
+            <input id="classSortInput" type="number" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="0" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-xs uppercase tracking-wide text-slate-400">Active</label>
+            <button id="classActiveToggle" type="button" class="w-full px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 text-sm font-semibold hover:bg-emerald-500/30 transition">Active</button>
+          </div>
+        </div>
+        <div id="modalError" class="hidden rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"></div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-800 flex justify-end gap-3">
+        <button id="cancelModalBtn" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 text-sm hover:bg-slate-700 transition">Cancel</button>
+        <button id="saveModalBtn" class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white text-sm font-semibold hover:bg-emerald-500 transition">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const csrfToken = '{{ csrf_token() }}';
+  const modalOverlay = document.getElementById('modalOverlay');
+  const modalPanel = document.getElementById('modalPanel');
+  const modalTitle = document.getElementById('modalTitle');
+  const classNameInput = document.getElementById('classNameInput');
+  const classDescriptionInput = document.getElementById('classDescriptionInput');
+  const classSortInput = document.getElementById('classSortInput');
+  const classActiveToggle = document.getElementById('classActiveToggle');
+  const modalError = document.getElementById('modalError');
+  const saveModalBtn = document.getElementById('saveModalBtn');
+  const addClassBtn = document.getElementById('addClassBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const cancelModalBtn = document.getElementById('cancelModalBtn');
+  const classesBody = document.getElementById('classesBody');
+  const searchInput = document.getElementById('searchInput');
+
+  let modalMode = 'edit';
+  let activeState = true;
+  let currentId = null;
+
+  const setModalVisibility = (visible) => {
+    if (visible) {
+      modalOverlay.classList.remove('opacity-0', 'pointer-events-none');
+      modalPanel.classList.remove('scale-95', 'translate-y-4');
+    } else {
+      modalOverlay.classList.add('opacity-0', 'pointer-events-none');
+      modalPanel.classList.add('scale-95', 'translate-y-4');
+    }
+  };
+
+  const setActiveButton = (value) => {
+    activeState = value;
+    if (value) {
+      classActiveToggle.textContent = 'Active';
+      classActiveToggle.classList.remove('bg-amber-500/20', 'text-amber-200');
+      classActiveToggle.classList.add('bg-emerald-500/20', 'text-emerald-200');
+    } else {
+      classActiveToggle.textContent = 'Inactive';
+      classActiveToggle.classList.remove('bg-emerald-500/20', 'text-emerald-200');
+      classActiveToggle.classList.add('bg-amber-500/20', 'text-amber-200');
+    }
+  };
+
+  const showError = (message) => {
+    modalError.textContent = message;
+    modalError.classList.remove('hidden');
+  };
+
+  const clearError = () => {
+    modalError.textContent = '';
+    modalError.classList.add('hidden');
+  };
+
+  const openModal = async (mode, id = null) => {
+    modalMode = mode;
+    currentId = id;
+    clearError();
+
+    if (mode === 'create') {
+      modalTitle.textContent = 'Add Part Class';
+      classNameInput.value = '';
+      classDescriptionInput.value = '';
+      classSortInput.value = '0';
+      setActiveButton(true);
+      setModalVisibility(true);
+      classNameInput.focus();
+      return;
+    }
+
+    modalTitle.textContent = 'Edit Part Class';
+    const response = await fetch(`/api/part_classes/${id}`);
+    if (!response.ok) {
+      showError('Unable to load part class details.');
+      return;
+    }
+    const data = await response.json();
+    classNameInput.value = data.name || '';
+    classDescriptionInput.value = data.description || '';
+    classSortInput.value = data.sort_order ?? 0;
+    setActiveButton(!!data.is_active);
+    setModalVisibility(true);
+    classNameInput.focus();
+  };
+
+  const closeModal = () => {
+    setModalVisibility(false);
+  };
+
+  classActiveToggle.addEventListener('click', () => {
+    setActiveButton(!activeState);
+  });
+
+  addClassBtn.addEventListener('click', () => openModal('create'));
+  closeModalBtn.addEventListener('click', closeModal);
+  cancelModalBtn.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', (event) => {
+    if (event.target === modalOverlay) {
+      closeModal();
+    }
+  });
+
+  classesBody.addEventListener('click', (event) => {
+    const row = event.target.closest('.part-class-row');
+    if (!row) return;
+
+    if (event.target.closest('.edit-btn')) {
+      openModal('edit', row.dataset.id);
+    }
+
+    if (event.target.closest('.toggle-btn')) {
+      const nextState = row.dataset.active !== '1';
+      updatePartClass(row.dataset.id, {
+        name: row.dataset.name,
+        description: row.dataset.description,
+        is_active: nextState,
+        sort_order: row.dataset.sort
+      });
+    }
+  });
+
+  const updateRow = (row, data) => {
+    row.dataset.name = data.name;
+    row.dataset.description = data.description || '';
+    row.dataset.active = data.is_active ? '1' : '0';
+    row.dataset.sort = data.sort_order ?? 0;
+    row.querySelector('.name-text').textContent = data.name;
+    row.querySelector('.description-text').textContent = data.description || '—';
+    row.querySelector('.sort-text').textContent = data.sort_order ?? 0;
+
+    const badge = row.querySelector('.status-badge');
+    badge.textContent = data.is_active ? 'Active' : 'Inactive';
+    badge.className = `status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${data.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`;
+
+    const toggleBtn = row.querySelector('.toggle-btn');
+    toggleBtn.textContent = data.is_active ? 'Disable' : 'Enable';
+    toggleBtn.className = `toggle-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition ${data.is_active ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30' : 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'}`;
+  };
+
+  const insertRow = (data) => {
+    const row = document.createElement('div');
+    row.className = 'part-class-row grid grid-cols-12 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition';
+    row.dataset.id = data.id;
+    row.dataset.name = data.name;
+    row.dataset.description = data.description || '';
+    row.dataset.active = data.is_active ? '1' : '0';
+    row.dataset.sort = data.sort_order ?? 0;
+    row.innerHTML = `
+      <div class="col-span-3 font-semibold text-slate-100"><span class="name-text">${data.name}</span></div>
+      <div class="col-span-4 text-slate-400 description-text">${data.description || '—'}</div>
+      <div class="col-span-2 text-slate-300 sort-text">${data.sort_order ?? 0}</div>
+      <div class="col-span-1">
+        <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${data.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${data.is_active ? 'Active' : 'Inactive'}</span>
+      </div>
+      <div class="col-span-2 flex justify-end gap-2">
+        <button class="edit-btn px-3 py-1.5 rounded-lg bg-slate-800 text-slate-100 text-xs hover:bg-slate-700 transition">Edit</button>
+        <button class="toggle-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition ${data.is_active ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30' : 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'}">${data.is_active ? 'Disable' : 'Enable'}</button>
+      </div>
+    `;
+    classesBody.appendChild(row);
+    sortRows();
+  };
+
+  const sortRows = () => {
+    const rows = Array.from(classesBody.querySelectorAll('.part-class-row'));
+    rows.sort((a, b) => {
+      const orderA = parseInt(a.dataset.sort || '0', 10);
+      const orderB = parseInt(b.dataset.sort || '0', 10);
+      if (orderA !== orderB) return orderA - orderB;
+      return a.dataset.name.localeCompare(b.dataset.name);
+    });
+    rows.forEach((row) => classesBody.appendChild(row));
+  };
+
+  const updatePartClass = async (id, payload) => {
+    const response = await fetch(`/api/part_classes/${id}/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (modalOverlay.classList.contains('pointer-events-none')) {
+        alert(data.error || 'Unable to update part class.');
+      } else {
+        showError(data.error || 'Unable to update part class.');
+      }
+      return;
+    }
+
+    const data = await response.json();
+    const row = classesBody.querySelector(`.part-class-row[data-id="${data.id}"]`);
+    if (row) {
+      updateRow(row, data);
+    }
+    closeModal();
+  };
+
+  saveModalBtn.addEventListener('click', async () => {
+    clearError();
+    const payload = {
+      name: classNameInput.value.trim(),
+      description: classDescriptionInput.value.trim(),
+      is_active: activeState,
+      sort_order: classSortInput.value
+    };
+
+    if (modalMode === 'create') {
+      const response = await fetch('/api/part_classes/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        showError(data.error || 'Unable to create part class.');
+        return;
+      }
+
+      const data = await response.json();
+      insertRow(data);
+      closeModal();
+      return;
+    }
+
+    updatePartClass(currentId, payload);
+  });
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase();
+    classesBody.querySelectorAll('.part-class-row').forEach((row) => {
+      const name = row.dataset.name.toLowerCase();
+      const desc = row.dataset.description.toLowerCase();
+      const status = row.dataset.active === '1' ? 'active' : 'inactive';
+      const matches = name.includes(query) || desc.includes(query) || status.includes(query);
+      row.classList.toggle('hidden', !matches);
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      searchInput.focus();
+    }
+    if (event.key === 'Escape') {
+      closeModal();
+    }
+  });
+</script>
+{% endblock %}

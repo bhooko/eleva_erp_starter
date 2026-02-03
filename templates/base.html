@@ -1194,7 +1194,7 @@
           {% set store_visible = current_user.is_admin or 'store' in role_key %}
 
           {% if design_visible %}
-          {% set design_endpoints = ['design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit'] %}
+          {% set design_endpoints = ['design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit','part_classes'] %}
           <div class="space-y-1">
             <a href="{{ url_for('design_tasks') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in design_endpoints else '' }}">
@@ -1217,6 +1217,10 @@
               <a href="{{ url_for('design_bom_templates') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['design_bom_templates','design_bom_template_edit'] else '' }}">
                 <span class="label">BOM Templates</span>
+              </a>
+              <a href="{{ url_for('part_classes') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'part_classes' else '' }}">
+                <span class="label">Part Classes</span>
               </a>
             </div>
           </div>
