@@ -123,6 +123,18 @@
   let modalMode = 'edit';
   let activeState = true;
   let currentId = null;
+  let savedScrollY = null;
+
+  const rememberScrollPosition = () => {
+    savedScrollY = window.scrollY;
+  };
+
+  const restoreScrollPosition = () => {
+    if (savedScrollY === null) return;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: savedScrollY, left: 0, behavior: 'auto' });
+    });
+  };
 
   const setModalVisibility = (visible) => {
     if (visible) {
@@ -158,6 +170,7 @@
   };
 
   const openModal = async (mode, id = null) => {
+    rememberScrollPosition();
     modalMode = mode;
     currentId = id;
     clearError();
@@ -190,6 +203,7 @@
 
   const closeModal = () => {
     setModalVisibility(false);
+    restoreScrollPosition();
   };
 
   classActiveToggle.addEventListener('click', () => {
@@ -240,6 +254,7 @@
     const toggleBtn = row.querySelector('.toggle-btn');
     toggleBtn.textContent = data.is_active ? 'Disable' : 'Enable';
     toggleBtn.className = `toggle-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition ${data.is_active ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30' : 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'}`;
+    restoreScrollPosition();
   };
 
   const insertRow = (data) => {
@@ -264,6 +279,7 @@
     `;
     classesBody.appendChild(row);
     sortRows();
+    restoreScrollPosition();
   };
 
   const sortRows = () => {
