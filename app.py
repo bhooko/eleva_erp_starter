@@ -191,6 +191,38 @@ def _parse_boolean_cell(value, *, default=True):
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on", "active"}
 
 
+def _parse_bool_payload(value, *, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on", "active"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off", "inactive"}:
+        return False
+    return default
+
+
+def _part_class_payload(part_class):
+    return {
+        "id": part_class.id,
+        "name": part_class.name,
+        "description": part_class.description,
+        "is_active": bool(part_class.active),
+        "sort_order": part_class.sort_order or 0,
+    }
+
+
+def _part_class_name_exists(name, *, exclude_id=None):
+    query = PartClass.query.filter(func.lower(PartClass.name) == name.lower())
+    if exclude_id is not None:
+        query = query.filter(PartClass.id != exclude_id)
+    return db.session.query(query.exists()).scalar()
+
+
 def _get_sqlite_db_path() -> Optional[str]:
     uri = app.config.get("SQLALCHEMY_DATABASE_URI")
     try:
@@ -7261,7 +7293,10 @@ def design_bom_templates():
                 has_errors = True
         status_map[template.id] = "Has Errors" if has_errors else "OK"
 
-    part_classes = PartClass.query.order_by(PartClass.name.asc()).all()
+    part_classes = PartClass.query.order_by(
+        PartClass.sort_order.asc(),
+        PartClass.name.asc(),
+    ).all()
     return render_template(
         "bom_templates.html",
         templates=templates,
@@ -7270,6 +7305,92 @@ def design_bom_templates():
         LIFT_TYPES=LIFT_TYPES,
         part_classes=part_classes,
     )
+
+
+@app.route("/part_classes", methods=["GET"])
+@login_required
+def part_classes():
+    _module_visibility_required("design")
+    part_classes = PartClass.query.order_by(
+        PartClass.sort_order.asc(),
+        PartClass.name.asc(),
+    ).all()
+    return render_template("part_classes.html", part_classes=part_classes)
+
+
+@app.route("/api/part_classes/<int:class_id>", methods=["GET"])
+@login_required
+def get_part_class(class_id):
+    _module_visibility_required("design")
+    part_class = PartClass.query.get_or_404(class_id)
+    return jsonify(_part_class_payload(part_class))
+
+
+@app.route("/api/part_classes/<int:class_id>/update", methods=["POST"])
+@login_required
+def update_part_class(class_id):
+    _module_visibility_required("design")
+    part_class = PartClass.query.get_or_404(class_id)
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    description = (payload.get("description") or "").strip() or None
+    is_active = _parse_bool_payload(payload.get("is_active"), default=part_class.active)
+    sort_order_raw = payload.get("sort_order")
+    try:
+        sort_order = int(sort_order_raw or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+
+    if not name or len(name) < 2:
+        return jsonify({"error": "Class name must be at least 2 characters."}), 400
+    if _part_class_name_exists(name, exclude_id=part_class.id):
+        return jsonify({"error": "Part Class name must be unique."}), 400
+
+    part_class.name = name
+    part_class.description = description
+    part_class.active = is_active
+    part_class.sort_order = sort_order
+    db.session.commit()
+    return jsonify(_part_class_payload(part_class))
+
+
+@app.route("/api/part_classes/create", methods=["POST"])
+@login_required
+def create_part_class_api():
+    _module_visibility_required("design")
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    description = (payload.get("description") or "").strip() or None
+    sort_order_raw = payload.get("sort_order")
+    try:
+        sort_order = int(sort_order_raw or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+
+    if not name or len(name) < 2:
+        return jsonify({"error": "Class name must be at least 2 characters."}), 400
+    if _part_class_name_exists(name):
+        return jsonify({"error": "Part Class name must be unique."}), 400
+
+    part_class = PartClass(
+        name=name,
+        description=description,
+        active=True,
+        sort_order=sort_order,
+    )
+    db.session.add(part_class)
+    db.session.commit()
+    return jsonify(_part_class_payload(part_class))
+
+
+@app.route("/api/part_classes/<int:class_id>/disable", methods=["POST"])
+@login_required
+def disable_part_class(class_id):
+    _module_visibility_required("design")
+    part_class = PartClass.query.get_or_404(class_id)
+    part_class.active = False
+    db.session.commit()
+    return jsonify(_part_class_payload(part_class))
 
 
 @app.route("/design/bom-templates/<int:template_id>", methods=["GET", "POST"])
@@ -7511,7 +7632,11 @@ def design_bom_template_edit(template_id):
         if action != "test_inputs":
             return redirect(url_for("design_bom_template_edit", template_id=template.id))
 
-    part_classes = PartClass.query.order_by(PartClass.name.asc()).all()
+    part_classes = (
+        PartClass.query.filter(PartClass.active.is_(True))
+        .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
+        .all()
+    )
     if evaluation is None:
         evaluation = evaluate_bom_template(template)
     return render_template(
@@ -12527,6 +12652,7 @@ def ensure_part_class_table():
             ("name", "TEXT"),
             ("description", "TEXT"),
             ("active", "INTEGER DEFAULT 1"),
+            ("sort_order", "INTEGER DEFAULT 0"),
         ],
     )
 

@@ -188,6 +188,9 @@
                       <input type="hidden" name="line_id" value="{{ line.id }}" />
                       <input name="ref_key" value="{{ line.ref_key }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="ref_key" />
                       <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                        {% if line.part_class and not line.part_class.active %}
+                          <option value="{{ line.part_class.id }}" selected>{{ line.part_class.name }} (Inactive)</option>
+                        {% endif %}
                         {% for part in part_classes %}
                           <option value="{{ part.id }}" {% if line.part_class_id == part.id %}selected{% endif %}>{{ part.name }}</option>
                         {% endfor %}
