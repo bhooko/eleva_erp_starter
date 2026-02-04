@@ -421,12 +421,31 @@ def _validate_expression_ast(expr):
 def _safe_eval_expr(expr, variables):
     parsed = _validate_expression_ast(expr)
 
+    def _comparison_label(value):
+        if isinstance(value, bool):
+            return "boolean"
+        if isinstance(value, str):
+            return "text"
+        if isinstance(value, (int, float)):
+            return "number"
+        return "unknown"
+
+    def _ensure_comparable(left, right):
+        left_label = _comparison_label(left)
+        right_label = _comparison_label(right)
+        if left_label != right_label:
+            raise ValueError(f"Cannot compare {left_label} to {right_label}")
+        return left_label
+
     def _eval(node):
         if isinstance(node, ast.Expression):
             return _eval(node.body)
         if isinstance(node, ast.Constant):
             return node.value
         if isinstance(node, ast.Name):
+            lowered = node.id.lower()
+            if lowered in {"true", "false"}:
+                return lowered == "true"
             if node.id in variables:
                 return variables[node.id]
             raise ValueError(f"Unknown reference '{node.id}'.")
@@ -462,18 +481,31 @@ def _safe_eval_expr(expr, variables):
             left = _eval(node.left)
             for op, comparator in zip(node.ops, node.comparators):
                 right = _eval(comparator)
+                label = _ensure_comparable(left, right)
                 if isinstance(op, ast.Eq) and not (left == right):
                     return False
                 if isinstance(op, ast.NotEq) and not (left != right):
                     return False
-                if isinstance(op, ast.Lt) and not (left < right):
-                    return False
-                if isinstance(op, ast.LtE) and not (left <= right):
-                    return False
-                if isinstance(op, ast.Gt) and not (left > right):
-                    return False
-                if isinstance(op, ast.GtE) and not (left >= right):
-                    return False
+                if isinstance(op, ast.Lt):
+                    if label == "boolean":
+                        raise ValueError("Cannot compare boolean values.")
+                    if not (left < right):
+                        return False
+                if isinstance(op, ast.LtE):
+                    if label == "boolean":
+                        raise ValueError("Cannot compare boolean values.")
+                    if not (left <= right):
+                        return False
+                if isinstance(op, ast.Gt):
+                    if label == "boolean":
+                        raise ValueError("Cannot compare boolean values.")
+                    if not (left > right):
+                        return False
+                if isinstance(op, ast.GtE):
+                    if label == "boolean":
+                        raise ValueError("Cannot compare boolean values.")
+                    if not (left >= right):
+                        return False
                 left = right
             return True
         if isinstance(node, ast.Call):
