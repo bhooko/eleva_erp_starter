@@ -840,6 +840,63 @@ def evaluate_bom_template(template, input_values=None):
     }
 
 
+def _get_or_create_design_task_bom(task, *, bom_name="Task BOM"):
+    bom = (
+        BillOfMaterials.query.filter_by(design_task_id=task.id)
+        .order_by(BillOfMaterials.id.asc())
+        .first()
+    )
+    if bom:
+        return bom
+    bom = BillOfMaterials(
+        project_id=task.project_id,
+        design_task_id=task.id,
+        bom_name=bom_name,
+        status="draft",
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(bom)
+    db.session.flush()
+    return bom
+
+
+def _get_or_create_default_bom_package(bom, *, name="Main Lift BOM"):
+    package = (
+        BOMPackage.query.filter_by(bom_id=bom.id)
+        .order_by(BOMPackage.id.asc())
+        .first()
+    )
+    if package:
+        return package
+    package = BOMPackage(
+        bom_id=bom.id,
+        name=name,
+        status="draft",
+        created_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(package)
+    db.session.flush()
+    return package
+
+
+def _parse_bom_package_inputs(package):
+    raw = package.input_snapshot_json if package else None
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _normalize_package_status(value):
+    normalized = (value or "").strip().lower()
+    if normalized in {"draft", "final"}:
+        return normalized
+    return "draft"
+
+
 def _to_india_time(value):
     if not value:
         return value
@@ -6281,6 +6338,7 @@ from eleva_app.models import (
     BomTemplateLine,
     BomTemplateSection,
     BomTemplateStage,
+    BOMPackage,
     PartClass,
     DrawingComment,
     DrawingHistory,
@@ -7032,6 +7090,19 @@ def design_task_detail(task_id):
 
     if request.method == "POST":
         action = request.form.get("action")
+        bom_actions = {
+            "create_bom_package",
+            "update_bom_package",
+            "finalize_bom_package",
+            "unlock_bom_package",
+            "validate_bom_package",
+            "generate_bom_package",
+            "add_bom_item",
+            "update_bom_item",
+            "delete_bom_item",
+        }
+        if action in bom_actions and not can_edit_bom:
+            abort(403)
         if action == "comment":
             body = request.form.get("body")
             if body:
@@ -7182,35 +7253,179 @@ def design_task_detail(task_id):
             task.updated_at = datetime.datetime.utcnow()
             db.session.commit()
             flash("Design task updated.", "success")
-        elif action == "bom_item":
-            bom_id = request.form.get("bom_id")
-            bom_status = request.form.get("bom_status") or "draft"
-            bom_name = request.form.get("bom_name") or "Task BOM"
+        elif action == "create_bom_package":
+            package_name = (request.form.get("package_name") or "").strip()
+            template_id_raw = request.form.get("bom_template_id") or None
+            template_id = int(template_id_raw) if template_id_raw else None
+            if not package_name:
+                flash("Package name is required.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            bom = _get_or_create_design_task_bom(task)
+            package = BOMPackage(
+                bom_id=bom.id,
+                name=package_name,
+                status="draft",
+                bom_template_id=template_id,
+                created_at=datetime.datetime.utcnow(),
+            )
+            db.session.add(package)
+            db.session.commit()
+            flash("BOM package created.", "success")
+        elif action == "update_bom_package":
+            package_id = request.form.get("bom_package_id")
+            package = BOMPackage.query.get_or_404(package_id)
+            if package.bom and package.bom.design_task_id != task.id:
+                abort(404)
+            if package.status == "final":
+                flash("Unlock the package before editing settings.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            package.name = (request.form.get("package_name") or package.name).strip()
+            template_id_raw = request.form.get("bom_template_id") or None
+            package.bom_template_id = (
+                int(template_id_raw) if template_id_raw else package.bom_template_id
+            )
+            db.session.commit()
+            flash("Package updated.", "success")
+        elif action in {"finalize_bom_package", "unlock_bom_package"}:
+            package_id = request.form.get("bom_package_id")
+            package = BOMPackage.query.get_or_404(package_id)
+            if package.bom and package.bom.design_task_id != task.id:
+                abort(404)
+            package.status = "final" if action == "finalize_bom_package" else "draft"
+            db.session.commit()
+            flash(
+                "Package finalized." if package.status == "final" else "Package unlocked.",
+                "success",
+            )
+        elif action in {"validate_bom_package", "generate_bom_package"}:
+            package_id = request.form.get("bom_package_id")
+            package = BOMPackage.query.get_or_404(package_id)
+            if package.bom and package.bom.design_task_id != task.id:
+                abort(404)
+            template_id_raw = request.form.get("bom_template_id") or package.bom_template_id
+            template_id = int(template_id_raw) if template_id_raw else None
+            if not template_id:
+                flash("Select a BOM template before validating or generating.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            template = (
+                BomTemplate.query.options(
+                    joinedload(BomTemplate.inputs),
+                    joinedload(BomTemplate.stages)
+                    .joinedload(BomTemplateStage.sections)
+                    .joinedload(BomTemplateSection.lines)
+                    .joinedload(BomTemplateLine.part_class),
+                )
+                .get(template_id)
+            )
+            if not template:
+                flash("Selected BOM template was not found.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            input_prefix = f"input_{package.id}_"
+            input_values = {
+                key.replace(input_prefix, ""): value
+                for key, value in request.form.items()
+                if key.startswith(input_prefix)
+            }
+            evaluation = evaluate_bom_template(template, input_values)
+            error_count = len(evaluation.get("errors") or [])
+            expression_error_count = len(evaluation.get("expression_errors") or [])
+            if action == "validate_bom_package":
+                if error_count or expression_error_count:
+                    flash(
+                        f"Validation found {error_count + expression_error_count} issue(s).",
+                        "warning",
+                    )
+                else:
+                    flash("Validation successful. Ready to generate.", "success")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            if package.status == "final":
+                flash("Unlock the package before regenerating.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            if error_count or expression_error_count:
+                flash("Resolve template errors before generating items.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            package.bom_template_id = template.id
+            package.input_snapshot_json = json.dumps(input_values)
+            package.generated_at = datetime.datetime.utcnow()
+            package.generated_by_user_id = current_user.id
+
+            (
+                BOMItem.query.filter_by(bom_package_id=package.id)
+                .filter(
+                    or_(
+                        BOMItem.is_generated.is_(True),
+                        BOMItem.source_template_line_id.isnot(None),
+                    )
+                )
+                .delete(synchronize_session=False)
+            )
+            created_count = 0
+            for line_result in evaluation.get("lines") or []:
+                if line_result.get("errors"):
+                    continue
+                final_qty = float(line_result.get("final_qty") or 0)
+                if final_qty <= 0:
+                    continue
+                line = line_result.get("line")
+                if not line:
+                    continue
+                section_name = line.section.section_name if line.section else None
+                item_code = (
+                    line.part_class.name if line.part_class else line.ref_key or "Item"
+                )
+                db.session.add(
+                    BOMItem(
+                        bom_id=package.bom_id,
+                        bom_package_id=package.id,
+                        part_class_id=line.part_class_id,
+                        item_code=item_code,
+                        description=line.specification_text,
+                        category=section_name,
+                        unit=line.unit,
+                        quantity_required=final_qty,
+                        stage_id=None,
+                        remarks=None,
+                        source_template_line_id=line.id,
+                        source_ref_key=line.ref_key,
+                        is_generated=True,
+                    )
+                )
+                created_count += 1
+            _notify_assignee(
+                f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
+            )
+            db.session.commit()
+            flash(f"Generated {created_count} BOM item(s) for {package.name}.", "success")
+        elif action == "add_bom_item":
+            package_id = request.form.get("bom_package_id")
+            package = BOMPackage.query.get_or_404(package_id)
+            if package.bom and package.bom.design_task_id != task.id:
+                abort(404)
+            if package.status == "final":
+                flash("Unlock the package before editing items.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            item_code = (request.form.get("item_code") or "").strip()
+            if not item_code:
+                flash("Item name/description is required.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             stage_id_value = request.form.get("stage_id") or (
                 default_stage.id if default_stage else None
             )
             stage_id = int(stage_id_value) if stage_id_value else None
-            if bom_id:
-                bom = BillOfMaterials.query.get(bom_id)
-            else:
-                bom = BillOfMaterials(
-                    project_id=task.project_id,
-                    design_task_id=task.id,
-                    bom_name=bom_name,
-                    status=bom_status,
-                    created_by_user_id=current_user.id,
-                )
-                db.session.add(bom)
-                db.session.flush()
+            part_class_id_raw = request.form.get("part_class_id") or None
+            part_class_id = int(part_class_id_raw) if part_class_id_raw else None
             item = BOMItem(
-                bom_id=bom.id,
-                item_code=request.form.get("item_code"),
+                bom_id=package.bom_id,
+                bom_package_id=package.id,
+                part_class_id=part_class_id,
+                item_code=item_code,
                 description=request.form.get("item_description"),
                 category=request.form.get("category"),
                 unit=request.form.get("unit"),
                 quantity_required=float(request.form.get("quantity_required") or 0),
                 stage_id=stage_id,
                 remarks=request.form.get("remarks"),
+                is_generated=False,
             )
             db.session.add(item)
             _notify_assignee(
@@ -7218,6 +7433,40 @@ def design_task_detail(task_id):
             )
             db.session.commit()
             flash("BOM item added.", "success")
+        elif action == "update_bom_item":
+            item_id = request.form.get("item_id")
+            item = BOMItem.query.get_or_404(item_id)
+            if item.bom and item.bom.design_task_id != task.id:
+                abort(404)
+            if item.bom_package and item.bom_package.status == "final":
+                flash("Unlock the package before editing items.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            stage_id_raw = request.form.get("stage_id") or None
+            stage_id = int(stage_id_raw) if stage_id_raw else None
+            part_class_id_raw = request.form.get("part_class_id") or None
+            part_class_id = int(part_class_id_raw) if part_class_id_raw else None
+            item.part_class_id = part_class_id
+            item.item_code = (request.form.get("item_code") or "").strip()
+            item.description = request.form.get("item_description")
+            item.category = request.form.get("category")
+            item.unit = request.form.get("unit")
+            item.quantity_required = float(request.form.get("quantity_required") or 0)
+            item.stage_id = stage_id
+            item.remarks = request.form.get("remarks")
+            item.is_generated = bool(item.is_generated)
+            db.session.commit()
+            flash("BOM item updated.", "success")
+        elif action == "delete_bom_item":
+            item_id = request.form.get("item_id")
+            item = BOMItem.query.get_or_404(item_id)
+            if item.bom and item.bom.design_task_id != task.id:
+                abort(404)
+            if item.bom_package and item.bom_package.status == "final":
+                flash("Unlock the package before editing items.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            db.session.delete(item)
+            db.session.commit()
+            flash("BOM item deleted.", "info")
         elif action == "clarification":
             detail = (request.form.get("clarification_body") or "").strip()
             if not detail:
@@ -7276,7 +7525,29 @@ def design_task_detail(task_id):
             drawing.revisions, key=lambda rev: rev.version_number, reverse=True
         )
         latest_revisions[drawing.id] = revisions_sorted[0] if revisions_sorted else None
-    bom_list = BillOfMaterials.query.filter_by(design_task_id=task.id).all()
+    bom = (
+        BillOfMaterials.query.filter_by(design_task_id=task.id)
+        .order_by(BillOfMaterials.id.asc())
+        .first()
+    )
+    bom_packages = []
+    bom_items_by_package = {}
+    all_bom_items = []
+    if bom:
+        bom_packages = (
+            BOMPackage.query.filter_by(bom_id=bom.id)
+            .order_by(BOMPackage.created_at.asc().nullslast(), BOMPackage.id.asc())
+            .all()
+        )
+        for package in bom_packages:
+            package_items = (
+                BOMItem.query.filter_by(bom_id=bom.id, bom_package_id=package.id)
+                .order_by(BOMItem.item_code.asc(), BOMItem.id.asc())
+                .all()
+            )
+            bom_items_by_package[package.id] = package_items
+            for item in package_items:
+                all_bom_items.append({"package": package, "item": item})
     related_drawing_sites = []
     users = User.query.order_by(User.first_name, User.username).all()
     project_options = (
@@ -7296,11 +7567,36 @@ def design_task_detail(task_id):
             DrawingSite.project_no.ilike(f"%{task.project_name}%")
         ).all()
 
+    part_classes = (
+        PartClass.query.filter(PartClass.active.is_(True))
+        .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
+        .all()
+    )
+    bom_template_options = (
+        BomTemplate.query.filter(BomTemplate.is_active.is_(True))
+        .order_by(BomTemplate.name.asc())
+        .all()
+    )
+    bom_template_map = {
+        template.id: template
+        for template in BomTemplate.query.options(joinedload(BomTemplate.inputs)).all()
+    }
+    package_input_values = {
+        package.id: _parse_bom_package_inputs(package) for package in bom_packages
+    }
+
     return render_template(
         "design_task_detail.html",
         task=task,
         drawings=drawings,
-        boms=bom_list,
+        bom=bom,
+        bom_packages=bom_packages,
+        bom_items_by_package=bom_items_by_package,
+        all_bom_items=all_bom_items,
+        part_classes=part_classes,
+        bom_template_options=bom_template_options,
+        bom_template_map=bom_template_map,
+        package_input_values=package_input_values,
         related_drawing_sites=related_drawing_sites,
         can_edit_bom=can_edit_bom,
         can_link_project=can_link_project,
@@ -8274,6 +8570,8 @@ def design_drawing_site_detail(site_id: int):
                 created_by_user_id=current_user.id,
             )
             db.session.add(bom)
+            db.session.flush()
+            _get_or_create_default_bom_package(bom)
             db.session.commit()
             flash("BOM created for this site.", "success")
             return redirect(url_for("design_drawing_site_detail", site_id=site.id))
@@ -8283,8 +8581,10 @@ def design_drawing_site_detail(site_id: int):
                 default_stage.id if default_stage else None
             )
             stage_id = int(stage_id_value) if stage_id_value else None
+            package = _get_or_create_default_bom_package(bom)
             item = BOMItem(
                 bom_id=bom.id,
+                bom_package_id=package.id,
                 item_code=request.form.get("item_code"),
                 description=request.form.get("item_description"),
                 category=request.form.get("category"),
@@ -8292,6 +8592,7 @@ def design_drawing_site_detail(site_id: int):
                 quantity_required=float(request.form.get("quantity_required") or 0),
                 stage_id=stage_id,
                 remarks=request.form.get("remarks"),
+                is_generated=False,
             )
             db.session.add(item)
             db.session.commit()
@@ -8410,10 +8711,34 @@ def duplicate_bom(bom_id: int):
         db.session.add(new_bom)
         db.session.flush()
 
+        source_packages = source_bom.packages or []
+        if not source_packages:
+            source_packages = [_get_or_create_default_bom_package(source_bom)]
+        package_id_map = {}
+        for package in source_packages:
+            new_package = BOMPackage(
+                bom_id=new_bom.id,
+                name=package.name,
+                status=package.status,
+                bom_template_id=package.bom_template_id,
+                input_snapshot_json=package.input_snapshot_json,
+                generated_at=package.generated_at,
+                generated_by_user_id=package.generated_by_user_id,
+                created_at=datetime.datetime.utcnow(),
+            )
+            db.session.add(new_package)
+            db.session.flush()
+            package_id_map[package.id] = new_package.id
+
+        default_new_package_id = next(iter(package_id_map.values()), None)
         for item in source_bom.items:
             db.session.add(
                 BOMItem(
                     bom_id=new_bom.id,
+                    bom_package_id=package_id_map.get(
+                        item.bom_package_id, default_new_package_id
+                    ),
+                    part_class_id=item.part_class_id,
                     item_code=item.item_code,
                     description=item.description,
                     category=item.category,
@@ -8421,6 +8746,9 @@ def duplicate_bom(bom_id: int):
                     quantity_required=item.quantity_required,
                     stage_id=item.stage_id,
                     remarks=item.remarks,
+                    source_template_line_id=item.source_template_line_id,
+                    source_ref_key=item.source_ref_key,
+                    is_generated=bool(item.is_generated),
                 )
             )
 
@@ -12942,6 +13270,7 @@ def ensure_tables():
         ProjectBomInput.__table__,
         ProjectBomLine.__table__,
         BillOfMaterials.__table__,
+        BOMPackage.__table__,
         BOMItem.__table__,
         Product.__table__,
         Vendor.__table__,
@@ -13138,6 +13467,23 @@ def ensure_project_bom_line_table():
             ("qty_expr_snapshot", "TEXT"),
             ("include_if_expr_snapshot", "TEXT"),
             ("override_expr_snapshot", "TEXT"),
+        ],
+    )
+
+
+def ensure_bom_package_table():
+    _ensure_sqlite_table(
+        "bom_package",
+        BOMPackage.__table__,
+        [
+            ("bom_id", "INTEGER"),
+            ("name", "TEXT"),
+            ("status", "TEXT DEFAULT 'draft'"),
+            ("bom_template_id", "INTEGER"),
+            ("input_snapshot_json", "TEXT"),
+            ("generated_at", "DATETIME"),
+            ("generated_by_user_id", "INTEGER"),
+            ("created_at", "DATETIME"),
         ],
     )
 
@@ -13532,12 +13878,35 @@ def ensure_bom_columns():
     cur.execute("PRAGMA table_info(bom_item)")
     bom_item_cols = {row[1] for row in cur.fetchall()}
 
+    if "bom_package_id" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN bom_package_id INTEGER;")
+        added_cols.append("bom_package_id")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_bom_item_bom_package_id ON bom_item (bom_package_id);"
+        )
+
     if "stage_id" not in bom_item_cols:
         cur.execute("ALTER TABLE bom_item ADD COLUMN stage_id INTEGER;")
         added_cols.append("stage_id")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS ix_bom_item_stage_id ON bom_item (stage_id);"
         )
+
+    if "part_class_id" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN part_class_id INTEGER;")
+        added_cols.append("part_class_id")
+
+    if "source_template_line_id" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN source_template_line_id INTEGER;")
+        added_cols.append("source_template_line_id")
+
+    if "source_ref_key" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN source_ref_key TEXT;")
+        added_cols.append("source_ref_key")
+
+    if "is_generated" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN is_generated INTEGER DEFAULT 0;")
+        added_cols.append("is_generated")
 
     cur.execute("PRAGMA table_info(purchase_order)")
     po_cols = {row[1] for row in cur.fetchall()}
@@ -13591,6 +13960,53 @@ def ensure_bom_columns():
         print(f"✅ Auto-added in purchase_order: {', '.join(po_added)}")
     if not added_cols and not po_added:
         print("✔️ bill_of_materials OK")
+
+
+def ensure_bom_package_backfill():
+    try:
+        bom_count = BillOfMaterials.query.count()
+    except Exception as exc:
+        print(f"⚠️ Skipping BOM package backfill due to database error: {exc}")
+        return
+
+    if bom_count == 0:
+        return
+
+    created_packages = 0
+    updated_items = 0
+
+    for bom in BillOfMaterials.query.all():
+        existing_packages = BOMPackage.query.filter_by(bom_id=bom.id).all()
+        if not existing_packages:
+            default_package = BOMPackage(
+                bom_id=bom.id,
+                name="Main Lift BOM",
+                status="draft",
+                created_at=datetime.datetime.utcnow(),
+            )
+            db.session.add(default_package)
+            db.session.flush()
+            existing_packages = [default_package]
+            created_packages += 1
+
+        default_package = existing_packages[0]
+        items_to_update = (
+            BOMItem.query.filter_by(bom_id=bom.id)
+            .filter(BOMItem.bom_package_id.is_(None))
+            .all()
+        )
+        for item in items_to_update:
+            item.bom_package_id = default_package.id
+            if item.is_generated is None:
+                item.is_generated = False
+            updated_items += 1
+
+    if created_packages or updated_items:
+        db.session.commit()
+        if created_packages:
+            print(f"✅ Auto-created {created_packages} BOM package(s) for legacy BOMs.")
+        if updated_items:
+            print(f"✅ Assigned {updated_items} BOM item(s) to default packages.")
 
 
 def ensure_purchase_order_item_columns():
@@ -13993,6 +14409,8 @@ def bootstrap_db():
     ensure_design_task_columns()
     ensure_design_drawing_columns()
     ensure_bom_columns()
+    ensure_bom_package_table()
+    ensure_bom_package_backfill()
     ensure_purchase_order_item_columns()
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
