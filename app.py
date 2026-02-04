@@ -6746,6 +6746,10 @@ def design_tasks():
     projects = Project.query.order_by(Project.name).all()
     users = User.query.order_by(User.first_name, User.username).all()
     statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
+    status_options_by_type = {
+        "bom": DESIGN_BOM_STATUS_OPTIONS,
+        "default": DESIGN_DRAWING_STATUS_OPTIONS,
+    }
 
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
 
@@ -6754,6 +6758,7 @@ def design_tasks():
         tasks_by_status=tasks_by_status,
         ordered_tasks=ordered_tasks,
         statuses=statuses,
+        status_options_by_type=status_options_by_type,
         users=users,
         projects=projects,
         can_move_cards=can_move_cards,
@@ -6765,33 +6770,37 @@ def design_tasks():
 def design_tasks_json():
     ensure_bootstrap()
     statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
+    status_options_by_type = {
+        "bom": DESIGN_BOM_STATUS_OPTIONS,
+        "default": DESIGN_DRAWING_STATUS_OPTIONS,
+    }
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
     board_html = render_template(
         "partials/design_tasks_board.html",
         tasks_by_status=tasks_by_status,
         ordered_tasks=ordered_tasks,
         statuses=statuses,
+        status_options_by_type=status_options_by_type,
         can_move_cards=can_move_cards,
     )
     return jsonify({"html": board_html})
 
 
-@app.route("/design/tasks/<int:task_id>/status", methods=["POST"])
-@login_required
-def design_task_status(task_id):
-    task = DesignTask.query.get_or_404(task_id)
-    role = (current_user.role or "").lower()
-    if not (current_user.is_admin or "design" in role):
-        abort(403)
-
-    allowed_statuses = set(_design_status_options_for(task.task_type))
-    status_value = None
-    if request.is_json:
-        status_value = request.json.get("status")
+def _extract_design_status_value():
+    payload = request.get_json(silent=True) if request.is_json else None
+    if payload and "status" in payload:
+        status_value = payload.get("status")
     else:
         status_value = request.form.get("status")
+    if isinstance(status_value, str):
+        return status_value.strip()
+    return status_value
+
+
+def _apply_design_task_status_update(task, status_value):
+    allowed_statuses = set(_design_status_options_for(task.task_type))
     if status_value not in allowed_statuses:
-        return ("Invalid status", 400)
+        return False
     task.status = status_value
     task.updated_at = datetime.datetime.utcnow()
     if (
@@ -6804,6 +6813,34 @@ def design_task_status(task_id):
             url_for("design_task_detail", task_id=task.id),
             commit=False,
         )
+    return True
+
+
+@app.route("/design/tasks/<int:task_id>/update_status", methods=["POST"])
+@login_required
+def design_task_update_status(task_id):
+    task = DesignTask.query.get_or_404(task_id)
+    role = (current_user.role or "").lower()
+    if not (current_user.is_admin or "design" in role):
+        abort(403)
+    status_value = _extract_design_status_value()
+    if not _apply_design_task_status_update(task, status_value):
+        return ("Invalid status", 400)
+    db.session.commit()
+    return {"ok": True, "status": status_value}
+
+
+@app.route("/design/tasks/<int:task_id>/status", methods=["POST"])
+@login_required
+def design_task_status(task_id):
+    task = DesignTask.query.get_or_404(task_id)
+    role = (current_user.role or "").lower()
+    if not (current_user.is_admin or "design" in role):
+        abort(403)
+
+    status_value = _extract_design_status_value()
+    if not _apply_design_task_status_update(task, status_value):
+        return ("Invalid status", 400)
     db.session.commit()
     if request.is_json:
         return {"ok": True, "status": status_value}
