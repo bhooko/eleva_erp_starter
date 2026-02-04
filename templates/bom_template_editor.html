@@ -161,15 +161,24 @@
 
             <div class="space-y-3" data-sortable>
               {% for section in stage.sections|sort(attribute='display_order') %}
-              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4 sortable-item" draggable="true">
+              {% set section_state = section_includes.get(section.id) if section_includes else None %}
+              {% set is_section_included = section_state is none or section_state.include %}
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4 sortable-item {% if section.include_if_expr and not is_section_included %}opacity-60{% endif %}" draggable="true">
                 <div class="flex flex-wrap items-center gap-2">
-                  <form method="post" class="flex flex-wrap items-center gap-2 flex-1">
+                  <form method="post" class="grid lg:grid-cols-6 gap-2 flex-1 items-center">
                     {{ csrf_field() }}
                     <input type="hidden" name="action" value="update_section" />
                     <input type="hidden" name="section_id" value="{{ section.id }}" />
-                    <input name="section_name" value="{{ section.section_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[180px]" />
+                    <div class="lg:col-span-2 flex items-center gap-2">
+                      <input name="section_name" value="{{ section.section_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[180px]" />
+                      {% if section.include_if_expr %}
+                        <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">Conditional</span>
+                      {% endif %}
+                    </div>
+                    <input name="include_if_expr" value="{{ section.include_if_expr or '' }}" class="expr-field rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 lg:col-span-3" placeholder="Include Section If (Condition)" data-expr-scope="inputs" />
                     <input name="display_order" value="{{ section.display_order }}" type="number" class="w-24 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 order-input" />
                     <button class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
+                    <div class="lg:col-span-6 text-xs text-slate-500">Use Input variables only (e.g. door_type == 'Manual').</div>
                   </form>
                   <form method="post">
                     {{ csrf_field() }}
@@ -249,6 +258,8 @@
               <input type="hidden" name="action" value="add_section" />
               <input type="hidden" name="stage_id" value="{{ stage.id }}" />
               <input name="section_name" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Section name" />
+              <input name="include_if_expr" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Include Section If (Condition)" data-expr-scope="inputs" />
+              <div class="lg:col-span-4 text-xs text-slate-500">Use Input variables only (e.g. door_type == 'Manual').</div>
               <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="Order" />
               <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Section</button>
             </form>
@@ -356,7 +367,7 @@
         <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Inputs</div>
         <div id="expr-helper-inputs" class="space-y-1"></div>
       </div>
-      <div>
+      <div id="expr-helper-lines-section">
         <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Line Keys</div>
         <div id="expr-helper-lines" class="space-y-1"></div>
       </div>
@@ -544,12 +555,14 @@
   const helperSearch = document.getElementById('expr-helper-search');
   const helperInputs = document.getElementById('expr-helper-inputs');
   const helperLines = document.getElementById('expr-helper-lines');
+  const helperLinesSection = document.getElementById('expr-helper-lines-section');
   const helperFnButtons = helper.querySelectorAll('.expr-fn-btn');
   const inputKeys = window.BOM_INPUT_KEYS || [];
   const lineKeys = window.BOM_LINE_KEYS || [];
   let activeField = null;
   let activeIndex = -1;
   let visibleItems = [];
+  let activeScope = 'all';
   let pendingPositionFrame = null;
   let activeScrollParent = null;
   let activeScrollParentHandler = null;
@@ -593,9 +606,10 @@
     const filteredInputs = inputKeys.filter((item) =>
       buildFilterText(item, 'input').includes(term),
     );
-    const filteredLines = lineKeys.filter((item) =>
-      buildFilterText(item, 'line').includes(term),
-    );
+    const allowLines = activeScope !== 'inputs';
+    const filteredLines = allowLines
+      ? lineKeys.filter((item) => buildFilterText(item, 'line').includes(term))
+      : [];
 
     const combined = [
       ...filteredInputs.map((item) => ({
@@ -604,12 +618,14 @@
         id: `input:${item.key}`,
         label: buildInputLabel(item),
       })),
-      ...filteredLines.map((item) => ({
-        type: 'line',
-        key: item.ref_key,
-        id: `line:${item.ref_key}`,
-        label: buildLineLabel(item),
-      })),
+      ...(allowLines
+        ? filteredLines.map((item) => ({
+            type: 'line',
+            key: item.ref_key,
+            id: `line:${item.ref_key}`,
+            label: buildLineLabel(item),
+          }))
+        : []),
     ];
 
     helperInputs.innerHTML = filteredInputs.length
@@ -628,21 +644,29 @@
           .join('')
       : '<div class="text-xs text-slate-500">No inputs found.</div>';
 
-    helperLines.innerHTML = filteredLines.length
-      ? filteredLines
-          .map((item) => {
-            const label = buildLineLabel(item);
-            return `
-              <div class="expr-helper-item" data-key="${item.ref_key}" data-id="line:${item.ref_key}" data-type="line">
-                <button type="button" class="flex-1 text-left text-sm text-slate-100" data-token="${item.ref_key}">
-                  ${label}
-                </button>
-                <button type="button" class="text-xs text-slate-400 hover:text-slate-200" data-copy="${item.ref_key}">Copy</button>
-              </div>
-            `;
-          })
-          .join('')
-      : '<div class="text-xs text-slate-500">No line keys found.</div>';
+    if (allowLines) {
+      helperLines.innerHTML = filteredLines.length
+        ? filteredLines
+            .map((item) => {
+              const label = buildLineLabel(item);
+              return `
+                <div class="expr-helper-item" data-key="${item.ref_key}" data-id="line:${item.ref_key}" data-type="line">
+                  <button type="button" class="flex-1 text-left text-sm text-slate-100" data-token="${item.ref_key}">
+                    ${label}
+                  </button>
+                  <button type="button" class="text-xs text-slate-400 hover:text-slate-200" data-copy="${item.ref_key}">Copy</button>
+                </div>
+              `;
+            })
+            .join('')
+        : '<div class="text-xs text-slate-500">No line keys found.</div>';
+      helperLinesSection.classList.remove('hidden');
+      helperSearch.placeholder = 'Search inputs or line keys...';
+    } else {
+      helperLines.innerHTML = '';
+      helperLinesSection.classList.add('hidden');
+      helperSearch.placeholder = 'Search inputs...';
+    }
 
     visibleItems = combined;
     activeIndex = visibleItems.length ? 0 : -1;
@@ -732,6 +756,7 @@
 
   const openHelper = (field) => {
     activeField = field;
+    activeScope = field?.dataset?.exprScope || 'all';
     helper.classList.remove('hidden');
     helper.classList.add('is-open');
     helper.classList.add('is-measuring');
