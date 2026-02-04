@@ -2215,6 +2215,7 @@ class PartClass(db.Model):
     description = db.Column(db.Text, nullable=True)
     active = db.Column(db.Boolean, default=True)
     sort_order = db.Column(db.Integer, default=0)
+    associated_sections = db.Column(db.Text, nullable=True)
 
 
 class BomTemplate(db.Model):

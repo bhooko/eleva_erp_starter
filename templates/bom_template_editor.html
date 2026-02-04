@@ -187,7 +187,7 @@
                       <input type="hidden" name="action" value="update_line" />
                       <input type="hidden" name="line_id" value="{{ line.id }}" />
                       <input type="hidden" name="ref_key" value="{{ line.ref_key }}" />
-                      <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                      <select name="part_class_id" data-section-id="{{ section.id }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
                         {% if line.part_class and not line.part_class.active %}
                           <option value="{{ line.part_class.id }}" selected>{{ line.part_class.name }} (Inactive)</option>
                         {% endif %}
@@ -223,7 +223,7 @@
                   <input type="hidden" name="action" value="add_line" />
                   <input type="hidden" name="section_id" value="{{ section.id }}" />
                   <input type="hidden" name="ref_key" />
-                  <select name="part_class_id" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
+                  <select name="part_class_id" data-section-id="{{ section.id }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1">
                     <option value="">Select part class</option>
                     {% for part in part_classes %}
                       <option value="{{ part.id }}">{{ part.name }}</option>
@@ -410,6 +410,7 @@
 <script>
   window.BOM_INPUT_KEYS = {{ input_keys|tojson }};
   window.BOM_LINE_KEYS = {{ line_keys|tojson }};
+  window.BOM_PART_CLASSES = {{ part_class_sections|tojson }};
 
   const templateId = {{ template.id }};
   const scrollStorageKey = `bomTemplateScroll:${templateId}`;
@@ -455,6 +456,51 @@
       window.scrollTo({ top: Number(savedScroll), left: 0, behavior: 'auto' });
       sessionStorage.removeItem(scrollStorageKey);
     }
+  });
+
+  const partClassSections = window.BOM_PART_CLASSES || [];
+  const partClassSectionMap = partClassSections.reduce((acc, item) => {
+    acc[String(item.id)] = (item.associated_sections || []).map((value) => String(value));
+    return acc;
+  }, {});
+
+  const buildSectionAwarePartClasses = (select) => {
+    const sectionId = select.dataset.sectionId;
+    if (!sectionId) return;
+    const partOptions = Array.from(select.options);
+    const placeholderOptions = partOptions.filter((option) => option.value === '');
+    const validOptions = partOptions.filter((option) => option.value !== '');
+    const inactiveOptions = validOptions.filter(
+      (option) => !(String(option.value) in partClassSectionMap)
+    );
+    const activeOptions = validOptions.filter(
+      (option) => String(option.value) in partClassSectionMap
+    );
+    const recommendedOptions = activeOptions.filter((option) => {
+      const sections = partClassSectionMap[String(option.value)] || [];
+      return sections.includes(String(sectionId));
+    });
+    if (!recommendedOptions.length) {
+      return;
+    }
+    const remainingOptions = activeOptions.filter(
+      (option) => !recommendedOptions.includes(option)
+    );
+    select.innerHTML = '';
+    placeholderOptions.forEach((option) => select.appendChild(option));
+    inactiveOptions.forEach((option) => select.appendChild(option));
+    const recommendedGroup = document.createElement('optgroup');
+    recommendedGroup.label = 'Recommended for this section';
+    recommendedOptions.forEach((option) => recommendedGroup.appendChild(option));
+    const allGroup = document.createElement('optgroup');
+    allGroup.label = 'All Part Classes';
+    remainingOptions.forEach((option) => allGroup.appendChild(option));
+    select.appendChild(recommendedGroup);
+    select.appendChild(allGroup);
+  };
+
+  document.querySelectorAll('select[name="part_class_id"]').forEach((select) => {
+    buildSectionAwarePartClasses(select);
   });
 
   document.querySelectorAll('[data-sortable]').forEach((container) => {

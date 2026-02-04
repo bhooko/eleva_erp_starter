@@ -213,7 +213,34 @@ def _part_class_payload(part_class):
         "description": part_class.description,
         "is_active": bool(part_class.active),
         "sort_order": part_class.sort_order or 0,
+        "associated_sections": _parse_associated_sections(part_class.associated_sections),
     }
+
+
+def _parse_associated_sections(raw_value) -> List[str]:
+    if raw_value is None:
+        return []
+    if isinstance(raw_value, list):
+        return [str(item).strip() for item in raw_value if str(item).strip()]
+    if isinstance(raw_value, str):
+        if not raw_value.strip():
+            return []
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+        return [item.strip() for item in raw_value.split(",") if item.strip()]
+    return []
+
+
+def _serialize_associated_sections(raw_value) -> Optional[str]:
+    items = _parse_associated_sections(raw_value)
+    if not items:
+        return None
+    unique_items = list(dict.fromkeys(items))
+    return json.dumps(unique_items)
 
 
 def _part_class_name_exists(name, *, exclude_id=None):
@@ -7332,7 +7359,35 @@ def part_classes():
         PartClass.sort_order.asc(),
         PartClass.name.asc(),
     ).all()
-    return render_template("part_classes.html", part_classes=part_classes)
+    part_class_section_map = {
+        part_class.id: _parse_associated_sections(part_class.associated_sections)
+        for part_class in part_classes
+    }
+    section_rows = (
+        db.session.query(BomTemplateSection, BomTemplateStage, BomTemplate)
+        .join(BomTemplateStage, BomTemplateSection.stage_id == BomTemplateStage.id)
+        .join(BomTemplate, BomTemplateStage.template_id == BomTemplate.id)
+        .order_by(
+            BomTemplate.name.asc(),
+            BomTemplateStage.display_order.asc(),
+            BomTemplateSection.display_order.asc(),
+            BomTemplateSection.section_name.asc(),
+        )
+        .all()
+    )
+    sections = [
+        {
+            "id": section.id,
+            "label": f"{template.name} / {stage.stage_name} / {section.section_name}",
+        }
+        for section, stage, template in section_rows
+    ]
+    return render_template(
+        "part_classes.html",
+        part_classes=part_classes,
+        part_class_section_map=part_class_section_map,
+        sections=sections,
+    )
 
 
 @app.route("/api/part_classes/<int:class_id>", methods=["GET"])
@@ -7352,6 +7407,11 @@ def update_part_class(class_id):
     name = (payload.get("name") or "").strip()
     description = (payload.get("description") or "").strip() or None
     is_active = _parse_bool_payload(payload.get("is_active"), default=part_class.active)
+    associated_sections = part_class.associated_sections
+    if "associated_sections" in payload:
+        associated_sections = _serialize_associated_sections(
+            payload.get("associated_sections")
+        )
     sort_order_raw = payload.get("sort_order")
     try:
         sort_order = int(sort_order_raw or 0)
@@ -7367,6 +7427,7 @@ def update_part_class(class_id):
     part_class.description = description
     part_class.active = is_active
     part_class.sort_order = sort_order
+    part_class.associated_sections = associated_sections
     db.session.commit()
     return jsonify(_part_class_payload(part_class))
 
@@ -7378,6 +7439,7 @@ def create_part_class_api():
     payload = request.get_json(silent=True) or {}
     name = (payload.get("name") or "").strip()
     description = (payload.get("description") or "").strip() or None
+    associated_sections = _serialize_associated_sections(payload.get("associated_sections"))
     sort_order_raw = payload.get("sort_order")
     try:
         sort_order = int(sort_order_raw or 0)
@@ -7394,6 +7456,7 @@ def create_part_class_api():
         description=description,
         active=True,
         sort_order=sort_order,
+        associated_sections=associated_sections,
     )
     db.session.add(part_class)
     db.session.commit()
@@ -7672,6 +7735,15 @@ def design_bom_template_edit(template_id):
         .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
         .all()
     )
+    part_class_sections = [
+        {
+            "id": part_class.id,
+            "associated_sections": _parse_associated_sections(
+                part_class.associated_sections
+            ),
+        }
+        for part_class in part_classes
+    ]
     input_keys = [
         {
             "key": template_input.input_key,
@@ -7702,6 +7774,7 @@ def design_bom_template_edit(template_id):
         "bom_template_editor.html",
         template=template,
         part_classes=part_classes,
+        part_class_sections=part_class_sections,
         LIFT_TYPES=LIFT_TYPES,
         BOM_INPUT_DATA_TYPES=BOM_INPUT_DATA_TYPES,
         evaluation=evaluation,
@@ -12714,6 +12787,7 @@ def ensure_part_class_table():
             ("description", "TEXT"),
             ("active", "INTEGER DEFAULT 1"),
             ("sort_order", "INTEGER DEFAULT 0"),
+            ("associated_sections", "TEXT"),
         ],
     )
 
