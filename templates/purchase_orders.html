@@ -246,8 +246,8 @@
     right: 0;
     z-index: 60;
     border-radius: 0.75rem;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
     max-height: 16rem;
     overflow-y: auto;
@@ -272,50 +272,20 @@
   }
   .part-dropdown-item:hover,
   .part-dropdown-create:hover {
-    background: #f1f5f9;
+    background: rgba(var(--color-neutral-rgb), 0.12);
   }
   .part-dropdown-meta {
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-muted);
   }
   .part-dropdown-desc {
     font-size: 0.75rem;
-    color: #475569;
+    color: var(--text-secondary);
   }
   .part-dropdown-create {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #2563eb;
-  }
-  html[data-theme="eleva-signature"] .part-dropdown,
-  html[data-theme="metallic-elevate"] .part-dropdown {
-    background: #0f172a;
-    border-color: #334155;
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-  }
-  html[data-theme="eleva-signature"] .part-dropdown-item,
-  html[data-theme="metallic-elevate"] .part-dropdown-item,
-  html[data-theme="eleva-signature"] .part-dropdown-create,
-  html[data-theme="metallic-elevate"] .part-dropdown-create {
-    color: #e2e8f0;
-  }
-  html[data-theme="eleva-signature"] .part-dropdown-item:hover,
-  html[data-theme="metallic-elevate"] .part-dropdown-item:hover,
-  html[data-theme="eleva-signature"] .part-dropdown-create:hover,
-  html[data-theme="metallic-elevate"] .part-dropdown-create:hover {
-    background: #1e293b;
-  }
-  html[data-theme="eleva-signature"] .part-dropdown-meta,
-  html[data-theme="metallic-elevate"] .part-dropdown-meta {
-    color: #94a3b8;
-  }
-  html[data-theme="eleva-signature"] .part-dropdown-desc,
-  html[data-theme="metallic-elevate"] .part-dropdown-desc {
-    color: #cbd5f5;
-  }
-  html[data-theme="eleva-signature"] .part-dropdown-item .text-slate-900,
-  html[data-theme="metallic-elevate"] .part-dropdown-item .text-slate-900 {
-    color: #f8fafc;
+    color: var(--color-primary);
   }
 </style>
 
