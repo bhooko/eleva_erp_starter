@@ -292,18 +292,19 @@
         <p class="text-sm text-slate-400">Enter sample values to validate formulas. Errors do not block saving but will block BOM generation.</p>
       </div>
 
-      <form method="post" class="grid lg:grid-cols-3 gap-3">
+      <form method="post" class="grid lg:grid-cols-3 gap-3" data-test-inputs-form>
         {{ csrf_field() }}
         <input type="hidden" name="action" value="test_inputs" />
         {% for input in template.inputs %}
           <div>
             <label class="block text-xs uppercase tracking-wide text-slate-400 mb-1">{{ input.label }}</label>
-            <input name="test_input_{{ input.input_key }}" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="{{ input.input_key }}" />
+            <input name="test_input_{{ input.input_key }}" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="{{ input.input_key }}" value="{{ test_input_values.get(input.input_key, '') }}" data-test-input />
             <p class="text-xs text-slate-500 mt-1">{{ input.unit or input.data_type }}</p>
           </div>
         {% endfor %}
-        <div class="lg:col-span-3">
+        <div class="lg:col-span-3 flex flex-wrap gap-2">
           <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Run Validation</button>
+          <button type="button" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-200 hover:bg-slate-800/60" data-clear-test-values>Clear test values</button>
         </div>
       </form>
 
@@ -489,9 +490,54 @@
   window.BOM_PART_CLASSES = {{ part_class_sections|tojson }};
 
   const templateId = {{ template.id }};
+  const validationStorageKey = `bom_validation_inputs_${templateId}`;
   const scrollStorageKey = `bomTemplateScroll:${templateId}`;
   const tabStorageKey = `bomTemplateTab:${templateId}`;
   let activeTab = sessionStorage.getItem(tabStorageKey) || 'inputs';
+
+  const testInputFields = Array.from(
+    document.querySelectorAll('[data-test-input]'),
+  );
+  const hydrateTestInputs = () => {
+    let storedValues = {};
+    try {
+      storedValues = JSON.parse(localStorage.getItem(validationStorageKey) || '{}');
+    } catch (error) {
+      storedValues = {};
+    }
+    testInputFields.forEach((field) => {
+      if (!field.value && storedValues[field.name]) {
+        field.value = storedValues[field.name];
+      }
+    });
+  };
+  const persistTestInputs = () => {
+    const payload = testInputFields.reduce((acc, field) => {
+      if (field.value) {
+        acc[field.name] = field.value;
+      }
+      return acc;
+    }, {});
+    localStorage.setItem(validationStorageKey, JSON.stringify(payload));
+  };
+  const clearTestInputs = () => {
+    testInputFields.forEach((field) => {
+      field.value = '';
+    });
+    localStorage.removeItem(validationStorageKey);
+  };
+
+  testInputFields.forEach((field) => {
+    field.addEventListener('input', () => {
+      persistTestInputs();
+    });
+  });
+  const clearButton = document.querySelector('[data-clear-test-values]');
+  if (clearButton) {
+    clearButton.addEventListener('click', () => {
+      clearTestInputs();
+    });
+  }
 
   const tabButtons = document.querySelectorAll('.tab-btn');
   const panels = document.querySelectorAll('.tab-panel');
@@ -527,6 +573,7 @@
   });
 
   window.addEventListener('load', () => {
+    hydrateTestInputs();
     const savedScroll = sessionStorage.getItem(scrollStorageKey);
     if (savedScroll) {
       window.scrollTo({ top: Number(savedScroll), left: 0, behavior: 'auto' });
