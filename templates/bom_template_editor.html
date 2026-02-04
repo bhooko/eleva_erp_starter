@@ -470,31 +470,31 @@
     const partOptions = Array.from(select.options);
     const placeholderOptions = partOptions.filter((option) => option.value === '');
     const validOptions = partOptions.filter((option) => option.value !== '');
-    const inactiveOptions = validOptions.filter(
-      (option) => !(String(option.value) in partClassSectionMap)
-    );
-    const activeOptions = validOptions.filter(
+    const mappedOptions = validOptions.filter(
       (option) => String(option.value) in partClassSectionMap
     );
-    const recommendedOptions = activeOptions.filter((option) => {
+    const unmappedOptions = validOptions.filter(
+      (option) => !(String(option.value) in partClassSectionMap)
+    );
+    const recommendedOptions = mappedOptions.filter((option) => {
       const sections = partClassSectionMap[String(option.value)] || [];
       return sections.includes(String(sectionId));
     });
     if (!recommendedOptions.length) {
       return;
     }
-    const remainingOptions = activeOptions.filter(
+    const remainingOptions = mappedOptions.filter(
       (option) => !recommendedOptions.includes(option)
     );
+    const allOptions = [...remainingOptions, ...unmappedOptions];
     select.innerHTML = '';
     placeholderOptions.forEach((option) => select.appendChild(option));
-    inactiveOptions.forEach((option) => select.appendChild(option));
     const recommendedGroup = document.createElement('optgroup');
     recommendedGroup.label = 'Recommended for this section';
     recommendedOptions.forEach((option) => recommendedGroup.appendChild(option));
     const allGroup = document.createElement('optgroup');
     allGroup.label = 'All Part Classes';
-    remainingOptions.forEach((option) => allGroup.appendChild(option));
+    allOptions.forEach((option) => allGroup.appendChild(option));
     select.appendChild(recommendedGroup);
     select.appendChild(allGroup);
   };
