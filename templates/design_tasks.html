@@ -93,11 +93,48 @@
           cardsGrid.prepend(dragged);
         }
         updateCardStatus(dragged, status);
-        fetch(`/design/tasks/${dragged.dataset.taskId}/status`, {
+        fetch(`/design/tasks/${dragged.dataset.taskId}/update_status`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({status})
         }).finally(()=>{ isDragging = false; });
+      });
+    });
+  }
+
+  function initStatusControls(){
+    if (!kanbanBoard) return;
+    kanbanBoard.querySelectorAll('[data-status-select]').forEach(select => {
+      select.addEventListener('click', (event) => {
+        event.stopPropagation();
+      });
+      select.addEventListener('mousedown', (event) => {
+        event.stopPropagation();
+      });
+      select.addEventListener('change', (event) => {
+        event.stopPropagation();
+        const taskId = select.dataset.taskId;
+        const nextStatus = select.value;
+        const previousStatus = select.dataset.currentStatus || nextStatus;
+        const card = select.closest('[data-task-id]');
+        select.dataset.currentStatus = nextStatus;
+        updateCardStatus(card, nextStatus);
+        select.disabled = true;
+        fetch(`/design/tasks/${taskId}/update_status`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({status: nextStatus})
+        })
+          .then(res => res.ok ? res.json() : Promise.reject())
+          .then(() => refreshBoard())
+          .catch(() => {
+            select.dataset.currentStatus = previousStatus;
+            select.value = previousStatus;
+            updateCardStatus(card, previousStatus);
+          })
+          .finally(() => {
+            select.disabled = false;
+          });
       });
     });
   }
@@ -110,12 +147,14 @@
         if (data && data.html){
           kanbanBoard.innerHTML = data.html;
           initDragAndDrop();
+          initStatusControls();
         }
       })
       .catch(()=>{});
   }
 
   initDragAndDrop();
+  initStatusControls();
   setInterval(refreshBoard, 15000);
   document.addEventListener('visibilitychange', ()=>{
     if (!document.hidden) refreshBoard();

@@ -41,6 +41,8 @@
       --color-neutral-rgb: 107, 114, 128;
       --text-primary: #111827;
       --text-secondary: #4B5563;
+      --text-muted-contrast: #64748B;
+      --text-muted-soft: #94A3B8;
       --accent-success: #22C55E;
       --accent-success-rgb: 34, 197, 94;
       --accent-warning: #FBBF24;
@@ -83,6 +85,8 @@
       --color-neutral-rgb: 32, 40, 53;
       --text-primary: #E6EDF3;
       --text-secondary: #B0BAC6;
+      --text-muted-contrast: #CBD5E1;
+      --text-muted-soft: #E2E8F0;
       --accent-success: #00C58E;
       --accent-success-rgb: 0, 197, 142;
       --accent-warning: #FBBF24;
@@ -114,6 +118,8 @@
       --color-neutral-rgb: 35, 44, 54;
       --text-primary: #F0F4F8;
       --text-secondary: #B4BDC8;
+      --text-muted-contrast: #CBD5E1;
+      --text-muted-soft: #E2E8F0;
       --accent-success: #14B8A6;
       --accent-success-rgb: 20, 184, 166;
       --accent-warning: #00E0E0;
@@ -145,6 +151,8 @@
       --color-neutral-rgb: 107, 114, 128;
       --text-primary: #111827;
       --text-secondary: #4B5563;
+      --text-muted-contrast: #64748B;
+      --text-muted-soft: #94A3B8;
       --accent-success: #22C55E;
       --accent-success-rgb: 34, 197, 94;
       --accent-warning: #FBBF24;
@@ -176,6 +184,8 @@
       --color-neutral-rgb: 199, 210, 254;
       --text-primary: #0B3D91;
       --text-secondary: #334155;
+      --text-muted-contrast: #64748B;
+      --text-muted-soft: #94A3B8;
       --accent-success: #2BA84A;
       --accent-success-rgb: 43, 168, 74;
       --accent-warning: #F97316;
@@ -204,6 +214,33 @@
     a { color: var(--color-secondary); transition: color 180ms ease; }
     a:hover { color: var(--color-primary); }
     .animate-slide { transition: all 220ms cubic-bezier(.2,.8,.2,1); }
+    .text-muted-contrast { color: var(--text-muted-contrast); }
+    .text-muted-soft { color: var(--text-muted-soft); }
+    .design-task-card {
+      background-color: var(--bg-surface);
+      border-color: var(--border-subtle);
+      color: var(--text-main);
+    }
+    .design-task-title { color: var(--text-main); }
+    .design-task-type {
+      background-color: rgba(148, 163, 184, 0.16);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: var(--text-muted-contrast);
+    }
+    .design-task-pill {
+      background-color: rgba(var(--color-neutral-rgb), 0.28);
+      border: 1px solid rgba(var(--color-neutral-rgb), 0.45);
+      color: var(--text-muted-contrast);
+    }
+    .design-task-status-select {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+    }
+    .design-task-status-select:focus-visible {
+      outline: 2px solid rgba(var(--stage-warm-rgb), 0.45);
+      outline-offset: 2px;
+    }
 
     #app {
       --sidebar-expanded-width: 280px;
