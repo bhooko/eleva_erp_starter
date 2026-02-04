@@ -514,9 +514,45 @@ def evaluate_bom_template(template, input_values=None):
     input_values = input_values or {}
     results = []
     errors = []
+    expression_errors = []
+    expression_error_counts = defaultdict(int)
     input_map = {}
     input_errors = {}
     input_keys = []
+    line_contexts = {}
+
+    def _line_display_name(line):
+        candidates = [
+            line.specification_text,
+            line.part_class.name if line.part_class else None,
+            line.unit,
+        ]
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            value = str(candidate).strip()
+            if value:
+                return value
+        return ""
+
+    def _record_expression_error(line_id, field_name, expr_text, message):
+        meta = line_contexts.get(line_id, {})
+        payload = {
+            "stage_id": meta.get("stage_id"),
+            "stage_name": meta.get("stage_name") or "",
+            "section_id": meta.get("section_id"),
+            "section_name": meta.get("section_name") or "",
+            "line_id": line_id,
+            "line_ref_key": meta.get("line_ref_key") or "",
+            "line_display_name": meta.get("line_display_name") or "",
+            "field_name": field_name,
+            "expression_text": expr_text or "",
+            "error_message": str(message),
+        }
+        expression_errors.append(payload)
+        section_id = meta.get("section_id")
+        if section_id is not None:
+            expression_error_counts[section_id] += 1
 
     for template_input in template.inputs:
         key = (template_input.input_key or "").strip()
@@ -576,7 +612,17 @@ def evaluate_bom_template(template, input_values=None):
         for section in sorted(stage.sections, key=lambda sec: (sec.display_order or 0, sec.id)):
             if not section_includes.get(section.id, {}).get("include", True):
                 continue
-            lines.extend(sorted(section.lines, key=lambda ln: (ln.display_order or 0, ln.id)))
+            sorted_section_lines = sorted(section.lines, key=lambda ln: (ln.display_order or 0, ln.id))
+            for line in sorted_section_lines:
+                lines.append(line)
+                line_contexts[line.id] = {
+                    "stage_id": stage.id,
+                    "stage_name": stage.stage_name,
+                    "section_id": section.id,
+                    "section_name": section.section_name,
+                    "line_ref_key": (line.ref_key or "").strip(),
+                    "line_display_name": _line_display_name(line),
+                }
 
     ref_map = {}
     ref_duplicates = set()
@@ -603,12 +649,12 @@ def evaluate_bom_template(template, input_values=None):
         ref_key = (line.ref_key or "").strip()
         deps = set()
         expressions = [
-            line.include_if_expr,
-            line.qty_expr,
-            line.override_if_expr,
-            line.override_qty_expr,
+            ("include_if_expr", line.include_if_expr),
+            ("qty_expr", line.qty_expr),
+            ("override_if_expr", line.override_if_expr),
+            ("override_qty_expr", line.override_qty_expr),
         ]
-        for expr in expressions:
+        for field_name, expr in expressions:
             if not expr:
                 continue
             names = _collect_expr_names(expr)
@@ -620,7 +666,9 @@ def evaluate_bom_template(template, input_values=None):
                 if name in ref_map:
                     deps.add(name)
                 else:
-                    line_errors[line.id].append(f"Unknown reference '{name}'.")
+                    message = f"Unknown reference '{name}'."
+                    line_errors[line.id].append(message)
+                    _record_expression_error(line.id, field_name, expr, message)
         dependencies[ref_key] = deps
 
     sorted_lines = []
@@ -675,20 +723,26 @@ def evaluate_bom_template(template, input_values=None):
             if include_expr:
                 include = bool(_safe_eval_expr(include_expr, context))
         except Exception as exc:
-            line_result["errors"].append(f"include_if_expr error: {exc}")
+            message = f"include_if_expr error: {exc}"
+            line_result["errors"].append(message)
+            _record_expression_error(line.id, "include_if_expr", include_expr, message)
             include = False
 
-        if include:
-            try:
-                qty_value = _safe_eval_expr(qty_expr, context)
-            except Exception as exc:
-                line_result["errors"].append(f"qty_expr error: {exc}")
-                qty_value = 0
+        try:
+            qty_value = _safe_eval_expr(qty_expr, context)
+        except Exception as exc:
+            message = f"qty_expr error: {exc}"
+            line_result["errors"].append(message)
+            _record_expression_error(line.id, "qty_expr", qty_expr, message)
+            qty_value = 0
 
-            if not isinstance(qty_value, (int, float)):
-                line_result["errors"].append("qty_expr did not return a number.")
-                qty_value = 0
-        else:
+        if qty_expr and not isinstance(qty_value, (int, float)):
+            message = "qty_expr did not return a number."
+            line_result["errors"].append(message)
+            _record_expression_error(line.id, "qty_expr", qty_expr, message)
+            qty_value = 0
+
+        if not include:
             qty_value = 0
 
         final_qty = qty_value
@@ -696,7 +750,9 @@ def evaluate_bom_template(template, input_values=None):
             try:
                 override = bool(_safe_eval_expr(override_if_expr, context))
             except Exception as exc:
-                line_result["errors"].append(f"override_if_expr error: {exc}")
+                message = f"override_if_expr error: {exc}"
+                line_result["errors"].append(message)
+                _record_expression_error(line.id, "override_if_expr", override_if_expr, message)
                 override = False
 
             if override:
@@ -707,11 +763,25 @@ def evaluate_bom_template(template, input_values=None):
                     try:
                         override_qty = _safe_eval_expr(override_qty_expr, context)
                     except Exception as exc:
-                        line_result["errors"].append(f"override_qty_expr error: {exc}")
+                        message = f"override_qty_expr error: {exc}"
+                        line_result["errors"].append(message)
+                        _record_expression_error(
+                            line.id,
+                            "override_qty_expr",
+                            override_qty_expr,
+                            message,
+                        )
                         override_qty = 0
 
                     if not isinstance(override_qty, (int, float)):
-                        line_result["errors"].append("override_qty_expr did not return a number.")
+                        message = "override_qty_expr did not return a number."
+                        line_result["errors"].append(message)
+                        _record_expression_error(
+                            line.id,
+                            "override_qty_expr",
+                            override_qty_expr,
+                            message,
+                        )
                         override_qty = 0
                     final_qty = override_qty
 
@@ -733,6 +803,8 @@ def evaluate_bom_template(template, input_values=None):
         "section_includes": section_includes,
         "lines": results,
         "errors": errors,
+        "expression_errors": expression_errors,
+        "expression_error_counts": dict(expression_error_counts),
     }
 
 
