@@ -39,10 +39,14 @@
       --color-secondary-rgb: 250, 204, 21;
       --color-neutral: #6B7280;
       --color-neutral-rgb: 107, 114, 128;
+      --color-surface-2: #E5E7EB;
+      --color-surface-2-rgb: 229, 231, 235;
       --text-primary: #111827;
       --text-secondary: #4B5563;
       --text-muted-contrast: #64748B;
       --text-muted-soft: #94A3B8;
+      --text-muted: #64748B;
+      --text-dim: #94A3B8;
       --accent-success: #22C55E;
       --accent-success-rgb: 34, 197, 94;
       --accent-warning: #FBBF24;
@@ -62,8 +66,8 @@
       --bg-app-rgb: var(--color-base-rgb);
       --bg-surface: var(--color-card);
       --bg-surface-rgb: var(--color-card-rgb);
-      --bg-surface-2: var(--color-neutral);
-      --bg-surface-2-rgb: var(--color-neutral-rgb);
+      --bg-surface-2: var(--color-surface-2);
+      --bg-surface-2-rgb: var(--color-surface-2-rgb);
       --text-main: var(--text-primary);
       --text-muted: var(--text-secondary);
       --accent-blue: var(--color-primary);
@@ -71,7 +75,8 @@
       --btn-primary-text: #111827;
     }
 
-    html[data-theme="eleva-signature"] {
+    html[data-theme="eleva-signature"],
+    [data-theme-preview="eleva-signature"] {
       color-scheme: dark;
       --color-base: #0B1117;
       --color-base-rgb: 11, 17, 23;
@@ -83,10 +88,14 @@
       --color-secondary-rgb: 76, 155, 255;
       --color-neutral: #202835;
       --color-neutral-rgb: 32, 40, 53;
+      --color-surface-2: #1F2937;
+      --color-surface-2-rgb: 31, 41, 55;
       --text-primary: #E6EDF3;
       --text-secondary: #B0BAC6;
       --text-muted-contrast: #CBD5E1;
       --text-muted-soft: #E2E8F0;
+      --text-muted: #9AA4B2;
+      --text-dim: #7B8794;
       --accent-success: #00C58E;
       --accent-success-rgb: 0, 197, 142;
       --accent-warning: #FBBF24;
@@ -104,7 +113,8 @@
       --btn-primary-text: #F8FAFC;
     }
 
-    html[data-theme="metallic-elevate"] {
+    html[data-theme="metallic-elevate"],
+    [data-theme-preview="metallic-elevate"] {
       color-scheme: dark;
       --color-base: #0E141A;
       --color-base-rgb: 14, 20, 26;
@@ -116,10 +126,14 @@
       --color-secondary-rgb: 99, 160, 255;
       --color-neutral: #232C36;
       --color-neutral-rgb: 35, 44, 54;
+      --color-surface-2: #202A34;
+      --color-surface-2-rgb: 32, 42, 52;
       --text-primary: #F0F4F8;
       --text-secondary: #B4BDC8;
       --text-muted-contrast: #CBD5E1;
       --text-muted-soft: #E2E8F0;
+      --text-muted: #9FA8B5;
+      --text-dim: #7C8796;
       --accent-success: #14B8A6;
       --accent-success-rgb: 20, 184, 166;
       --accent-warning: #00E0E0;
@@ -137,7 +151,8 @@
       --btn-primary-text: #F8FAFC;
     }
 
-    html[data-theme="warm-modern"] {
+    html[data-theme="warm-modern"],
+    [data-theme-preview="warm-modern"] {
       color-scheme: light;
       --color-base: #F3F4F6;
       --color-base-rgb: 243, 244, 246;
@@ -149,10 +164,14 @@
       --color-secondary-rgb: 250, 204, 21;
       --color-neutral: #6B7280;
       --color-neutral-rgb: 107, 114, 128;
+      --color-surface-2: #E5E7EB;
+      --color-surface-2-rgb: 229, 231, 235;
       --text-primary: #111827;
       --text-secondary: #4B5563;
       --text-muted-contrast: #64748B;
       --text-muted-soft: #94A3B8;
+      --text-muted: #64748B;
+      --text-dim: #94A3B8;
       --accent-success: #22C55E;
       --accent-success-rgb: 34, 197, 94;
       --accent-warning: #FBBF24;
@@ -170,7 +189,8 @@
       --btn-primary-text: #111827;
     }
 
-    html[data-theme="india"] {
+    html[data-theme="india"],
+    [data-theme-preview="india"] {
       color-scheme: light;
       --color-base: #FFF8ED;
       --color-base-rgb: 255, 248, 237;
@@ -182,10 +202,14 @@
       --color-secondary-rgb: 19, 136, 8;
       --color-neutral: #C7D2FE;
       --color-neutral-rgb: 199, 210, 254;
+      --color-surface-2: #F3EDE2;
+      --color-surface-2-rgb: 243, 237, 226;
       --text-primary: #0B3D91;
       --text-secondary: #334155;
       --text-muted-contrast: #64748B;
       --text-muted-soft: #94A3B8;
+      --text-muted: #64748B;
+      --text-dim: #94A3B8;
       --accent-success: #2BA84A;
       --accent-success-rgb: 43, 168, 74;
       --accent-warning: #F97316;
@@ -386,6 +410,56 @@
     .bg-slate-700\/60 { background-color: rgba(var(--color-neutral-rgb), 0.6) !important; }
     .bg-slate-700\/70 { background-color: rgba(var(--color-neutral-rgb), 0.7) !important; }
 
+    /* Theme-aware utility backgrounds */
+    .bg-slate-50,
+    .bg-gray-50,
+    .bg-zinc-50,
+    .bg-neutral-50,
+    .bg-slate-100,
+    .bg-gray-100,
+    .bg-zinc-100,
+    .bg-neutral-100,
+    .bg-slate-200,
+    .bg-gray-200,
+    .bg-zinc-200,
+    .bg-neutral-200 {
+      background-color: var(--color-card) !important;
+    }
+    .bg-slate-300,
+    .bg-gray-300,
+    .bg-zinc-300,
+    .bg-neutral-300,
+    .bg-slate-400,
+    .bg-gray-400,
+    .bg-zinc-400,
+    .bg-neutral-400 {
+      background-color: var(--color-surface-2) !important;
+    }
+    .bg-slate-500,
+    .bg-gray-500,
+    .bg-zinc-500,
+    .bg-neutral-500,
+    .bg-slate-600,
+    .bg-gray-600,
+    .bg-zinc-600,
+    .bg-neutral-600,
+    .bg-slate-700,
+    .bg-gray-700,
+    .bg-zinc-700,
+    .bg-neutral-700 {
+      background-color: var(--color-neutral) !important;
+    }
+    .bg-slate-800,
+    .bg-gray-800,
+    .bg-zinc-800,
+    .bg-neutral-800,
+    .bg-slate-900,
+    .bg-gray-900,
+    .bg-zinc-900,
+    .bg-neutral-900 {
+      background-color: var(--color-base) !important;
+    }
+
     /* Borders and outlines */
     .border-subtle { border-color: var(--border-subtle) !important; }
     .border-slate-800 { border-color: var(--color-neutral) !important; }
@@ -404,6 +478,53 @@
     .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(var(--color-neutral-rgb), 0.6) !important; }
     .divide-slate-800\/80 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(var(--color-neutral-rgb), 0.8) !important; }
 
+    .border-slate-50,
+    .border-gray-50,
+    .border-zinc-50,
+    .border-neutral-50,
+    .border-slate-100,
+    .border-gray-100,
+    .border-zinc-100,
+    .border-neutral-100,
+    .border-slate-200,
+    .border-gray-200,
+    .border-zinc-200,
+    .border-neutral-200 {
+      border-color: var(--border-subtle) !important;
+    }
+    .border-slate-300,
+    .border-gray-300,
+    .border-zinc-300,
+    .border-neutral-300,
+    .border-slate-400,
+    .border-gray-400,
+    .border-zinc-400,
+    .border-neutral-400,
+    .border-slate-500,
+    .border-gray-500,
+    .border-zinc-500,
+    .border-neutral-500 {
+      border-color: rgba(var(--color-neutral-rgb), 0.6) !important;
+    }
+    .border-slate-600,
+    .border-gray-600,
+    .border-zinc-600,
+    .border-neutral-600,
+    .border-slate-700,
+    .border-gray-700,
+    .border-zinc-700,
+    .border-neutral-700,
+    .border-slate-800,
+    .border-gray-800,
+    .border-zinc-800,
+    .border-neutral-800,
+    .border-slate-900,
+    .border-gray-900,
+    .border-zinc-900,
+    .border-neutral-900 {
+      border-color: rgba(var(--color-neutral-rgb), 0.85) !important;
+    }
+
     /* Typography */
     .text-slate-50,
     .text-slate-100,
@@ -413,6 +534,55 @@
     .text-slate-500 { color: var(--text-secondary) !important; }
     .text-slate-600,
     .text-slate-700 { color: var(--text-secondary) !important; }
+
+    .text-slate-50,
+    .text-gray-50,
+    .text-zinc-50,
+    .text-neutral-50,
+    .text-slate-100,
+    .text-gray-100,
+    .text-zinc-100,
+    .text-neutral-100,
+    .text-slate-200,
+    .text-gray-200,
+    .text-zinc-200,
+    .text-neutral-200,
+    .text-slate-700,
+    .text-gray-700,
+    .text-zinc-700,
+    .text-neutral-700,
+    .text-slate-800,
+    .text-gray-800,
+    .text-zinc-800,
+    .text-neutral-800,
+    .text-slate-900,
+    .text-gray-900,
+    .text-zinc-900,
+    .text-neutral-900 {
+      color: var(--text-primary) !important;
+    }
+    .text-slate-300,
+    .text-gray-300,
+    .text-zinc-300,
+    .text-neutral-300 {
+      color: var(--text-dim) !important;
+    }
+    .text-slate-400,
+    .text-gray-400,
+    .text-zinc-400,
+    .text-neutral-400 {
+      color: var(--text-muted) !important;
+    }
+    .text-slate-500,
+    .text-gray-500,
+    .text-zinc-500,
+    .text-neutral-500,
+    .text-slate-600,
+    .text-gray-600,
+    .text-zinc-600,
+    .text-neutral-600 {
+      color: var(--text-secondary) !important;
+    }
 
     .text-main { color: var(--text-main) !important; }
     .text-muted { color: var(--text-muted) !important; }

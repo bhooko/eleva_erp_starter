@@ -18,7 +18,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast, html
 from decimal import Decimal, InvalidOperation
 from datetime import datetime as datetime_cls, date
 import importlib.util
@@ -17808,6 +17808,22 @@ def _require_admin():
         abort(403)
 
 
+def _load_ui_utility_classes():
+    base_template_path = os.path.join(BASE_DIR, "templates", "base.html")
+    try:
+        with open(base_template_path, "r", encoding="utf-8") as handle:
+            css_source = handle.read()
+    except OSError:
+        return set()
+    class_pattern = re.compile(
+        r"\\.(text|bg|border)-(slate|gray|zinc|neutral)-(\\d{2,3})\\b"
+    )
+    return {
+        f"{prefix}-{palette}-{shade}"
+        for prefix, palette, shade in class_pattern.findall(css_source)
+    }
+
+
 def _form_truthy(value):
     if value is None:
         return False
@@ -17941,6 +17957,90 @@ def admin_users():
     _require_admin()
 
     return render_template("admin_users.html", **_admin_users_context())
+
+
+@app.route("/admin/ui_audit")
+@login_required
+def admin_ui_audit():
+    _require_admin()
+    template_root = os.path.join(BASE_DIR, "templates")
+    class_pattern = re.compile(
+        r"\\b(text|bg|border)-(slate|gray|zinc|neutral)-(\\d{2,3})\\b"
+    )
+    supported_classes = _load_ui_utility_classes()
+    report_rows = []
+
+    for root, _, files in os.walk(template_root):
+        for filename in sorted(file for file in files if file.endswith(".html")):
+            path = os.path.join(root, filename)
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    content = handle.read()
+            except OSError:
+                continue
+            matches = {
+                f"{prefix}-{palette}-{shade}"
+                for prefix, palette, shade in class_pattern.findall(content)
+            }
+            if not matches:
+                continue
+            unsupported = sorted(match for match in matches if match not in supported_classes)
+            report_rows.append(
+                {
+                    "template": os.path.relpath(path, template_root),
+                    "classes": sorted(matches),
+                    "unsupported": unsupported,
+                }
+            )
+
+    html_rows = []
+    for row in report_rows:
+        unsupported_markup = (
+            "None"
+            if not row["unsupported"]
+            else ", ".join(
+                f"<span class=\"bad\">{html.escape(item)}</span>"
+                for item in row["unsupported"]
+            )
+        )
+        html_rows.append(
+            "<tr>"
+            f"<td>{html.escape(row['template'])}</td>"
+            f"<td>{', '.join(html.escape(item) for item in row['classes'])}</td>"
+            f"<td>{unsupported_markup}</td>"
+            "</tr>"
+        )
+
+    table_body = "\n".join(html_rows) if html_rows else "<tr><td colspan=\"3\">No matching utility classes found.</td></tr>"
+    return (
+        "<!doctype html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<title>UI Utility Audit</title>"
+        "<style>"
+        "body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;"
+        "background:#0f172a;color:#e2e8f0;margin:0;padding:24px;}"
+        "h1{font-size:20px;margin-bottom:16px;}"
+        "table{width:100%;border-collapse:collapse;font-size:14px;}"
+        "th,td{border:1px solid rgba(148,163,184,0.3);padding:10px;vertical-align:top;}"
+        "th{background:rgba(15,23,42,0.8);text-align:left;}"
+        "tr:nth-child(even){background:rgba(15,23,42,0.5);}"
+        ".bad{color:#fca5a5;font-weight:600;}"
+        "</style>"
+        "</head>"
+        "<body>"
+        "<h1>UI Utility Audit</h1>"
+        "<table>"
+        "<thead><tr><th>Template</th><th>Utility Classes Found</th><th>Unsupported</th></tr></thead>"
+        "<tbody>"
+        f"{table_body}"
+        "</tbody>"
+        "</table>"
+        "</body>"
+        "</html>"
+    )
 
 
 @app.route("/admin/departments/template")
