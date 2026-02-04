@@ -133,15 +133,18 @@
     </div>
 
     <div class="tab-panel hidden p-6 space-y-6" data-panel="structure">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-lg font-semibold text-slate-100">Stages &amp; Sections</h2>
-        <p class="text-xs text-slate-400">Drag to reorder, then save each row to persist the new display order.</p>
+        <div class="flex items-center gap-3">
+          <button type="button" id="find-eq-expr" class="px-3 py-1.5 rounded-lg border border-amber-500/60 bg-amber-500/10 text-xs text-amber-100">Find ==</button>
+          <p class="text-xs text-slate-400">Drag to reorder, then save each row to persist the new display order.</p>
+        </div>
       </div>
 
       <div class="space-y-6">
         <div class="space-y-4" data-sortable>
           {% for stage in template.stages|sort(attribute='display_order') %}
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4 sortable-item" draggable="true">
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4 sortable-item" draggable="true" data-stage-id="{{ stage.id }}">
             <div class="flex flex-wrap items-center gap-3">
               <form method="post" class="flex flex-wrap items-center gap-2 flex-1">
                 {{ csrf_field() }}
@@ -163,7 +166,8 @@
               {% for section in stage.sections|sort(attribute='display_order') %}
               {% set section_state = section_includes.get(section.id) if section_includes else None %}
               {% set is_section_included = section_state is none or section_state.include %}
-              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4 sortable-item {% if section.include_if_expr and not is_section_included %}opacity-60{% endif %}" draggable="true">
+              {% set section_error_count = evaluation.expression_error_counts.get(section.id, 0) if evaluation and evaluation.expression_error_counts else 0 %}
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4 sortable-item {% if section.include_if_expr and not is_section_included %}opacity-60{% endif %}" draggable="true" data-section-id="{{ section.id }}">
                 <div class="flex flex-wrap items-center gap-2">
                   <form method="post" class="grid lg:grid-cols-6 gap-2 flex-1 items-center">
                     {{ csrf_field() }}
@@ -173,6 +177,9 @@
                       <input name="section_name" value="{{ section.section_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[180px]" />
                       {% if section.include_if_expr %}
                         <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">Conditional</span>
+                      {% endif %}
+                      {% if section_error_count %}
+                        <span class="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-200">{{ section_error_count }} error{{ 's' if section_error_count != 1 }}</span>
                       {% endif %}
                     </div>
                     <input name="include_if_expr" value="{{ section.include_if_expr or '' }}" class="expr-field rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 lg:col-span-3" placeholder="Include Section If (Condition)" data-expr-scope="inputs" />
@@ -190,7 +197,7 @@
 
                 <div class="space-y-3" data-sortable>
                   {% for line in section.lines|sort(attribute='display_order') %}
-                  <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3 sortable-item" draggable="true">
+                  <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3 sortable-item" draggable="true" data-line-id="{{ line.id }}" data-section-id="{{ section.id }}" data-stage-id="{{ stage.id }}">
                     <form method="post" class="grid lg:grid-cols-6 gap-2">
                       {{ csrf_field() }}
                       <input type="hidden" name="action" value="update_line" />
@@ -344,6 +351,55 @@
             </tbody>
           </table>
         </div>
+
+        <div class="border-t border-slate-800 pt-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-sm font-semibold text-slate-100">Expression Errors</h4>
+            <input id="expr-error-filter" type="text" class="w-64 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs" placeholder="Filter by item or section" />
+          </div>
+          {% if evaluation.expression_errors %}
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th class="px-3 py-2">Stage</th>
+                    <th class="px-3 py-2">Section</th>
+                    <th class="px-3 py-2">Item</th>
+                    <th class="px-3 py-2">Field</th>
+                    <th class="px-3 py-2">Expression</th>
+                    <th class="px-3 py-2">Error</th>
+                    <th class="px-3 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                  {% for error in evaluation.expression_errors %}
+                  {% set item_label = error.line_ref_key or error.line_display_name or ('Line #' ~ error.line_id) %}
+                  {% set filter_text = (error.section_name ~ ' ' ~ item_label ~ ' ' ~ error.stage_name) | lower %}
+                  <tr class="expr-error-row" data-filter-text="{{ filter_text }}">
+                    <td class="px-3 py-2 text-slate-300">{{ error.stage_name or '—' }}</td>
+                    <td class="px-3 py-2 text-slate-300">{{ error.section_name or '—' }}</td>
+                    <td class="px-3 py-2 text-slate-100">
+                      {% if error.line_ref_key and error.line_display_name %}
+                        {{ error.line_ref_key }} — {{ error.line_display_name }}
+                      {% else %}
+                        {{ item_label }}
+                      {% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-slate-300">{{ error.field_name }}</td>
+                    <td class="px-3 py-2 text-xs text-slate-400">{{ error.expression_text }}</td>
+                    <td class="px-3 py-2 text-xs text-amber-200">{{ error.error_message }}</td>
+                    <td class="px-3 py-2">
+                      <button type="button" class="expr-go-line px-3 py-1 rounded-lg bg-slate-800 text-xs text-slate-100" data-line-id="{{ error.line_id }}">Go to line</button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-xs text-emerald-200">No expression errors found.</p>
+          {% endif %}
+        </div>
       </div>
       {% endif %}
     </div>
@@ -415,6 +471,15 @@
   }
   .expr-helper-item button {
     border-radius: 6px;
+  }
+  .line-highlight {
+    outline: 2px solid rgba(251, 191, 36, 0.9);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.15);
+    transition: outline 0.2s ease, box-shadow 0.2s ease;
+  }
+  .expr-eq-highlight {
+    border-color: rgba(251, 191, 36, 0.9);
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
   }
 </style>
 
@@ -868,6 +933,59 @@
       }
     });
   });
+
+  const jumpToLine = (lineId) => {
+    if (!lineId) return;
+    setActiveTab('structure');
+    requestAnimationFrame(() => {
+      const lineEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (!lineEl) return;
+      lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      lineEl.classList.add('line-highlight');
+      window.setTimeout(() => {
+        lineEl.classList.remove('line-highlight');
+      }, 3000);
+    });
+  };
+
+  document.querySelectorAll('.expr-go-line').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      jumpToLine(btn.dataset.lineId);
+    });
+  });
+
+  const exprFilterInput = document.getElementById('expr-error-filter');
+  if (exprFilterInput) {
+    exprFilterInput.addEventListener('input', () => {
+      const term = (exprFilterInput.value || '').trim().toLowerCase();
+      document.querySelectorAll('.expr-error-row').forEach((row) => {
+        const haystack = row.dataset.filterText || '';
+        const isMatch = !term || haystack.includes(term);
+        row.classList.toggle('hidden', !isMatch);
+      });
+    });
+  }
+
+  const eqButton = document.getElementById('find-eq-expr');
+  if (eqButton) {
+    eqButton.addEventListener('click', () => {
+      setActiveTab('structure');
+      const fields = document.querySelectorAll('[data-panel="structure"] .expr-field');
+      const matches = [];
+      fields.forEach((field) => {
+        if ((field.value || '').includes('==')) {
+          field.classList.add('expr-eq-highlight');
+          matches.push(field);
+        }
+      });
+      if (matches.length) {
+        matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      window.setTimeout(() => {
+        matches.forEach((field) => field.classList.remove('expr-eq-highlight'));
+      }, 3000);
+    });
+  }
 
   window.addEventListener('scroll', schedulePosition, true);
   window.addEventListener('resize', schedulePosition);
