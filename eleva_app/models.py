@@ -2392,22 +2392,62 @@ class BillOfMaterials(db.Model):
     drawing_site = db.relationship("DrawingSite", backref="boms")
     created_by = db.relationship("User")
 
+    __table_args__ = (
+        db.UniqueConstraint(
+            "design_task_id", name="uq_bill_of_materials_design_task"
+        ),
+    )
+
+
+class BOMPackage(db.Model):
+    __tablename__ = "bom_package"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    bom_template_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template.id"), nullable=True
+    )
+    input_snapshot_json = db.Column(db.Text, nullable=True)
+    generated_at = db.Column(db.DateTime, nullable=True)
+    generated_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    bom = db.relationship("BillOfMaterials", backref="packages")
+    template = db.relationship("BomTemplate")
+    generated_by = db.relationship("User")
+
 
 class BOMItem(db.Model):
     __tablename__ = "bom_item"
 
     id = db.Column(db.Integer, primary_key=True)
     bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=False)
+    bom_package_id = db.Column(
+        db.Integer, db.ForeignKey("bom_package.id"), nullable=True, index=True
+    )
     stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
+    part_class_id = db.Column(
+        db.Integer, db.ForeignKey("part_class.id"), nullable=True, index=True
+    )
     item_code = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     category = db.Column(db.String(80), nullable=True)
     unit = db.Column(db.String(20), nullable=True)
     quantity_required = db.Column(db.Float, nullable=False, default=1)
     remarks = db.Column(db.Text, nullable=True)
+    source_template_line_id = db.Column(
+        db.Integer, db.ForeignKey("bom_template_line.id"), nullable=True
+    )
+    source_ref_key = db.Column(db.String(120), nullable=True)
+    is_generated = db.Column(db.Boolean, default=False)
 
     bom = db.relationship("BillOfMaterials", backref="items")
+    bom_package = db.relationship("BOMPackage", backref="items")
     stage = db.relationship("ProcurementStage")
+    part_class = db.relationship("PartClass")
+    source_template_line = db.relationship("BomTemplateLine")
 
 
 class Vendor(db.Model):

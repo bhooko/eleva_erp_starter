@@ -191,223 +191,519 @@
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-xs uppercase text-slate-500">Bill of Materials</p>
-            <h2 class="text-lg font-semibold">Add line items</h2>
+            <h2 class="text-lg font-semibold">BOM Packages</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            {% if bom and can_edit_bom %}
+            <button
+              type="button"
+              class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+              onclick="toggleBomDuplicateModal('{{ bom.id }}', true)"
+            >
+              Duplicate BOM
+            </button>
+            {% endif %}
+            {% if can_edit_bom %}
+            <button
+              type="button"
+              data-modal-target="addBomPackageModal"
+              class="px-4 py-2 rounded-xl btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition"
+            >
+              + Add Package
+            </button>
+            {% endif %}
           </div>
         </div>
-        <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 border rounded-xl p-3">
-          {{ csrf_field() }}
-          <input type="hidden" name="action" value="bom_item" />
-          <label class="space-y-1">
-            <span class="text-sm">BOM name</span>
-            <input type="text" name="bom_name" class="w-full rounded-lg border-slate-200" placeholder="Main lift BOM" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Status</span>
-            <select name="bom_status" class="w-full rounded-lg border-slate-200">
-              <option value="draft">Draft</option>
-              <option value="finalized">Finalized</option>
-              <option value="locked">Locked</option>
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Item code</span>
-            <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" required />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Qty</span>
-            <input type="number" step="0.01" name="quantity_required" class="w-full rounded-lg border-slate-200" value="1" />
-          </label>
-          <label class="space-y-1 lg:col-span-2">
-            <span class="text-sm">Description</span>
-            <input type="text" name="item_description" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Category</span>
-            <input type="text" name="category" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Stage</span>
-            <select name="stage_id" class="w-full rounded-lg border-slate-200">
-              <option value="">Default{% if stage_options %} (Stage 1 if available){% endif %}</option>
-              {% for stage in stage_options %}
-              <option value="{{ stage.id }}" {% if default_stage and default_stage.id == stage.id %}selected{% endif %}>{{ stage.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Unit</span>
-            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
-          </label>
-          <label class="space-y-1 lg:col-span-4">
-            <span class="text-sm">Remarks</span>
-            <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <div class="lg:col-span-4 flex justify-end">
-            <button type="submit" class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Add item</button>
-          </div>
-        </form>
-        <div class="space-y-3">
-          {% for bom in boms %}
-          <div class="border rounded-xl p-3">
-            <div class="flex items-center justify-between">
+        {% if not bom %}
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          No BOM yet. Create a package to start capturing items for this design task.
+        </div>
+        {% endif %}
+        <div class="space-y-4">
+          {% for package in bom_packages %}
+          {% set package_template = bom_template_map.get(package.bom_template_id) %}
+          {% set package_inputs = package_input_values.get(package.id, {}) %}
+          <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="font-semibold">{{ bom.bom_name }}</p>
-                <p class="text-xs text-slate-500">{{ bom.status.title() }}</p>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-semibold text-slate-900">{{ package.name }}</h3>
+                  {% if package.status == 'final' %}
+                  <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">Final</span>
+                  {% else %}
+                  <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">Draft</span>
+                  {% endif %}
+                </div>
+                <p class="text-xs text-slate-500">
+                  Template: {{ package_template.name if package_template else 'Not selected' }}
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <a
+                  href="#package-items-{{ package.id }}"
+                  class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-white"
+                >
+                  Edit Items
+                </a>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-white"
+                  onclick="document.getElementById('package-config-{{ package.id }}')?.setAttribute('open', 'true')"
+                >
+                  Configure / Generate
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-400 cursor-not-allowed"
+                  title="Export will be available soon."
+                  disabled
+                >
+                  Export
+                </button>
+                {% if can_edit_bom %}
+                  {% if package.status == 'final' %}
+                  <form method="POST">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                    <button
+                      type="submit"
+                      name="action"
+                      value="unlock_bom_package"
+                      class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-orange-600 hover:bg-white"
+                      onclick="return confirm('Unlock this package to allow edits and regeneration?')"
+                    >
+                      Unlock
+                    </button>
+                  </form>
+                  {% else %}
+                  <form method="POST">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                    <button
+                      type="submit"
+                      name="action"
+                      value="finalize_bom_package"
+                      class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-emerald-700 hover:bg-white"
+                      onclick="return confirm('Finalize this package? Regeneration will be locked until unlocked.')"
+                    >
+                      Finalize
+                    </button>
+                  </form>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+
+            <details id="package-config-{{ package.id }}" class="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <summary class="cursor-pointer text-sm font-semibold text-slate-700">Configure & Generate</summary>
+              <div class="mt-4 space-y-4">
+                <form method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                  <label class="space-y-1">
+                    <span class="text-sm text-slate-600">Package name</span>
+                    <input type="text" name="package_name" class="w-full rounded-lg border-slate-200" value="{{ package.name }}" />
+                  </label>
+                  <label class="space-y-1 md:col-span-2">
+                    <span class="text-sm text-slate-600">BOM Template</span>
+                    <select name="bom_template_id" class="w-full rounded-lg border-slate-200">
+                      <option value="">Select template</option>
+                      {% for template in bom_template_options %}
+                      <option value="{{ template.id }}" {% if package.bom_template_id == template.id %}selected{% endif %}>
+                        {{ template.name }} ({{ template.lift_type }})
+                      </option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <div class="md:col-span-3 flex justify-end">
+                    <button
+                      type="submit"
+                      name="action"
+                      value="update_bom_package"
+                      class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50"
+                      {% if package.status == 'final' %}disabled title="Unlock the package to edit."{% endif %}
+                    >
+                      Save settings
+                    </button>
+                  </div>
+                </form>
+
+                <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <h4 class="text-sm font-semibold text-slate-700">Template Inputs</h4>
+                  {% if package_template %}
+                  <form method="POST" class="mt-3 space-y-3">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                    <input type="hidden" name="bom_template_id" value="{{ package_template.id }}" />
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {% for input in package_template.inputs %}
+                      {% set input_value = package_inputs.get(input.input_key, input.default_value) %}
+                      <label class="space-y-1">
+                        <span class="text-sm text-slate-600">{{ input.label }}{% if input.unit %} ({{ input.unit }}){% endif %}</span>
+                        {% if input.data_type == 'boolean' %}
+                        <select name="input_{{ package.id }}_{{ input.input_key }}" class="w-full rounded-lg border-slate-200">
+                          <option value="true" {% if input_value in [True, 'true', 'True', 1, '1'] %}selected{% endif %}>Yes</option>
+                          <option value="false" {% if input_value in [False, 'false', 'False', 0, '0', None, ''] %}selected{% endif %}>No</option>
+                        </select>
+                        {% elif input.data_type in ['integer', 'number'] %}
+                        <input
+                          type="number"
+                          step="{% if input.data_type == 'integer' %}1{% else %}0.01{% endif %}"
+                          name="input_{{ package.id }}_{{ input.input_key }}"
+                          class="w-full rounded-lg border-slate-200"
+                          value="{{ input_value }}"
+                          {% if input.required %}required{% endif %}
+                        />
+                        {% else %}
+                        <input
+                          type="text"
+                          name="input_{{ package.id }}_{{ input.input_key }}"
+                          class="w-full rounded-lg border-slate-200"
+                          value="{{ input_value }}"
+                          {% if input.required %}required{% endif %}
+                        />
+                        {% endif %}
+                      </label>
+                      {% else %}
+                      <p class="text-sm text-slate-500 md:col-span-3">No inputs configured for this template.</p>
+                      {% endfor %}
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="submit"
+                        name="action"
+                        value="validate_bom_package"
+                        class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-white"
+                      >
+                        Run Validation
+                      </button>
+                      <button
+                        type="submit"
+                        name="action"
+                        value="generate_bom_package"
+                        class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition"
+                        {% if package.status == 'final' %}disabled title="Unlock the package to regenerate."{% endif %}
+                      >
+                        {% if package.generated_at %}Regenerate{% else %}Generate{% endif %}
+                      </button>
+                    </div>
+                    {% if package.generated_at %}
+                    <p class="text-xs text-slate-500">
+                      Last generated {{ package.generated_at|format_india_datetime('%d %b %Y, %I:%M %p') }} by
+                      {{ package.generated_by.display_name if package.generated_by else 'System' }}.
+                    </p>
+                    {% endif %}
+                  </form>
+                  {% else %}
+                  <p class="text-sm text-slate-500 mt-2">Select a template to load inputs for generation.</p>
+                  {% endif %}
+                </div>
+              </div>
+            </details>
+
+            <div id="package-items-{{ package.id }}" class="mt-5 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-sm font-semibold text-slate-700">Items in {{ package.name }}</h4>
+                <input
+                  type="search"
+                  data-package-search="{{ package.id }}"
+                  class="rounded-lg border-slate-200 text-sm px-3 py-2"
+                  placeholder="Search items..."
+                />
               </div>
               {% if can_edit_bom %}
-              <button
-                type="button"
-                class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                onclick="toggleBomDuplicateModal('{{ bom.id }}', true)"
-              >
-                Duplicate BOM to Another Project/Site
-              </button>
+              <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-white border border-slate-200 rounded-xl p-3">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="add_bom_item" />
+                <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                <label class="space-y-1">
+                  <span class="text-sm">Part Class</span>
+                  <select name="part_class_id" class="w-full rounded-lg border-slate-200">
+                    <option value="">Select</option>
+                    {% for part in part_classes %}
+                    <option value="{{ part.id }}">{{ part.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="space-y-1">
+                  <span class="text-sm">Item Name / Description</span>
+                  <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" required />
+                </label>
+                <label class="space-y-1 lg:col-span-2">
+                  <span class="text-sm">Specification</span>
+                  <input type="text" name="item_description" class="w-full rounded-lg border-slate-200" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-sm">Unit</span>
+                  <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-sm">Qty</span>
+                  <input type="number" step="0.01" name="quantity_required" class="w-full rounded-lg border-slate-200" value="1" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-sm">Stage</span>
+                  <select name="stage_id" class="w-full rounded-lg border-slate-200">
+                    <option value="">Default{% if stage_options %} (Stage 1 if available){% endif %}</option>
+                    {% for stage in stage_options %}
+                    <option value="{{ stage.id }}" {% if default_stage and default_stage.id == stage.id %}selected{% endif %}>{{ stage.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="space-y-1 lg:col-span-2">
+                  <span class="text-sm">Section / Category</span>
+                  <input type="text" name="category" class="w-full rounded-lg border-slate-200" />
+                </label>
+                <label class="space-y-1 lg:col-span-4">
+                  <span class="text-sm">Remarks</span>
+                  <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
+                </label>
+                <div class="lg:col-span-4 flex justify-end">
+                  <button type="submit" class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Add item</button>
+                </div>
+              </form>
               {% endif %}
-            </div>
-            <div class="flex items-center justify-between mt-2">
-              <div class="flex items-center gap-2 text-sm text-slate-600">
-                <span>Filter by stage:</span>
-                <select
-                  class="rounded-lg border-slate-200"
-                  onchange="filterBomStage('{{ bom.id }}', this.value)"
-                >
-                  <option value="">All</option>
-                  {% for stage in stage_options %}
-                  <option value="{{ stage.id }}">{{ stage.name }}</option>
-                  {% endfor %}
-                  <option value="none">Unassigned</option>
-                </select>
-              </div>
-              <a
-                href="{{ url_for('generate_po_from_bom', bom_id=bom.id) }}"
-                class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-              >
-                Generate PO from BOM
-              </a>
-            </div>
-            <div class="mt-2 overflow-x-auto">
-              <table class="w-full text-sm" id="bom-table-{{ bom.id }}">
-                <thead>
-                  <tr class="text-left text-slate-500">
-                    <th class="py-1">Item</th>
-                    <th class="py-1">Description</th>
-                    <th class="py-1">Stage</th>
-                    <th class="py-1">Qty</th>
-                    <th class="py-1">Unit</th>
-                    <th class="py-1">Category</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y">
-                  {% for item in bom.items %}
-                  <tr data-stage-id="{{ item.stage_id or '' }}">
-                    <td class="py-1">{{ item.item_code }}</td>
-                    <td class="py-1">{{ item.description }}</td>
-                    <td class="py-1">
-                      {% if can_edit_bom %}
-                      <form method="POST" action="{{ url_for('update_bom_item_stage', item_id=item.id) }}" class="flex items-center gap-2">
-                        {{ csrf_field() }}
-                        <input type="hidden" name="redirect_url" value="{{ request.path }}" />
-                        {% set selected_stage = item.stage_id or (default_stage.id if default_stage else None) %}
-                        <select name="stage_id" class="rounded-lg border-slate-200 text-xs">
-                          <option value="">—</option>
-                          {% for stage in stage_options %}
-                          <option value="{{ stage.id }}" {% if selected_stage and selected_stage == stage.id %}selected{% endif %}>{{ stage.name }}</option>
-                          {% endfor %}
-                        </select>
-                        <button type="submit" class="px-2 py-1 rounded border text-xs">Save</button>
-                      </form>
-                      {% else %}
-                      {{ item.stage.name if item.stage else (default_stage.name if default_stage else '—') }}
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm" data-package-table="{{ package.id }}">
+                  <thead>
+                    <tr class="text-left text-slate-500">
+                      <th class="py-2">Part Class</th>
+                      <th class="py-2">Item Name / Description</th>
+                      <th class="py-2">Specification</th>
+                      <th class="py-2">Unit</th>
+                      <th class="py-2">Qty</th>
+                      <th class="py-2">Stage</th>
+                      <th class="py-2">Section / Category</th>
+                      <th class="py-2">Remarks</th>
+                      <th class="py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y">
+                    {% for item in bom_items_by_package.get(package.id, []) %}
+                    {% set row_label = (item.item_code or '') ~ ' ' ~ (item.description or '') %}
+                    {% set form_id = 'bom-item-' ~ item.id %}
+                    {% if can_edit_bom %}
+                    <form id="{{ form_id }}" method="POST" class="hidden">
+                      {{ csrf_field() }}
+                      <input type="hidden" name="item_id" value="{{ item.id }}" />
+                    </form>
+                    {% endif %}
+                    <tr data-search-text="{{ row_label|lower }}">
+                      <td class="py-2">
+                        {% if can_edit_bom %}
+                          <select form="{{ form_id }}" name="part_class_id" class="rounded-lg border-slate-200 text-xs">
+                            <option value="">—</option>
+                            {% for part in part_classes %}
+                            <option value="{{ part.id }}" {% if item.part_class_id == part.id %}selected{% endif %}>{{ part.name }}</option>
+                            {% endfor %}
+                          </select>
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="text" name="item_code" value="{{ item.item_code }}" class="w-40 rounded-lg border-slate-200 text-xs" />
+                          {% if item.is_generated %}
+                          <span class="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">Generated</span>
+                          {% endif %}
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="text" name="item_description" value="{{ item.description }}" class="w-44 rounded-lg border-slate-200 text-xs" />
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="text" name="unit" value="{{ item.unit }}" class="w-20 rounded-lg border-slate-200 text-xs" />
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="number" step="0.01" name="quantity_required" value="{{ item.quantity_required }}" class="w-20 rounded-lg border-slate-200 text-xs" />
+                      </td>
+                      <td class="py-2">
+                          <select form="{{ form_id }}" name="stage_id" class="rounded-lg border-slate-200 text-xs">
+                            <option value="">—</option>
+                            {% for stage in stage_options %}
+                            <option value="{{ stage.id }}" {% if item.stage_id == stage.id %}selected{% endif %}>{{ stage.name }}</option>
+                            {% endfor %}
+                          </select>
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="text" name="category" value="{{ item.category }}" class="w-32 rounded-lg border-slate-200 text-xs" />
+                      </td>
+                      <td class="py-2">
+                          <input form="{{ form_id }}" type="text" name="remarks" value="{{ item.remarks }}" class="w-32 rounded-lg border-slate-200 text-xs" />
+                      </td>
+                      <td class="py-2">
+                          <div class="flex items-center gap-2">
+                            <button form="{{ form_id }}" type="submit" name="action" value="update_bom_item" class="px-2 py-1 rounded border text-xs">Save</button>
+                            <button
+                              form="{{ form_id }}"
+                              type="submit"
+                              name="action"
+                              value="delete_bom_item"
+                              class="px-2 py-1 rounded border border-rose-200 text-xs text-rose-600"
+                              onclick="return confirm('Delete this item?')"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                      </td>
+                        {% else %}
+                        {{ item.part_class.name if item.part_class else '—' }}
+                      </td>
+                      <td class="py-2">{{ item.item_code }}</td>
+                      <td class="py-2">{{ item.description }}</td>
+                      <td class="py-2">{{ item.unit }}</td>
+                      <td class="py-2">{{ item.quantity_required }}</td>
+                      <td class="py-2">{{ item.stage.name if item.stage else (default_stage.name if default_stage else '—') }}</td>
+                      <td class="py-2">{{ item.category }}</td>
+                      <td class="py-2">{{ item.remarks }}</td>
+                      <td class="py-2">—</td>
                       {% endif %}
-                    </td>
-                    <td class="py-1">{{ item.quantity_required }}</td>
-                    <td class="py-1">{{ item.unit }}</td>
-                    <td class="py-1">{{ item.category }}</td>
-                  </tr>
-                  {% else %}
-                <tr><td colspan="5" class="py-2 text-slate-500">No items yet.</td></tr>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="py-3 text-slate-500">No items in this package yet.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No BOM packages added yet.</p>
+          {% endfor %}
+        </div>
+
+        {% if all_bom_items %}
+        <div class="mt-6 border-t border-slate-200 pt-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-xs uppercase text-slate-500">Cross-check</p>
+              <h3 class="text-sm font-semibold text-slate-700">All items across packages</h3>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <select id="allItemsPackageFilter" class="rounded-lg border-slate-200 text-sm">
+                <option value="">All Packages</option>
+                {% for package in bom_packages %}
+                <option value="{{ package.id }}">{{ package.name }}</option>
+                {% endfor %}
+              </select>
+              <select id="allItemsPartClassFilter" class="rounded-lg border-slate-200 text-sm">
+                <option value="">All Part Classes</option>
+                {% for part in part_classes %}
+                <option value="{{ part.id }}">{{ part.name }}</option>
+                {% endfor %}
+              </select>
+              <input id="allItemsSearch" type="search" class="rounded-lg border-slate-200 text-sm px-3 py-2" placeholder="Search items..." />
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="allItemsTable">
+              <thead>
+                <tr class="text-left text-slate-500">
+                  <th class="py-2">Package</th>
+                  <th class="py-2">Part Class</th>
+                  <th class="py-2">Item</th>
+                  <th class="py-2">Specification</th>
+                  <th class="py-2">Qty</th>
+                  <th class="py-2">Unit</th>
+                  <th class="py-2">Stage</th>
+                  <th class="py-2">Section / Category</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                {% for entry in all_bom_items %}
+                {% set item = entry.item %}
+                {% set package = entry.package %}
+                {% set search_text = (item.item_code or '') ~ ' ' ~ (item.description or '') ~ ' ' ~ (item.category or '') %}
+                <tr
+                  data-package-id="{{ package.id }}"
+                  data-part-class-id="{{ item.part_class_id or '' }}"
+                  data-search-text="{{ search_text|lower }}"
+                >
+                  <td class="py-2 font-semibold">{{ package.name }}</td>
+                  <td class="py-2">{{ item.part_class.name if item.part_class else '—' }}</td>
+                  <td class="py-2">{{ item.item_code }}</td>
+                  <td class="py-2">{{ item.description }}</td>
+                  <td class="py-2">{{ item.quantity_required }}</td>
+                  <td class="py-2">{{ item.unit }}</td>
+                  <td class="py-2">{{ item.stage.name if item.stage else (default_stage.name if default_stage else '—') }}</td>
+                  <td class="py-2">{{ item.category }}</td>
+                </tr>
                 {% endfor %}
               </tbody>
             </table>
-            </div>
-            {% if can_edit_bom %}
-            <div
-              id="duplicateBomModal{{ bom.id }}"
-              class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur"
-            >
-              <div
-                class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-                onclick="event.stopPropagation()"
-              >
-                <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
-                  <div>
-                    <p class="text-xs text-slate-500 uppercase">Duplicate BOM</p>
-                    <h2 class="text-lg font-semibold">Send BOM to another project/site</h2>
-                  </div>
-                  <button class="text-slate-500" type="button" onclick="toggleBomDuplicateModal('{{ bom.id }}', false)">✕</button>
-                </div>
-                <form method="POST" action="{{ url_for('duplicate_bom', bom_id=bom.id) }}" class="p-5 space-y-4">
-                  {{ csrf_field() }}
-                  <input type="hidden" name="redirect_url" value="{{ request.path }}" />
-                  <label class="space-y-1 block">
-                    <span class="text-sm text-slate-600">Target Project / Site</span>
-                    <select name="target_reference" required class="w-full rounded-lg border-slate-200">
-                      <option value="">Select where to duplicate</option>
-                      {% if drawing_site_options %}
-                      <optgroup label="Drawing Sites">
-                        {% for option in drawing_site_options %}
-                        <option value="drawing_site:{{ option.id }}">
-                          {{ option.project_no or option.client_name or 'Drawing Site' }}{% if option.site_location %} · {{ option.site_location }}{% endif %}
-                        </option>
-                        {% endfor %}
-                      </optgroup>
-                      {% endif %}
-                      {% if project_options %}
-                      <optgroup label="Projects">
-                        {% for project in project_options %}
-                        <option value="project:{{ project.id }}">{{ project.name }}</option>
-                        {% endfor %}
-                      </optgroup>
-                      {% endif %}
-                    </select>
-                  </label>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="space-y-1 block">
-                      <span class="text-sm text-slate-600">Target Lift Identifier (optional)</span>
-                      <input
-                        type="text"
-                        name="target_lift_identifier"
-                        class="w-full rounded-lg border-slate-200"
-                        placeholder="Lift-2"
-                      />
-                    </label>
-                    <label class="space-y-1 block">
-                      <span class="text-sm text-slate-600">New BOM name or code (optional)</span>
-                      <input
-                        type="text"
-                        name="new_bom_name"
-                        class="w-full rounded-lg border-slate-200"
-                        placeholder="{{ bom.bom_name }} (Copy)"
-                      />
-                    </label>
-                  </div>
-                  <div class="flex items-center justify-end gap-3 pt-2">
-                    <button type="button" class="px-4 py-2 rounded-lg border" onclick="toggleBomDuplicateModal('{{ bom.id }}', false)">Cancel</button>
-                    <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Duplicate BOM</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-            {% endif %}
           </div>
-          {% else %}
-          <p class="text-sm text-slate-500">No BOM added yet.</p>
-          {% endfor %}
         </div>
+        {% endif %}
+
+        {% if bom and can_edit_bom %}
+        <div
+          id="duplicateBomModal{{ bom.id }}"
+          class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur"
+        >
+          <div
+            class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            onclick="event.stopPropagation()"
+          >
+            <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+              <div>
+                <p class="text-xs text-slate-500 uppercase">Duplicate BOM</p>
+                <h2 class="text-lg font-semibold">Send BOM to another project/site</h2>
+              </div>
+              <button class="text-slate-500" type="button" onclick="toggleBomDuplicateModal('{{ bom.id }}', false)">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('duplicate_bom', bom_id=bom.id) }}" class="p-5 space-y-4">
+              {{ csrf_field() }}
+              <input type="hidden" name="redirect_url" value="{{ request.path }}" />
+              <label class="space-y-1 block">
+                <span class="text-sm text-slate-600">Target Project / Site</span>
+                <select name="target_reference" required class="w-full rounded-lg border-slate-200">
+                  <option value="">Select where to duplicate</option>
+                  {% if drawing_site_options %}
+                  <optgroup label="Drawing Sites">
+                    {% for option in drawing_site_options %}
+                    <option value="drawing_site:{{ option.id }}">
+                      {{ option.project_no or option.client_name or 'Drawing Site' }}{% if option.site_location %} · {{ option.site_location }}{% endif %}
+                    </option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                  {% if project_options %}
+                  <optgroup label="Projects">
+                    {% for project in project_options %}
+                    <option value="project:{{ project.id }}">{{ project.name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                </select>
+              </label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">Target Lift Identifier (optional)</span>
+                  <input
+                    type="text"
+                    name="target_lift_identifier"
+                    class="w-full rounded-lg border-slate-200"
+                    placeholder="Lift-2"
+                  />
+                </label>
+                <label class="space-y-1 block">
+                  <span class="text-sm text-slate-600">New BOM name or code (optional)</span>
+                  <input
+                    type="text"
+                    name="new_bom_name"
+                    class="w-full rounded-lg border-slate-200"
+                    placeholder="{{ bom.bom_name }} (Copy)"
+                  />
+                </label>
+              </div>
+              <div class="flex items-center justify-end gap-3 pt-2">
+                <button type="button" class="px-4 py-2 rounded-lg border" onclick="toggleBomDuplicateModal('{{ bom.id }}', false)">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Duplicate BOM</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -617,6 +913,40 @@
   </div>
 </div>
 
+<div id="addBomPackageModal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-modal-overlay></div>
+  <div class="relative bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <div>
+        <p class="text-xs text-slate-500 uppercase">BOM Package</p>
+        <h2 class="text-lg font-semibold">Create BOM package</h2>
+      </div>
+      <button class="text-slate-500" type="button" data-close-modal>✕</button>
+    </div>
+    <form method="POST" class="p-5 space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="create_bom_package" />
+      <label class="space-y-1 block">
+        <span class="text-sm text-slate-600">Package Name</span>
+        <input type="text" name="package_name" class="w-full rounded-lg border-slate-200" placeholder="Main Lift BOM" required />
+      </label>
+      <label class="space-y-1 block">
+        <span class="text-sm text-slate-600">BOM Template (optional)</span>
+        <select name="bom_template_id" class="w-full rounded-lg border-slate-200">
+          <option value="">Select template</option>
+          {% for template in bom_template_options %}
+          <option value="{{ template.id }}">{{ template.name }} ({{ template.lift_type }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Create Package</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
   const modals = document.querySelectorAll('[data-modal]');
   const toggleModal = (modal, state) => {
@@ -679,16 +1009,43 @@
     modal.classList.toggle('flex', shouldShow);
   }
 
-  function filterBomStage(bomId, stageId){
-    const table = document.getElementById(`bom-table-${bomId}`);
-    if(!table) return;
-    const rows = table.querySelectorAll('tbody tr[data-stage-id]');
-    rows.forEach(row => {
-      const value = row.getAttribute('data-stage-id') || '';
-      const matches = !stageId || (stageId === 'none' ? !value : value === stageId);
-      row.classList.toggle('hidden', !matches);
+  document.querySelectorAll('[data-package-search]').forEach(input => {
+    input.addEventListener('input', event => {
+      const searchValue = event.target.value.toLowerCase();
+      const packageId = event.target.dataset.packageSearch;
+      const table = document.querySelector(`[data-package-table="${packageId}"]`);
+      if (!table) return;
+      table.querySelectorAll('tbody tr[data-search-text]').forEach(row => {
+        const haystack = row.dataset.searchText || '';
+        row.classList.toggle('hidden', searchValue && !haystack.includes(searchValue));
+      });
+    });
+  });
+
+  const allItemsTable = document.getElementById('allItemsTable');
+  const allItemsPackageFilter = document.getElementById('allItemsPackageFilter');
+  const allItemsPartClassFilter = document.getElementById('allItemsPartClassFilter');
+  const allItemsSearch = document.getElementById('allItemsSearch');
+
+  function filterAllItems(){
+    if (!allItemsTable) return;
+    const packageValue = allItemsPackageFilter ? allItemsPackageFilter.value : '';
+    const partClassValue = allItemsPartClassFilter ? allItemsPartClassFilter.value : '';
+    const searchValue = allItemsSearch ? allItemsSearch.value.toLowerCase() : '';
+    allItemsTable.querySelectorAll('tbody tr').forEach(row => {
+      const matchesPackage = !packageValue || row.dataset.packageId === packageValue;
+      const matchesPartClass = !partClassValue || row.dataset.partClassId === partClassValue;
+      const searchText = row.dataset.searchText || '';
+      const matchesSearch = !searchValue || searchText.includes(searchValue);
+      row.classList.toggle('hidden', !(matchesPackage && matchesPartClass && matchesSearch));
     });
   }
+
+  [allItemsPackageFilter, allItemsPartClassFilter, allItemsSearch].forEach(control => {
+    if (!control) return;
+    control.addEventListener('input', filterAllItems);
+    control.addEventListener('change', filterAllItems);
+  });
 
   const detailStatusSelect = document.querySelector('[data-task-status-select]');
   const detailStatusPill = document.querySelector('[data-status-pill]');
