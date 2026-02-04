@@ -6732,6 +6732,52 @@ def _design_status_map():
     return {status: status for status in ordered}
 
 
+def _design_task_missing_inputs(task) -> bool:
+    """Return True when a task explicitly flags missing inputs."""
+    missing_flag = getattr(task, "inputs_missing", None)
+    if isinstance(missing_flag, bool):
+        return missing_flag
+    notes = (getattr(task, "notes", None) or "").lower()
+    return "[missing_inputs]" in notes or "[missing inputs]" in notes
+
+
+def _design_task_has_drawings(task) -> bool:
+    return (
+        db.session.query(DesignDrawing.id)
+        .filter(DesignDrawing.design_task_id == task.id)
+        .first()
+        is not None
+    )
+
+
+def _design_task_pending_inputs_applies(task) -> bool:
+    """Pending Inputs is a derived state: no drawings yet or inputs are missing."""
+    return (not _design_task_has_drawings(task)) or _design_task_missing_inputs(task)
+
+
+def _design_task_next_status_after_pending_inputs(task) -> Optional[str]:
+    options = _design_status_options_for(task.task_type)
+    if "In Drawing" in options:
+        return "In Drawing"
+    for status in options:
+        if status != "Pending Inputs":
+            return status
+    return None
+
+
+def _auto_advance_design_task_from_pending_inputs(task, *, had_drawings: bool) -> bool:
+    if task.status != "Pending Inputs":
+        return False
+    if had_drawings or _design_task_missing_inputs(task):
+        return False
+    next_status = _design_task_next_status_after_pending_inputs(task)
+    if not next_status or next_status == task.status:
+        return False
+    task.status = next_status
+    task.updated_at = datetime.datetime.utcnow()
+    return True
+
+
 def _get_design_board_payload():
     statuses = _design_status_map()
     tasks_by_status = {}
@@ -7014,6 +7060,7 @@ def design_task_detail(task_id):
             else:
                 if drawing_type not in allowed_drawing_types:
                     drawing_type = "Other"
+                had_drawings = _design_task_has_drawings(task)
                 filename = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
                 save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -7038,6 +7085,7 @@ def design_task_detail(task_id):
                 drawing.current_version_number = 1
                 drawing.updated_at = datetime.datetime.utcnow()
                 db.session.add(revision)
+                _auto_advance_design_task_from_pending_inputs(task, had_drawings=had_drawings)
                 _notify_assignee(
                     f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
                 )
