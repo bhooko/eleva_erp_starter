@@ -541,9 +541,41 @@ def evaluate_bom_template(template, input_values=None):
         for input_id, message in input_errors.items():
             errors.append({"type": "input", "id": input_id, "message": message})
 
+    section_includes = {}
+    for stage in sorted(template.stages, key=lambda st: (st.display_order or 0, st.id)):
+        for section in sorted(stage.sections, key=lambda sec: (sec.display_order or 0, sec.id)):
+            include_expr = (section.include_if_expr or "").strip()
+            include_errors = []
+            include = True
+            if include_expr:
+                names = _collect_expr_names(include_expr)
+                for name in names:
+                    if name in _BOM_ALLOWED_FUNCS:
+                        continue
+                    if name not in input_map:
+                        include_errors.append(f"Unknown reference '{name}'.")
+                if include_errors:
+                    include = False
+                else:
+                    try:
+                        include = bool(_safe_eval_expr(include_expr, input_map))
+                    except Exception as exc:
+                        include_errors.append(f"include_if_expr error: {exc}")
+                        include = False
+            section_includes[section.id] = {
+                "include": include,
+                "errors": include_errors,
+                "expr": include_expr,
+            }
+            if include_errors:
+                for message in include_errors:
+                    errors.append({"type": "section", "id": section.id, "message": message})
+
     lines = []
     for stage in sorted(template.stages, key=lambda st: (st.display_order or 0, st.id)):
         for section in sorted(stage.sections, key=lambda sec: (sec.display_order or 0, sec.id)):
+            if not section_includes.get(section.id, {}).get("include", True):
+                continue
             lines.extend(sorted(section.lines, key=lambda ln: (ln.display_order or 0, ln.id)))
 
     ref_map = {}
@@ -698,6 +730,7 @@ def evaluate_bom_template(template, input_values=None):
     return {
         "inputs": input_map,
         "input_errors": input_errors,
+        "section_includes": section_includes,
         "lines": results,
         "errors": errors,
     }
@@ -7272,6 +7305,7 @@ def design_bom_templates():
                     new_section = BomTemplateSection(
                         stage_id=new_stage.id,
                         section_name=section.section_name,
+                        include_if_expr=section.include_if_expr,
                         display_order=section.display_order,
                     )
                     db.session.add(new_section)
@@ -7585,6 +7619,7 @@ def design_bom_template_edit(template_id):
         elif action == "add_section":
             stage_id = request.form.get("stage_id")
             section_name = (request.form.get("section_name") or "").strip()
+            include_if_expr = (request.form.get("include_if_expr") or "").strip() or None
             display_order = int(request.form.get("display_order") or 0)
             stage = BomTemplateStage.query.get_or_404(stage_id)
             if stage.template_id != template.id:
@@ -7595,6 +7630,7 @@ def design_bom_template_edit(template_id):
                 section = BomTemplateSection(
                     stage_id=stage.id,
                     section_name=section_name,
+                    include_if_expr=include_if_expr,
                     display_order=display_order,
                 )
                 db.session.add(section)
@@ -7606,6 +7642,7 @@ def design_bom_template_edit(template_id):
             if section.stage.template_id != template.id:
                 abort(404)
             section.section_name = (request.form.get("section_name") or "").strip()
+            section.include_if_expr = (request.form.get("include_if_expr") or "").strip() or None
             section.display_order = int(request.form.get("display_order") or 0)
             db.session.commit()
             flash("Section updated.", "success")
@@ -7770,6 +7807,7 @@ def design_bom_template_edit(template_id):
                 )
     if evaluation is None:
         evaluation = evaluate_bom_template(template)
+    section_includes = evaluation.get("section_includes") if evaluation else {}
     return render_template(
         "bom_template_editor.html",
         template=template,
@@ -7780,6 +7818,7 @@ def design_bom_template_edit(template_id):
         evaluation=evaluation,
         input_keys=input_keys,
         line_keys=line_keys,
+        section_includes=section_includes,
     )
 
 
@@ -12842,6 +12881,7 @@ def ensure_bom_template_section_table():
         [
             ("stage_id", "INTEGER"),
             ("section_name", "TEXT"),
+            ("include_if_expr", "TEXT"),
             ("display_order", "INTEGER DEFAULT 0"),
         ],
     )

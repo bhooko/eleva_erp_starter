@@ -2280,6 +2280,7 @@ class BomTemplateSection(db.Model):
         db.Integer, db.ForeignKey("bom_template_stage.id"), nullable=False, index=True
     )
     section_name = db.Column(db.String(200), nullable=False)
+    include_if_expr = db.Column(db.Text, nullable=True)
     display_order = db.Column(db.Integer, default=0)
 
     lines = db.relationship(
