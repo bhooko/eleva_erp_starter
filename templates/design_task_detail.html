@@ -7,13 +7,45 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Design Task · {{ task.task_type.replace('_',' ').title() }}</p>
       <h1 class="text-2xl font-semibold">{{ task.description or task.project_label }}</h1>
+      {% set can_update_status = current_user.is_admin or 'design' in (current_user.role or '').lower() %}
+      {% set status_styles = {
+        'new': 'bg-slate-500 text-white',
+        'in_progress': 'bg-blue-500 text-white',
+        'waiting_info': 'bg-amber-500 text-slate-900',
+        'completed': 'bg-emerald-500 text-white',
+        'on_hold': 'bg-rose-500 text-white'
+      } %}
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
         {% if task.project_id %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Project: {{ task.project_label }}</span>
         {% else %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-100 text-red-700">Unlinked project</span>
         {% endif %}
-        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-orange-100 text-orange-800">Status: {{ task.status.replace('_',' ').title() }}</span>
+        <div class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 text-slate-700">
+          <span class="uppercase text-[10px] tracking-wide text-slate-500">Status</span>
+          <span
+            data-status-pill
+            class="px-2 py-0.5 rounded-full text-xs font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}"
+          >
+            {{ task.status.replace('_',' ').title() }}
+          </span>
+          {% if can_update_status %}
+          <label class="sr-only" for="taskStatusSelect">Update status</label>
+          <select
+            id="taskStatusSelect"
+            class="design-task-status-select rounded-md px-2 py-1 text-xs"
+            data-task-status-select
+            data-task-id="{{ task.id }}"
+            data-current-status="{{ task.status }}"
+          >
+            {% for status in task_status_options %}
+            <option value="{{ status }}" {% if status == task.status %}selected{% endif %}>
+              {{ status.replace('_',' ').title() }}
+            </option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
         {% if task.origin_type %}
         <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-900 text-white">Origin: {{ task.origin_type.title() }} {% if task.origin_reference %}· {{ task.origin_reference }}{% endif %}</span>
         {% endif %}
@@ -42,7 +74,12 @@
             <p class="text-xs uppercase text-slate-500">Task summary</p>
             <h2 class="text-lg font-semibold">{{ task.description or 'No description yet' }}</h2>
           </div>
-          <span class="px-3 py-1 rounded-full text-sm bg-orange-100 text-orange-700">{{ task.status|title }}</span>
+          <span
+            data-status-summary
+            class="px-3 py-1 rounded-full text-sm font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}"
+          >
+            {{ task.status.replace('_',' ').title() }}
+          </span>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-600">
           <div class="p-3 bg-slate-50 rounded-xl">Priority: <strong>{{ task.priority.title() }}</strong></div>
@@ -650,6 +687,62 @@
       const value = row.getAttribute('data-stage-id') || '';
       const matches = !stageId || (stageId === 'none' ? !value : value === stageId);
       row.classList.toggle('hidden', !matches);
+    });
+  }
+
+  const detailStatusSelect = document.querySelector('[data-task-status-select]');
+  const detailStatusPill = document.querySelector('[data-status-pill]');
+  const detailStatusSummary = document.querySelector('[data-status-summary]');
+  const statusStyles = {
+    new: 'bg-slate-500 text-white',
+    in_progress: 'bg-blue-500 text-white',
+    waiting_info: 'bg-amber-500 text-slate-900',
+    completed: 'bg-emerald-500 text-white',
+    on_hold: 'bg-rose-500 text-white'
+  };
+
+  function formatStatusLabel(status){
+    return status
+      .split('_')
+      .map((word)=> word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  function updateDetailStatus(status){
+    const label = formatStatusLabel(status);
+    const styleClass = statusStyles[status] || 'bg-slate-500 text-white';
+    if (detailStatusPill){
+      detailStatusPill.textContent = label;
+      detailStatusPill.className = `px-2 py-0.5 rounded-full text-xs font-semibold ${styleClass}`;
+    }
+    if (detailStatusSummary){
+      detailStatusSummary.textContent = label;
+      detailStatusSummary.className = `px-3 py-1 rounded-full text-sm font-semibold ${styleClass}`;
+    }
+  }
+
+  if (detailStatusSelect){
+    detailStatusSelect.addEventListener('change', () => {
+      const taskId = detailStatusSelect.dataset.taskId;
+      const nextStatus = detailStatusSelect.value;
+      const previousStatus = detailStatusSelect.dataset.currentStatus || nextStatus;
+      detailStatusSelect.dataset.currentStatus = nextStatus;
+      updateDetailStatus(nextStatus);
+      detailStatusSelect.disabled = true;
+      fetch(`/design/tasks/${taskId}/update_status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: nextStatus})
+      })
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .catch(() => {
+          detailStatusSelect.dataset.currentStatus = previousStatus;
+          detailStatusSelect.value = previousStatus;
+          updateDetailStatus(previousStatus);
+        })
+        .finally(() => {
+          detailStatusSelect.disabled = false;
+        });
     });
   }
 </script>
