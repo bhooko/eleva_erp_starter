@@ -37,7 +37,8 @@
            data-name="{{ part_class.name }}"
            data-description="{{ part_class.description or '' }}"
            data-active="{{ 1 if part_class.active else 0 }}"
-           data-sort="{{ part_class.sort_order or 0 }}">
+           data-sort="{{ part_class.sort_order or 0 }}"
+           data-sections='{{ part_class_section_map[part_class.id]|tojson }}'>
         <div class="col-span-3 font-semibold text-slate-100">
           <span class="name-text">{{ part_class.name }}</span>
         </div>
@@ -83,6 +84,15 @@
           <label class="text-xs uppercase tracking-wide text-slate-400">Description</label>
           <textarea id="classDescriptionInput" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes"></textarea>
         </div>
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-slate-400">Associated Sections</label>
+          <select id="classSectionsInput" multiple class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+            {% for section in sections %}
+              <option value="{{ section.id }}">{{ section.label }}</option>
+            {% endfor %}
+          </select>
+          <p class="text-xs text-slate-500">Optional. Linked sections appear as recommended when adding BOM lines.</p>
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <label class="text-xs uppercase tracking-wide text-slate-400">Sort Order</label>
@@ -112,6 +122,7 @@
   const classDescriptionInput = document.getElementById('classDescriptionInput');
   const classSortInput = document.getElementById('classSortInput');
   const classActiveToggle = document.getElementById('classActiveToggle');
+  const classSectionsInput = document.getElementById('classSectionsInput');
   const modalError = document.getElementById('modalError');
   const saveModalBtn = document.getElementById('saveModalBtn');
   const addClassBtn = document.getElementById('addClassBtn');
@@ -169,6 +180,13 @@
     modalError.classList.add('hidden');
   };
 
+  const setSectionSelections = (sectionIds) => {
+    const selectedSet = new Set((sectionIds || []).map((item) => String(item)));
+    Array.from(classSectionsInput.options).forEach((option) => {
+      option.selected = selectedSet.has(option.value);
+    });
+  };
+
   const openModal = async (mode, id = null) => {
     rememberScrollPosition();
     modalMode = mode;
@@ -180,6 +198,7 @@
       classNameInput.value = '';
       classDescriptionInput.value = '';
       classSortInput.value = '0';
+      setSectionSelections([]);
       setActiveButton(true);
       setModalVisibility(true);
       classNameInput.focus();
@@ -196,9 +215,18 @@
     classNameInput.value = data.name || '';
     classDescriptionInput.value = data.description || '';
     classSortInput.value = data.sort_order ?? 0;
+    setSectionSelections(data.associated_sections || []);
     setActiveButton(!!data.is_active);
     setModalVisibility(true);
     classNameInput.focus();
+  };
+
+  const getRowSections = (row) => {
+    try {
+      return JSON.parse(row.dataset.sections || '[]');
+    } catch (error) {
+      return [];
+    }
   };
 
   const closeModal = () => {
@@ -233,7 +261,8 @@
         name: row.dataset.name,
         description: row.dataset.description,
         is_active: nextState,
-        sort_order: row.dataset.sort
+        sort_order: row.dataset.sort,
+        associated_sections: getRowSections(row)
       });
     }
   });
@@ -243,6 +272,7 @@
     row.dataset.description = data.description || '';
     row.dataset.active = data.is_active ? '1' : '0';
     row.dataset.sort = data.sort_order ?? 0;
+    row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.querySelector('.name-text').textContent = data.name;
     row.querySelector('.description-text').textContent = data.description || '—';
     row.querySelector('.sort-text').textContent = data.sort_order ?? 0;
@@ -265,6 +295,7 @@
     row.dataset.description = data.description || '';
     row.dataset.active = data.is_active ? '1' : '0';
     row.dataset.sort = data.sort_order ?? 0;
+    row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.innerHTML = `
       <div class="col-span-3 font-semibold text-slate-100"><span class="name-text">${data.name}</span></div>
       <div class="col-span-4 text-slate-400 description-text">${data.description || '—'}</div>
@@ -327,7 +358,8 @@
       name: classNameInput.value.trim(),
       description: classDescriptionInput.value.trim(),
       is_active: activeState,
-      sort_order: classSortInput.value
+      sort_order: classSortInput.value,
+      associated_sections: Array.from(classSectionsInput.selectedOptions).map((option) => option.value)
     };
 
     if (modalMode === 'create') {
