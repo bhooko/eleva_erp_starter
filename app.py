@@ -7631,6 +7631,7 @@ def design_bom_template_edit(template_id):
         .get_or_404(template_id)
     )
     evaluation = None
+    test_input_values = {}
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
         if action == "update_template":
@@ -7872,6 +7873,7 @@ def design_bom_template_edit(template_id):
                 for key, value in request.form.items()
                 if key.startswith("test_input_")
             }
+            test_input_values = dict(input_values)
             evaluation = evaluate_bom_template(template, input_values)
         if action != "test_inputs":
             return redirect(url_for("design_bom_template_edit", template_id=template.id))
@@ -7928,6 +7930,7 @@ def design_bom_template_edit(template_id):
         input_keys=input_keys,
         line_keys=line_keys,
         section_includes=section_includes,
+        test_input_values=test_input_values,
     )
 
 
