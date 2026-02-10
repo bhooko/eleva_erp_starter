@@ -1947,6 +1947,7 @@ class DesignTask(db.Model):
     requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     assigned_to_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     status = db.Column(db.String(50), nullable=False, default="new")
+    has_pending_inputs = db.Column(db.Boolean, nullable=False, default=True)
     priority = db.Column(db.String(50), nullable=False, default="medium")
     due_date = db.Column(db.Date, nullable=True)
     description = db.Column(db.Text, nullable=True)
