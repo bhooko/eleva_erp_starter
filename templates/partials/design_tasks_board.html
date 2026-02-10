@@ -1,74 +1,81 @@
 <div class="space-y-4">
-  <div class="grid gap-4 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2" data-cards-grid>
-    {% set type_styles = {
-      'sales_query': 'design-task-type',
-      'drawing': 'design-task-type',
-      'bom': 'design-task-type',
-      'general': 'design-task-type',
-      'design': 'design-task-type'
-    } %}
-    {% set type_labels = {
-      'sales_query': 'Sales Query',
-      'drawing': 'Drawing',
-      'bom': 'BOM',
-      'general': 'General',
-      'design': 'Design Task'
-    } %}
-    {% set status_styles = {
-      'new': 'bg-slate-500 text-white',
-      'in_progress': 'bg-blue-500 text-white',
-      'waiting_info': 'bg-amber-500 text-slate-900',
-      'completed': 'bg-emerald-500 text-white',
-      'on_hold': 'bg-rose-500 text-white'
-    } %}
-    {% set origin_icons = {
-      'sales': '💼',
-      'installation': '🏗️',
-      'service': '🛠️',
-      'manual': '✍️'
-    } %}
+  {% set type_styles = {
+    'sales_query': 'design-task-type',
+    'drawing': 'design-task-type',
+    'bom': 'design-task-type',
+    'general': 'design-task-type',
+    'design': 'design-task-type'
+  } %}
+  {% set type_labels = {
+    'sales_query': 'Sales Query',
+    'drawing': 'Drawing',
+    'bom': 'BOM',
+    'general': 'General',
+    'design': 'Design Task'
+  } %}
+  {% set status_styles = {
+    'Pending Inputs': 'bg-slate-500 text-white',
+    'Drawing': 'bg-blue-500 text-white',
+    'In Drawing': 'bg-indigo-500 text-white',
+    'Sent for Approval': 'bg-amber-500 text-slate-900',
+    'Approved': 'bg-emerald-500 text-white',
+    'Revision Needed': 'bg-rose-500 text-white',
+    'Finalized': 'bg-teal-600 text-white',
+    'In Preparation': 'bg-blue-500 text-white',
+    'Revised': 'bg-rose-500 text-white'
+  } %}
+  {% set origin_icons = {
+    'sales': '💼',
+    'installation': '🏗️',
+    'service': '🛠️',
+    'manual': '✍️'
+  } %}
 
-    {% if ordered_tasks %}
-      {% for task in ordered_tasks %}
-      {% set task_status_options = status_options_by_type.get(task.task_type, status_options_by_type.get('default', [])) %}
-      <article class="design-task-card border rounded-xl p-3 shadow-sm hover:shadow-md transition cursor-pointer" draggable="{{ 'true' if can_move_cards else 'false' }}" data-task-id="{{ task.id }}" data-status="{{ task.status }}" onclick="window.location='{{ url_for('design_task_detail', task_id=task.id) }}'">
-        <div class="flex items-start justify-between gap-2">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-2 py-1 rounded-full text-xs font-semibold {{ type_styles.get(task.task_type, 'design-task-type') }}">{{ type_labels.get(task.task_type, task.task_type.title()) }}</span>
-              <span class="px-2 py-1 rounded-full text-xs font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}" data-status-label>{{ statuses.get(task.status, task.status.replace('_', ' ').title()) }}</span>
-              {% if task.has_pending_inputs %}
-              <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
-              {% endif %}
-            </div>
-            <p class="design-task-title font-semibold leading-tight">{{ task.description or 'Untitled task' }}</p>
-            <p class="text-xs text-muted-contrast">{{ task.project_label or 'Unlinked' }}</p>
-          </div>
-          <div class="flex flex-col items-end gap-2">
-            {% if can_move_cards %}
-              <select class="design-task-status-select rounded-md px-2 py-1 text-xs" data-status-select data-task-id="{{ task.id }}" data-current-status="{{ task.status }}">
-                {% for status in task_status_options %}
-                  <option value="{{ status }}" {% if status == task.status %}selected{% endif %}>
-                    {{ statuses.get(status, status.replace('_', ' ').title()) }}
-                  </option>
-                {% endfor %}
-              </select>
-            {% endif %}
-            <span class="text-xs text-muted-contrast">DT-{{ '%04d' % task.id }}</span>
-          </div>
+  <div class="grid gap-4 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-1" data-status-columns>
+    {% for status_key, status_label in statuses.items() %}
+      {% set status_tasks = tasks_by_status.get(status_key, []) %}
+      <section class="border rounded-xl bg-slate-50/60" data-status-column="{{ status_key }}">
+        <header class="px-3 py-2 border-b bg-white/80 rounded-t-xl flex items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold text-slate-700">{{ status_label }}</h2>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700" data-status-count>{{ status_tasks|length }}</span>
+        </header>
+        <div class="p-3 min-h-24 space-y-3 dropzone" data-status="{{ status_key }}" data-cards-grid>
+          {% for task in status_tasks %}
+            {% set task_status_options = status_options_by_type.get(task.task_type, status_options_by_type.get('default', [])) %}
+            <article class="design-task-card border bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition cursor-pointer" draggable="{{ 'true' if can_move_cards else 'false' }}" data-task-id="{{ task.id }}" data-status="{{ task.status }}" onclick="window.location='{{ url_for('design_task_detail', task_id=task.id) }}'">
+              <div class="flex items-start justify-between gap-2">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold {{ type_styles.get(task.task_type, 'design-task-type') }}">{{ type_labels.get(task.task_type, task.task_type.title()) }}</span>
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}" data-status-label>{{ statuses.get(task.status, task.status) }}</span>
+                    {% if task.has_pending_inputs %}
+                      <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
+                    {% endif %}
+                  </div>
+                  <p class="design-task-title font-semibold leading-tight">{{ task.description or 'Untitled task' }}</p>
+                  <p class="text-xs text-muted-contrast">{{ task.project_label or 'Unlinked' }}</p>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                  {% if can_move_cards %}
+                    <select class="design-task-status-select rounded-md px-2 py-1 text-xs" data-status-select data-task-id="{{ task.id }}" data-current-status="{{ task.status }}">
+                      {% for status in task_status_options %}
+                        <option value="{{ status }}" {% if status == task.status %}selected{% endif %}>{{ statuses.get(status, status) }}</option>
+                      {% endfor %}
+                    </select>
+                  {% endif %}
+                  <span class="text-xs text-muted-contrast">DT-{{ '%04d' % task.id }}</span>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-contrast">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">{{ origin_icons.get(task.origin_type or 'manual', '✍️') }} {{ (task.origin_type or 'manual').title() }}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">👤 {{ task.assigned_to.display_name if task.assigned_to else 'Unassigned' }}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full {{ 'bg-red-500 text-white' if task.priority=='high' else ('bg-amber-500 text-slate-900' if task.priority=='medium' else 'bg-emerald-500 text-white') }}">⚡ {{ task.priority.title() }}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">📅 {{ task.due_date or 'No due date' }}</span>
+              </div>
+            </article>
+          {% endfor %}
         </div>
-        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-contrast">
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">
-            {{ origin_icons.get(task.origin_type or 'manual', '✍️') }} {{ (task.origin_type or 'manual').title() }}
-          </span>
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">👤 {{ task.assigned_to.display_name if task.assigned_to else 'Unassigned' }}</span>
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full {{ 'bg-red-500 text-white' if task.priority=='high' else ('bg-amber-500 text-slate-900' if task.priority=='medium' else 'bg-emerald-500 text-white') }}">⚡ {{ task.priority.title() }}</span>
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full design-task-pill">📅 {{ task.due_date or 'No due date' }}</span>
-        </div>
-      </article>
-      {% endfor %}
-    {% else %}
-      <p class="text-sm text-muted-contrast italic col-span-4 text-center">No tasks to display.</p>
-    {% endif %}
+      </section>
+    {% endfor %}
   </div>
 </div>
