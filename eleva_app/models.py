@@ -2429,6 +2429,9 @@ class BOMItem(db.Model):
         db.Integer, db.ForeignKey("bom_package.id"), nullable=True, index=True
     )
     stage_id = db.Column(db.Integer, db.ForeignKey("procurement_stage.id"), nullable=True)
+    stage = db.Column(db.String(120), nullable=True)
+    section_title = db.Column(db.String(200), nullable=True)
+    specification = db.Column(db.Text, nullable=True)
     part_class_id = db.Column(
         db.Integer, db.ForeignKey("part_class.id"), nullable=True, index=True
     )
@@ -2446,7 +2449,7 @@ class BOMItem(db.Model):
 
     bom = db.relationship("BillOfMaterials", backref="items")
     bom_package = db.relationship("BOMPackage", backref="items")
-    stage = db.relationship("ProcurementStage")
+    procurement_stage = db.relationship("ProcurementStage")
     part_class = db.relationship("PartClass")
     source_template_line = db.relationship("BomTemplateLine")
 

@@ -360,9 +360,9 @@
             <span class="text-sm">Item code</span>
             <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" placeholder="Item code" />
           </label>
-          <label class="space-y-1">
-            <span class="text-sm">Description</span>
-            <input type="text" name="item_description" class="w-full rounded-lg border-slate-200" placeholder="Description" />
+          <label class="space-y-1 md:col-span-2">
+            <span class="text-sm font-semibold text-rose-700">Specification *</span>
+            <textarea name="specification" rows="2" class="w-full rounded-lg border-rose-300 bg-rose-50/60" placeholder="Designer-owned technical specification" required></textarea>
           </label>
           <label class="space-y-1">
             <span class="text-sm">Quantity</span>
@@ -373,17 +373,12 @@
             <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
           </label>
           <label class="space-y-1">
-            <span class="text-sm">Category</span>
-            <input type="text" name="category" class="w-full rounded-lg border-slate-200" placeholder="Category" />
+            <span class="text-sm font-semibold text-sky-700">Stage</span>
+            <input type="text" name="stage" class="w-full rounded-lg border-sky-300 bg-sky-50/60" placeholder="Stage 1 / Electrical" />
           </label>
           <label class="space-y-1">
-            <span class="text-sm">Stage</span>
-            <select name="stage_id" class="w-full rounded-lg border-slate-200">
-              <option value="">Default{% if stage_options %} (Stage 1 if available){% endif %}</option>
-              {% for stage in stage_options %}
-              <option value="{{ stage.id }}" {% if default_stage and default_stage.id == stage.id %}selected{% endif %}>{{ stage.name }}</option>
-              {% endfor %}
-            </select>
+            <span class="text-sm font-semibold text-violet-700">Section</span>
+            <input type="text" name="section_title" class="w-full rounded-lg border-violet-300 bg-violet-50/60" placeholder="Car Bracket Kit" />
           </label>
           <label class="space-y-1 md:col-span-2">
             <span class="text-sm">Remarks</span>
@@ -416,42 +411,25 @@
             <thead>
               <tr class="text-left text-slate-500">
                 <th class="py-1">Item</th>
-                <th class="py-1">Description</th>
-                <th class="py-1">Stage</th>
+                <th class="py-1 text-sky-700">Stage</th>
+                <th class="py-1 text-violet-700">Section</th>
+                <th class="py-1 text-rose-700">Specification</th>
                 <th class="py-1">Qty</th>
                 <th class="py-1">Unit</th>
-                <th class="py-1">Category</th>
               </tr>
             </thead>
                 <tbody class="divide-y">
                   {% for item in bom.items %}
-                  <tr data-stage-id="{{ item.stage_id or '' }}">
+                  <tr data-stage-id="">
                     <td class="py-1">{{ item.item_code }}</td>
-                    <td class="py-1">{{ item.description }}</td>
-                    <td class="py-1">
-                      {% if can_edit_bom %}
-                      <form method="POST" action="{{ url_for('update_bom_item_stage', item_id=item.id) }}" class="flex items-center gap-2">
-                        {{ csrf_field() }}
-                        <input type="hidden" name="redirect_url" value="{{ request.path }}" />
-                        {% set selected_stage = item.stage_id or (default_stage.id if default_stage else None) %}
-                        <select name="stage_id" class="rounded-lg border-slate-200 text-xs">
-                          <option value="">—</option>
-                          {% for stage in stage_options %}
-                          <option value="{{ stage.id }}" {% if selected_stage and selected_stage == stage.id %}selected{% endif %}>{{ stage.name }}</option>
-                          {% endfor %}
-                        </select>
-                        <button type="submit" class="px-2 py-1 rounded border text-xs">Save</button>
-                      </form>
-                      {% else %}
-                      {{ item.stage.name if item.stage else (default_stage.name if default_stage else '—') }}
-                      {% endif %}
-                    </td>
+                    <td class="py-1">{{ item.stage or '—' }}</td>
+                    <td class="py-1">{{ item.section_title or item.category or '—' }}</td>
+                    <td class="py-1">{{ item.specification or item.description or '—' }}</td>
                     <td class="py-1">{{ item.quantity_required }}</td>
                     <td class="py-1">{{ item.unit }}</td>
-                    <td class="py-1">{{ item.category }}</td>
-                  </tr>
+                                      </tr>
                   {% else %}
-              <tr><td colspan="5" class="py-2 text-slate-500">No items yet.</td></tr>
+              <tr><td colspan="6" class="py-2 text-slate-500">No items yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
