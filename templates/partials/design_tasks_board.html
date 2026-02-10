@@ -37,6 +37,9 @@
             <div class="flex items-center gap-2 flex-wrap">
               <span class="px-2 py-1 rounded-full text-xs font-semibold {{ type_styles.get(task.task_type, 'design-task-type') }}">{{ type_labels.get(task.task_type, task.task_type.title()) }}</span>
               <span class="px-2 py-1 rounded-full text-xs font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}" data-status-label>{{ statuses.get(task.status, task.status.replace('_', ' ').title()) }}</span>
+              {% if task.has_pending_inputs %}
+              <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
+              {% endif %}
             </div>
             <p class="design-task-title font-semibold leading-tight">{{ task.description or 'Untitled task' }}</p>
             <p class="text-xs text-muted-contrast">{{ task.project_label or 'Unlinked' }}</p>

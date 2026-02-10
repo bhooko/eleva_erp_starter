@@ -29,6 +29,9 @@
           >
             {{ task.status.replace('_',' ').title() }}
           </span>
+          {% if task.has_pending_inputs %}
+          <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
+          {% endif %}
           {% if can_update_status %}
           <label class="sr-only" for="taskStatusSelect">Update status</label>
           <select
@@ -74,12 +77,17 @@
             <p class="text-xs uppercase text-slate-500">Task summary</p>
             <h2 class="text-lg font-semibold">{{ task.description or 'No description yet' }}</h2>
           </div>
-          <span
-            data-status-summary
-            class="px-3 py-1 rounded-full text-sm font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}"
-          >
-            {{ task.status.replace('_',' ').title() }}
-          </span>
+          <div class="flex items-center gap-2">
+            <span
+              data-status-summary
+              class="px-3 py-1 rounded-full text-sm font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}"
+            >
+              {{ task.status.replace('_',' ').title() }}
+            </span>
+            {% if task.has_pending_inputs %}
+            <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
+            {% endif %}
+          </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-600">
           <div class="p-3 bg-slate-50 rounded-xl">Priority: <strong>{{ task.priority.title() }}</strong></div>
