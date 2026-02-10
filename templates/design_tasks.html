@@ -43,10 +43,24 @@
 
   function formatStatusLabel(status){
     if (statusLabels[status]) return statusLabels[status];
-    return status
-      .split('_')
-      .map((word)=> word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+    return status;
+  }
+
+  function showStatusUpdateError(message){
+    window.alert(message || 'Unable to update task status. Please try again.');
+  }
+
+  function getColumnForStatus(status){
+    return kanbanBoard ? kanbanBoard.querySelector(`[data-status-column="${CSS.escape(status)}"] [data-cards-grid]`) : null;
+  }
+
+  function recalculateColumnCounts(){
+    if (!kanbanBoard) return;
+    kanbanBoard.querySelectorAll('[data-status-column]').forEach(column => {
+      const countBadge = column.querySelector('[data-status-count]');
+      const cards = column.querySelectorAll('[data-task-id]');
+      if (countBadge) countBadge.textContent = String(cards.length);
+    });
   }
 
   function updateCardStatus(card, status){
@@ -58,17 +72,31 @@
     }
   }
 
+  function moveCardToStatusColumn(card, status){
+    const columnGrid = getColumnForStatus(status);
+    if (!card || !columnGrid) return false;
+    columnGrid.appendChild(card);
+    recalculateColumnCounts();
+    return true;
+  }
+
+  async function postTaskStatus(taskId, status){
+    const response = await fetch(`/design/tasks/${taskId}/update_status`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({status})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok){
+      throw new Error(data.message || 'Unable to update task status.');
+    }
+    return data;
+  }
+
   function initDragAndDrop(){
     if (!canMove || !kanbanBoard) return;
     let dragged = null;
     const dropzones = kanbanBoard.querySelectorAll('.dropzone');
-    if (!dropzones.length){
-      kanbanBoard.querySelectorAll('[draggable="true"]').forEach(card => {
-        card.setAttribute('draggable', 'false');
-      });
-      return;
-    }
-    const cardsGrid = kanbanBoard.querySelector('[data-cards-grid]');
     kanbanBoard.querySelectorAll('[draggable="true"]').forEach(card => {
       card.addEventListener('dragstart', ()=>{
         dragged = card;
@@ -81,23 +109,44 @@
         isDragging = false;
       });
     });
+
     dropzones.forEach(zone => {
       zone.addEventListener('dragover', (e)=>{ e.preventDefault(); zone.classList.add('ring','ring-orange-200');});
       zone.addEventListener('dragleave', ()=> zone.classList.remove('ring','ring-orange-200'));
-      zone.addEventListener('drop', (e)=>{
+      zone.addEventListener('drop', async (e)=>{
         e.preventDefault();
         zone.classList.remove('ring','ring-orange-200');
         if(!dragged) return;
-        const status = zone.dataset.status;
-        if (cardsGrid){
-          cardsGrid.prepend(dragged);
+
+        const card = dragged;
+        const taskId = card.dataset.taskId;
+        const nextStatus = zone.dataset.status;
+        const previousStatus = card.dataset.status;
+        if (!taskId || !nextStatus || previousStatus === nextStatus) return;
+
+        updateCardStatus(card, nextStatus);
+        moveCardToStatusColumn(card, nextStatus);
+        try {
+          const data = await postTaskStatus(taskId, nextStatus);
+          updateCardStatus(card, data.status);
+          moveCardToStatusColumn(card, data.status);
+          const select = card.querySelector('[data-status-select]');
+          if (select){
+            select.value = data.status;
+            select.dataset.currentStatus = data.status;
+          }
+        } catch (error) {
+          updateCardStatus(card, previousStatus);
+          moveCardToStatusColumn(card, previousStatus);
+          const select = card.querySelector('[data-status-select]');
+          if (select){
+            select.value = previousStatus;
+            select.dataset.currentStatus = previousStatus;
+          }
+          showStatusUpdateError(error.message);
+        } finally {
+          isDragging = false;
         }
-        updateCardStatus(dragged, status);
-        fetch(`/design/tasks/${dragged.dataset.taskId}/update_status`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({status})
-        }).finally(()=>{ isDragging = false; });
       });
     });
   }
@@ -105,36 +154,38 @@
   function initStatusControls(){
     if (!kanbanBoard) return;
     kanbanBoard.querySelectorAll('[data-status-select]').forEach(select => {
-      select.addEventListener('click', (event) => {
-        event.stopPropagation();
-      });
-      select.addEventListener('mousedown', (event) => {
-        event.stopPropagation();
-      });
-      select.addEventListener('change', (event) => {
+      select.addEventListener('click', (event) => event.stopPropagation());
+      select.addEventListener('mousedown', (event) => event.stopPropagation());
+      select.addEventListener('change', async (event) => {
         event.stopPropagation();
         const taskId = select.dataset.taskId;
         const nextStatus = select.value;
-        const previousStatus = select.dataset.currentStatus || nextStatus;
         const card = select.closest('[data-task-id]');
+        const previousStatus = select.dataset.currentStatus || card?.dataset.status || nextStatus;
+
+        if (!taskId || !card || previousStatus === nextStatus) return;
+
+        select.disabled = true;
         select.dataset.currentStatus = nextStatus;
         updateCardStatus(card, nextStatus);
-        select.disabled = true;
-        fetch(`/design/tasks/${taskId}/update_status`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({status: nextStatus})
-        })
-          .then(res => res.ok ? res.json() : Promise.reject())
-          .then(() => refreshBoard())
-          .catch(() => {
-            select.dataset.currentStatus = previousStatus;
-            select.value = previousStatus;
-            updateCardStatus(card, previousStatus);
-          })
-          .finally(() => {
-            select.disabled = false;
-          });
+        moveCardToStatusColumn(card, nextStatus);
+
+        try {
+          const data = await postTaskStatus(taskId, nextStatus);
+          const persistedStatus = data.status;
+          select.value = persistedStatus;
+          select.dataset.currentStatus = persistedStatus;
+          updateCardStatus(card, persistedStatus);
+          moveCardToStatusColumn(card, persistedStatus);
+        } catch (error) {
+          select.value = previousStatus;
+          select.dataset.currentStatus = previousStatus;
+          updateCardStatus(card, previousStatus);
+          moveCardToStatusColumn(card, previousStatus);
+          showStatusUpdateError(error.message);
+        } finally {
+          select.disabled = false;
+        }
       });
     });
   }
@@ -155,6 +206,7 @@
 
   initDragAndDrop();
   initStatusControls();
+  recalculateColumnCounts();
   setInterval(refreshBoard, 15000);
   document.addEventListener('visibilitychange', ()=>{
     if (!document.hidden) refreshBoard();

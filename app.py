@@ -6969,10 +6969,9 @@ def design_tasks_json():
 
 
 def _extract_design_status_value():
-    payload = request.get_json(silent=True) if request.is_json else None
-    if payload and "status" in payload:
-        status_value = payload.get("status")
-    else:
+    payload = request.get_json(silent=True) or {}
+    status_value = payload.get("status")
+    if status_value is None:
         status_value = request.form.get("status")
     if isinstance(status_value, str):
         return status_value.strip()
@@ -6981,8 +6980,11 @@ def _extract_design_status_value():
 
 def _apply_design_task_status_update(task, status_value):
     allowed_statuses = set(_design_status_options_for(task.task_type))
+    if not isinstance(status_value, str) or not status_value:
+        return False, "Missing status value."
     if status_value not in allowed_statuses:
-        return False
+        return False, "Invalid status value."
+
     task.status = status_value
     task.updated_at = datetime.datetime.utcnow()
     if (
@@ -6995,7 +6997,7 @@ def _apply_design_task_status_update(task, status_value):
             url_for("design_task_detail", task_id=task.id),
             commit=False,
         )
-    return True
+    return True, None
 
 
 @app.route("/design/tasks/<int:task_id>/update_status", methods=["POST"])
@@ -7004,30 +7006,31 @@ def design_task_update_status(task_id):
     task = DesignTask.query.get_or_404(task_id)
     role = (current_user.role or "").lower()
     if not (current_user.is_admin or "design" in role):
-        abort(403)
+        return jsonify({"ok": False, "message": "You are not allowed to update task status."}), 403
+
     status_value = _extract_design_status_value()
-    if not _apply_design_task_status_update(task, status_value):
-        return ("Invalid status", 400)
-    db.session.commit()
-    return {"ok": True, "status": status_value}
+    is_valid, error_message = _apply_design_task_status_update(task, status_value)
+    if not is_valid:
+        return jsonify({"ok": False, "message": error_message or "Invalid status."}), 400
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to persist task status."}), 500
+
+    return jsonify({
+        "ok": True,
+        "task_id": task.id,
+        "status": task.status,
+        "has_pending_inputs": bool(task.has_pending_inputs),
+    })
 
 
 @app.route("/design/tasks/<int:task_id>/status", methods=["POST"])
 @login_required
 def design_task_status(task_id):
-    task = DesignTask.query.get_or_404(task_id)
-    role = (current_user.role or "").lower()
-    if not (current_user.is_admin or "design" in role):
-        abort(403)
-
-    status_value = _extract_design_status_value()
-    if not _apply_design_task_status_update(task, status_value):
-        return ("Invalid status", 400)
-    db.session.commit()
-    if request.is_json:
-        return {"ok": True, "status": status_value}
-    flash("Task status updated.", "success")
-    return redirect(url_for("design_tasks"))
+    return design_task_update_status(task_id)
 
 
 @app.route("/design/tasks/<int:task_id>", methods=["GET", "POST"])
