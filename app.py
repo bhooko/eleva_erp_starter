@@ -890,6 +890,20 @@ def _parse_bom_package_inputs(package):
     return payload if isinstance(payload, dict) else {}
 
 
+def _bom_line_spec_required(item):
+    """Treat specification as mandatory for most classes (all classified lines)."""
+    return bool(item and item.part_class_id)
+
+
+def _bom_package_missing_spec_items(package_id):
+    items = BOMItem.query.filter_by(bom_package_id=package_id).all()
+    return [
+        item
+        for item in items
+        if _bom_line_spec_required(item) and not (item.specification or "").strip()
+    ]
+
+
 def _normalize_package_status(value):
     normalized = (value or "").strip().lower()
     if normalized in {"draft", "final"}:
@@ -7268,7 +7282,17 @@ def design_task_detail(task_id):
             package = BOMPackage.query.get_or_404(package_id)
             if package.bom and package.bom.design_task_id != task.id:
                 abort(404)
-            package.status = "final" if action == "finalize_bom_package" else "draft"
+            if action == "finalize_bom_package":
+                missing_spec_items = _bom_package_missing_spec_items(package.id)
+                if missing_spec_items:
+                    flash(
+                        f"Cannot finalize. {len(missing_spec_items)} BOM line(s) are missing Specification.",
+                        "danger",
+                    )
+                    return redirect(url_for("design_task_detail", task_id=task.id))
+                package.status = "final"
+            else:
+                package.status = "draft"
             db.session.commit()
             flash(
                 "Package finalized." if package.status == "final" else "Package unlocked.",
@@ -7347,6 +7371,11 @@ def design_task_detail(task_id):
                 if not line:
                     continue
                 section_name = line.section.section_name if line.section else None
+                stage_name = (
+                    line.section.stage.stage_name
+                    if line.section and line.section.stage
+                    else None
+                )
                 item_code = (
                     line.part_class.name if line.part_class else line.ref_key or "Item"
                 )
@@ -7356,8 +7385,11 @@ def design_task_detail(task_id):
                         bom_package_id=package.id,
                         part_class_id=line.part_class_id,
                         item_code=item_code,
-                        description=line.specification_text,
+                        description=None,
                         category=section_name,
+                        stage=stage_name,
+                        section_title=section_name,
+                        specification=None,
                         unit=line.unit,
                         quantity_required=final_qty,
                         stage_id=None,
@@ -7385,10 +7417,9 @@ def design_task_detail(task_id):
             if not item_code:
                 flash("Item name/description is required.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
-            stage_id_value = request.form.get("stage_id") or (
-                default_stage.id if default_stage else None
-            )
-            stage_id = int(stage_id_value) if stage_id_value else None
+            stage_value = (request.form.get("stage") or "").strip() or None
+            section_title = (request.form.get("section_title") or "").strip() or None
+            specification = (request.form.get("specification") or "").strip() or None
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
             item = BOMItem(
@@ -7396,14 +7427,20 @@ def design_task_detail(task_id):
                 bom_package_id=package.id,
                 part_class_id=part_class_id,
                 item_code=item_code,
-                description=request.form.get("item_description"),
-                category=request.form.get("category"),
+                description=specification,
+                category=section_title,
+                stage=stage_value,
+                section_title=section_title,
+                specification=specification,
                 unit=request.form.get("unit"),
                 quantity_required=float(request.form.get("quantity_required") or 0),
-                stage_id=stage_id,
+                stage_id=(default_stage.id if default_stage else None),
                 remarks=request.form.get("remarks"),
                 is_generated=False,
             )
+            if _bom_line_spec_required(item) and not specification:
+                flash("Specification is required for this BOM line.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             db.session.add(item)
             _notify_assignee(
                 f"Task '{task.description or task.project_label}' was updated by {current_user.display_name}.",
@@ -7418,19 +7455,22 @@ def design_task_detail(task_id):
             if item.bom_package and item.bom_package.status == "final":
                 flash("Unlock the package before editing items.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
-            stage_id_raw = request.form.get("stage_id") or None
-            stage_id = int(stage_id_raw) if stage_id_raw else None
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
             item.part_class_id = part_class_id
             item.item_code = (request.form.get("item_code") or "").strip()
-            item.description = request.form.get("item_description")
-            item.category = request.form.get("category")
+            item.stage = (request.form.get("stage") or "").strip() or None
+            item.section_title = (request.form.get("section_title") or "").strip() or None
+            item.specification = (request.form.get("specification") or "").strip() or None
+            item.description = item.specification
+            item.category = item.section_title
             item.unit = request.form.get("unit")
             item.quantity_required = float(request.form.get("quantity_required") or 0)
-            item.stage_id = stage_id
             item.remarks = request.form.get("remarks")
             item.is_generated = bool(item.is_generated)
+            if _bom_line_spec_required(item) and not (item.specification or "").strip():
+                flash("Specification is required for this BOM line.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             db.session.commit()
             flash("BOM item updated.", "success")
         elif action == "delete_bom_item":
@@ -7561,6 +7601,13 @@ def design_task_detail(task_id):
     package_input_values = {
         package.id: _parse_bom_package_inputs(package) for package in bom_packages
     }
+    bom_package_spec_summary = {
+        package.id: {
+            "total": len(bom_items_by_package.get(package.id, [])),
+            "missing": len(_bom_package_missing_spec_items(package.id)),
+        }
+        for package in bom_packages
+    }
 
     return render_template(
         "design_task_detail.html",
@@ -7574,6 +7621,7 @@ def design_task_detail(task_id):
         bom_template_options=bom_template_options,
         bom_template_map=bom_template_map,
         package_input_values=package_input_values,
+        bom_package_spec_summary=bom_package_spec_summary,
         related_drawing_sites=related_drawing_sites,
         can_edit_bom=can_edit_bom,
         can_link_project=can_link_project,
@@ -8417,8 +8465,8 @@ def design_drawing_site_detail(site_id: int):
         stage_counter = Counter()
         for item in bom.items:
             stage_name = None
-            if item.stage:
-                stage_name = item.stage.name
+            if item.procurement_stage:
+                stage_name = item.procurement_stage.name
             elif default_stage:
                 stage_name = default_stage.name
             stage_counter[stage_name or "Unassigned"] += 1
@@ -8554,23 +8602,25 @@ def design_drawing_site_detail(site_id: int):
             return redirect(url_for("design_drawing_site_detail", site_id=site.id))
 
         if action == "bom_item" and bom:
-            stage_id_value = request.form.get("stage_id") or (
-                default_stage.id if default_stage else None
-            )
-            stage_id = int(stage_id_value) if stage_id_value else None
             package = _get_or_create_default_bom_package(bom)
             item = BOMItem(
                 bom_id=bom.id,
                 bom_package_id=package.id,
                 item_code=request.form.get("item_code"),
-                description=request.form.get("item_description"),
-                category=request.form.get("category"),
+                description=(request.form.get("specification") or "").strip() or None,
+                category=(request.form.get("section_title") or "").strip() or None,
+                stage=(request.form.get("stage") or "").strip() or None,
+                section_title=(request.form.get("section_title") or "").strip() or None,
+                specification=(request.form.get("specification") or "").strip() or None,
                 unit=request.form.get("unit"),
                 quantity_required=float(request.form.get("quantity_required") or 0),
-                stage_id=stage_id,
+                stage_id=(default_stage.id if default_stage else None),
                 remarks=request.form.get("remarks"),
                 is_generated=False,
             )
+            if _bom_line_spec_required(item) and not (item.specification or "").strip():
+                flash("Specification is required for this BOM line.", "danger")
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id))
             db.session.add(item)
             db.session.commit()
             flash("BOM item added.", "success")
@@ -8719,6 +8769,9 @@ def duplicate_bom(bom_id: int):
                     item_code=item.item_code,
                     description=item.description,
                     category=item.category,
+                    stage=item.stage,
+                    section_title=item.section_title,
+                    specification=item.specification,
                     unit=item.unit,
                     quantity_required=item.quantity_required,
                     stage_id=item.stage_id,
@@ -9408,7 +9461,7 @@ def generate_po_from_bom(bom_id):
                             "bom_qty": bom_qty,
                             "ordered_qty": ordered_qty or 0,
                             "quantity_to_order": quantity_to_order,
-                            "stage_name": item.stage.name if item.stage else (default_stage.name if default_stage else "—"),
+                            "stage_name": item.procurement_stage.name if item.procurement_stage else (default_stage.name if default_stage else "—"),
                             "unit_price": unit_price,
                         }
                     )
@@ -13888,6 +13941,18 @@ def ensure_bom_columns():
         cur.execute(
             "CREATE INDEX IF NOT EXISTS ix_bom_item_stage_id ON bom_item (stage_id);"
         )
+
+    if "stage" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN stage TEXT;")
+        added_cols.append("stage")
+
+    if "section_title" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN section_title TEXT;")
+        added_cols.append("section_title")
+
+    if "specification" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN specification TEXT;")
+        added_cols.append("specification")
 
     if "part_class_id" not in bom_item_cols:
         cur.execute("ALTER TABLE bom_item ADD COLUMN part_class_id INTEGER;")
