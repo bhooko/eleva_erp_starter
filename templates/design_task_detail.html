@@ -508,6 +508,8 @@
                     {% for item in bom_items_by_package.get(package.id, []) %}
                     {% set row_label = (item.item_code or '') ~ ' ' ~ (item.specification or item.description or '') %}
                     {% set form_id = 'bom-item-' ~ item.id %}
+                    {% set pending_req = pending_spec_requests_by_line.get(item.id) %}
+                    {% set latest_req = latest_spec_requests_by_line.get(item.id) %}
                     {% if can_edit_bom %}
                     <form id="{{ form_id }}" method="POST" class="hidden">
                       {{ csrf_field() }}
@@ -536,8 +538,19 @@
                       <td class="py-2">
                           <input form="{{ form_id }}" type="text" name="section_title" value="{{ item.section_title or item.category or '' }}" class="w-36 rounded-lg border-violet-300 bg-violet-50/60 text-xs text-slate-900" />
                       </td>
-                      <td class="py-2">
+                      <td class="py-2 space-y-1">
                           <textarea form="{{ form_id }}" name="specification" rows="2" class="w-52 rounded-lg border-rose-300 bg-rose-50/60 text-xs text-slate-900" required>{{ item.specification or item.description or '' }}</textarea>
+                          {% if pending_req %}
+                          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800">Spec Change Requested</span>
+                          <div class="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded p-1 max-w-56">
+                            <p><span class="font-semibold">Reason:</span> {{ pending_req.reason }}</p>
+                            {% if pending_req.suggested_alternative %}
+                            <p><span class="font-semibold">Suggestion:</span> {{ pending_req.suggested_alternative }}</p>
+                            {% endif %}
+                          </div>
+                          {% elif latest_req %}
+                          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] {% if latest_req.status == 'Approved' %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-700{% endif %}">Latest Request: {{ latest_req.status }}</span>
+                          {% endif %}
                       </td>
                       <td class="py-2">
                           <input form="{{ form_id }}" type="text" name="unit" value="{{ item.unit }}" class="w-20 rounded-lg border-slate-200 text-xs" />
@@ -558,18 +571,29 @@
                           <input form="{{ form_id }}" type="text" name="remarks" value="{{ item.remarks }}" class="w-32 rounded-lg border-slate-200 text-xs" />
                       </td>
                       <td class="py-2">
-                          <div class="flex items-center gap-2">
-                            <button form="{{ form_id }}" type="submit" name="action" value="update_bom_item" class="px-2 py-1 rounded border text-xs">Save</button>
-                            <button
-                              form="{{ form_id }}"
-                              type="submit"
-                              name="action"
-                              value="delete_bom_item"
-                              class="px-2 py-1 rounded border border-rose-200 text-xs text-rose-600"
-                              onclick="return confirm('Delete this item?')"
-                            >
-                              Delete
-                            </button>
+                          <div class="flex flex-col items-start gap-2">
+                            <div class="flex items-center gap-2">
+                              <button form="{{ form_id }}" type="submit" name="action" value="update_bom_item" class="px-2 py-1 rounded border text-xs">Save</button>
+                              {% if pending_req and is_design_user %}
+                              <button form="{{ form_id }}" type="submit" name="action" value="approve_spec_change" class="px-2 py-1 rounded border border-emerald-300 text-emerald-700 text-xs">Approve + Save</button>
+                              {% endif %}
+                              <button
+                                form="{{ form_id }}"
+                                type="submit"
+                                name="action"
+                                value="delete_bom_item"
+                                class="px-2 py-1 rounded border border-rose-200 text-xs text-rose-600"
+                                onclick="return confirm('Delete this item?')"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                            {% if pending_req and is_design_user %}
+                            <div class="flex items-center gap-2">
+                              <input form="{{ form_id }}" type="text" name="resolution_notes" class="w-44 rounded border border-slate-200 text-[10px] px-2 py-1" placeholder="Rejection note (optional)" />
+                              <button form="{{ form_id }}" type="submit" name="action" value="reject_spec_change" class="px-2 py-1 rounded border border-rose-300 text-rose-700 text-xs">Reject</button>
+                            </div>
+                            {% endif %}
                           </div>
                       </td>
                         {% else %}

@@ -234,6 +234,16 @@ def _parse_optional_int(value):
         return None
 
 
+def _is_purchase_user(user) -> bool:
+    role = (getattr(user, "role", "") or "").strip().lower()
+    return bool(getattr(user, "is_admin", False) or "purchase" in role)
+
+
+def _is_design_user(user) -> bool:
+    role = (getattr(user, "role", "") or "").strip().lower()
+    return bool(getattr(user, "is_admin", False) or "design" in role)
+
+
 def _product_option_label(product):
     if not product:
         return ""
@@ -6380,6 +6390,7 @@ from eleva_app.models import (
     BomTemplateSection,
     BomTemplateStage,
     BOMPackage,
+    BOMSpecChangeRequest,
     PartClass,
     DrawingComment,
     DrawingHistory,
@@ -7078,6 +7089,8 @@ def design_task_status(task_id):
 def design_task_detail(task_id):
     task = DesignTask.query.get_or_404(task_id)
     role = (current_user.role or "").lower()
+    is_design_user = _is_design_user(current_user)
+    is_purchase_user = _is_purchase_user(current_user)
     can_edit_bom = current_user.is_admin or any(
         keyword in role for keyword in ["design", "purchase", "project", "installation"]
     )
@@ -7116,6 +7129,8 @@ def design_task_detail(task_id):
             "generate_bom_package",
             "add_bom_item",
             "update_bom_item",
+            "approve_spec_change",
+            "reject_spec_change",
             "delete_bom_item",
         }
         if action in bom_actions and not can_edit_bom:
@@ -7486,7 +7501,7 @@ def design_task_detail(task_id):
             )
             db.session.commit()
             flash("BOM item added.", "success")
-        elif action == "update_bom_item":
+        elif action in {"update_bom_item", "approve_spec_change", "reject_spec_change"}:
             item_id = request.form.get("item_id")
             item = BOMItem.query.get_or_404(item_id)
             if item.bom and item.bom.design_task_id != task.id:
@@ -7494,9 +7509,31 @@ def design_task_detail(task_id):
             if item.bom_package and item.bom_package.status == "final":
                 flash("Unlock the package before editing items.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
+
+            active_request = (
+                BOMSpecChangeRequest.query.filter_by(bom_line_id=item.id, status="Pending")
+                .order_by(BOMSpecChangeRequest.requested_at.desc(), BOMSpecChangeRequest.id.desc())
+                .first()
+            )
+
+            if action == "reject_spec_change":
+                if not is_design_user:
+                    abort(403)
+                if not active_request:
+                    flash("No pending spec change request found for this BOM line.", "warning")
+                    return redirect(url_for("design_task_detail", task_id=task.id))
+                active_request.status = "Rejected"
+                active_request.resolved_by = current_user.id
+                active_request.resolved_at = datetime.datetime.utcnow()
+                active_request.resolution_notes = (request.form.get("resolution_notes") or "").strip() or None
+                db.session.commit()
+                flash("Spec change request rejected.", "info")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
             suggested_part_id = _parse_optional_int(request.form.get("suggested_part_id"))
+            old_specification = (item.specification or "").strip()
             item.part_class_id = part_class_id
             item.suggested_part_id = suggested_part_id
             item.item_code = (request.form.get("item_code") or "").strip()
@@ -7515,8 +7552,40 @@ def design_task_detail(task_id):
             if _bom_line_spec_required(item) and not (item.specification or "").strip():
                 flash("Specification is required for this BOM line.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
+
+            new_specification = (item.specification or "").strip()
+            spec_changed = new_specification != old_specification
+            requires_design_authority = spec_changed or action == "approve_spec_change"
+            if requires_design_authority and not is_design_user:
+                flash("Only Design can modify BOM specifications.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            if active_request and spec_changed and action != "approve_spec_change":
+                flash("Use 'Approve + Save' to apply requested specification changes.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+
+            if action == "approve_spec_change":
+                if not active_request:
+                    flash("No pending spec change request found for this BOM line.", "warning")
+                    return redirect(url_for("design_task_detail", task_id=task.id))
+                active_request.status = "Approved"
+                active_request.resolved_by = current_user.id
+                active_request.resolved_at = datetime.datetime.utcnow()
+                active_request.resolution_notes = (request.form.get("resolution_notes") or "").strip() or None
+
+            if spec_changed and item.bom:
+                item.bom.revision_number = (item.bom.revision_number or 0) + 1
+                item.bom.last_modified_at = datetime.datetime.utcnow()
+                linked_po_lines = PurchaseOrderItem.query.filter_by(source_bom_line_id=item.id).all()
+                for po_line in linked_po_lines:
+                    po_line.is_out_of_sync = True
+
             db.session.commit()
-            flash("BOM item updated.", "success")
+            flash(
+                "BOM item updated and spec change request approved."
+                if action == "approve_spec_change"
+                else "BOM item updated.",
+                "success",
+            )
         elif action == "delete_bom_item":
             item_id = request.form.get("item_id")
             item = BOMItem.query.get_or_404(item_id)
@@ -7609,6 +7678,21 @@ def design_task_detail(task_id):
             bom_items_by_package[package.id] = package_items
             for item in package_items:
                 all_bom_items.append({"package": package, "item": item})
+    pending_spec_requests_by_line = {}
+    latest_spec_requests_by_line = {}
+    if bom:
+        bom_line_ids = [entry["item"].id for entry in all_bom_items]
+        if bom_line_ids:
+            all_requests = (
+                BOMSpecChangeRequest.query.filter(BOMSpecChangeRequest.bom_line_id.in_(bom_line_ids))
+                .order_by(BOMSpecChangeRequest.requested_at.desc(), BOMSpecChangeRequest.id.desc())
+                .all()
+            )
+            for req in all_requests:
+                latest_spec_requests_by_line.setdefault(req.bom_line_id, req)
+                if req.status == "Pending":
+                    pending_spec_requests_by_line.setdefault(req.bom_line_id, req)
+
     related_drawing_sites = []
     users = User.query.order_by(User.first_name, User.username).all()
     project_options = (
@@ -7678,8 +7762,12 @@ def design_task_detail(task_id):
         bom_template_map=bom_template_map,
         package_input_values=package_input_values,
         bom_package_spec_summary=bom_package_spec_summary,
+        pending_spec_requests_by_line=pending_spec_requests_by_line,
+        latest_spec_requests_by_line=latest_spec_requests_by_line,
         related_drawing_sites=related_drawing_sites,
         can_edit_bom=can_edit_bom,
+        is_design_user=is_design_user,
+        is_purchase_user=is_purchase_user,
         can_link_project=can_link_project,
         project_options=project_options,
         drawing_site_options=drawing_site_options,
@@ -9455,6 +9543,7 @@ def purchase_order_detail_view(po_id: int):
     )
     issue_products = []
     seen_products = set()
+    po_line_request_map = {}
     for item in po.items or []:
         product_id = item.product_id or item.part_id
         if product_id and product_id not in seen_products:
@@ -9466,13 +9555,80 @@ def purchase_order_detail_view(po_id: int):
             )
             seen_products.add(product_id)
 
+    if po.items:
+        line_ids = [line.id for line in po.items]
+        change_requests = (
+            BOMSpecChangeRequest.query.filter(BOMSpecChangeRequest.po_line_id.in_(line_ids))
+            .order_by(BOMSpecChangeRequest.requested_at.desc(), BOMSpecChangeRequest.id.desc())
+            .all()
+        )
+        for req in change_requests:
+            po_line_request_map.setdefault(req.po_line_id, req)
+
     return render_template(
         "purchase_order_detail.html",
         po=po,
         vendor_issues=vendor_issues,
         issue_products=issue_products,
         issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
+        po_line_request_map=po_line_request_map,
+        po_has_out_of_sync_lines=any(bool(line.is_out_of_sync) for line in (po.items or [])),
+        is_purchase_user=_is_purchase_user(current_user),
     )
+
+
+@app.route("/purchase/orders/<int:po_id>/request-spec-change", methods=["POST"])
+@login_required
+def purchase_order_request_spec_change(po_id: int):
+    ensure_bootstrap()
+    if not _is_purchase_user(current_user):
+        abort(403)
+
+    po = PurchaseOrder.query.options(subqueryload(PurchaseOrder.items)).get_or_404(po_id)
+    po_line_id = _parse_optional_int(request.form.get("po_line_id"))
+    reason = (request.form.get("reason") or "").strip()
+    suggested_alternative = (request.form.get("suggested_alternative") or "").strip() or None
+
+    if not po_line_id:
+        flash("Please select a PO line for spec change request.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    po_line = next((line for line in (po.items or []) if line.id == po_line_id), None)
+    if not po_line:
+        flash("PO line not found.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    bom_line_id = po_line.source_bom_line_id or po_line.bom_item_id
+    if not bom_line_id:
+        flash("This line is not linked to a BOM line. Spec change can be requested only for BOM-linked lines.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    if not reason:
+        flash("Reason is required for spec change request.", "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    existing_pending = BOMSpecChangeRequest.query.filter_by(
+        bom_line_id=bom_line_id,
+        po_line_id=po_line.id,
+        status="Pending",
+    ).first()
+    if existing_pending:
+        flash("A pending spec change request already exists for this PO line.", "warning")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+    request_entry = BOMSpecChangeRequest(
+        bom_line_id=bom_line_id,
+        po_line_id=po_line.id,
+        requested_by=current_user.id,
+        requested_at=datetime.datetime.utcnow(),
+        reason=reason,
+        suggested_alternative=suggested_alternative,
+        status="Pending",
+    )
+    db.session.add(request_entry)
+    db.session.commit()
+    flash("Spec change request submitted to Design.", "success")
+    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
 
 @app.route("/purchase/orders/<int:po_id>/issues", methods=["POST"])
@@ -14157,6 +14313,12 @@ def ensure_bom_columns():
             "ALTER TABLE bill_of_materials ADD COLUMN drawing_site_id INTEGER;"
         )
         added_cols.append("drawing_site_id")
+    if "revision_number" not in bom_cols:
+        cur.execute("ALTER TABLE bill_of_materials ADD COLUMN revision_number INTEGER DEFAULT 1;")
+        added_cols.append("revision_number")
+    if "last_modified_at" not in bom_cols:
+        cur.execute("ALTER TABLE bill_of_materials ADD COLUMN last_modified_at DATETIME;")
+        added_cols.append("last_modified_at")
 
     if added_cols:
         cur.execute("CREATE INDEX IF NOT EXISTS ix_bill_of_materials_drawing_site_id ON bill_of_materials (drawing_site_id);")
@@ -14252,6 +14414,10 @@ def ensure_bom_columns():
         cur.execute(
             "UPDATE purchase_order SET expected_delivery = expected_delivery_date WHERE expected_delivery IS NULL AND expected_delivery_date IS NOT NULL;"
         )
+    if "revision_number" in bom_cols:
+        cur.execute(
+            "UPDATE bill_of_materials SET revision_number = 1 WHERE revision_number IS NULL OR revision_number < 1;"
+        )
 
     conn.commit()
     conn.close()
@@ -14344,6 +14510,10 @@ def ensure_purchase_order_item_columns():
         cur.execute("ALTER TABLE purchase_order_item ADD COLUMN item_code TEXT;")
         added.append("item_code")
         col_names.add("item_code")
+    if "is_out_of_sync" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN is_out_of_sync INTEGER DEFAULT 0;")
+        added.append("is_out_of_sync")
+        col_names.add("is_out_of_sync")
 
     item_code_notnull = col_info.get("item_code", [None, None, None, 0])[3] == 1
     if item_code_notnull:
@@ -14420,6 +14590,41 @@ def ensure_purchase_order_item_columns():
         print(f"✅ Auto-added in purchase_order_item: {', '.join(added)}")
     if not added and not item_code_notnull:
         print("✔️ purchase_order_item OK")
+
+
+def ensure_bom_spec_change_request_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_bom_spec_change_request_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bom_spec_change_requests (
+            id INTEGER PRIMARY KEY,
+            bom_line_id INTEGER NOT NULL,
+            po_line_id INTEGER,
+            requested_by INTEGER NOT NULL,
+            requested_at DATETIME,
+            reason TEXT NOT NULL,
+            suggested_alternative TEXT,
+            status TEXT NOT NULL DEFAULT 'Pending',
+            resolved_by INTEGER,
+            resolved_at DATETIME,
+            resolution_notes TEXT
+        );
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_bom_spec_change_requests_bom_line_id ON bom_spec_change_requests (bom_line_id);"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_bom_spec_change_requests_po_line_id ON bom_spec_change_requests (po_line_id);"
+    )
+
+    conn.commit()
+    conn.close()
 
 
 def ensure_vendor_product_rate_table():
@@ -14714,6 +14919,7 @@ def bootstrap_db():
     ensure_bom_package_table()
     ensure_bom_package_backfill()
     ensure_purchase_order_item_columns()
+    ensure_bom_spec_change_request_table()
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
     ensure_vendor_contact_table()
