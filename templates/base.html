@@ -21,6 +21,108 @@
     })();
   </script>
 
+  <script>
+    (function () {
+      const THEME_ORDER = ['warm-modern', 'metallic-elevate', 'eleva-signature', 'india'];
+      const THEME_KEY = 'eleva:theme';
+      const AUTOCYCLE_KEY = 'eleva:theme_autocycle';
+      const RESTORE_THEME_KEY = 'eleva:theme_autocycle_restore_theme';
+      const DEFAULT_THEME = 'warm-modern';
+      const INTERVAL_MS = 3000;
+
+      const applyTheme = (themeName) => {
+        const targetTheme = THEME_ORDER.includes(themeName) ? themeName : DEFAULT_THEME;
+        document.documentElement.setAttribute('data-theme', targetTheme);
+        localStorage.setItem(THEME_KEY, targetTheme);
+      };
+
+      const getCurrentTheme = () => {
+        const savedTheme = localStorage.getItem(THEME_KEY);
+        const activeTheme = savedTheme || document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
+        return THEME_ORDER.includes(activeTheme) ? activeTheme : DEFAULT_THEME;
+      };
+
+      const getNextTheme = () => {
+        const currentTheme = getCurrentTheme();
+        const currentIndex = THEME_ORDER.indexOf(currentTheme);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % THEME_ORDER.length : 0;
+        return THEME_ORDER[nextIndex];
+      };
+
+      const stopCycle = () => {
+        if (window.__elevaThemeCycleTimer) {
+          clearInterval(window.__elevaThemeCycleTimer);
+          window.__elevaThemeCycleTimer = null;
+        }
+      };
+
+      const setToggleUiState = (enabled) => {
+        const toggle = document.getElementById('autoThemeToggle');
+        if (!toggle) {
+          return;
+        }
+
+        const knob = document.getElementById('autoThemeToggleKnob');
+        toggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
+        toggle.classList.toggle('bg-emerald-500/90', enabled);
+        toggle.classList.toggle('border-emerald-300/80', enabled);
+        toggle.classList.toggle('bg-slate-700/70', !enabled);
+        toggle.classList.toggle('border-slate-600/80', !enabled);
+
+        if (knob) {
+          knob.classList.toggle('translate-x-5', enabled);
+          knob.classList.toggle('translate-x-0.5', !enabled);
+        }
+      };
+
+      const startCycle = () => {
+        stopCycle();
+        window.__elevaThemeCycleTimer = setInterval(() => {
+          const nextTheme = getNextTheme();
+          applyTheme(nextTheme);
+        }, INTERVAL_MS);
+      };
+
+      const setAutoCycleEnabled = (enabled) => {
+        const isEnabled = localStorage.getItem(AUTOCYCLE_KEY) === '1';
+
+        if (enabled) {
+          if (!isEnabled) {
+            localStorage.setItem(RESTORE_THEME_KEY, getCurrentTheme());
+          }
+          localStorage.setItem(AUTOCYCLE_KEY, '1');
+          startCycle();
+        } else {
+          localStorage.setItem(AUTOCYCLE_KEY, '0');
+          stopCycle();
+          const restoreTheme = localStorage.getItem(RESTORE_THEME_KEY) || DEFAULT_THEME;
+          applyTheme(restoreTheme);
+        }
+
+        setToggleUiState(enabled);
+      };
+
+      window.__elevaSetThemeAutoCycle = setAutoCycleEnabled;
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const toggle = document.getElementById('autoThemeToggle');
+        const autoCycleEnabled = localStorage.getItem(AUTOCYCLE_KEY) === '1';
+        setToggleUiState(autoCycleEnabled);
+
+        if (autoCycleEnabled) {
+          startCycle();
+        }
+
+        if (toggle) {
+          toggle.addEventListener('click', () => {
+            const currentlyEnabled = localStorage.getItem(AUTOCYCLE_KEY) === '1';
+            setAutoCycleEnabled(!currentlyEnabled);
+          });
+        }
+      });
+    })();
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1205,6 +1307,21 @@
 
       <!-- Spacer + user -->
       <div class="ml-auto flex items-center gap-3">
+        <div class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-800/60 px-3 py-2">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Auto Theme</span>
+          <button
+            type="button"
+            id="autoThemeToggle"
+            role="switch"
+            aria-checked="false"
+            class="relative inline-flex h-6 w-11 items-center rounded-full border border-slate-600/80 bg-slate-700/70 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+          >
+            <span
+              id="autoThemeToggleKnob"
+              class="pointer-events-none inline-block h-5 w-5 translate-x-0.5 transform rounded-full bg-white shadow transition-transform duration-200"
+            ></span>
+          </button>
+        </div>
         {% if current_user.is_authenticated %}
           <div class="relative" id="notificationWrapper">
             <button type="button" id="notificationToggle" class="relative inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/70 text-slate-200 hover:bg-slate-700/60">
