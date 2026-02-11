@@ -2217,6 +2217,7 @@ class PartClass(db.Model):
     active = db.Column(db.Boolean, default=True)
     sort_order = db.Column(db.Integer, default=0)
     associated_sections = db.Column(db.Text, nullable=True)
+    primary_part_id = db.Column(db.Integer, nullable=True)
 
 
 class BomTemplate(db.Model):
@@ -2446,6 +2447,7 @@ class BOMItem(db.Model):
     )
     source_ref_key = db.Column(db.String(120), nullable=True)
     is_generated = db.Column(db.Boolean, default=False)
+    suggested_part_id = db.Column(db.Integer, nullable=True)
 
     bom = db.relationship("BillOfMaterials", backref="items")
     bom_package = db.relationship("BOMPackage", backref="items")

@@ -23,26 +23,30 @@
   </div>
 
   <div class="rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden">
-    <div class="grid grid-cols-12 gap-2 px-4 py-3 text-xs uppercase tracking-wide text-slate-500 border-b border-slate-800">
+    <div class="grid grid-cols-14 gap-2 px-4 py-3 text-xs uppercase tracking-wide text-slate-500 border-b border-slate-800">
       <div class="col-span-3">Name</div>
       <div class="col-span-4">Description</div>
+      <div class="col-span-2">Primary Part</div>
       <div class="col-span-2">Sort Order</div>
       <div class="col-span-1">Status</div>
       <div class="col-span-2 text-right">Actions</div>
     </div>
     <div id="classesBody" class="divide-y divide-slate-800">
       {% for part_class in part_classes %}
-      <div class="part-class-row grid grid-cols-12 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition"
+      <div class="part-class-row grid grid-cols-14 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition"
            data-id="{{ part_class.id }}"
            data-name="{{ part_class.name }}"
            data-description="{{ part_class.description or '' }}"
            data-active="{{ 1 if part_class.active else 0 }}"
            data-sort="{{ part_class.sort_order or 0 }}"
+           data-primary-part-id="{{ part_class.primary_part_id or "" }}"
+           data-primary-part-name="{{ primary_part_labels.get(part_class.id) or "" }}"
            data-sections='{{ part_class_section_map[part_class.id]|tojson }}'>
         <div class="col-span-3 font-semibold text-slate-100">
           <span class="name-text">{{ part_class.name }}</span>
         </div>
         <div class="col-span-4 text-slate-400 description-text">{{ part_class.description or '—' }}</div>
+        <div class="col-span-2 text-slate-300 primary-part-text">{{ primary_part_labels.get(part_class.id) or '—' }}</div>
         <div class="col-span-2 text-slate-300 sort-text">{{ part_class.sort_order or 0 }}</div>
         <div class="col-span-1">
           <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-500/20 text-emerald-300' if part_class.active else 'bg-amber-500/20 text-amber-300' }}">
@@ -71,7 +75,7 @@
       <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
         <div>
           <h2 id="modalTitle" class="text-lg font-semibold text-slate-100">Edit Part Class</h2>
-          <p class="text-xs text-slate-500">Update names, descriptions, and availability.</p>
+          <p class="text-xs text-slate-500">Update names, descriptions, primary part suggestion, and availability.</p>
         </div>
         <button id="closeModalBtn" class="w-9 h-9 inline-flex items-center justify-center rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition">✕</button>
       </div>
@@ -83,6 +87,16 @@
         <div class="space-y-2">
           <label class="text-xs uppercase tracking-wide text-slate-400">Description</label>
           <textarea id="classDescriptionInput" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes"></textarea>
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-slate-400">Primary Part (Suggested)</label>
+          <input id="primaryPartSearchInput" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" placeholder="Search parts" />
+          <select id="classPrimaryPartInput" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+            <option value="">— None —</option>
+            {% for part in parts %}
+              <option value="{{ part.id }}">{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="space-y-2">
           <label class="text-xs uppercase tracking-wide text-slate-400">Associated Sections</label>
@@ -123,6 +137,8 @@
   const classSortInput = document.getElementById('classSortInput');
   const classActiveToggle = document.getElementById('classActiveToggle');
   const classSectionsInput = document.getElementById('classSectionsInput');
+  const classPrimaryPartInput = document.getElementById('classPrimaryPartInput');
+  const primaryPartSearchInput = document.getElementById('primaryPartSearchInput');
   const modalError = document.getElementById('modalError');
   const saveModalBtn = document.getElementById('saveModalBtn');
   const addClassBtn = document.getElementById('addClassBtn');
@@ -199,6 +215,9 @@
       classDescriptionInput.value = '';
       classSortInput.value = '0';
       setSectionSelections([]);
+      classPrimaryPartInput.value = '';
+      primaryPartSearchInput.value = '';
+      filterPrimaryPartOptions('');
       setActiveButton(true);
       setModalVisibility(true);
       classNameInput.focus();
@@ -216,6 +235,9 @@
     classDescriptionInput.value = data.description || '';
     classSortInput.value = data.sort_order ?? 0;
     setSectionSelections(data.associated_sections || []);
+    classPrimaryPartInput.value = data.primary_part_id || '';
+    primaryPartSearchInput.value = '';
+    filterPrimaryPartOptions('');
     setActiveButton(!!data.is_active);
     setModalVisibility(true);
     classNameInput.focus();
@@ -262,7 +284,8 @@
         description: row.dataset.description,
         is_active: nextState,
         sort_order: row.dataset.sort,
-        associated_sections: getRowSections(row)
+        associated_sections: getRowSections(row),
+        primary_part_id: row.dataset.primaryPartId || null
       });
     }
   });
@@ -272,9 +295,12 @@
     row.dataset.description = data.description || '';
     row.dataset.active = data.is_active ? '1' : '0';
     row.dataset.sort = data.sort_order ?? 0;
+    row.dataset.primaryPartId = data.primary_part_id || '';
+    row.dataset.primaryPartName = data.primary_part_name || '';
     row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.querySelector('.name-text').textContent = data.name;
     row.querySelector('.description-text').textContent = data.description || '—';
+    row.querySelector('.primary-part-text').textContent = data.primary_part_name || '—';
     row.querySelector('.sort-text').textContent = data.sort_order ?? 0;
 
     const badge = row.querySelector('.status-badge');
@@ -289,16 +315,19 @@
 
   const insertRow = (data) => {
     const row = document.createElement('div');
-    row.className = 'part-class-row grid grid-cols-12 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition';
+    row.className = 'part-class-row grid grid-cols-14 gap-2 px-4 py-4 items-center text-sm text-slate-200 hover:bg-slate-900/60 transition';
     row.dataset.id = data.id;
     row.dataset.name = data.name;
     row.dataset.description = data.description || '';
     row.dataset.active = data.is_active ? '1' : '0';
     row.dataset.sort = data.sort_order ?? 0;
+    row.dataset.primaryPartId = data.primary_part_id || '';
+    row.dataset.primaryPartName = data.primary_part_name || '';
     row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.innerHTML = `
       <div class="col-span-3 font-semibold text-slate-100"><span class="name-text">${data.name}</span></div>
       <div class="col-span-4 text-slate-400 description-text">${data.description || '—'}</div>
+      <div class="col-span-2 text-slate-300 primary-part-text">${data.primary_part_name || '—'}</div>
       <div class="col-span-2 text-slate-300 sort-text">${data.sort_order ?? 0}</div>
       <div class="col-span-1">
         <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${data.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${data.is_active ? 'Active' : 'Inactive'}</span>
@@ -323,6 +352,22 @@
     });
     rows.forEach((row) => classesBody.appendChild(row));
   };
+
+
+  const filterPrimaryPartOptions = (query) => {
+    const normalizedQuery = (query || '').trim().toLowerCase();
+    Array.from(classPrimaryPartInput.options).forEach((option, index) => {
+      if (index === 0) {
+        option.hidden = false;
+        return;
+      }
+      option.hidden = normalizedQuery && !option.textContent.toLowerCase().includes(normalizedQuery);
+    });
+  };
+
+  primaryPartSearchInput.addEventListener('input', () => {
+    filterPrimaryPartOptions(primaryPartSearchInput.value);
+  });
 
   const updatePartClass = async (id, payload) => {
     const response = await fetch(`/api/part_classes/${id}/update`, {
@@ -359,6 +404,7 @@
       description: classDescriptionInput.value.trim(),
       is_active: activeState,
       sort_order: classSortInput.value,
+      primary_part_id: classPrimaryPartInput.value || null,
       associated_sections: Array.from(classSectionsInput.selectedOptions).map((option) => option.value)
     };
 
@@ -393,7 +439,8 @@
       const name = row.dataset.name.toLowerCase();
       const desc = row.dataset.description.toLowerCase();
       const status = row.dataset.active === '1' ? 'active' : 'inactive';
-      const matches = name.includes(query) || desc.includes(query) || status.includes(query);
+      const primaryPart = (row.dataset.primaryPartName || '').toLowerCase();
+      const matches = name.includes(query) || desc.includes(query) || status.includes(query) || primaryPart.includes(query);
       row.classList.toggle('hidden', !matches);
     });
   });

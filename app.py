@@ -207,6 +207,12 @@ def _parse_bool_payload(value, *, default=False):
 
 
 def _part_class_payload(part_class):
+    primary_part_name = None
+    if getattr(part_class, "primary_part_id", None):
+        primary_part = Product.query.get(part_class.primary_part_id)
+        if primary_part:
+            primary_part_name = _product_option_label(primary_part)
+
     return {
         "id": part_class.id,
         "name": part_class.name,
@@ -214,7 +220,27 @@ def _part_class_payload(part_class):
         "is_active": bool(part_class.active),
         "sort_order": part_class.sort_order or 0,
         "associated_sections": _parse_associated_sections(part_class.associated_sections),
+        "primary_part_id": part_class.primary_part_id,
+        "primary_part_name": primary_part_name,
     }
+
+
+def _parse_optional_int(value):
+    if value in (None, "", "null"):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _product_option_label(product):
+    if not product:
+        return ""
+    unit = (product.uom or product.purchase_uom or "").strip()
+    if unit:
+        return f"{product.name} ({unit})"
+    return product.name
 
 
 def _parse_associated_sections(raw_value) -> List[str]:
@@ -7397,6 +7423,11 @@ def design_task_detail(task_id):
                         source_template_line_id=line.id,
                         source_ref_key=line.ref_key,
                         is_generated=True,
+                        suggested_part_id=(
+                            line.part_class.primary_part_id
+                            if line.part_class and line.part_class.primary_part_id
+                            else None
+                        ),
                     )
                 )
                 created_count += 1
@@ -7422,6 +7453,10 @@ def design_task_detail(task_id):
             specification = (request.form.get("specification") or "").strip() or None
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
+            suggested_part_id = _parse_optional_int(request.form.get("suggested_part_id"))
+            part_class = PartClass.query.get(part_class_id) if part_class_id else None
+            if suggested_part_id is None and part_class and part_class.primary_part_id:
+                suggested_part_id = part_class.primary_part_id
             item = BOMItem(
                 bom_id=package.bom_id,
                 bom_package_id=package.id,
@@ -7437,7 +7472,11 @@ def design_task_detail(task_id):
                 stage_id=(default_stage.id if default_stage else None),
                 remarks=request.form.get("remarks"),
                 is_generated=False,
+                suggested_part_id=suggested_part_id,
             )
+            if suggested_part_id and not Product.query.get(suggested_part_id):
+                flash("Suggested part was not found.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             if _bom_line_spec_required(item) and not specification:
                 flash("Specification is required for this BOM line.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
@@ -7457,7 +7496,9 @@ def design_task_detail(task_id):
                 return redirect(url_for("design_task_detail", task_id=task.id))
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
+            suggested_part_id = _parse_optional_int(request.form.get("suggested_part_id"))
             item.part_class_id = part_class_id
+            item.suggested_part_id = suggested_part_id
             item.item_code = (request.form.get("item_code") or "").strip()
             item.stage = (request.form.get("stage") or "").strip() or None
             item.section_title = (request.form.get("section_title") or "").strip() or None
@@ -7468,6 +7509,9 @@ def design_task_detail(task_id):
             item.quantity_required = float(request.form.get("quantity_required") or 0)
             item.remarks = request.form.get("remarks")
             item.is_generated = bool(item.is_generated)
+            if suggested_part_id and not Product.query.get(suggested_part_id):
+                flash("Suggested part was not found.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             if _bom_line_spec_required(item) and not (item.specification or "").strip():
                 flash("Specification is required for this BOM line.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
@@ -7589,6 +7633,16 @@ def design_task_detail(task_id):
         .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
         .all()
     )
+    parts = (
+        Product.query.filter(Product.is_active.is_(True))
+        .order_by(Product.name.asc())
+        .all()
+    )
+    part_class_primary_parts = {
+        part_class.id: part_class.primary_part_id
+        for part_class in part_classes
+        if part_class.primary_part_id
+    }
     bom_template_options = (
         BomTemplate.query.filter(BomTemplate.is_active.is_(True))
         .order_by(BomTemplate.name.asc())
@@ -7618,6 +7672,8 @@ def design_task_detail(task_id):
         bom_items_by_package=bom_items_by_package,
         all_bom_items=all_bom_items,
         part_classes=part_classes,
+        parts=parts,
+        part_class_primary_parts=part_class_primary_parts,
         bom_template_options=bom_template_options,
         bom_template_map=bom_template_map,
         package_input_values=package_input_values,
@@ -7907,6 +7963,18 @@ def part_classes():
         part_class.id: _parse_associated_sections(part_class.associated_sections)
         for part_class in part_classes
     }
+    parts = (
+        Product.query.filter(Product.is_active.is_(True))
+        .order_by(Product.name.asc())
+        .all()
+    )
+    parts_lookup = {part.id: part for part in parts}
+    primary_part_labels = {
+        part_class.id: _product_option_label(parts_lookup.get(part_class.primary_part_id))
+        if part_class.primary_part_id
+        else None
+        for part_class in part_classes
+    }
     section_rows = (
         db.session.query(BomTemplateSection, BomTemplateStage, BomTemplate)
         .join(BomTemplateStage, BomTemplateSection.stage_id == BomTemplateStage.id)
@@ -7930,7 +7998,9 @@ def part_classes():
         "part_classes.html",
         part_classes=part_classes,
         part_class_section_map=part_class_section_map,
+        primary_part_labels=primary_part_labels,
         sections=sections,
+        parts=parts,
     )
 
 
@@ -7956,6 +8026,9 @@ def update_part_class(class_id):
         associated_sections = _serialize_associated_sections(
             payload.get("associated_sections")
         )
+    primary_part_id = part_class.primary_part_id
+    if "primary_part_id" in payload:
+        primary_part_id = _parse_optional_int(payload.get("primary_part_id"))
     sort_order_raw = payload.get("sort_order")
     try:
         sort_order = int(sort_order_raw or 0)
@@ -7967,11 +8040,15 @@ def update_part_class(class_id):
     if _part_class_name_exists(name, exclude_id=part_class.id):
         return jsonify({"error": "Part Class name must be unique."}), 400
 
+    if primary_part_id and not Product.query.get(primary_part_id):
+        return jsonify({"error": "Selected primary part was not found."}), 400
+
     part_class.name = name
     part_class.description = description
     part_class.active = is_active
     part_class.sort_order = sort_order
     part_class.associated_sections = associated_sections
+    part_class.primary_part_id = primary_part_id
     db.session.commit()
     return jsonify(_part_class_payload(part_class))
 
@@ -7984,6 +8061,7 @@ def create_part_class_api():
     name = (payload.get("name") or "").strip()
     description = (payload.get("description") or "").strip() or None
     associated_sections = _serialize_associated_sections(payload.get("associated_sections"))
+    primary_part_id = _parse_optional_int(payload.get("primary_part_id"))
     sort_order_raw = payload.get("sort_order")
     try:
         sort_order = int(sort_order_raw or 0)
@@ -7994,6 +8072,8 @@ def create_part_class_api():
         return jsonify({"error": "Class name must be at least 2 characters."}), 400
     if _part_class_name_exists(name):
         return jsonify({"error": "Part Class name must be unique."}), 400
+    if primary_part_id and not Product.query.get(primary_part_id):
+        return jsonify({"error": "Selected primary part was not found."}), 400
 
     part_class = PartClass(
         name=name,
@@ -8001,6 +8081,7 @@ def create_part_class_api():
         active=True,
         sort_order=sort_order,
         associated_sections=associated_sections,
+        primary_part_id=primary_part_id,
     )
     db.session.add(part_class)
     db.session.commit()
@@ -13378,6 +13459,7 @@ def ensure_part_class_table():
             ("active", "INTEGER DEFAULT 1"),
             ("sort_order", "INTEGER DEFAULT 0"),
             ("associated_sections", "TEXT"),
+            ("primary_part_id", "INTEGER"),
         ],
     )
 
@@ -13969,6 +14051,10 @@ def ensure_bom_columns():
     if "is_generated" not in bom_item_cols:
         cur.execute("ALTER TABLE bom_item ADD COLUMN is_generated INTEGER DEFAULT 0;")
         added_cols.append("is_generated")
+
+    if "suggested_part_id" not in bom_item_cols:
+        cur.execute("ALTER TABLE bom_item ADD COLUMN suggested_part_id INTEGER;")
+        added_cols.append("suggested_part_id")
 
     cur.execute("PRAGMA table_info(purchase_order)")
     po_cols = {row[1] for row in cur.fetchall()}
