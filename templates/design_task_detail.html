@@ -438,7 +438,7 @@
                 <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
                 <label class="space-y-1">
                   <span class="text-sm">Part Class</span>
-                  <select name="part_class_id" class="w-full rounded-lg border-slate-200">
+                  <select name="part_class_id" class="w-full rounded-lg border-slate-200" data-part-class-select>
                     <option value="">Select</option>
                     {% for part in part_classes %}
                     <option value="{{ part.id }}">{{ part.name }}</option>
@@ -469,7 +469,17 @@
                   <span class="text-sm font-semibold text-violet-700">Section</span>
                   <input type="text" name="section_title" class="w-full rounded-lg border-violet-300 bg-violet-50/60 text-slate-900" placeholder="Car Bracket Kit" />
                 </label>
-                <label class="space-y-1 lg:col-span-4">
+                <label class="space-y-1 lg:col-span-2">
+                  <span class="text-sm font-semibold text-emerald-700">Suggested Part</span>
+                  <select name="suggested_part_id" class="w-full rounded-lg border-emerald-300 bg-emerald-50/60 text-slate-900" data-suggested-part-select>
+                    <option value="">— None —</option>
+                    {% for part in parts %}
+                    <option value="{{ part.id }}">{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
+                    {% endfor %}
+                  </select>
+                  <p class="text-[11px] text-emerald-800">Suggested from Part Class. Specification on BOM line is authoritative.</p>
+                </label>
+                <label class="space-y-1 lg:col-span-2">
                   <span class="text-sm">Remarks</span>
                   <input type="text" name="remarks" class="w-full rounded-lg border-slate-200" />
                 </label>
@@ -489,6 +499,7 @@
                       <th class="py-2 text-rose-700">Specification *</th>
                       <th class="py-2">Unit</th>
                       <th class="py-2">Qty</th>
+                      <th class="py-2 text-emerald-700">Suggested Part</th>
                       <th class="py-2">Remarks</th>
                       <th class="py-2">Actions</th>
                     </tr>
@@ -506,7 +517,7 @@
                     <tr data-search-text="{{ row_label|lower }}">
                       <td class="py-2">
                         {% if can_edit_bom %}
-                          <select form="{{ form_id }}" name="part_class_id" class="rounded-lg border-slate-200 text-xs">
+                          <select form="{{ form_id }}" name="part_class_id" class="rounded-lg border-slate-200 text-xs" data-part-class-select>
                             <option value="">—</option>
                             {% for part in part_classes %}
                             <option value="{{ part.id }}" {% if item.part_class_id == part.id %}selected{% endif %}>{{ part.name }}</option>
@@ -535,6 +546,15 @@
                           <input form="{{ form_id }}" type="number" step="0.01" name="quantity_required" value="{{ item.quantity_required }}" class="w-20 rounded-lg border-slate-200 text-xs" />
                       </td>
                       <td class="py-2">
+                          <select form="{{ form_id }}" name="suggested_part_id" class="w-48 rounded-lg border-emerald-300 bg-emerald-50/60 text-xs text-slate-900" data-suggested-part-select>
+                            <option value="">— None —</option>
+                            {% for part in parts %}
+                            <option value="{{ part.id }}" {% if item.suggested_part_id == part.id %}selected{% endif %}>{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
+                            {% endfor %}
+                          </select>
+                          <p class="mt-1 text-[10px] text-emerald-800">Suggested from Part Class. Specification on BOM line is authoritative.</p>
+                      </td>
+                      <td class="py-2">
                           <input form="{{ form_id }}" type="text" name="remarks" value="{{ item.remarks }}" class="w-32 rounded-lg border-slate-200 text-xs" />
                       </td>
                       <td class="py-2">
@@ -561,12 +581,13 @@
                       <td class="py-2">{{ item.specification or item.description or '—' }}</td>
                       <td class="py-2">{{ item.unit }}</td>
                       <td class="py-2">{{ item.quantity_required }}</td>
+                      <td class="py-2">{% if item.suggested_part_id %}{% set sp = parts|selectattr("id", "equalto", item.suggested_part_id)|first %}{{ sp.name if sp else "—" }}{% else %}—{% endif %}</td>
                       <td class="py-2">{{ item.remarks }}</td>
                       <td class="py-2">—</td>
                       {% endif %}
                     </tr>
                     {% else %}
-                    <tr><td colspan="9" class="py-3 text-slate-500">No items in this package yet.</td></tr>
+                    <tr><td colspan="10" class="py-3 text-slate-500">No items in this package yet.</td></tr>
                     {% endfor %}
                   </tbody>
                 </table>
@@ -954,6 +975,7 @@
 </div>
 
 <script>
+  const partClassPrimaryParts = {{ part_class_primary_parts|tojson }};
   const modals = document.querySelectorAll('[data-modal]');
   const toggleModal = (modal, state) => {
     if (!modal) return;
@@ -1026,6 +1048,23 @@
         row.classList.toggle('hidden', searchValue && !haystack.includes(searchValue));
       });
     });
+  });
+
+
+  const syncSuggestedPartFromClass = (partClassSelect) => {
+    const container = partClassSelect.closest('form') || partClassSelect.closest('tr') || document;
+    const suggestedSelect = container.querySelector('[data-suggested-part-select]');
+    if (!suggestedSelect) return;
+    const selectedClassId = partClassSelect.value || '';
+    const suggestedPartId = partClassPrimaryParts[selectedClassId] || null;
+    if (suggestedPartId && !suggestedSelect.value) {
+      suggestedSelect.value = String(suggestedPartId);
+    }
+  };
+
+  document.querySelectorAll('[data-part-class-select]').forEach(select => {
+    select.addEventListener('change', () => syncSuggestedPartFromClass(select));
+    syncSuggestedPartFromClass(select);
   });
 
   const allItemsTable = document.getElementById('allItemsTable');
