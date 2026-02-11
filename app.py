@@ -9001,6 +9001,63 @@ def update_bom_item_stage(item_id: int):
     return redirect(redirect_url)
 
 
+def _resolve_drawing_revision_file_path(file_name: Optional[str]) -> Optional[str]:
+    if not file_name:
+        return None
+    safe_name = os.path.basename(file_name)
+    if not safe_name:
+        return None
+    return os.path.join(app.config["UPLOAD_FOLDER"], safe_name)
+
+
+def _drawing_revision_download_name(revision: DesignDrawingRevision) -> str:
+    drawing = revision.drawing
+    drawing_name = (drawing.name if drawing and drawing.name else f"drawing_{revision.drawing_id}").strip()
+    drawing_slug = secure_filename(drawing_name) or f"drawing_{revision.drawing_id}"
+    extension = os.path.splitext(os.path.basename(revision.file_name or ""))[1]
+    if extension and not re.fullmatch(r"\.[A-Za-z0-9]{1,12}", extension):
+        extension = ""
+    return f"{drawing_slug}_v{revision.version_number}{extension}"
+
+
+@app.route("/design/drawings/<int:drawing_id>/download/latest")
+@login_required
+def download_latest_drawing_revision(drawing_id: int):
+    drawing = DesignDrawing.query.get_or_404(drawing_id)
+    latest_revision = (
+        DesignDrawingRevision.query.filter_by(drawing_id=drawing.id)
+        .order_by(DesignDrawingRevision.version_number.desc(), DesignDrawingRevision.id.desc())
+        .first()
+    )
+    if not latest_revision:
+        abort(404)
+
+    file_path = _resolve_drawing_revision_file_path(latest_revision.file_name)
+    if not file_path or not os.path.exists(file_path):
+        abort(404)
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=_drawing_revision_download_name(latest_revision),
+    )
+
+
+@app.route("/design/drawings/revisions/<int:revision_id>/download")
+@login_required
+def download_drawing_revision(revision_id: int):
+    revision = DesignDrawingRevision.query.options(joinedload(DesignDrawingRevision.drawing)).get_or_404(revision_id)
+    file_path = _resolve_drawing_revision_file_path(revision.file_name)
+    if not file_path or not os.path.exists(file_path):
+        abort(404)
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=_drawing_revision_download_name(revision),
+    )
+
+
 @app.route("/purchase/orders", methods=["GET", "POST"])
 @login_required
 def purchase_orders():
@@ -9265,7 +9322,7 @@ def purchase_orders():
                 part_id=product_id,
                 part_name=item_name,
                 item_code=item_code,
-                description=specs or None,
+                description=item_name or None,
                 specification=specs or None,
                 specification_locked=bool(row_data.get("specification_locked")),
                 unit=unit or None,
