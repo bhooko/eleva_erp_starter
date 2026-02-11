@@ -115,40 +115,73 @@
 
     html[data-theme="metallic-elevate"],
     [data-theme-preview="metallic-elevate"] {
-      color-scheme: dark;
-      --color-base: #0E141A;
-      --color-base-rgb: 14, 20, 26;
-      --color-card: #171F27;
-      --color-card-rgb: 23, 31, 39;
-      --color-primary: #4B8BFF;
-      --color-primary-rgb: 75, 139, 255;
-      --color-secondary: #63A0FF;
-      --color-secondary-rgb: 99, 160, 255;
-      --color-neutral: #232C36;
-      --color-neutral-rgb: 35, 44, 54;
-      --color-surface-2: #202A34;
-      --color-surface-2-rgb: 32, 42, 52;
-      --text-primary: #F0F4F8;
-      --text-secondary: #B4BDC8;
-      --text-muted-contrast: #CBD5E1;
-      --text-muted-soft: #E2E8F0;
-      --text-muted: #9FA8B5;
-      --text-dim: #7C8796;
-      --accent-success: #14B8A6;
-      --accent-success-rgb: 20, 184, 166;
-      --accent-warning: #00E0E0;
-      --accent-warning-rgb: 0, 224, 224;
-      --accent-error: #EF4444;
-      --accent-error-rgb: 239, 68, 68;
-      --border-subtle: #313C48;
-      --stage-cold: #3B82F6;
-      --stage-cold-rgb: 59, 130, 246;
-      --stage-warm: #00E0E0;
-      --stage-warm-rgb: 0, 224, 224;
-      --stage-success: #14B8A6;
-      --stage-success-rgb: 20, 184, 166;
-      --stage-glow: rgba(59, 130, 246, 0.45);
+      color-scheme: light;
+      --color-base: #EFF4FF;
+      --color-base-rgb: 239, 244, 255;
+      --color-card: rgba(255, 255, 255, 0.7);
+      --color-card-rgb: 255, 255, 255;
+      --color-primary: #7C3AED;
+      --color-primary-rgb: 124, 58, 237;
+      --color-secondary: #6D28D9;
+      --color-secondary-rgb: 109, 40, 217;
+      --color-neutral: #D7E1F2;
+      --color-neutral-rgb: 215, 225, 242;
+      --color-surface-2: #E2EAF8;
+      --color-surface-2-rgb: 226, 234, 248;
+      --text-primary: #0F172A;
+      --text-secondary: #1E293B;
+      --text-muted-contrast: #334155;
+      --text-muted-soft: #475569;
+      --text-muted: #475569;
+      --text-dim: #64748B;
+      --accent-success: #16A34A;
+      --accent-success-rgb: 22, 163, 74;
+      --accent-warning: #D97706;
+      --accent-warning-rgb: 217, 119, 6;
+      --accent-error: #DC2626;
+      --accent-error-rgb: 220, 38, 38;
+      --border-subtle: rgba(255, 255, 255, 0.6);
+      --stage-cold: #0284C7;
+      --stage-cold-rgb: 2, 132, 199;
+      --stage-warm: #7C3AED;
+      --stage-warm-rgb: 124, 58, 237;
+      --stage-success: #16A34A;
+      --stage-success-rgb: 22, 163, 74;
+      --stage-glow: rgba(124, 58, 237, 0.35);
       --btn-primary-text: #F8FAFC;
+    }
+
+    html[data-theme="metallic-elevate"] body {
+      background:
+        radial-gradient(42rem 34rem at 8% -10%, rgba(56, 189, 248, 0.24), transparent 62%),
+        radial-gradient(36rem 32rem at 92% 8%, rgba(167, 139, 250, 0.25), transparent 58%),
+        radial-gradient(34rem 28rem at 18% 90%, rgba(196, 181, 253, 0.22), transparent 62%),
+        linear-gradient(145deg, #f7f9ff 0%, #edf4ff 46%, #e9f2ff 100%);
+      background-attachment: fixed;
+    }
+
+    html[data-theme="metallic-elevate"] .bg-white,
+    html[data-theme="metallic-elevate"] .bg-slate-50,
+    html[data-theme="metallic-elevate"] .bg-slate-100,
+    html[data-theme="metallic-elevate"] .bg-slate-900,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/40,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/50,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/60,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/70,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/80,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/90,
+    html[data-theme="metallic-elevate"] .bg-slate-900\/95 {
+      backdrop-filter: blur(14px) saturate(130%);
+      -webkit-backdrop-filter: blur(14px) saturate(130%);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+      border-color: rgba(255, 255, 255, 0.62) !important;
+    }
+
+    html[data-theme="metallic-elevate"] .fixed.inset-0 .bg-slate-900,
+    html[data-theme="metallic-elevate"] [role="dialog"].bg-slate-900,
+    html[data-theme="metallic-elevate"] [role="dialog"].bg-white {
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
     }
 
     html[data-theme="warm-modern"],
@@ -838,34 +871,59 @@
     }
 
     /* Improved table text contrast for dark themes */
-    html[data-theme="eleva-signature"] table th,
-    html[data-theme="metallic-elevate"] table th {
+    html[data-theme="eleva-signature"] table th {
       color: #f3f4f6 !important;
       font-weight: 600 !important;
     }
-    html[data-theme="eleva-signature"] table td,
-    html[data-theme="metallic-elevate"] table td {
+    html[data-theme="eleva-signature"] table td {
       color: #e5e7eb !important;
+    }
+
+    html[data-theme="metallic-elevate"] table th {
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="metallic-elevate"] table td {
+      color: #1e293b !important;
     }
 
     /* FORM FIELDS IN ELEVA DARK THEMES */
     html[data-theme="eleva-signature"] input,
     html[data-theme="eleva-signature"] select,
-    html[data-theme="eleva-signature"] textarea,
-    html[data-theme="metallic-elevate"] input,
-    html[data-theme="metallic-elevate"] select,
-    html[data-theme="metallic-elevate"] textarea {
+    html[data-theme="eleva-signature"] textarea {
       background-color: #111827 !important;   /* dark field */
       color: #e5e7eb !important;              /* light text */
       border: 1px solid #374151 !important;
     }
 
+    html[data-theme="metallic-elevate"] input,
+    html[data-theme="metallic-elevate"] select,
+    html[data-theme="metallic-elevate"] textarea {
+      background-color: rgba(255, 255, 255, 0.82) !important;
+      color: #0f172a !important;
+      border: 1px solid rgba(148, 163, 184, 0.58) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    html[data-theme="metallic-elevate"] input:focus,
+    html[data-theme="metallic-elevate"] select:focus,
+    html[data-theme="metallic-elevate"] textarea:focus {
+      border-color: rgba(var(--color-primary-rgb), 0.75) !important;
+      box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.22) !important;
+      outline: none;
+    }
+
     /* Placeholder styling */
     html[data-theme="eleva-signature"] input::placeholder,
-    html[data-theme="eleva-signature"] textarea::placeholder,
+    html[data-theme="eleva-signature"] textarea::placeholder {
+      color: #6b7280 !important;              /* softer gray */
+    }
+
     html[data-theme="metallic-elevate"] input::placeholder,
     html[data-theme="metallic-elevate"] textarea::placeholder {
-      color: #6b7280 !important;              /* softer gray */
+      color: #64748b !important;
     }
 
     /* Disabled + Readonly fields */
@@ -874,7 +932,13 @@
     html[data-theme="eleva-signature"] select[disabled],
     html[data-theme="eleva-signature"] input[readonly],
     html[data-theme="eleva-signature"] textarea[readonly],
-    html[data-theme="eleva-signature"] select[readonly],
+    html[data-theme="eleva-signature"] select[readonly] {
+      opacity: 1 !important;
+      background-color: #1f2937 !important;   /* slightly lighter dark */
+      color: #9ca3af !important;              /* readable muted text */
+      cursor: not-allowed;
+    }
+
     html[data-theme="metallic-elevate"] input[disabled],
     html[data-theme="metallic-elevate"] textarea[disabled],
     html[data-theme="metallic-elevate"] select[disabled],
@@ -882,15 +946,20 @@
     html[data-theme="metallic-elevate"] textarea[readonly],
     html[data-theme="metallic-elevate"] select[readonly] {
       opacity: 1 !important;
-      background-color: #1f2937 !important;   /* slightly lighter dark */
-      color: #9ca3af !important;              /* readable muted text */
+      background-color: rgba(248, 250, 252, 0.9) !important;
+      color: #475569 !important;
+      border-color: rgba(148, 163, 184, 0.5) !important;
       cursor: not-allowed;
     }
 
-    html[data-theme="eleva-signature"] select option,
-    html[data-theme="metallic-elevate"] select option {
+    html[data-theme="eleva-signature"] select option {
       background-color: #111827 !important;
       color: #e5e7eb !important;
+    }
+
+    html[data-theme="metallic-elevate"] select option {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
     }
 
     .collapsible-card {
