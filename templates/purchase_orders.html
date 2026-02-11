@@ -59,13 +59,15 @@
             </label>
             <label class="space-y-1 md:col-span-3">
               <span class="text-sm">Linked BOM</span>
-              <select name="bom_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+              <select name="bom_id" class="w-full rounded-lg border-slate-200 h-10 px-3" data-bom-select>
                 <option value="">—</option>
                 {% for bom in bom_options %}
                 <option value="{{ bom.id }}">{{ bom.bom_name }} (ID {{ bom.id }})</option>
                 {% endfor %}
               </select>
+              <p class="text-xs text-slate-500">Selecting a BOM opens an apply mode dialog (Replace/Add). BOM specifications are copied as read-only.</p>
             </label>
+            <input type="hidden" name="bom_apply_mode" value="" data-bom-apply-mode />
           </div>
 
           <div class="space-y-3">
@@ -149,6 +151,30 @@
   </div>
 </div>
 
+
+<div id="apply-bom-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur" data-apply-bom-overlay></div>
+  <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <h3 class="text-lg font-semibold text-slate-900">Apply BOM to Purchase Order</h3>
+    <p class="mt-2 text-sm text-slate-600">How would you like to apply BOM items to this Purchase Order?</p>
+    <div class="mt-4 space-y-2">
+      <label class="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2">
+        <input type="radio" name="apply_bom_mode" value="replace" checked class="mt-1" />
+        <span class="text-sm text-slate-700">Replace existing PO items with BOM items</span>
+      </label>
+      <label class="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2">
+        <input type="radio" name="apply_bom_mode" value="add" class="mt-1" />
+        <span class="text-sm text-slate-700">Add BOM items to existing PO items</span>
+      </label>
+    </div>
+    <p class="mt-3 text-xs text-rose-600 hidden" data-apply-bom-error></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700" data-apply-bom-cancel>Cancel</button>
+      <button type="button" class="px-4 py-2 rounded-lg bg-slate-900 text-white" data-apply-bom-confirm>Apply</button>
+    </div>
+  </div>
+</div>
+
 <template id="poItemTemplate">
   <div class="po-item-row group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 ease-out opacity-0 translate-y-2">
     <div class="flex items-start gap-3">
@@ -187,10 +213,17 @@
       <label class="space-y-1 block">
         <span class="text-xs uppercase text-slate-500">Specifications</span>
         <textarea name="item_specs[]" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2" data-specs></textarea>
+        <p class="text-xs text-rose-600 mt-1 hidden" data-unmapped-warning>Part not selected</p>
+        <p class="text-[11px] text-slate-500 mt-1" data-stage-section></p>
       </label>
     </div>
     <input type="hidden" name="item_product_id[]" data-product-id />
     <input type="hidden" name="item_currency[]" value="INR" data-currency />
+    <input type="hidden" name="item_stage[]" data-stage />
+    <input type="hidden" name="item_section_title[]" data-section-title />
+    <input type="hidden" name="item_source_bom_id[]" data-source-bom-id />
+    <input type="hidden" name="item_source_bom_line_id[]" data-source-bom-line-id />
+    <input type="hidden" name="item_spec_locked[]" value="0" data-spec-locked />
   </div>
 </template>
 
@@ -307,6 +340,10 @@
     const subtotalInput = form.querySelector('[name="subtotal_amount"]');
     const grandTotalInput = form.querySelector('[name="grand_total_amount"]');
     const vendorSelect = form.querySelector('[name="vendor_id"]');
+    const bomSelect = form.querySelector('[data-bom-select]');
+    const bomApplyModeInput = form.querySelector('[data-bom-apply-mode]');
+    const applyBomModal = document.getElementById('apply-bom-modal');
+    const applyBomError = applyBomModal ? applyBomModal.querySelector('[data-apply-bom-error]') : null;
     const csrfToken = '{{ csrf_token() }}';
 
     let lastAutoExpected = '';
@@ -426,6 +463,7 @@
       requestAnimationFrame(() => {
         row.classList.remove('opacity-0', 'translate-y-2');
       });
+      clearBomMetadata(row);
       updateTotals();
       updateRemoveButtons();
       return row;
@@ -469,6 +507,79 @@
         input.dataset.autofilled = '1';
         input.dataset.autofilledValue = value || '';
       }
+    };
+
+    const markSpecsReadonly = (row, locked) => {
+      if (!row) {
+        return;
+      }
+      const specsInput = row.querySelector('[data-specs]');
+      const lockInput = row.querySelector('[data-spec-locked]');
+      if (lockInput) {
+        lockInput.value = locked ? '1' : '0';
+      }
+      if (specsInput) {
+        specsInput.readOnly = Boolean(locked);
+        specsInput.classList.toggle('bg-slate-100', Boolean(locked));
+      }
+    };
+
+    const updateStageSectionText = (row) => {
+      if (!row) {
+        return;
+      }
+      const stageInput = row.querySelector('[data-stage]');
+      const sectionInput = row.querySelector('[data-section-title]');
+      const textEl = row.querySelector('[data-stage-section]');
+      if (!textEl) {
+        return;
+      }
+      const stage = stageInput ? stageInput.value.trim() : '';
+      const section = sectionInput ? sectionInput.value.trim() : '';
+      if (!stage && !section) {
+        textEl.textContent = '';
+        return;
+      }
+      textEl.textContent = `Stage: ${stage || '—'} · Section: ${section || '—'}`;
+    };
+
+    const syncUnmappedWarning = (row) => {
+      if (!row) {
+        return;
+      }
+      const productIdInput = row.querySelector('[data-product-id]');
+      const specsInput = row.querySelector('[data-specs]');
+      const warningEl = row.querySelector('[data-unmapped-warning]');
+      if (!warningEl || !specsInput || !productIdInput) {
+        return;
+      }
+      const showWarning = Boolean(specsInput.value.trim()) && !productIdInput.value;
+      warningEl.classList.toggle('hidden', !showWarning);
+    };
+
+    const clearBomMetadata = (row) => {
+      if (!row) {
+        return;
+      }
+      const stageInput = row.querySelector('[data-stage]');
+      const sectionInput = row.querySelector('[data-section-title]');
+      const sourceBomIdInput = row.querySelector('[data-source-bom-id]');
+      const sourceBomLineInput = row.querySelector('[data-source-bom-line-id]');
+      if (stageInput) {
+        stageInput.value = '';
+      }
+      if (sectionInput) {
+        sectionInput.value = '';
+      }
+      if (sourceBomIdInput) {
+        sourceBomIdInput.value = '';
+      }
+      if (sourceBomLineInput) {
+        sourceBomLineInput.value = '';
+      }
+      markSpecsReadonly(row, false);
+      updateStageSectionText(row);
+      syncUnmappedWarning(row);
     };
 
     const searchTimers = new WeakMap();
@@ -585,9 +696,12 @@
         productIdInput.value = part.id || '';
       }
       applyAutofill(unitInput, part.unit || '');
-      applyAutofill(specsInput, part.description || '');
+      if (row.querySelector('[data-spec-locked]')?.value !== '1') {
+        applyAutofill(specsInput, part.description || '');
+      }
       fetchVendorRate(row);
       hideDropdown(row);
+      syncUnmappedWarning(row);
       ensureTrailingBlankRow();
     };
 
@@ -685,9 +799,12 @@
         if (productIdInput) {
           productIdInput.value = '';
         }
-        clearAutoField(unitInput);
-        clearAutoField(specsInput);
+        if (row.querySelector('[data-spec-locked]')?.value !== '1') {
+          clearAutoField(unitInput);
+          clearAutoField(specsInput);
+        }
       }
+      syncUnmappedWarning(row);
       queuePartSearch(input);
       const isLast = itemsContainer && row === itemsContainer.querySelector('.po-item-row:last-child');
       if (isLast && partName) {
@@ -707,6 +824,10 @@
         handlePartNameInput(event.target);
       }
       if (event.target.matches('[data-specs]')) {
+        const lockInput = row ? row.querySelector('[data-spec-locked]') : null;
+        if (lockInput && lockInput.value === '1') {
+          return;
+        }
         event.target.dataset.autofilled = '0';
       }
       if (event.target.matches('[name="item_unit[]"]')) {
@@ -714,6 +835,9 @@
       }
       if (event.target.matches('[name="item_unit_price[]"]')) {
         event.target.dataset.autofilled = '0';
+      }
+      if (row) {
+        syncUnmappedWarning(row);
       }
     });
 
@@ -803,6 +927,7 @@
           delete input.dataset.autofilled;
           delete input.dataset.autofilledValue;
         });
+        clearBomMetadata(row);
       } else {
         row.remove();
       }
@@ -834,6 +959,108 @@
         });
       }
     });
+
+    const openApplyBomModal = (bomId) => {
+      if (!applyBomModal || !bomId) {
+        return;
+      }
+      applyBomModal.dataset.pendingBomId = bomId;
+      if (applyBomError) {
+        applyBomError.classList.add('hidden');
+        applyBomError.textContent = '';
+      }
+      applyBomModal.classList.remove('hidden');
+      applyBomModal.classList.add('flex');
+    };
+
+    const closeApplyBomModal = () => {
+      if (!applyBomModal) {
+        return;
+      }
+      applyBomModal.classList.add('hidden');
+      applyBomModal.classList.remove('flex');
+      delete applyBomModal.dataset.pendingBomId;
+    };
+
+    const applyBomLinesToRows = async (bomId, mode) => {
+      const response = await fetch(`/purchase/bom/${bomId}/po-lines-preview`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error('Unable to load BOM lines.');
+      }
+      const data = await response.json();
+      const lines = Array.isArray(data.lines) ? data.lines : [];
+      if (mode === 'replace' && itemsContainer) {
+        itemsContainer.innerHTML = '';
+      }
+      lines.forEach((line) => {
+        const row = addRow();
+        if (!row) {
+          return;
+        }
+        row.querySelector('[data-part-name]').value = line.item_name || '';
+        row.querySelector('[data-part-name]').dataset.selectedName = line.item_name || '';
+        row.querySelector('[data-product-id]').value = line.part_id || '';
+        row.querySelector('[name="item_qty[]"]').value = line.qty ?? 0;
+        row.querySelector('[name="item_unit[]"]').value = line.unit || '';
+        row.querySelector('[data-specs]').value = line.specification || '';
+        row.querySelector('[data-stage]').value = line.stage || '';
+        row.querySelector('[data-section-title]').value = line.section_title || '';
+        row.querySelector('[data-source-bom-id]').value = line.source_bom_id || '';
+        row.querySelector('[data-source-bom-line-id]').value = line.source_bom_line_id || '';
+        markSpecsReadonly(row, true);
+        updateStageSectionText(row);
+        syncUnmappedWarning(row);
+      });
+      ensureTrailingBlankRow();
+      updateTotals();
+      updateRemoveButtons();
+    };
+
+    if (bomSelect) {
+      bomSelect.addEventListener('change', () => {
+        if (!bomSelect.value) {
+          if (bomApplyModeInput) {
+            bomApplyModeInput.value = '';
+          }
+          return;
+        }
+        openApplyBomModal(bomSelect.value);
+      });
+    }
+
+    if (applyBomModal) {
+      applyBomModal.querySelectorAll('[data-apply-bom-cancel], [data-apply-bom-overlay]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          closeApplyBomModal();
+        });
+      });
+      const confirmButton = applyBomModal.querySelector('[data-apply-bom-confirm]');
+      if (confirmButton) {
+        confirmButton.addEventListener('click', async () => {
+          const bomId = applyBomModal.dataset.pendingBomId;
+          const selectedMode = applyBomModal.querySelector('input[name="apply_bom_mode"]:checked');
+          const mode = selectedMode ? selectedMode.value : 'replace';
+          if (!bomId) {
+            closeApplyBomModal();
+            return;
+          }
+          try {
+            await applyBomLinesToRows(bomId, mode);
+            if (bomApplyModeInput) {
+              bomApplyModeInput.value = mode;
+            }
+            closeApplyBomModal();
+          } catch (error) {
+            if (applyBomError) {
+              applyBomError.textContent = error.message || 'Could not apply BOM lines.';
+              applyBomError.classList.remove('hidden');
+            }
+          }
+        });
+      }
+    }
 
     const createModal = document.getElementById('part-create-modal');
     if (createModal) {
@@ -940,6 +1167,9 @@
         createModal.classList.add('hidden');
         createModal.classList.remove('flex');
       }
+      if (applyBomModal && !applyBomModal.classList.contains('hidden')) {
+        closeApplyBomModal();
+      }
     });
 
     if (vendorSelect) {
@@ -987,6 +1217,21 @@
         }
       });
     }
+
+    form.addEventListener('submit', (event) => {
+      if (!itemsContainer) {
+        return;
+      }
+      const hasBlockedLine = Array.from(itemsContainer.querySelectorAll('.po-item-row')).some((row) => {
+        const specValue = (row.querySelector('[data-specs]')?.value || '').trim();
+        const productId = (row.querySelector('[data-product-id]')?.value || '').trim();
+        return Boolean(specValue) && !productId;
+      });
+      if (hasBlockedLine) {
+        event.preventDefault();
+        alert('Cannot finalize this PO while any line has specification but Part is not selected.');
+      }
+    });
 
     ensureTrailingBlankRow();
     updateTotals();

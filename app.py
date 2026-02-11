@@ -8917,6 +8917,37 @@ def update_bom_item_stage(item_id: int):
 @login_required
 def purchase_orders():
     ensure_bootstrap()
+
+    def _parse_int_value(value):
+        try:
+            return int(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    def _build_po_line_payload_from_bom_item(bom_item):
+        part_id = _parse_int_value(bom_item.suggested_part_id)
+        item_label = (
+            (bom_item.part_class.name if bom_item.part_class else None)
+            or (bom_item.description or "").strip()
+            or (bom_item.item_code or "").strip()
+            or f"BOM Line {bom_item.id}"
+        )
+        specification = (bom_item.specification or "").strip()
+        return {
+            "product_id": part_id,
+            "item_name": item_label,
+            "specification": specification,
+            "unit": (bom_item.unit or "").strip(),
+            "quantity": float(bom_item.quantity_required or 0),
+            "unit_price": None,
+            "currency": "INR",
+            "stage": (bom_item.stage or "").strip() or None,
+            "section_title": (bom_item.section_title or "").strip() or None,
+            "source_bom_id": bom_item.bom_id,
+            "source_bom_line_id": bom_item.id,
+            "specification_locked": True,
+            "is_bom_line": True,
+        }
     if request.method == "POST":
         po_number = request.form.get("po_number") or f"PO-{uuid.uuid4().hex[:6].upper()}"
         project_id = request.form.get("project_id") or None
@@ -8995,6 +9026,24 @@ def purchase_orders():
         item_currencies = request.form.getlist("item_currency[]") or request.form.getlist(
             "item_currency"
         )
+        item_stages = request.form.getlist("item_stage[]") or request.form.getlist(
+            "item_stage"
+        )
+        item_sections = request.form.getlist("item_section_title[]") or request.form.getlist(
+            "item_section_title"
+        )
+        item_source_bom_ids = request.form.getlist("item_source_bom_id[]") or request.form.getlist(
+            "item_source_bom_id"
+        )
+        item_source_bom_line_ids = request.form.getlist(
+            "item_source_bom_line_id[]"
+        ) or request.form.getlist("item_source_bom_line_id")
+        item_spec_locks = request.form.getlist("item_spec_locked[]") or request.form.getlist(
+            "item_spec_locked"
+        )
+
+        bom_apply_mode = (request.form.get("bom_apply_mode") or "").strip().lower()
+        combined_rows = []
 
         has_valid_items = False
         invalid_rows = False
@@ -9008,6 +9057,11 @@ def purchase_orders():
             len(item_qtys),
             len(item_unit_prices),
             len(item_currencies),
+            len(item_stages),
+            len(item_sections),
+            len(item_source_bom_ids),
+            len(item_source_bom_line_ids),
+            len(item_spec_locks),
         )
 
         for idx in range(row_count):
@@ -9021,6 +9075,18 @@ def purchase_orders():
                 (item_currencies[idx] if idx < len(item_currencies) else "").strip()
                 or "INR"
             )
+            stage_value = (item_stages[idx] if idx < len(item_stages) else "").strip()
+            section_title = (item_sections[idx] if idx < len(item_sections) else "").strip()
+            source_bom_id = _parse_int_value(
+                item_source_bom_ids[idx] if idx < len(item_source_bom_ids) else None
+            )
+            source_bom_line_id = _parse_int_value(
+                item_source_bom_line_ids[idx] if idx < len(item_source_bom_line_ids) else None
+            )
+            spec_locked_flag = (
+                (item_spec_locks[idx] if idx < len(item_spec_locks) else "").strip().lower()
+                in {"1", "true", "yes"}
+            )
 
             if (
                 not item_name
@@ -9030,23 +9096,11 @@ def purchase_orders():
                 and not unit_price_raw
             ):
                 continue
-            if not item_name:
-                invalid_rows = True
-                continue
-            product_id = None
-            if product_id_raw:
-                try:
-                    product_id = int(product_id_raw)
-                except (TypeError, ValueError):
-                    product_id = None
 
             try:
                 quantity = float(quantity_raw or 0)
             except (TypeError, ValueError):
                 quantity = 0
-            if quantity <= 0:
-                invalid_rows = True
-                continue
 
             unit_price = None
             if unit_price_raw not in (None, ""):
@@ -9054,6 +9108,57 @@ def purchase_orders():
                     unit_price = float(unit_price_raw)
                 except (TypeError, ValueError):
                     unit_price = None
+
+            combined_rows.append(
+                {
+                    "item_name": item_name,
+                    "product_id": _parse_int_value(product_id_raw),
+                    "specification": specs,
+                    "unit": unit,
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "currency": currency,
+                    "stage": stage_value or None,
+                    "section_title": section_title or None,
+                    "source_bom_id": source_bom_id,
+                    "source_bom_line_id": source_bom_line_id,
+                    "specification_locked": spec_locked_flag,
+                }
+            )
+
+        if bom_id_raw and bom_apply_mode in {"replace", "add"}:
+            bom_items = (
+                BOMItem.query.options(joinedload(BOMItem.part_class))
+                .filter(BOMItem.bom_id == int(bom_id_raw))
+                .order_by(BOMItem.id.asc())
+                .all()
+            )
+            mapped_rows = [
+                _build_po_line_payload_from_bom_item(bom_item)
+                for bom_item in bom_items
+                if (bom_item.quantity_required or 0) > 0
+            ]
+            if bom_apply_mode == "replace":
+                combined_rows = mapped_rows
+            else:
+                combined_rows.extend(mapped_rows)
+
+        for row_data in combined_rows:
+            item_name = (row_data.get("item_name") or "").strip()
+            product_id = _parse_int_value(row_data.get("product_id"))
+            specs = (row_data.get("specification") or "").strip()
+            unit = (row_data.get("unit") or "").strip()
+            quantity = float(row_data.get("quantity") or 0)
+            unit_price = row_data.get("unit_price")
+            currency = (row_data.get("currency") or "INR").strip() or "INR"
+
+            if not item_name or quantity <= 0:
+                invalid_rows = True
+                continue
+
+            if specs and not product_id and (row_data.get("source_bom_line_id") or row_data.get("specification_locked")):
+                invalid_rows = True
+                continue
 
             line_total = quantity * unit_price if unit_price is not None else None
             if unit_price is not None:
@@ -9067,17 +9172,23 @@ def purchase_orders():
                 item_code = _ensure_product_sku(product_record) or f"PROD-{product_id}"
             poi = PurchaseOrderItem(
                 purchase_order_id=po.id,
-                bom_item_id=None,
+                bom_item_id=_parse_int_value(row_data.get("source_bom_line_id")),
                 product_id=product_id,
                 part_id=product_id,
                 part_name=item_name,
                 item_code=item_code,
                 description=specs or None,
+                specification=specs or None,
+                specification_locked=bool(row_data.get("specification_locked")),
                 unit=unit or None,
                 quantity_ordered=quantity,
                 unit_price=unit_price,
                 total_amount=line_total,
                 currency=currency,
+                stage=row_data.get("stage") or None,
+                section_title=row_data.get("section_title") or None,
+                source_bom_id=_parse_int_value(row_data.get("source_bom_id")),
+                source_bom_line_id=_parse_int_value(row_data.get("source_bom_line_id")),
             )
             db.session.add(poi)
             has_valid_items = True
@@ -9106,7 +9217,10 @@ def purchase_orders():
             if not has_valid_items:
                 flash("Add at least one valid line item before saving.", "danger")
             else:
-                flash("Each line item needs a part name and quantity.", "danger")
+                flash(
+                    "Each line item needs part name, quantity, and mapped part when specification is provided.",
+                    "danger",
+                )
             return redirect(url_for("purchase_orders"))
 
         po.subtotal_amount = subtotal_amount
@@ -9143,6 +9257,46 @@ def purchase_orders():
         bom_items=bom_items,
         bom_options=bom_options,
     )
+
+
+@app.route("/purchase/bom/<int:bom_id>/po-lines-preview")
+@login_required
+def purchase_bom_po_lines_preview(bom_id: int):
+    ensure_bootstrap()
+    bom = BillOfMaterials.query.get_or_404(bom_id)
+    bom_items = (
+        BOMItem.query.options(joinedload(BOMItem.part_class))
+        .filter(BOMItem.bom_id == bom.id)
+        .order_by(BOMItem.id.asc())
+        .all()
+    )
+
+    payload = []
+    for bom_item in bom_items:
+        qty_value = float(bom_item.quantity_required or 0)
+        if qty_value <= 0:
+            continue
+        item_name = (
+            (bom_item.part_class.name if bom_item.part_class else None)
+            or (bom_item.description or "").strip()
+            or (bom_item.item_code or "").strip()
+            or f"BOM Line {bom_item.id}"
+        )
+        payload.append(
+            {
+                "source_bom_id": bom.id,
+                "source_bom_line_id": bom_item.id,
+                "part_id": bom_item.suggested_part_id,
+                "item_name": item_name,
+                "specification": (bom_item.specification or "").strip(),
+                "qty": qty_value,
+                "unit": (bom_item.unit or "").strip(),
+                "stage": (bom_item.stage or "").strip(),
+                "section_title": (bom_item.section_title or "").strip(),
+            }
+        )
+
+    return jsonify({"bom_id": bom.id, "lines": payload})
 
 
 @app.route("/purchase/vendor-rate")
