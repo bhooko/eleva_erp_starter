@@ -163,15 +163,6 @@
                       >
                         Upload revision
                       </button>
-                      {% if latest_revision %}
-                      <a
-                        href="{{ url_for('static', filename='uploads/' ~ latest_revision.file_name) }}"
-                        class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50"
-                        download
-                      >
-                        Download latest
-                      </a>
-                      {% endif %}
                     </div>
                   </div>
                 </div>
@@ -181,12 +172,17 @@
                   <div class="flex items-start gap-3 text-xs text-slate-600">
                     <div class="px-2 py-1 bg-slate-100 rounded-lg text-slate-700">v{{ rev.version_number }}</div>
                     <div class="flex-1">
-                      <p class="text-sm font-semibold text-slate-800">{{ rev.change_reason or 'Uploaded revision' }}</p>
+                      <p class="text-sm font-semibold text-slate-800">
+                        {{ rev.change_reason or 'Uploaded revision' }}
+                        {% if loop.first %}
+                        <span class="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Latest</span>
+                        {% endif %}
+                      </p>
                       <p class="text-xs text-slate-500">
                         {{ rev.created_at|format_india_datetime('%d %b %Y, %I:%M %p') if rev.created_at else '' }}
                         · {{ rev.changed_by.display_name if rev.changed_by else 'Design' }}
                       </p>
-                      <a href="{{ url_for('static', filename='uploads/' ~ rev.file_name) }}" class="text-orange-600 text-xs" download>Download</a>
+                      <a href="{{ url_for('download_drawing_revision', revision_id=rev.id) }}" class="{{ 'inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-lg bg-slate-900 text-white text-xs hover:bg-slate-800' if loop.first else 'text-orange-600 text-xs' }}" download>Download</a>
                     </div>
                   </div>
                   {% else %}
