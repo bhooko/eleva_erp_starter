@@ -55,6 +55,11 @@
       Generated from BOM <a href="{{ url_for('generate_po_from_bom', bom_id=po.bom.id) }}" class="text-orange-600 hover:underline">{{ po.bom.bom_name }}</a>.
     </div>
     {% endif %}
+    {% if po_has_out_of_sync_lines %}
+    <div class="text-sm border border-amber-300 bg-amber-50 text-amber-900 rounded-lg p-3">
+      <span class="font-semibold">BOM specification updated. Re-apply BOM to sync.</span>
+    </div>
+    {% endif %}
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -83,6 +88,8 @@
             <th class="py-2 px-3">Unit Price</th>
             <th class="py-2 px-3">Currency</th>
             <th class="py-2 px-3">Total</th>
+            <th class="py-2 px-3">BOM Sync</th>
+            <th class="py-2 px-3">Spec Change</th>
           </tr>
         </thead>
         <tbody class="divide-y">
@@ -100,9 +107,57 @@
             <td class="py-2 px-3">{{ item.unit_price if item.unit_price is not none else '—' }}</td>
             <td class="py-2 px-3">{{ item.currency or '—' }}</td>
             <td class="py-2 px-3">{{ item.total_amount if item.total_amount is not none else '—' }}</td>
+            <td class="py-2 px-3">
+              {% if item.is_out_of_sync %}
+              <span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">Out of sync</span>
+              {% else %}
+              <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800">Synced</span>
+              {% endif %}
+            </td>
+            <td class="py-2 px-3">
+              {% set req = po_line_request_map.get(item.id) %}
+              {% if req %}
+              <div class="space-y-1">
+                <span class="px-2 py-1 rounded-full text-xs {% if req.status == 'Pending' %}bg-amber-100 text-amber-800{% elif req.status == 'Approved' %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-700{% endif %}">{{ req.status }}</span>
+                <p class="text-xs text-slate-600">{{ req.reason }}</p>
+                {% if req.suggested_alternative %}
+                <p class="text-xs text-slate-500">Alt: {{ req.suggested_alternative }}</p>
+                {% endif %}
+              </div>
+              {% endif %}
+              {% if is_purchase_user and item.source_bom_line_id %}
+              <button type="button" class="mt-1 px-2 py-1 rounded border border-amber-300 text-amber-800 text-xs hover:bg-amber-50" onclick="openSpecChangeModal('{{ item.id }}')">Request Spec Change</button>
+              <div id="spec-change-modal-{{ item.id }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 px-4">
+                <div class="w-full max-w-lg rounded-xl bg-white border border-slate-200 shadow-2xl p-4" onclick="event.stopPropagation()">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold">Request Spec Change</h3>
+                    <button type="button" class="text-slate-500" onclick="closeSpecChangeModal('{{ item.id }}')">✕</button>
+                  </div>
+                  <form method="POST" action="{{ url_for('purchase_order_request_spec_change', po_id=po.id) }}" class="space-y-3">
+                    {{ csrf_field() }}
+                    <input type="hidden" name="po_line_id" value="{{ item.id }}" />
+                    <label class="block space-y-1">
+                      <span class="text-xs text-slate-600">Reason <span class="text-rose-600">*</span></span>
+                      <textarea name="reason" rows="3" required class="w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Why the BOM specification cannot be sourced"></textarea>
+                    </label>
+                    <label class="block space-y-1">
+                      <span class="text-xs text-slate-600">Suggested alternative (optional)</span>
+                      <textarea name="suggested_alternative" rows="2" class="w-full rounded-lg border border-slate-200 px-3 py-2" placeholder="Alternate part/spec"></textarea>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                      <button type="button" class="px-3 py-1.5 rounded border" onclick="closeSpecChangeModal('{{ item.id }}')">Cancel</button>
+                      <button type="submit" class="px-3 py-1.5 rounded bg-slate-900 text-white">Submit Request</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              {% elif not req %}
+              <span class="text-xs text-slate-400">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="py-3 px-3 text-slate-500">No items yet.</td></tr>
+          <tr><td colspan="9" class="py-3 px-3 text-slate-500">No items yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -186,4 +241,19 @@
     </div>
   </div>
 </div>
+<script>
+  function openSpecChangeModal(itemId) {
+    const modal = document.getElementById(`spec-change-modal-${itemId}`);
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeSpecChangeModal(itemId) {
+    const modal = document.getElementById(`spec-change-modal-${itemId}`);
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+</script>
 {% endblock %}

@@ -2383,6 +2383,8 @@ class BillOfMaterials(db.Model):
     )
     bom_name = db.Column(db.String(150), nullable=False)
     status = db.Column(db.String(50), nullable=False, default="draft")
+    revision_number = db.Column(db.Integer, nullable=False, default=1)
+    last_modified_at = db.Column(db.DateTime, nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -2658,6 +2660,7 @@ class PurchaseOrderItem(db.Model):
     section_title = db.Column(db.String(200), nullable=True)
     source_bom_id = db.Column(db.Integer, db.ForeignKey("bill_of_materials.id"), nullable=True)
     source_bom_line_id = db.Column(db.Integer, db.ForeignKey("bom_item.id"), nullable=True)
+    is_out_of_sync = db.Column(db.Boolean, nullable=False, default=False)
 
     purchase_order = db.relationship("PurchaseOrder", backref="items")
     bom_item = db.relationship("BOMItem", foreign_keys=[bom_item_id])
@@ -2678,6 +2681,27 @@ class BookInventory(db.Model):
     last_po_id = db.Column(db.Integer, db.ForeignKey("purchase_order.id"), nullable=True)
 
     last_po = db.relationship("PurchaseOrder")
+
+
+class BOMSpecChangeRequest(db.Model):
+    __tablename__ = "bom_spec_change_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bom_line_id = db.Column(db.Integer, db.ForeignKey("bom_item.id"), nullable=False, index=True)
+    po_line_id = db.Column(db.Integer, db.ForeignKey("purchase_order_item.id"), nullable=True, index=True)
+    requested_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    requested_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+    reason = db.Column(db.Text, nullable=False)
+    suggested_alternative = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Pending")
+    resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolution_notes = db.Column(db.Text, nullable=True)
+
+    bom_line = db.relationship("BOMItem", backref="spec_change_requests")
+    po_line = db.relationship("PurchaseOrderItem", backref="spec_change_requests")
+    requester = db.relationship("User", foreign_keys=[requested_by])
+    resolver = db.relationship("User", foreign_keys=[resolved_by])
 
 
 class Product(db.Model):
