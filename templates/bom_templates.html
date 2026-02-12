@@ -32,7 +32,7 @@
         <input name="description" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Optional description" />
       </div>
       <div class="lg:col-span-4">
-        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Create Template</button>
+        <button type="submit" class="primary-submit px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Create Template</button>
       </div>
     </form>
   </div>
@@ -47,7 +47,7 @@
             <option value="{{ lift }}" {% if lift_filter == lift %}selected{% endif %}>{{ lift }}</option>
           {% endfor %}
         </select>
-        <button class="px-3 py-2 rounded-xl bg-slate-800 text-sm text-slate-100">Filter</button>
+        <button type="submit" class="primary-submit px-3 py-2 rounded-xl bg-slate-800 text-sm text-slate-100">Filter</button>
       </form>
     </div>
     <div class="overflow-x-auto">
@@ -84,13 +84,13 @@
                   {{ csrf_field() }}
                   <input type="hidden" name="action" value="duplicate_template" />
                   <input type="hidden" name="template_id" value="{{ template.id }}" />
-                  <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Duplicate</button>
+                  <button type="submit" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Duplicate</button>
                 </form>
                 <form method="post">
                   {{ csrf_field() }}
                   <input type="hidden" name="action" value="toggle_template" />
                   <input type="hidden" name="template_id" value="{{ template.id }}" />
-                  <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
+                  <button type="submit" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
                     {{ 'Deactivate' if template.is_active else 'Activate' }}
                   </button>
                 </form>
@@ -121,7 +121,7 @@
         <input name="part_class_description" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2" placeholder="Optional notes" />
       </div>
       <div class="lg:col-span-3">
-        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Part Class</button>
+        <button type="submit" class="primary-submit px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Part Class</button>
       </div>
     </form>
     <div class="overflow-x-auto">
@@ -152,7 +152,7 @@
                 {{ csrf_field() }}
                 <input type="hidden" name="action" value="toggle_part_class" />
                 <input type="hidden" name="part_class_id" value="{{ part_class.id }}" />
-                <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
+                <button type="submit" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">
                   {{ 'Deactivate' if part_class.active else 'Activate' }}
                 </button>
               </form>
