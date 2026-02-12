@@ -1707,9 +1707,9 @@
           {% set store_visible = current_user.is_admin or 'store' in role_key %}
 
           {% if design_visible %}
-          {% set design_endpoints = ['design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit','part_classes'] %}
+          {% set design_endpoints = ['design_overview','design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit','part_classes'] %}
           <div class="space-y-1">
-            <a href="{{ url_for('design_tasks') }}"
+            <a href="{{ url_for('design_overview') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in design_endpoints else '' }}">
               <span class="nav-icon inline-flex w-8 h-8 items-center justify-center rounded-lg bg-slate-800/70 border border-slate-700/70">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1719,8 +1719,12 @@
               <span class="label text-[15px] flex-1">Design</span>
             </a>
             <div class="pl-12 space-y-1">
+              <a href="{{ url_for('design_overview') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'design_overview' else '' }}">
+                <span class="label">Design Metrics</span>
+              </a>
               <a href="{{ url_for('design_tasks') }}"
-                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in design_endpoints else '' }}">
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['design_tasks', 'design_task_detail'] else '' }}">
                 <span class="label">Design Tasks</span>
               </a>
               <a href="{{ url_for('design_drawing_history') }}"
