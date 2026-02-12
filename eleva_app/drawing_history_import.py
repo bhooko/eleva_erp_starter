@@ -6,13 +6,8 @@ from flask import current_app
 
 from eleva_app import db
 from eleva_app.models import DrawingSite, DrawingVersion
-from eleva_app.uploads import _extract_tabular_upload
-from app import (
-    UploadStageTimeoutError,
-    clean_str,
-    parse_int_field,
-    stringify_cell,
-)
+from eleva_app.common_import_utils import clean_str, parse_int_field, stringify_cell
+from eleva_app.uploads import UploadStageTimeoutError, _extract_tabular_upload
 from utils.excel_utils import iter_rows_from_xlsx
 
 

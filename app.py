@@ -34,6 +34,7 @@ from sqlalchemy.orm import joinedload, subqueryload, load_only, object_session
 from sqlalchemy.engine.url import make_url
 
 from eleva_app import create_app, csrf, db, login_manager
+from eleva_app.common_import_utils import clean_str, parse_int_field, stringify_cell
 from utils.notifications import create_notification
 
 def _is_password_hashed(value: Optional[str]) -> bool:
@@ -889,6 +890,7 @@ def _get_or_create_design_task_bom(task, *, bom_name="Task BOM"):
         design_task_id=task.id,
         bom_name=bom_name,
         status="draft",
+        bom_type=BOM_TYPE_MAIN,
         created_by_user_id=current_user.id,
     )
     db.session.add(bom)
@@ -1069,42 +1071,6 @@ def parse_optional_date(value):
         return datetime.datetime.strptime(value, "%Y-%m-%d").date()
     except (TypeError, ValueError):
         return None
-
-
-def clean_str(value):
-    """
-    Convert any Excel cell value to a clean string.
-
-    - None -> ""
-    - Numbers -> their string representation
-    - Datetime/date -> ISO-ish string "YYYY-MM-DD" if appropriate, else default str(value)
-    - Str -> stripped
-    """
-    if value is None:
-        return ""
-    # If it's a date/datetime, prefer ISO string
-    try:
-        from datetime import date as _dt_date, datetime as _dt_datetime  # avoid circular issues
-    except Exception:
-        _dt_date, _dt_datetime = None, None  # fallback
-
-    if _dt_date is not None and isinstance(value, (_dt_date, _dt_datetime)):
-        try:
-            return value.strftime("%Y-%m-%d")
-        except Exception:
-            return str(value).strip()
-
-    return str(value).strip()
-
-
-def parse_int_field(value, label):
-    value = clean_str(value)
-    if value is None or value == "":
-        return None, None
-    try:
-        return int(value), None
-    except (TypeError, ValueError):
-        return None, f"{label} must be a whole number."
 
 
 def parse_float_field(value, label):
@@ -1337,20 +1303,6 @@ def parse_preferred_service_days_from_string(value):
     if error:
         return [], error
     return parsed, None
-
-
-def stringify_cell(value):
-    if value is None:
-        return None
-    if isinstance(value, datetime.datetime):
-        value = value.date()
-    if isinstance(value, datetime.time):
-        return value.strftime("%H:%M")
-    if isinstance(value, datetime.date):
-        return value.isoformat()
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    return str(value).strip()
 
 
 def _customer_upload_row(customer):
@@ -6442,6 +6394,8 @@ from eleva_app.models import (
     ClientRequirementForm,
     TaskTemplate,
     User,
+    BOM_TYPE_CHOICES,
+    BOM_TYPE_MAIN,
 )
 
 from eleva_app.uploads import (
@@ -6463,6 +6417,54 @@ from eleva_app.drawing_history_import import (
     REQUIRED_HEADERS as DRAWING_REQUIRED_HEADERS,
     process_drawing_history_upload,
 )
+
+
+
+BOM_TYPE_LABELS = {
+    "main": "Main",
+    "fabrication": "Fabrication",
+    "civil": "Civil",
+    "supplementary": "Supplementary",
+}
+
+
+def _normalize_bom_type(value, *, default=BOM_TYPE_MAIN):
+    candidate = clean_str(value).lower()
+    if candidate in BOM_TYPE_CHOICES:
+        return candidate
+    return default
+
+
+def _get_or_create_drawing_site_main_bom(site):
+    main_bom = (
+        BillOfMaterials.query.filter(
+            BillOfMaterials.drawing_site_id == site.id,
+            func.coalesce(BillOfMaterials.bom_type, BOM_TYPE_MAIN) == BOM_TYPE_MAIN,
+        )
+        .order_by(BillOfMaterials.created_at.asc().nullsfirst(), BillOfMaterials.id.asc())
+        .first()
+    )
+    if main_bom:
+        if not main_bom.bom_type:
+            main_bom.bom_type = BOM_TYPE_MAIN
+        return main_bom
+
+    main_bom = BillOfMaterials(
+        bom_name=f"Main BOM - {site.project_no or site.client_name or 'Site'}",
+        bom_type=BOM_TYPE_MAIN,
+        status="draft",
+        drawing_site_id=site.id,
+        project_id=site.project_id,
+        created_by_user_id=(
+            current_user.id
+            if current_user and not getattr(current_user, "is_anonymous", False)
+            else None
+        ),
+    )
+    db.session.add(main_bom)
+    db.session.flush()
+    _get_or_create_default_bom_package(main_bom)
+    return main_bom
 
 
 def backup_org_structure():
@@ -8523,11 +8525,44 @@ def design_drawing_site_detail(site_id: int):
     stage_options = _get_active_procurement_stages()
     default_stage = _get_default_procurement_stage()
 
-    bom = (
-        BillOfMaterials.query.filter_by(drawing_site_id=site.id)
-        .order_by(BillOfMaterials.created_at.desc().nullslast())
-        .first()
+    main_bom = _get_or_create_drawing_site_main_bom(site)
+    db.session.commit()
+
+    site_boms = (
+        BillOfMaterials.query.filter(BillOfMaterials.drawing_site_id == site.id)
+        .order_by(BillOfMaterials.created_at.asc().nullsfirst(), BillOfMaterials.id.asc())
+        .all()
     )
+    for existing_bom in site_boms:
+        existing_bom.bom_type = _normalize_bom_type(existing_bom.bom_type)
+
+    selected_bom_type = _normalize_bom_type(request.args.get("bom_type"), default=BOM_TYPE_MAIN)
+    bom = next(
+        (
+            entry
+            for entry in site_boms
+            if _normalize_bom_type(entry.bom_type) == selected_bom_type
+        ),
+        None,
+    )
+    if not bom:
+        selected_bom_type = BOM_TYPE_MAIN
+        bom = main_bom
+
+    bom_summaries = []
+    for entry in site_boms:
+        item_count = len(entry.items) if entry.items else 0
+        bom_summaries.append(
+            {
+                "id": entry.id,
+                "type": _normalize_bom_type(entry.bom_type),
+                "label": BOM_TYPE_LABELS.get(_normalize_bom_type(entry.bom_type), "Main").title(),
+                "name": entry.bom_name,
+                "status": entry.status,
+                "created_at": entry.created_at,
+                "item_count": item_count,
+            }
+        )
 
     bom_item_count = len(bom.items) if bom and bom.items else 0
     bom_stage_summary = []
@@ -8573,12 +8608,12 @@ def design_drawing_site_detail(site_id: int):
 
             if not drawing_number:
                 flash("Please provide a drawing number for this version.", "danger")
-                return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
 
             file = request.files.get("version_file")
             if not file or not file.filename:
                 flash("Upload a drawing file to create a new version.", "danger")
-                return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
 
             fname = secure_filename(f"{uuid.uuid4().hex}_{file.filename}")
             save_path = os.path.join(app.config["UPLOAD_FOLDER"], fname)
@@ -8631,7 +8666,7 @@ def design_drawing_site_detail(site_id: int):
                 "Drawing version saved." if created_now else "Drawing version updated.",
                 "success",
             )
-            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
 
         if action == "comment":
             body = (request.form.get("body") or "").strip()
@@ -8650,26 +8685,40 @@ def design_drawing_site_detail(site_id: int):
                 )
                 db.session.commit()
                 flash("Comment added.", "success")
-            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
 
-        if action == "create_bom":
-            bom_name = request.form.get("bom_name") or (
-                f"BOM - {site.project_no or site.client_name or 'Site'}"
+        if action == "create_bom_type":
+            requested_type = _normalize_bom_type(request.form.get("bom_type"), default=None)
+            if requested_type not in {"fabrication", "civil", "supplementary"}:
+                flash("Select a valid BOM type.", "danger")
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
+
+            existing = (
+                BillOfMaterials.query.filter(
+                    BillOfMaterials.drawing_site_id == site.id,
+                    func.coalesce(BillOfMaterials.bom_type, BOM_TYPE_MAIN) == requested_type,
+                )
+                .order_by(BillOfMaterials.id.asc())
+                .first()
             )
-            bom_status = request.form.get("bom_status") or "draft"
-            bom = BillOfMaterials(
-                bom_name=bom_name,
-                status=bom_status,
+            if existing:
+                flash(f"{BOM_TYPE_LABELS.get(requested_type, requested_type.title())} BOM already exists for this site", "warning")
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=requested_type))
+
+            created_bom = BillOfMaterials(
+                bom_name=f"{BOM_TYPE_LABELS[requested_type]} BOM - {site.project_no or site.client_name or 'Site'}",
+                bom_type=requested_type,
+                status="draft",
                 drawing_site_id=site.id,
                 project_id=site.project_id,
                 created_by_user_id=current_user.id,
             )
-            db.session.add(bom)
+            db.session.add(created_bom)
             db.session.flush()
-            _get_or_create_default_bom_package(bom)
+            _get_or_create_default_bom_package(created_bom)
             db.session.commit()
-            flash("BOM created for this site.", "success")
-            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+            flash(f"{BOM_TYPE_LABELS[requested_type]} BOM created for this site.", "success")
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=requested_type))
 
         if action == "bom_item" and bom:
             package = _get_or_create_default_bom_package(bom)
@@ -8690,11 +8739,11 @@ def design_drawing_site_detail(site_id: int):
             )
             if _bom_line_spec_required(item) and not (item.specification or "").strip():
                 flash("Specification is required for this BOM line.", "danger")
-                return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+                return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
             db.session.add(item)
             db.session.commit()
             flash("BOM item added.", "success")
-            return redirect(url_for("design_drawing_site_detail", site_id=site.id))
+            return redirect(url_for("design_drawing_site_detail", site_id=site.id, bom_type=selected_bom_type))
 
     versions = sorted(
         site.versions or [],
@@ -8724,6 +8773,8 @@ def design_drawing_site_detail(site_id: int):
         bom=bom,
         bom_item_count=bom_item_count,
         bom_stage_summary=bom_stage_summary,
+        bom_summaries=bom_summaries,
+        selected_bom_type=selected_bom_type,
         related_tasks=related_tasks,
         can_edit_bom=can_edit_bom,
         stage_options=stage_options,
@@ -8731,10 +8782,13 @@ def design_drawing_site_detail(site_id: int):
         project_options=project_options,
         drawing_site_options=drawing_site_options,
         design_users=design_users,
+        available_bom_types=["fabrication", "civil", "supplementary"],
+        bom_type_labels=BOM_TYPE_LABELS,
     )
 
 
 @app.route("/bom/<int:bom_id>/duplicate", methods=["POST"])
+
 @login_required
 def duplicate_bom(bom_id: int):
     ensure_bootstrap()
@@ -8801,6 +8855,7 @@ def duplicate_bom(bom_id: int):
         project_id=target_project_id,
         design_task_id=None,
         drawing_site_id=target_drawing_site_id,
+        bom_type=_normalize_bom_type(source_bom.bom_type),
         created_by_user_id=current_user.id,
     )
 

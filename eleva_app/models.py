@@ -2316,6 +2316,18 @@ class BomTemplateLine(db.Model):
     )
 
 
+BOM_TYPE_MAIN = "main"
+BOM_TYPE_FABRICATION = "fabrication"
+BOM_TYPE_CIVIL = "civil"
+BOM_TYPE_SUPPLEMENTARY = "supplementary"
+BOM_TYPE_CHOICES = (
+    BOM_TYPE_MAIN,
+    BOM_TYPE_FABRICATION,
+    BOM_TYPE_CIVIL,
+    BOM_TYPE_SUPPLEMENTARY,
+)
+
+
 class BillOfMaterials(db.Model):
     __tablename__ = "bill_of_materials"
 
@@ -2326,6 +2338,7 @@ class BillOfMaterials(db.Model):
         db.Integer, db.ForeignKey("drawing_site.id"), nullable=True, index=True
     )
     bom_name = db.Column(db.String(150), nullable=False)
+    bom_type = db.Column(db.String(30), nullable=False, default=BOM_TYPE_MAIN)
     status = db.Column(db.String(50), nullable=False, default="draft")
     revision_number = db.Column(db.Integer, nullable=False, default=1)
     last_modified_at = db.Column(db.DateTime, nullable=True)
@@ -2344,7 +2357,13 @@ class BillOfMaterials(db.Model):
         db.UniqueConstraint(
             "design_task_id", name="uq_bill_of_materials_design_task"
         ),
+        db.UniqueConstraint(
+            "drawing_site_id", "bom_type", name="uq_bill_of_materials_site_type"
+        ),
     )
+
+    def __repr__(self):
+        return f"<BillOfMaterials id={self.id} type={self.bom_type or BOM_TYPE_MAIN} name={self.bom_name!r}>"
 
 
 class BOMPackage(db.Model):
