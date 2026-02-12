@@ -126,7 +126,7 @@
     
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <section class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <section id="service-schedule" class="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
         <div class="flex h-full flex-col gap-4">
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold text-theme-primary">Lift summary details</h2>
@@ -430,7 +430,7 @@
                   <th class="px-4 py-2 text-left">Service date</th>
                   <th class="px-4 py-2 text-left">Complaint</th>
                   <th class="px-4 py-2 text-left">Service slip</th>
-                  <th class="px-4 py-2 text-left">Technician</th>
+                  <th class="px-4 py-2 text-left">Route</th>
                   <th class="px-4 py-2 text-left">Status</th>
                 </tr>
               </thead>
@@ -465,25 +465,7 @@
                         {% endif %}
                       </td>
                       <td class="px-4 py-2 text-sm">
-                        {% if current_user_is_service_manager and visit.date %}
-                          {% set current_value = visit.technician_value or visit.technician_display %}
-                          <form
-                            method="post"
-                            action="{{ url_for('service_visit_assign', lift_id=lift.id, visit_date_str=visit.date.strftime('%Y-%m-%d')) }}"
-                            class="inline-flex items-center gap-2"
-                          >
-                            <select name="technician" class="input input-sm">
-                              <option value="">-- Select technician --</option>
-                              {% for tech in service_team_users %}
-                                {% set tech_name = tech.display_name or tech.username %}
-                                <option value="{{ tech_name }}" {% if current_value and current_value|lower == tech_name|lower %}selected{% endif %}>{{ tech_name }}</option>
-                              {% endfor %}
-                            </select>
-                            <button type="submit" class="btn btn-xs">Assign</button>
-                          </form>
-                        {% else %}
-                          <span class="text-xs text-slate-400">{{ visit.technician_display }}</span>
-                        {% endif %}
+                        <span class="text-xs text-slate-400">{{ visit.route_display }}</span>
                       </td>
                       <td class="px-4 py-2">
                         {% set badge_class = 'border border-slate-700/70 bg-slate-800/60 text-slate-200' %}
@@ -992,7 +974,11 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred PM time</span>
-        <input type="time" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="time" id="liftPreferredServiceTimeDetail" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+          <input type="checkbox" id="liftAnyTimeDetail" class="rounded border-slate-600 bg-slate-800" {% if not lift.preferred_service_time %}checked{% endif %} />
+          Any time
+        </label>
       </label>
       <label class="space-y-1 md:col-span-2">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service remarks</span>
@@ -1010,7 +996,7 @@
     <div class="flex items-start justify-between gap-4">
       <div>
         <h2 class="text-lg font-semibold text-theme-primary">Edit service schedule</h2>
-        <p class="text-xs text-slate-400">Adjust visit dates, assigned technicians and signed slips for this AMC period.</p>
+        <p class="text-xs text-slate-400">Adjust visit dates, assigned routes, service details and signed slips for this AMC period.</p>
       </div>
       <button type="button" data-modal-close class="rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800/70">Close</button>
     </div>
@@ -1032,23 +1018,30 @@
           </div>
         </div>
       {% endif %}
-      <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-5">
+      <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-7">
         <div>Service date</div>
-        <div>Technician</div>
+        <div>Route</div>
         <div>Status</div>
-        <div class="xl:col-span-2">Service slip</div>
+        <div>Service type</div><div>Details</div><div class="xl:col-span-2">Service slip</div>
       </div>
       <div id="serviceScheduleList" class="space-y-3">
-        {% set schedule_entries = payload.service_schedule if payload.service_schedule else [{'date_iso': '', 'technician_value': '', 'status_key': 'scheduled', 'slip_url': '', 'slip_label': '', 'slip_display_label': '', 'slip_stored': '', 'has_slip': False, 'allow_overdue': False}] %}
+        {% set schedule_entries = payload.service_schedule if payload.service_schedule else [{'date_iso': '', 'route_value': '', 'status_key': 'scheduled', 'slip_url': '', 'slip_label': '', 'slip_display_label': '', 'slip_stored': '', 'has_slip': False, 'allow_overdue': False}] %}
         {% for visit in schedule_entries %}
-          <div class="grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-5" data-service-row data-allow-overdue="{{ 'true' if visit.allow_overdue else 'false' }}" data-status="{{ visit.status_key }}">
+          <div class="grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-7" data-service-row data-allow-overdue="{{ 'true' if visit.allow_overdue else 'false' }}" data-status="{{ visit.status_key }}">
             <label class="space-y-1">
               <span class="sr-only">Service date</span>
               <input type="date" name="service_date" value="{{ visit.date_iso }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
             </label>
             <label class="space-y-1">
-              <span class="sr-only">Technician</span>
-              <input name="service_technician" value="{{ visit.technician_value }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="{{ payload.route_display if payload.route_display != '—' else 'Route technician' }}" />
+              <span class="sr-only">Route</span>
+              <select name="service_route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+                <option value="">Default route</option>
+                {% for route in service_routes %}
+                  {% set option_value = route.state %}
+                  {% set selected_route = visit.route_value or lift.route %}
+                  <option value="{{ option_value }}" {% if selected_route and selected_route|lower == option_value|lower %}selected{% endif %}>{{ route.display_name }}</option>
+                {% endfor %}
+              </select>
             </label>
             <label class="space-y-1">
               <span class="sr-only">Status</span>
@@ -1057,6 +1050,19 @@
                   <option value="{{ value }}" {% if value == 'overdue' %}data-overdue-option="true" {% if not visit.allow_overdue and visit.status_key != 'overdue' %}disabled hidden{% endif %}{% endif %} {% if visit.status_key == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
+            </label>
+            <label class="space-y-1">
+              <span class="sr-only">Service type</span>
+              <select name="service_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+                <option value="">Select type</option>
+                {% for value, label in service_type_options %}
+                  <option value="{{ value }}" {% if visit.service_type == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="sr-only">Details</span>
+              <input name="service_details" value="{{ visit.details_json or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Notes / parts used" />
             </label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 xl:col-span-2">
               <input type="hidden" name="service_slip_existing" value="{{ visit.slip_stored or '' }}">
@@ -1294,6 +1300,11 @@
     setupModal('[data-modal-open="lift-specs"]', 'liftSpecsModal');
     setupModal('[data-modal-open="lift-amc"]', 'liftAmcModal');
     setupModal('[data-modal-open="lift-service-schedule"]', 'liftServiceScheduleModal');
+    const markCompleteMode = {{ (request.args.get('mark_complete') == '1') | tojson }};
+    if (markCompleteMode) {
+      const scheduleModal = document.getElementById('liftServiceScheduleModal');
+      openModal(scheduleModal);
+    }
     setupModal('[data-modal-open="lift-contacts"]', 'liftContactsModal');
     setupModal('[data-modal-open="lift-attachments"]', 'liftAttachmentsModal');
     setupModal('[data-modal-open="lift-comments"]', 'liftCommentsModal');
@@ -1457,6 +1468,28 @@
       enforcePreferredDays(preferredDaysSelect);
     }
 
+    const anyTimeDetail = document.getElementById('liftAnyTimeDetail');
+    const preferredTimeDetail = document.getElementById('liftPreferredServiceTimeDetail');
+    function syncAnyTimeDetail() {
+      if (!anyTimeDetail || !preferredTimeDetail) return;
+      if (anyTimeDetail.checked) {
+        preferredTimeDetail.value = '';
+        preferredTimeDetail.setAttribute('disabled', 'disabled');
+      } else {
+        preferredTimeDetail.removeAttribute('disabled');
+      }
+    }
+    if (anyTimeDetail && preferredTimeDetail) {
+      anyTimeDetail.addEventListener('change', syncAnyTimeDetail);
+      preferredTimeDetail.addEventListener('input', () => {
+        if (preferredTimeDetail.value) {
+          anyTimeDetail.checked = false;
+          syncAnyTimeDetail();
+        }
+      });
+      syncAnyTimeDetail();
+    }
+
     const lifetimeList = document.getElementById('lifetimeMetricsList');
     const addMetricButton = document.querySelector('[data-add-metric]');
 
@@ -1466,7 +1499,15 @@
     const bulkGenerateButton = document.querySelector('[data-bulk-generate]');
     const bulkStartInput = document.getElementById('bulkServiceStartDate');
     const servicesPerYear = {{ (payload.amc.services_per_year or 0) | tojson }};
-    const routeTechnicianPlaceholder = {{ (payload.route_display if payload.route_display != '—' else 'Route technician') | tojson }};
+    const defaultRouteLabel = {{ (payload.route_display if payload.route_display != '—' else 'Default route') | tojson }};
+    const serviceRouteOptions = [{% for route in service_routes %}[{{ route.state|tojson }}, {{ route.display_name|tojson }}],{% endfor %}];
+    const serviceTypeOptions = {{ service_type_options | tojson }};
+    const serviceRouteOptionsHtml = [`<option value="">${defaultRouteLabel}</option>`]
+      .concat(serviceRouteOptions.map(([value, label]) => `<option value="${value}">${label}</option>`))
+      .join('');
+    const serviceTypeOptionsHtml = ['<option value="">Select type</option>']
+      .concat(serviceTypeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`))
+      .join('');
 
     const addableStatusOptions = (scheduleStatusOptions || []).filter(([value]) => value !== 'overdue');
     const todayStart = new Date();
@@ -1528,7 +1569,20 @@
         }
       }
       row.setAttribute('data-status', select.value);
+      toggleSlipInput(row);
       updateServiceRemoveButtons();
+    }
+
+    function toggleSlipInput(row) {
+      const statusSelect = row.querySelector('select[name="service_status"]');
+      const fileInput = row.querySelector('input[type="file"][name="service_slip_file"]');
+      if (!statusSelect || !fileInput) return;
+      const enabled = statusSelect.value === 'completed';
+      fileInput.disabled = !enabled;
+      fileInput.closest('label')?.classList.toggle('opacity-50', !enabled);
+      if (!enabled) {
+        fileInput.value = '';
+      }
     }
 
     function updateServiceRemoveButtons() {
@@ -1555,7 +1609,7 @@
 
     function createServiceRow() {
       const wrapper = document.createElement('div');
-      wrapper.className = 'grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-5';
+      wrapper.className = 'grid gap-3 service-row items-start md:grid-cols-2 xl:grid-cols-7';
       wrapper.setAttribute('data-service-row', 'true');
       wrapper.setAttribute('data-allow-overdue', 'false');
       const optionSource = (scheduleStatusOptions && scheduleStatusOptions.length)
@@ -1575,14 +1629,24 @@
           <input type="date" name="service_date" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
         </label>
         <label class="space-y-1">
-          <span class="sr-only">Technician</span>
-          <input name="service_technician" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="${routeTechnicianPlaceholder}" />
+          <span class="sr-only">Route</span>
+          <select name="service_route" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+            ${serviceRouteOptionsHtml}
+          </select>
         </label>
         <label class="space-y-1">
           <span class="sr-only">Status</span>
           <select name="service_status" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
             ${optionsHtml}
           </select>
+        </label>
+        <label class="space-y-1">
+          <span class="sr-only">Service type</span>
+          <select name="service_type" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">${serviceTypeOptionsHtml}</select>
+        </label>
+        <label class="space-y-1">
+          <span class="sr-only">Details</span>
+          <input name="service_details" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Notes / parts used" />
         </label>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 xl:col-span-2">
           <input type="hidden" name="service_slip_existing" value="">
@@ -1626,6 +1690,7 @@
           enforceOverdueAvailability(row, statusSelect);
           row.setAttribute('data-status', statusSelect.value);
           updateRowStatusBasedOnDate(row);
+          toggleSlipInput(row);
         };
       }
       const dateInput = row.querySelector('input[name="service_date"]');
@@ -1642,7 +1707,7 @@
             row.remove();
             refreshServiceRows();
           } else {
-            row.querySelectorAll('input[type="date"], input[name="service_technician"]').forEach((input) => {
+            row.querySelectorAll('input[type="date"], select[name="service_route"], input[name="service_details"], select[name="service_type"]').forEach((input) => {
               input.value = '';
             });
             if (statusSelect) {
@@ -1729,6 +1794,10 @@
           if (dateInput) {
             const visitDate = addMonthsPreserveDay(startDate, intervalMonths * index);
             dateInput.value = visitDate.toISOString().split('T')[0];
+          }
+          const typeSelect = row.querySelector('select[name="service_type"]');
+          if (typeSelect && serviceTypeOptions[index % serviceTypeOptions.length]) {
+            typeSelect.value = serviceTypeOptions[index % serviceTypeOptions.length][0];
           }
           scheduleList.appendChild(row);
         }

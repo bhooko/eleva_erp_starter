@@ -284,7 +284,11 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred service time</span>
-        <input type="time" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <input type="time" id="liftPreferredServiceTimeEdit" name="preferred_service_time" value="{{ lift.preferred_service_time.strftime('%H:%M') if lift.preferred_service_time else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+          <input type="checkbox" id="liftAnyTimeEdit" class="rounded border-slate-600 bg-slate-800" {% if not lift.preferred_service_time %}checked{% endif %} />
+          Any time
+        </label>
       </label>
     </div>
     <label class="space-y-1">
@@ -541,6 +545,28 @@
     if (preferredDaysSelect) {
       preferredDaysSelect.addEventListener('change', () => enforcePreferredDays(preferredDaysSelect));
       enforcePreferredDays(preferredDaysSelect);
+    }
+
+    const anyTimeEdit = document.getElementById('liftAnyTimeEdit');
+    const preferredTimeEdit = document.getElementById('liftPreferredServiceTimeEdit');
+    function syncAnyTimeEdit() {
+      if (!anyTimeEdit || !preferredTimeEdit) return;
+      if (anyTimeEdit.checked) {
+        preferredTimeEdit.value = '';
+        preferredTimeEdit.setAttribute('disabled', 'disabled');
+      } else {
+        preferredTimeEdit.removeAttribute('disabled');
+      }
+    }
+    if (anyTimeEdit && preferredTimeEdit) {
+      anyTimeEdit.addEventListener('change', syncAnyTimeEdit);
+      preferredTimeEdit.addEventListener('input', () => {
+        if (preferredTimeEdit.value) {
+          anyTimeEdit.checked = false;
+          syncAnyTimeEdit();
+        }
+      });
+      syncAnyTimeEdit();
     }
   })();
 </script>

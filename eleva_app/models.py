@@ -1653,6 +1653,7 @@ class Lift(db.Model):
                     visit_date = datetime.datetime.strptime(raw_date, "%Y-%m-%d").date()
                 except ValueError:
                     visit_date = None
+            route_value = clean_str(item.get("route"))
             technician = clean_str(item.get("technician"))
             status_value = clean_str(item.get("status"))
             status_key = (
@@ -1665,10 +1666,13 @@ class Lift(db.Model):
             schedule.append(
                 {
                     "date": visit_date,
+                    "route": route_value,
                     "technician": technician,
                     "status": status_key,
                     "slip_url": slip_url,
                     "slip_label": slip_label,
+                    "service_type": clean_str(item.get("service_type")),
+                    "details_json": clean_str(item.get("details_json") or item.get("service_details")),
                 }
             )
         return schedule
@@ -1703,16 +1707,22 @@ class Lift(db.Model):
                 if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
                 else "scheduled"
             )
+            route_value = clean_str(item.get("route"))
             technician = clean_str(item.get("technician"))
             slip_url = clean_str(item.get("slip_url"))
             slip_label = clean_str(item.get("slip_label"))
+            service_type = clean_str(item.get("service_type"))
+            details_json = clean_str(item.get("details_json") or item.get("service_details"))
             cleaned.append(
                 {
                     "date": iso_date,
+                    "route": route_value,
                     "technician": technician,
                     "status": status_key,
                     "slip_url": slip_url,
                     "slip_label": slip_label,
+                    "service_type": service_type,
+                    "details_json": details_json,
                 }
             )
         self.service_schedule_json = (
