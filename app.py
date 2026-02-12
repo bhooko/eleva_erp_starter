@@ -1288,6 +1288,15 @@ def normalize_amc_duration(value):
     return None, f"AMC duration must match one of: {valid_options}."
 
 
+def parse_optional_service_time(value, label):
+    """Blank values mean 'Any time'."""
+    if value is None:
+        return None, None
+    if isinstance(value, str) and not value.strip():
+        return None, None
+    return parse_time_field(value, label)
+
+
 def parse_preferred_service_days_from_string(value):
     if not value:
         return [], None
@@ -1864,6 +1873,13 @@ SERVICE_VISIT_STATUS_OPTIONS = [
 SERVICE_VISIT_STATUS_LABELS = {
     value: label for value, label in SERVICE_VISIT_STATUS_OPTIONS
 }
+SERVICE_TYPE_OPTIONS = [
+    ("type_1", "Type 1"),
+    ("type_2", "Type 2"),
+    ("type_3", "Type 3"),
+    ("type_4", "Type 4"),
+]
+SERVICE_TYPE_LABELS = {value: label for value, label in SERVICE_TYPE_OPTIONS}
 LIFT_STATUS_OPTIONS = ["On", "Off", "Protected", "Decommissioned"]
 SERVICE_BRANCH_OPTIONS = ["Goa", "Mumbai"]
 SERVICE_BRANCH_OPTION_SET = {option.lower() for option in SERVICE_BRANCH_OPTIONS}
@@ -5564,8 +5580,8 @@ def build_lift_payload(lift):
                 visit_date = None
         date_display = format_service_date(visit_date)
         date_iso = visit_date.isoformat() if isinstance(visit_date, datetime.date) else ""
-        technician_raw = clean_str(item.get("technician"))
-        technician_display = technician_raw or route_technician_label
+        route_raw = clean_str(item.get("route")) or clean_str(lift.route)
+        route_display = route_raw or route_technician_label
         status_raw = clean_str(item.get("status"))
         status_key = (
             status_raw.lower()
@@ -5599,9 +5615,12 @@ def build_lift_payload(lift):
                 "date": visit_date,
                 "date_display": date_display,
                 "date_iso": date_iso,
-                "technician_display": technician_display,
-                "technician_value": technician_raw or "",
+                "route_display": route_display,
+                "route_value": route_raw or "",
                 "status_key": status_key,
+                "service_type": clean_str(item.get("service_type")),
+                "service_type_display": SERVICE_TYPE_LABELS.get(clean_str(item.get("service_type")), "—"),
+                "details_json": clean_str(item.get("details_json") or item.get("service_details")),
                 "status_display": status_display,
                 "slip_url": slip_href,
                 "slip_label": slip_label,
@@ -23429,6 +23448,7 @@ def get_service_schedule_snapshot():
             status_key = status_value.lower()
             if status_key not in SERVICE_VISIT_STATUS_LABELS:
                 status_key = "scheduled"
+            route_value = clean_str(raw_entry.get("route")) or clean_str(lift.route)
             technician = clean_str(raw_entry.get("technician"))
             complaint_summary = clean_str(raw_entry.get("complaint_summary")) or ""
             ticket_ref = raw_entry.get("support_ticket_ref")
@@ -23437,6 +23457,7 @@ def get_service_schedule_snapshot():
                     "lift": lift,
                     "date": visit_date,
                     "status": status_key,
+                    "route": route_value,
                     "technician": technician,
                     "first_time_fix": _coerce_bool(raw_entry.get("first_time_fix")),
                     "on_time": _coerce_bool(
@@ -25288,6 +25309,7 @@ def service_lifts():
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
         amc_status_options=AMC_STATUS_OPTIONS,
+        service_type_options=SERVICE_TYPE_OPTIONS,
     )
 
 
@@ -25362,7 +25384,7 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_time, error = parse_time_field(
+    preferred_time, error = parse_optional_service_time(
         request.form.get("preferred_service_time"), "Preferred service time"
     )
     if error:
@@ -25376,6 +25398,7 @@ def service_lifts_create():
         return redirect(redirect_url)
 
     contract_input = clean_str(request.form.get("amc_contract_id"))
+    generated_schedule = []
     amc_contract_id = None
     if contract_input:
         contract_record = get_service_contract_by_id(contract_input)
@@ -25383,6 +25406,40 @@ def service_lifts_create():
             flash("Select a valid AMC contract.", "error")
             return redirect(redirect_url)
         amc_contract_id = contract_record.get("id")
+
+    schedule_dates = request.form.getlist("generated_service_date")
+    schedule_types = request.form.getlist("generated_service_type")
+    schedule_details = request.form.getlist("generated_service_details")
+    max_schedule_len = max(len(schedule_dates), len(schedule_types), len(schedule_details))
+    for idx in range(max_schedule_len):
+        schedule_date_raw = schedule_dates[idx] if idx < len(schedule_dates) else ""
+        schedule_type = clean_str(schedule_types[idx]) if idx < len(schedule_types) else None
+        schedule_detail = clean_str(schedule_details[idx]) if idx < len(schedule_details) else None
+        if not any([schedule_date_raw, schedule_type, schedule_detail]):
+            continue
+        if not schedule_date_raw:
+            flash(f"Generated schedule row {idx + 1} is missing date.", "error")
+            return redirect(redirect_url)
+        schedule_date, schedule_error = parse_date_field(
+            schedule_date_raw, f"Generated service date (row {idx + 1})"
+        )
+        if schedule_error:
+            flash(schedule_error, "error")
+            return redirect(redirect_url)
+        if schedule_type and schedule_type not in SERVICE_TYPE_LABELS:
+            flash(f"Select a valid service type for generated row {idx + 1}.", "error")
+            return redirect(redirect_url)
+        generated_schedule.append(
+            {
+                "date": schedule_date.isoformat(),
+                "route": route_value,
+                "status": "scheduled",
+                "service_type": schedule_type,
+                "details_json": schedule_detail,
+                "slip_url": None,
+                "slip_label": None,
+            }
+        )
 
     lift = Lift(
         lift_code=lift_code,
@@ -25425,6 +25482,8 @@ def service_lifts_create():
         last_updated_by=current_user.id if current_user.is_authenticated else None,
     )
     lift.preferred_service_days = preferred_days
+    if generated_schedule:
+        lift.service_schedule = generated_schedule
     lift.set_capacity_display()
 
     db.session.add(lift)
@@ -25478,6 +25537,7 @@ def service_lift_detail(lift_id):
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
+        service_type_options=SERVICE_TYPE_OPTIONS,
         current_user_is_service_manager=_user_is_service_manager(current_user),
         service_team_users=service_team_users,
     )
@@ -25487,10 +25547,10 @@ def service_lift_detail(lift_id):
 @login_required
 def service_visit_assign(lift_id: int, visit_date_str: str):
     """
-    Assign or reassign a service visit (including breakdown calls) to a technician.
+    Assign or reassign a service visit (including breakdown calls) to a route.
 
     The visit is identified by lift_id + visit_date.
-    This updates the 'technician' field in lift.service_schedule
+    This updates the 'route' field in lift.service_schedule
     so that the dashboard picks it up automatically.
     """
     if not _user_is_service_manager(current_user):
@@ -25507,9 +25567,9 @@ def service_visit_assign(lift_id: int, visit_date_str: str):
         flash("Invalid visit date.", "error")
         return redirect(url_for("service_lift_detail", lift_id=lift.id))
 
-    technician_name = (request.form.get("technician") or "").strip()
-    if not technician_name:
-        flash("Please select a technician.", "error")
+    route_name = (request.form.get("service_route") or "").strip()
+    if not route_name:
+        flash("Please select a route.", "error")
         return redirect(url_for("service_lift_detail", lift_id=lift.id))
 
     schedule = lift.service_schedule or []
@@ -25526,7 +25586,7 @@ def service_visit_assign(lift_id: int, visit_date_str: str):
             # Do not assign completed/cancelled visits
             continue
 
-        entry["technician"] = technician_name
+        entry["route"] = route_name
         updated = True
 
     if not updated:
@@ -25536,7 +25596,7 @@ def service_visit_assign(lift_id: int, visit_date_str: str):
     lift.service_schedule = schedule
     db.session.commit()
 
-    flash("Service visit assigned to technician.", "success")
+    flash("Service visit assigned to route.", "success")
     return redirect(url_for("service_lift_detail", lift_id=lift.id))
 
 
@@ -25578,6 +25638,7 @@ def service_lift_edit(lift_id):
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
+        service_type_options=SERVICE_TYPE_OPTIONS,
     )
 
 
@@ -25707,7 +25768,7 @@ def service_lift_update(lift_id):
             flash(error, "error")
             return redirect(redirect_url)
 
-        preferred_time, error = parse_time_field(
+        preferred_time, error = parse_optional_service_time(
             request.form.get("preferred_service_time"), "Preferred PM time"
         )
         if error:
@@ -25756,15 +25817,19 @@ def service_lift_update(lift_id):
 
     if form_section == "service_schedule":
         dates = request.form.getlist("service_date")
-        technicians = request.form.getlist("service_technician")
+        routes = request.form.getlist("service_route")
         statuses = request.form.getlist("service_status")
+        service_types = request.form.getlist("service_type")
+        service_details = request.form.getlist("service_details")
         slip_existing_values = request.form.getlist("service_slip_existing")
         slip_labels = request.form.getlist("service_slip_label")
         slip_files = request.files.getlist("service_slip_file")
         max_len = max(
             len(dates),
-            len(technicians),
+            len(routes),
             len(statuses),
+            len(service_types),
+            len(service_details),
             len(slip_existing_values),
             len(slip_labels),
             len(slip_files),
@@ -25773,8 +25838,10 @@ def service_lift_update(lift_id):
         static_root = os.path.join(BASE_DIR, "static")
         for idx in range(max_len):
             date_value = dates[idx] if idx < len(dates) else ""
-            technician = clean_str(technicians[idx]) if idx < len(technicians) else None
+            route_value = clean_str(routes[idx]) if idx < len(routes) else None
             status_value = clean_str(statuses[idx]) if idx < len(statuses) else None
+            service_type_value = clean_str(service_types[idx]) if idx < len(service_types) else None
+            details_text = clean_str(service_details[idx]) if idx < len(service_details) else None
             slip_value = (
                 clean_str(slip_existing_values[idx])
                 if idx < len(slip_existing_values)
@@ -25784,10 +25851,35 @@ def service_lift_update(lift_id):
                 clean_str(slip_labels[idx]) if idx < len(slip_labels) else None
             )
             uploaded_file = slip_files[idx] if idx < len(slip_files) else None
+
+            normalized_route = None
+            if route_value:
+                valid_route = ServiceRoute.query.filter(
+                    func.lower(ServiceRoute.state) == route_value.lower()
+                ).first()
+                if not valid_route:
+                    flash(f"Select a valid service route for row {idx + 1}.", "error")
+                    return redirect(redirect_url)
+                normalized_route = valid_route.state
+            elif lift.route:
+                normalized_route = lift.route
+
+            status_key = (
+                status_value.lower()
+                if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
+                else "scheduled"
+            )
+
             if uploaded_file and getattr(uploaded_file, "filename", None):
                 if not uploaded_file.filename:
                     uploaded_file = None
             if uploaded_file and uploaded_file.filename:
+                if status_key != "completed":
+                    flash(
+                        f"Slip upload is allowed only for completed visits (row {idx + 1}).",
+                        "error",
+                    )
+                    return redirect(redirect_url)
                 safe_name = secure_filename(uploaded_file.filename)
                 if not safe_name:
                     flash(
@@ -25819,7 +25911,7 @@ def service_lift_update(lift_id):
                 if normalized_value.startswith("static/"):
                     normalized_value = normalized_value.split("static/", 1)[1]
                 slip_value = normalized_value or None
-            if not any([date_value, technician, status_value, slip_value, slip_label]):
+            if not any([date_value, normalized_route, status_value, service_type_value, details_text, slip_value, slip_label]):
                 continue
             if not date_value:
                 flash(
@@ -25833,18 +25925,18 @@ def service_lift_update(lift_id):
             if error:
                 flash(error, "error")
                 return redirect(redirect_url)
-            status_key = (
-                status_value.lower()
-                if status_value and status_value.lower() in SERVICE_VISIT_STATUS_LABELS
-                else "scheduled"
-            )
+            if service_type_value and service_type_value not in SERVICE_TYPE_LABELS:
+                flash(f"Select a valid service type for row {idx + 1}.", "error")
+                return redirect(redirect_url)
             schedule_entries.append(
                 {
                     "date": visit_date.isoformat() if visit_date else None,
-                    "technician": technician,
+                    "route": normalized_route,
                     "status": status_key,
                     "slip_url": slip_value,
                     "slip_label": slip_label,
+                    "service_type": service_type_value,
+                    "details_json": details_text,
                 }
             )
         lift.service_schedule = schedule_entries
@@ -25989,7 +26081,7 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
-    preferred_time, error = parse_time_field(
+    preferred_time, error = parse_optional_service_time(
         request.form.get("preferred_service_time"), "Preferred service time"
     )
     if error:
@@ -26106,7 +26198,7 @@ def service_lift_update_notes(lift_id):
         return redirect(redirect_url)
 
     preferred_time_raw = request.form.get("preferred_service_time")
-    preferred_time, error = parse_time_field(preferred_time_raw, "Preferred service time")
+    preferred_time, error = parse_optional_service_time(preferred_time_raw, "Preferred service time")
     if error:
         flash(error, "error")
         return redirect(redirect_url)
