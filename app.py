@@ -13240,6 +13240,12 @@ def ensure_service_route_columns():
         cur.execute("ALTER TABLE service_route ADD COLUMN branch TEXT;")
         added_cols.append("branch")
 
+    # One-time SQL fallback for older SQLite DBs without migrations:
+    # ALTER TABLE service_route ADD COLUMN remark VARCHAR(255);
+    if "remark" not in route_cols:
+        cur.execute("ALTER TABLE service_route ADD COLUMN remark VARCHAR(255);")
+        added_cols.append("remark")
+
     before_update = conn.total_changes
     cur.execute(
         """
@@ -15328,12 +15334,17 @@ def settings_service_route_create():
         flash(error, "error")
         return redirect(url_for("service_settings"))
 
+    remark_value = clean_str(request.form.get("remark"))
+    if remark_value and len(remark_value) > 255:
+        remark_value = remark_value[:255]
+        flash("Remark exceeded 255 characters and was truncated.", "warning")
+
     existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower()).first()
     if existing:
         flash("A route with that name already exists.", "error")
         return redirect(url_for("service_settings"))
 
-    db.session.add(ServiceRoute(state=route_name, branch=branch_value))
+    db.session.add(ServiceRoute(state=route_name, branch=branch_value, remark=remark_value))
     db.session.commit()
     flash(f"Route '{route_name}' for branch {branch_value} added.", "success")
     return redirect(url_for("service_settings"))
@@ -15360,6 +15371,11 @@ def settings_service_route_update(route_id):
         flash(error, "error")
         return redirect(url_for("service_settings"))
 
+    remark_value = clean_str(request.form.get("remark"))
+    if remark_value and len(remark_value) > 255:
+        remark_value = remark_value[:255]
+        flash("Remark exceeded 255 characters and was truncated.", "warning")
+
     duplicate = (
         ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower(), ServiceRoute.id != route.id)
         .first()
@@ -15370,6 +15386,7 @@ def settings_service_route_update(route_id):
 
     route.state = route_name
     route.branch = branch_value
+    route.remark = remark_value
     db.session.commit()
 
     flash("Route updated.", "success")
