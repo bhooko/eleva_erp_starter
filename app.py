@@ -14350,6 +14350,9 @@ def ensure_bom_columns():
     if "last_modified_at" not in bom_cols:
         cur.execute("ALTER TABLE bill_of_materials ADD COLUMN last_modified_at DATETIME;")
         added_cols.append("last_modified_at")
+    if "bom_type" not in bom_cols:
+        cur.execute("ALTER TABLE bill_of_materials ADD COLUMN bom_type TEXT DEFAULT 'main';")
+        added_cols.append("bom_type")
 
     if added_cols:
         cur.execute("CREATE INDEX IF NOT EXISTS ix_bill_of_materials_drawing_site_id ON bill_of_materials (drawing_site_id);")
@@ -14445,9 +14448,14 @@ def ensure_bom_columns():
         cur.execute(
             "UPDATE purchase_order SET expected_delivery = expected_delivery_date WHERE expected_delivery IS NULL AND expected_delivery_date IS NOT NULL;"
         )
-    if "revision_number" in bom_cols:
+    bom_all_cols = bom_cols.union(set(added_cols))
+    if "revision_number" in bom_all_cols:
         cur.execute(
             "UPDATE bill_of_materials SET revision_number = 1 WHERE revision_number IS NULL OR revision_number < 1;"
+        )
+    if "bom_type" in bom_all_cols:
+        cur.execute(
+            "UPDATE bill_of_materials SET bom_type = 'main' WHERE bom_type IS NULL OR trim(bom_type) = '';"
         )
 
     conn.commit()
