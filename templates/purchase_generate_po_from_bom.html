@@ -12,6 +12,42 @@
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+    {% if missing_spec_items %}
+    <div class="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-3">
+      <div>
+        <p class="text-sm font-semibold text-amber-900">Specification incomplete</p>
+        <p class="text-xs text-amber-800">Some classified BOM items are missing specification text. Complete specs first, or explicitly acknowledge override.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-left text-amber-900">
+              <th class="py-1 pr-3">Item</th>
+              <th class="py-1 pr-3">Description</th>
+              <th class="py-1 pr-3">Section / Category</th>
+              <th class="py-1">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-amber-200">
+            {% for missing in missing_spec_items %}
+            <tr>
+              <td class="py-1 pr-3 font-semibold">{{ missing.item_code or '—' }}</td>
+              <td class="py-1 pr-3">{{ missing.description or '—' }}</td>
+              <td class="py-1 pr-3">{{ missing.section_label or '—' }}</td>
+              <td class="py-1">
+                {% if missing.edit_url %}
+                <a href="{{ missing.edit_url }}" class="text-amber-700 hover:underline">Edit spec</a>
+                {% else %}
+                <span class="text-amber-700">Edit in BOM</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
     <form method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       {{ csrf_field() }}
       <input type="hidden" name="step" value="select" />
@@ -50,6 +86,12 @@
         <input type="checkbox" name="pending_only" value="1" {% if pending_only %}checked{% endif %} class="rounded border-slate-300" />
         <span class="text-sm">Include only items not yet fully ordered</span>
       </label>
+      {% if missing_spec_items %}
+      <label class="md:col-span-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+        <input type="checkbox" name="allow_incomplete_spec" value="1" {% if allow_incomplete_spec %}checked{% endif %} class="mt-0.5 rounded border-amber-400" />
+        <span class="text-sm text-amber-900">I understand specs are incomplete, proceed anyway.</span>
+      </label>
+      {% endif %}
       <div class="md:col-span-4 flex justify-end">
         <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Preview items</button>
       </div>
@@ -115,6 +157,12 @@
       <input type="hidden" name="project_id" value="{{ project_id_value or '' }}" />
       <input type="hidden" name="po_notes" value="{{ po_notes or '' }}" />
       {% if pending_only %}<input type="hidden" name="pending_only" value="1" />{% endif %}
+            {% if missing_spec_items %}
+      <label class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+        <input type="checkbox" name="allow_incomplete_spec" value="1" {% if allow_incomplete_spec %}checked{% endif %} class="mt-0.5 rounded border-amber-400" />
+        <span class="text-amber-900">I understand specs are incomplete, proceed anyway.</span>
+      </label>
+      {% endif %}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
