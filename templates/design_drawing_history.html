@@ -5,8 +5,8 @@
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
     <div>
       <p class="text-sm uppercase text-slate-500">Design</p>
-      <h1 class="text-2xl font-semibold">Drawing Site Repository</h1>
-      <p class="text-sm text-slate-600">Latest drawings by site/lift with quick access to history and BOM.</p>
+      <h1 class="text-2xl font-semibold">Drawing History Archive</h1>
+      <p class="text-sm text-slate-600">Approved and finalized drawings are archived here automatically.</p>
     </div>
     <label for="upload-drawing-history" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Drawing History (Excel)</label>
   </div>
@@ -25,7 +25,7 @@
         </div>
         <form method="POST" action="{{ url_for('design_drawing_history_upload') }}" enctype="multipart/form-data" class="p-5 space-y-4">
           {{ csrf_field() }}
-          <p class="text-sm text-slate-600">Upload the <span class="font-semibold">Drawing History</span> sheet (.xlsx or .csv). Required columns: {{ required_headers|join(', ') if required_headers else 'Project No., CLIENT NAME, SITE LOCATION, DRG NUMBER, DRG BY, REV. NO., DRG APPROVAL, LIFT TYPE, SHAFT INNER DIMS (Actual), CAR INNER DIMS, NO. OF PASS. (Actual), NO. OF PASS. (Quoted), FLR. LEVEL, LANDING DOOR OPENING, NO. OF SIDES OF STRUCT.' }}.</p>
+          <p class="text-sm text-slate-600">Required columns: {{ required_headers|join(', ') }}.</p>
           <label class="space-y-1 block">
             <span class="text-sm text-slate-600">Upload file</span>
             <input type="file" name="drawing_history_file" accept=".xlsx,.csv" required class="w-full rounded-lg border-slate-200" />
@@ -40,7 +40,7 @@
   </div>
 
   <form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <label class="space-y-1 block">
         <span class="text-xs uppercase text-slate-500">Project No.</span>
         <input type="text" name="project_no" value="{{ filters.project_no }}" class="w-full rounded-lg border-slate-200" placeholder="Search project" />
@@ -53,24 +53,6 @@
         <span class="text-xs uppercase text-slate-500">Site Location</span>
         <input type="text" name="site_location" value="{{ filters.site_location }}" class="w-full rounded-lg border-slate-200" placeholder="City / address" />
       </label>
-      <label class="space-y-1 block">
-        <span class="text-xs uppercase text-slate-500">Lift Type</span>
-        <select name="lift_type" class="w-full rounded-lg border-slate-200">
-          <option value="">All types</option>
-          {% for option in lift_type_options %}
-          <option value="{{ option }}" {% if filters.lift_type == option %}selected{% endif %}>{{ option }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="space-y-1 block">
-        <span class="text-xs uppercase text-slate-500">Approval Status</span>
-        <select name="approval_status" class="w-full rounded-lg border-slate-200">
-          {% set statuses = ['all','Approved','Pending','Rejected'] %}
-          {% for status in statuses %}
-          <option value="{{ status }}" {% if filters.approval_status|lower == status|lower %}selected{% endif %}>{{ status.title() if status!='all' else 'All statuses' }}</option>
-          {% endfor %}
-        </select>
-      </label>
     </div>
     <div class="flex items-center justify-end gap-3 pt-2">
       <a href="{{ url_for('design_drawing_history') }}" class="px-4 py-2 rounded-lg border">Reset</a>
@@ -81,10 +63,10 @@
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 bg-slate-50 border-b">
       <div>
-        <p class="text-xs uppercase text-slate-500">Sites / Lifts</p>
-        <p class="text-sm text-slate-700">{{ total_records }} record(s) found</p>
+        <p class="text-xs uppercase text-slate-500">Archived drawings</p>
+        <p class="text-sm text-slate-700">{{ total_records }} archived site(s)</p>
       </div>
-      <p class="text-xs text-slate-500">Click a row to open the drawing site detail.</p>
+      <p class="text-xs text-slate-500">Click a row to open version timeline.</p>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
@@ -92,50 +74,31 @@
           <tr class="text-left text-slate-500">
             <th class="py-3 px-4">Project No.</th>
             <th class="py-3 px-4">Client</th>
-            <th class="py-3 px-4">Site Location</th>
-            <th class="py-3 px-4">Lift Type</th>
-            <th class="py-3 px-4">Lift Identifier</th>
-            <th class="py-3 px-4">Latest Drawing No.</th>
-            <th class="py-3 px-4">Latest Revision</th>
-            <th class="py-3 px-4">Approval Status</th>
-            <th class="py-3 px-4">Last Updated</th>
+            <th class="py-3 px-4">Site</th>
+            <th class="py-3 px-4">Lift ID</th>
+            <th class="py-3 px-4">Latest Drawing</th>
+            <th class="py-3 px-4">Status</th>
+            <th class="py-3 px-4">Updated</th>
           </tr>
         </thead>
         <tbody class="divide-y">
           {% for site in sites %}
-          <tr class="hover:bg-orange-50 transition" onclick="window.location='{{ url_for('design_drawing_site_detail', site_id=site.id) }}'">
+          <tr class="hover:bg-orange-50 transition cursor-pointer" onclick="window.location='{{ url_for('design_drawing_history_detail', site_id=site.id) }}'">
             <td class="py-3 px-4 font-semibold text-slate-800">{{ site.project_no or '—' }}</td>
             <td class="py-3 px-4">{{ site.client_name or '—' }}</td>
             <td class="py-3 px-4">{{ site.site_location or '—' }}</td>
-            <td class="py-3 px-4">{{ site.lift_type or '—' }}</td>
             <td class="py-3 px-4">{{ site.lift_identifier or '—' }}</td>
-            <td class="py-3 px-4"><span class="clickable-text">{{ site.latest_drawing_number or '—' }}</span></td>
-            <td class="py-3 px-4">{{ site.latest_revision or '—' }}</td>
+            <td class="py-3 px-4">{{ site.latest_drawing_number or '—' }} {% if site.latest_revision %}<span class="text-slate-500">(Rev {{ site.latest_revision }})</span>{% endif %}</td>
             <td class="py-3 px-4">
-              {% if site.approval_status %}
-              <span class="px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if site.approval_status|lower == 'approved' else ('bg-amber-100 text-amber-700' if site.approval_status|lower == 'pending' else 'bg-red-100 text-red-700') }}">{{ site.approval_status }}</span>
-              {% else %}
-              —
-              {% endif %}
+              <span class="px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if site.approval_status|lower == 'approved' else 'bg-indigo-100 text-indigo-700' }}">{{ site.approval_status or '—' }}</span>
             </td>
             <td class="py-3 px-4">{{ site.last_updated|format_india_datetime('%d %b %Y, %I:%M %p') if site.last_updated else '—' }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="9" class="py-4 px-4 text-slate-500">No drawing site records found.</td></tr>
+          <tr><td colspan="7" class="py-4 px-4 text-slate-500">No archived drawing records found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-  </div>
-
-  <div class="flex items-center justify-between text-sm text-slate-600">
-    <p>Showing {{ sites|length }} of {{ total_records }} records</p>
-    <div class="flex items-center gap-2">
-      {% set prev_page = page - 1 %}
-      {% set next_page = page + 1 %}
-      <a href="{{ url_for('design_drawing_history', page=prev_page if page>1 else 1, project_no=filters.project_no, client_name=filters.client_name, site_location=filters.site_location, lift_type=filters.lift_type, approval_status=filters.approval_status) }}" class="px-3 py-1 rounded-lg border {{ 'opacity-50 pointer-events-none' if page <=1 else '' }}">Prev</a>
-      <span>Page {{ page }} of {{ total_pages }}</span>
-      <a href="{{ url_for('design_drawing_history', page=next_page if page < total_pages else total_pages, project_no=filters.project_no, client_name=filters.client_name, site_location=filters.site_location, lift_type=filters.lift_type, approval_status=filters.approval_status) }}" class="px-3 py-1 rounded-lg border {{ 'opacity-50 pointer-events-none' if page >= total_pages else '' }}">Next</a>
     </div>
   </div>
 </div>

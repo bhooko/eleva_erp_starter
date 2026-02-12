@@ -7818,13 +7818,15 @@ def mark_notifications_read():
 @login_required
 def design_drawing_history():
     ensure_bootstrap()
-    query = DrawingSite.query
+    query = DrawingSite.query.filter(
+        func.lower(func.trim(func.coalesce(DrawingSite.approval_status, ""))).in_(
+            tuple(COMPLETED_DRAWING_STATUSES)
+        )
+    )
 
     project_no = (request.args.get("project_no") or "").strip()
     client_name = (request.args.get("client_name") or "").strip()
     site_location = (request.args.get("site_location") or "").strip()
-    lift_type = (request.args.get("lift_type") or "").strip()
-    approval_status = (request.args.get("approval_status") or "").strip()
 
     if project_no:
         query = query.filter(DrawingSite.project_no.ilike(f"%{project_no}%"))
@@ -7832,10 +7834,6 @@ def design_drawing_history():
         query = query.filter(DrawingSite.client_name.ilike(f"%{client_name}%"))
     if site_location:
         query = query.filter(DrawingSite.site_location.ilike(f"%{site_location}%"))
-    if lift_type:
-        query = query.filter(DrawingSite.lift_type.ilike(f"%{lift_type}%"))
-    if approval_status and approval_status.lower() != "all":
-        query = query.filter(DrawingSite.approval_status == approval_status)
 
     page = max(int(request.args.get("page", 1) or 1), 1)
     per_page = 20
@@ -7848,15 +7846,9 @@ def design_drawing_history():
         .all()
     )
 
-    lift_type_options = [
-        row[0]
-        for row in db.session.query(DrawingSite.lift_type)
-        .filter(DrawingSite.lift_type.isnot(None))
-        .distinct()
-        .order_by(DrawingSite.lift_type)
-        .all()
-        if row[0]
-    ]
+    for site in sites:
+        _sync_drawing_history_for_site(site)
+    db.session.commit()
 
     return render_template(
         "design_drawing_history.html",
@@ -7865,15 +7857,44 @@ def design_drawing_history():
             "project_no": project_no,
             "client_name": client_name,
             "site_location": site_location,
-            "lift_type": lift_type,
-            "approval_status": approval_status or "all",
         },
         page=page,
         total_pages=total_pages,
         total_records=total_records,
         per_page=per_page,
         required_headers=sorted(DRAWING_REQUIRED_HEADERS),
-        lift_type_options=lift_type_options,
+    )
+
+
+@app.route("/design/drawing-history/<int:site_id>")
+@login_required
+def design_drawing_history_detail(site_id: int):
+    ensure_bootstrap()
+    site = DrawingSite.query.get_or_404(site_id)
+    if not _is_completed_drawing_status(site.approval_status):
+        flash("Only approved or finalized drawings appear in history.", "warning")
+        return redirect(url_for("design_drawing_history"))
+
+    _sync_drawing_history_for_site(site)
+    db.session.commit()
+
+    versions = sorted(
+        [
+            version
+            for version in (site.versions or [])
+            if _is_completed_drawing_status(version.approval_status)
+        ],
+        key=lambda v: (
+            v.approved_date or v.created_at or datetime.datetime.min,
+            v.id or 0,
+        ),
+        reverse=True,
+    )
+
+    return render_template(
+        "design_drawing_history_detail.html",
+        site=site,
+        versions=versions,
     )
 
 
@@ -8521,6 +8542,47 @@ def _parse_date_field(raw_value: str):
         return None
 
 
+COMPLETED_DRAWING_STATUSES = {"approved", "finalized"}
+
+
+def _is_completed_drawing_status(status_value: str) -> bool:
+    return clean_str(status_value).lower() in COMPLETED_DRAWING_STATUSES
+
+
+def _sync_drawing_history_for_site(site: DrawingSite):
+    if not site:
+        return
+
+    for version in site.versions or []:
+        if not _is_completed_drawing_status(version.approval_status):
+            continue
+
+        history = (
+            DrawingHistory.query.filter(
+                DrawingHistory.project_no == site.project_no,
+                DrawingHistory.drg_number == version.drawing_number,
+                DrawingHistory.rev_no == version.revision_no,
+            )
+            .order_by(DrawingHistory.id.asc())
+            .first()
+        )
+
+        if not history:
+            history = DrawingHistory(
+                project_no=site.project_no,
+                drg_number=version.drawing_number,
+                rev_no=version.revision_no,
+            )
+            db.session.add(history)
+
+        history.client_name = site.client_name
+        history.site_location = site.site_location
+        history.lift_type = site.lift_type
+        history.drg_approval = version.approval_status or site.approval_status
+        history.remarks = version.revision_reason
+        history.is_active = True
+
+
 @app.route("/design/drawing-site/<int:site_id>", methods=["GET", "POST"])
 @login_required
 def design_drawing_site_detail(site_id: int):
@@ -8651,6 +8713,8 @@ def design_drawing_site_detail(site_id: int):
                 except Exception:
                     pass
 
+            previous_version_status = version.approval_status
+
             if file_path:
                 version.file_path = file_path
             version.approval_status = approval_status or version.approval_status
@@ -8663,11 +8727,18 @@ def design_drawing_site_detail(site_id: int):
             )
             version.created_at = version.created_at or datetime.datetime.utcnow()
 
+            previous_completion_state = _is_completed_drawing_status(previous_version_status)
+
             site.latest_drawing_number = drawing_number or site.latest_drawing_number
             site.latest_revision = revision_no or site.latest_revision
             site.approval_status = approval_status or site.approval_status
             site.last_updated = datetime.datetime.utcnow()
             site.apply_latest_version()
+
+            if _is_completed_drawing_status(version.approval_status) and not previous_completion_state:
+                _sync_drawing_history_for_site(site)
+            elif _is_completed_drawing_status(site.approval_status):
+                _sync_drawing_history_for_site(site)
 
             db.session.commit()
             flash(
