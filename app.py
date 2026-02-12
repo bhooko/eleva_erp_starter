@@ -6869,12 +6869,41 @@ def _get_design_board_payload():
     statuses = _design_status_map()
     tasks_by_status = {}
     ordered_tasks = []
+    active_task_query = _design_default_filters(
+        DesignTask.query.filter(func.lower(func.trim(DesignTask.status)) != "finalized")
+    )
     for key in statuses:
-        tasks_by_status[key] = _design_default_filters(
-            DesignTask.query.filter(DesignTask.status == key)
-        ).order_by(DesignTask.due_date.nullsfirst()).all()
+        tasks_by_status[key] = (
+            active_task_query
+            .filter(DesignTask.status == key)
+            .order_by(DesignTask.due_date.nullsfirst())
+            .all()
+        )
         ordered_tasks.extend(tasks_by_status[key])
     return statuses, tasks_by_status, ordered_tasks
+
+
+@app.route("/design", methods=["GET"])
+@login_required
+def design_overview():
+    ensure_bootstrap()
+    base_query = _design_default_filters(
+        DesignTask.query.filter(func.lower(func.trim(DesignTask.status)) != "finalized")
+    )
+    active_tasks = base_query.all()
+    status_counts = {
+        "pending_inputs": sum(1 for task in active_tasks if task.status == "Pending Inputs"),
+        "pending_drawings": sum(1 for task in active_tasks if task.status in ["Drawing", "In Drawing", "Revision Needed"]),
+        "pending_bom": sum(1 for task in active_tasks if task.status in ["In Preparation", "Revised"]),
+        "sent_for_approval": sum(1 for task in active_tasks if task.status == "Sent for Approval"),
+        "approved": sum(1 for task in active_tasks if task.status == "Approved"),
+    }
+
+    return render_template(
+        "design_overview.html",
+        total_active_tasks=len(active_tasks),
+        status_counts=status_counts,
+    )
 
 
 @event.listens_for(DesignTask, "after_insert")
@@ -6978,7 +7007,7 @@ def design_tasks():
 
     projects = Project.query.order_by(Project.name).all()
     users = User.query.order_by(User.first_name, User.username).all()
-    statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
+    statuses, _, ordered_tasks = _get_design_board_payload()
     status_options_by_type = {
         "bom": DESIGN_BOM_STATUS_OPTIONS,
         "default": DESIGN_DRAWING_STATUS_OPTIONS,
@@ -6988,7 +7017,6 @@ def design_tasks():
 
     return render_template(
         "design_tasks.html",
-        tasks_by_status=tasks_by_status,
         ordered_tasks=ordered_tasks,
         statuses=statuses,
         status_options_by_type=status_options_by_type,
@@ -6996,27 +7024,6 @@ def design_tasks():
         projects=projects,
         can_move_cards=can_move_cards,
     )
-
-
-@app.route("/design/tasks/json")
-@login_required
-def design_tasks_json():
-    ensure_bootstrap()
-    statuses, tasks_by_status, ordered_tasks = _get_design_board_payload()
-    status_options_by_type = {
-        "bom": DESIGN_BOM_STATUS_OPTIONS,
-        "default": DESIGN_DRAWING_STATUS_OPTIONS,
-    }
-    can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
-    board_html = render_template(
-        "partials/design_tasks_board.html",
-        tasks_by_status=tasks_by_status,
-        ordered_tasks=ordered_tasks,
-        statuses=statuses,
-        status_options_by_type=status_options_by_type,
-        can_move_cards=can_move_cards,
-    )
-    return jsonify({"html": board_html})
 
 
 def _extract_design_status_value():
