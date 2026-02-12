@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Design · Drawing History Detail{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Drawing archive</p>
+      <h1 class="text-2xl font-semibold">{{ site.project_no or 'Unlinked Project' }} · {{ site.site_location or 'Site' }}</h1>
+      <p class="text-sm text-slate-600">Client: {{ site.client_name or '—' }} · Lift: {{ site.lift_identifier or '—' }} · Type: {{ site.lift_type or '—' }}</p>
+    </div>
+    <a href="{{ url_for('design_drawing_history') }}" class="px-4 py-2 rounded-lg border">Back to History</a>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-4 py-3 bg-slate-50 border-b">
+      <p class="text-xs uppercase text-slate-500">Version timeline</p>
+      <p class="text-sm text-slate-700">{{ versions|length }} approved/finalized version(s)</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-3 px-4">Drawing</th>
+            <th class="py-3 px-4">Revision</th>
+            <th class="py-3 px-4">Status</th>
+            <th class="py-3 px-4">Submitted</th>
+            <th class="py-3 px-4">Approved</th>
+            <th class="py-3 px-4">File</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for version in versions %}
+          <tr>
+            <td class="py-3 px-4 font-medium text-slate-800">{{ version.drawing_number or '—' }}</td>
+            <td class="py-3 px-4">{{ version.revision_no or '—' }}</td>
+            <td class="py-3 px-4">{{ version.approval_status or '—' }}</td>
+            <td class="py-3 px-4">{{ version.submitted_date.strftime('%d %b %Y') if version.submitted_date else '—' }}</td>
+            <td class="py-3 px-4">{{ version.approved_date.strftime('%d %b %Y') if version.approved_date else '—' }}</td>
+            <td class="py-3 px-4">
+              {% if version.file_path %}
+              <a href="{{ url_for('static', filename=version.file_path) }}" class="text-orange-600" download>Download</a>
+              {% else %}
+              —
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-4 px-4 text-slate-500">No approved/finalized versions available.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

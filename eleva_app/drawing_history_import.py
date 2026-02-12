@@ -5,7 +5,7 @@ from typing import List, Optional
 from flask import current_app
 
 from eleva_app import db
-from eleva_app.models import DrawingSite, DrawingVersion
+from eleva_app.models import DrawingHistory, DrawingSite, DrawingVersion
 from eleva_app.common_import_utils import clean_str, parse_int_field, stringify_cell
 from eleva_app.uploads import UploadStageTimeoutError, _extract_tabular_upload
 from utils.excel_utils import iter_rows_from_xlsx
@@ -55,6 +55,43 @@ INTEGER_HEADERS = {
     "NO. OF PASS. (Quoted)",
     "NO. OF SIDES OF STRUCT.",
 }
+
+
+COMPLETED_DRAWING_STATUSES = {"approved", "finalized"}
+
+
+def _is_completed_drawing_status(value):
+    return (clean_str(value) or "").lower() in COMPLETED_DRAWING_STATUSES
+
+
+def _sync_site_history(site: DrawingSite):
+    for version in site.versions or []:
+        if not _is_completed_drawing_status(version.approval_status):
+            continue
+
+        history = (
+            DrawingHistory.query.filter(
+                DrawingHistory.project_no == site.project_no,
+                DrawingHistory.drg_number == version.drawing_number,
+                DrawingHistory.rev_no == version.revision_no,
+            )
+            .order_by(DrawingHistory.id.asc())
+            .first()
+        )
+        if not history:
+            history = DrawingHistory(
+                project_no=site.project_no,
+                drg_number=version.drawing_number,
+                rev_no=version.revision_no,
+            )
+            db.session.add(history)
+
+        history.client_name = site.client_name
+        history.site_location = site.site_location
+        history.lift_type = site.lift_type
+        history.drg_approval = version.approval_status
+        history.remarks = version.revision_reason
+        history.is_active = True
 
 
 @dataclass
@@ -263,6 +300,7 @@ def process_drawing_history_upload(upload) -> DrawingHistoryUploadResult:
 
     for site in {s for s in touched_sites if s}:
         _apply_latest_version(site)
+        _sync_site_history(site)
         if site.versions and not site.last_updated:
             latest = sorted(
                 site.versions,
