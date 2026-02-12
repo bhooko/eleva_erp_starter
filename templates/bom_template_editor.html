@@ -36,7 +36,7 @@
         <textarea name="description" rows="2" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2">{{ template.description or '' }}</textarea>
       </div>
       <div class="lg:col-span-4">
-        <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Save Template</button>
+        <button type="submit" class="primary-submit px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Save Template</button>
       </div>
     </form>
   </div>
@@ -86,13 +86,13 @@
                         <input type="checkbox" name="required" value="1" {% if input.required %}checked{% endif %} />
                         Required
                       </label>
-                      <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
+                      <button type="submit" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
                     </form>
                     <form method="post" class="flex items-center">
                       {{ csrf_field() }}
                       <input type="hidden" name="action" value="delete_input" />
                       <input type="hidden" name="input_id" value="{{ input.id }}" />
-                      <button class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
+                      <button type="submit" class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
                     </form>
                   </div>
                 </td>
@@ -126,7 +126,7 @@
             Required
           </label>
           <div class="lg:col-span-6">
-            <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Input</button>
+            <button type="submit" class="primary-submit px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Add Input</button>
           </div>
         </form>
       </div>
@@ -152,13 +152,13 @@
                 <input type="hidden" name="stage_id" value="{{ stage.id }}" />
                 <input name="stage_name" value="{{ stage.stage_name }}" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex-1 min-w-[200px]" />
                 <input name="display_order" value="{{ stage.display_order }}" type="number" class="w-24 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 order-input" />
-                <button class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
+                <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
               </form>
               <form method="post">
                 {{ csrf_field() }}
                 <input type="hidden" name="action" value="delete_stage" />
                 <input type="hidden" name="stage_id" value="{{ stage.id }}" />
-                <button class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
+                <button type="submit" class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
               </form>
             </div>
 
@@ -184,14 +184,14 @@
                     </div>
                     <input name="include_if_expr" value="{{ section.include_if_expr or '' }}" class="expr-field rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 lg:col-span-3" placeholder="Include Section If (Condition)" data-expr-scope="inputs" />
                     <input name="display_order" value="{{ section.display_order }}" type="number" class="w-24 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 order-input" />
-                    <button class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
+                    <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-100 text-xs">Save</button>
                     <div class="lg:col-span-6 text-xs text-slate-500">Use Input variables only (e.g. door_type == 'Manual').</div>
                   </form>
                   <form method="post">
                     {{ csrf_field() }}
                     <input type="hidden" name="action" value="delete_section" />
                     <input type="hidden" name="section_id" value="{{ section.id }}" />
-                    <button class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
+                    <button type="submit" class="px-3 py-2 rounded-xl bg-rose-500/80 text-white text-xs">Delete</button>
                   </form>
                 </div>
 
@@ -219,14 +219,14 @@
                       <input name="override_if_expr" value="{{ line.override_if_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
                       <input name="override_qty_expr" value="{{ line.override_qty_expr or '' }}" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
                       <div class="lg:col-span-6 flex flex-wrap gap-2">
-                        <button class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
+                        <button type="submit" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-100 text-xs">Save</button>
                       </div>
                     </form>
                     <form method="post">
                       {{ csrf_field() }}
                       <input type="hidden" name="action" value="delete_line" />
                       <input type="hidden" name="line_id" value="{{ line.id }}" />
-                      <button class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
+                      <button type="submit" class="px-3 py-1 rounded-lg bg-rose-500/80 text-white text-xs">Delete</button>
                     </form>
                   </div>
                   {% else %}
@@ -253,7 +253,7 @@
                   <input name="override_if_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_if_expr" />
                   <input name="override_qty_expr" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="override_qty_expr" />
                   <div class="lg:col-span-6">
-                    <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Line</button>
+                    <button type="submit" class="primary-submit px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Line</button>
                   </div>
                 </form>
               </div>
@@ -268,7 +268,7 @@
               <input name="include_if_expr" class="expr-field rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Include Section If (Condition)" data-expr-scope="inputs" />
               <div class="lg:col-span-4 text-xs text-slate-500">Use Input variables only (e.g. door_type == 'Manual').</div>
               <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="Order" />
-              <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Section</button>
+              <button type="submit" class="primary-submit px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Section</button>
             </form>
           </div>
           {% else %}
@@ -281,7 +281,7 @@
           <input type="hidden" name="action" value="add_stage" />
           <input name="stage_name" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 lg:col-span-2" placeholder="Stage name" />
           <input name="display_order" type="number" class="rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1" placeholder="Order" />
-          <button class="px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Stage</button>
+          <button type="submit" class="primary-submit px-3 py-2 rounded-xl bg-emerald-500/90 text-white text-xs font-semibold">Add Stage</button>
         </form>
       </div>
     </div>
@@ -303,7 +303,7 @@
           </div>
         {% endfor %}
         <div class="lg:col-span-3 flex flex-wrap gap-2">
-          <button class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Run Validation</button>
+          <button type="submit" class="primary-submit px-4 py-2 rounded-xl bg-emerald-500/90 text-white font-semibold">Run Validation</button>
           <button type="button" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-200 hover:bg-slate-800/60" data-clear-test-values>Clear test values</button>
         </div>
       </form>

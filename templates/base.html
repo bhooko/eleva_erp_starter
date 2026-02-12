@@ -2324,6 +2324,41 @@
       }
     });
   </script>
+  <script>
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+
+      const inputType = (target.type || '').toLowerCase();
+      if (['file', 'button', 'submit', 'reset', 'checkbox', 'radio'].includes(inputType)) {
+        return;
+      }
+
+      const form = target.closest('form');
+      if (!form) {
+        return;
+      }
+
+      const primarySubmit = form.querySelector('.primary-submit[type="submit"]:not([disabled])');
+      const fallbackSubmit = form.querySelector('button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])');
+      const submitTarget = primarySubmit || fallbackSubmit;
+
+      if (!submitTarget) {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      submitTarget.click();
+    });
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>
