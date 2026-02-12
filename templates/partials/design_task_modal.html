@@ -10,16 +10,17 @@
     </div>
     <form method="POST" action="{{ action_url or url_for('design_tasks') }}" class="p-5 space-y-4">
       {{ csrf_field() }}
+      <input type="hidden" name="parent_task_id" value="{{ default_parent_task_id or '' }}" />
+      {% if default_subtype %}<input type="hidden" name="subtype" value="{{ default_subtype }}" />{% endif %}
       {% if redirect_url %}<input type="hidden" name="redirect_url" value="{{ redirect_url }}" />{% endif %}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="space-y-1">
           <span class="text-sm text-slate-600">Task type</span>
           <select name="task_type" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
             {% set task_types = task_type_options or {
-              'sales_query': 'Sales Query',
-              'drawing': 'Drawing',
-              'bom': 'BOM',
-              'general': 'General'
+              'general': 'General Task',
+              'design': 'Design Task',
+              'site_visit': 'Site Visit Task'
             } %}
             {% for value, label in task_types.items() %}
             <option value="{{ value }}" {% if default_task_type and default_task_type == value %}selected{% endif %}>{{ label }}</option>
@@ -28,7 +29,15 @@
         </label>
         <label class="space-y-1">
           <span class="text-sm text-slate-600">Title</span>
-          <input type="text" name="description" class="w-full rounded-lg border-slate-200" placeholder="Task title" value="{{ default_description or '' }}" required />
+          <input type="text" name="task_name" class="w-full rounded-lg border-slate-200" placeholder="Task title" value="{{ default_task_name or default_description or '' }}" required />
+        </label>
+
+        <label class="space-y-1 md:col-span-2" data-site-visit-field hidden>
+          <span class="text-sm text-slate-600">Site visit purpose</span>
+          <select name="subtype" class="w-full rounded-lg border-slate-200">
+            <option value="sales_request">Sales team request</option>
+            <option value="drawing_verification">Drawing verification</option>
+          </select>
         </label>
         <label class="space-y-1">
           <span class="text-sm text-slate-600">Project</span>
@@ -89,8 +98,16 @@
           <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" value="{{ default_due_date or '' }}" />
         </label>
         <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Description</span>
+          <textarea name="description" rows="2" class="w-full rounded-lg border-slate-200" placeholder="Description">{{ default_description or '' }}</textarea>
+        </label>
+        <label class="space-y-1 md:col-span-2">
+          <span class="text-sm text-slate-600">Attachment (link/path)</span>
+          <input type="text" name="attachment" class="w-full rounded-lg border-slate-200" placeholder="Paste file link" value="{{ default_attachment or '' }}" />
+        </label>
+        <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Notes</span>
-          <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context or attachments link">{{ default_notes or '' }}</textarea>
+          <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context">{{ default_notes or '' }}</textarea>
         </label>
       </div>
       <div class="flex items-center justify-end gap-3 pt-2">
@@ -109,6 +126,16 @@
       modal.classList.toggle('hidden', !shouldShow);
       modal.classList.toggle('flex', shouldShow);
     };
+    const typeSelect = modal.querySelector('select[name="task_type"]');
+    const siteVisitField = modal.querySelector('[data-site-visit-field]');
+    const syncTaskTypeFields = () => {
+      if (!typeSelect || !siteVisitField) return;
+      const isSiteVisit = typeSelect.value === 'site_visit';
+      siteVisitField.hidden = !isSiteVisit;
+    };
+    syncTaskTypeFields();
+    typeSelect?.addEventListener('change', syncTaskTypeFields);
+
     document.querySelectorAll('[data-design-task-modal="{{ modal_id }}"]').forEach((trigger) => {
       trigger.addEventListener('click', (event) => {
         event.preventDefault();

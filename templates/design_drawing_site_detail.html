@@ -479,12 +479,15 @@
   submit_label='Create Task',
   projects=project_options,
   users=design_users,
-  default_task_type='drawing',
+  default_task_type='design',
   default_origin_type='design',
   default_origin_reference=site.project_no or site.site_location or site.client_name,
   default_project_id=site.project_id,
   default_project_name=site.project_no or site.client_name,
+  default_task_name='Drawing task - ' ~ (site.project_no or site.client_name),
   default_description=site.project_no or site.client_name,
+  default_attachment='',
+  default_subtype='drawing',
   show_origin_fields=False
 %}
   {% include 'partials/design_task_modal.html' %}
@@ -496,12 +499,15 @@
   submit_label='Create Task',
   projects=project_options,
   users=design_users,
-  default_task_type='bom',
+  default_task_type='design',
   default_origin_type='design',
   default_origin_reference=site.project_no or site.site_location or site.client_name,
   default_project_id=site.project_id,
   default_project_name=site.project_no or site.client_name,
+  default_task_name='BOM task - ' ~ (site.project_no or site.client_name),
   default_description='BOM requirement for ' ~ (site.project_no or site.client_name),
+  default_attachment='',
+  default_subtype='bom',
   show_origin_fields=False
 %}
   {% include 'partials/design_task_modal.html' %}

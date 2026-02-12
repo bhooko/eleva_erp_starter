@@ -2603,22 +2603,25 @@ QC_STATUS_OPTIONS = [
     "Rectification Pending",
     "Closed",
 ]
-DESIGN_DRAWING_STATUS_OPTIONS = [
-    "Pending Inputs",
-    "Drawing",
-    "In Drawing",
-    "Sent for Approval",
-    "Approved",
-    "Revision Needed",
+DESIGN_GENERAL_STATUS_OPTIONS = [
+    "In progress",
+    "Hold",
+    "Complete",
+    "Cancelled",
+]
+DESIGN_TASK_STATUS_OPTIONS = [
+    "Drawing pending",
+    "SRT input",
+    "Sales input",
+    "Sent for approval",
+    "BOM pending",
+    "BOM approved",
     "Finalized",
 ]
-DESIGN_BOM_STATUS_OPTIONS = [
-    "Pending Inputs",
-    "In Preparation",
-    "Sent for Approval",
-    "Approved",
-    "Revised",
-    "Finalized",
+DESIGN_SITE_VISIT_STATUS_OPTIONS = [
+    "In progress",
+    "Complete",
+    "Delayed",
 ]
 SRT_STATUS_OPTIONS = [
     "Scheduled",
@@ -6825,16 +6828,32 @@ def _design_default_filters(query):
     return query
 
 
+def _normalize_design_task_type(task_type):
+    normalized = (task_type or "").strip().lower()
+    if normalized in {"drawing", "bom", "sales_query"}:
+        return "design"
+    if normalized in {"general", "design", "site_visit"}:
+        return normalized
+    return "general"
+
+
 def _design_status_options_for(task_type):
-    if (task_type or "").lower() == "bom":
-        return DESIGN_BOM_STATUS_OPTIONS
-    return DESIGN_DRAWING_STATUS_OPTIONS
+    normalized = _normalize_design_task_type(task_type)
+    if normalized == "design":
+        return DESIGN_TASK_STATUS_OPTIONS
+    if normalized == "site_visit":
+        return DESIGN_SITE_VISIT_STATUS_OPTIONS
+    return DESIGN_GENERAL_STATUS_OPTIONS
 
 
 def _design_status_map():
     ordered = []
     seen = set()
-    for status in DESIGN_DRAWING_STATUS_OPTIONS + DESIGN_BOM_STATUS_OPTIONS:
+    for status in (
+        DESIGN_GENERAL_STATUS_OPTIONS
+        + DESIGN_TASK_STATUS_OPTIONS
+        + DESIGN_SITE_VISIT_STATUS_OPTIONS
+    ):
         if status in seen:
             continue
         ordered.append(status)
@@ -6853,16 +6872,11 @@ def _design_task_has_drawings(task) -> bool:
 def _mark_design_task_inputs_received(task, *, had_drawings: bool) -> bool:
     if had_drawings:
         return False
-    updated = False
-    if task.has_pending_inputs:
-        task.has_pending_inputs = False
-        updated = True
-    if task.status == "Pending Inputs":
-        task.status = "Drawing"
-        updated = True
-    if updated:
-        task.updated_at = datetime.datetime.utcnow()
-    return updated
+    if not task.has_pending_inputs:
+        return False
+    task.has_pending_inputs = False
+    task.updated_at = datetime.datetime.utcnow()
+    return True
 
 
 def _get_design_board_payload():
@@ -6870,7 +6884,12 @@ def _get_design_board_payload():
     tasks_by_status = {}
     ordered_tasks = []
     active_task_query = _design_default_filters(
-        DesignTask.query.filter(func.lower(func.trim(DesignTask.status)) != "finalized")
+        DesignTask.query.filter(
+            or_(
+                func.lower(func.trim(DesignTask.task_type)) != "design",
+                func.lower(func.trim(DesignTask.status)) != "finalized",
+            )
+        )
     )
     for key in statuses:
         tasks_by_status[key] = (
@@ -6888,15 +6907,20 @@ def _get_design_board_payload():
 def design_overview():
     ensure_bootstrap()
     base_query = _design_default_filters(
-        DesignTask.query.filter(func.lower(func.trim(DesignTask.status)) != "finalized")
+        DesignTask.query.filter(
+            or_(
+                func.lower(func.trim(DesignTask.task_type)) != "design",
+                func.lower(func.trim(DesignTask.status)) != "finalized",
+            )
+        )
     )
     active_tasks = base_query.all()
     status_counts = {
-        "pending_inputs": sum(1 for task in active_tasks if task.status == "Pending Inputs"),
-        "pending_drawings": sum(1 for task in active_tasks if task.status in ["Drawing", "In Drawing", "Revision Needed"]),
-        "pending_bom": sum(1 for task in active_tasks if task.status in ["In Preparation", "Revised"]),
-        "sent_for_approval": sum(1 for task in active_tasks if task.status == "Sent for Approval"),
-        "approved": sum(1 for task in active_tasks if task.status == "Approved"),
+        "pending_inputs": sum(1 for task in active_tasks if task.status in ["Drawing pending", "SRT input", "Sales input"]),
+        "pending_drawings": sum(1 for task in active_tasks if task.status == "BOM pending"),
+        "pending_bom": sum(1 for task in active_tasks if task.status == "BOM approved"),
+        "sent_for_approval": sum(1 for task in active_tasks if task.status == "Sent for approval"),
+        "approved": sum(1 for task in active_tasks if task.status in ["Complete", "Finalized"]),
     }
 
     return render_template(
@@ -6968,7 +6992,7 @@ def design_tasks():
         if (not current_user.is_admin) and role not in allowed_creators:
             abort(403)
 
-        task_type = request.form.get("task_type") or "general"
+        task_type = _normalize_design_task_type(request.form.get("task_type") or "general")
         project_id = request.form.get("project_id") or None
         project_name = request.form.get("project_name") or None
         requested_by = request.form.get("requested_by_user_id") or None
@@ -6976,7 +7000,7 @@ def design_tasks():
         status_value = _design_status_options_for(task_type)[0]
         priority = request.form.get("priority") or "medium"
         due_date_raw = request.form.get("due_date")
-        description = request.form.get("description")
+        task_name = (request.form.get("task_name") or request.form.get("description") or "").strip()
 
         try:
             due_date = datetime.datetime.strptime(due_date_raw, "%Y-%m-%d").date() if due_date_raw else None
@@ -6993,10 +7017,13 @@ def design_tasks():
             has_pending_inputs=True,
             priority=priority,
             due_date=due_date,
-            description=description,
+            task_name=task_name,
+            description=request.form.get("description") or task_name,
             origin_type=request.form.get("origin_type") or None,
             origin_id=request.form.get("origin_id") or None,
             origin_reference=request.form.get("origin_reference") or None,
+            attachment=request.form.get("attachment") or None,
+            parent_task_id=request.form.get("parent_task_id") or None,
             notes=request.form.get("notes") or None,
             subtype=request.form.get("subtype") or None,
         )
@@ -7009,8 +7036,10 @@ def design_tasks():
     users = User.query.order_by(User.first_name, User.username).all()
     statuses, _, ordered_tasks = _get_design_board_payload()
     status_options_by_type = {
-        "bom": DESIGN_BOM_STATUS_OPTIONS,
-        "default": DESIGN_DRAWING_STATUS_OPTIONS,
+        "general": DESIGN_GENERAL_STATUS_OPTIONS,
+        "design": DESIGN_TASK_STATUS_OPTIONS,
+        "site_visit": DESIGN_SITE_VISIT_STATUS_OPTIONS,
+        "default": DESIGN_GENERAL_STATUS_OPTIONS,
     }
 
     can_move_cards = current_user.is_admin or "design" in (current_user.role or "").lower()
@@ -7037,7 +7066,7 @@ def _extract_design_status_value():
 
 
 def _apply_design_task_status_update(task, status_value):
-    allowed_statuses = set(_design_status_options_for(task.task_type))
+    allowed_statuses = set(_design_status_options_for(_normalize_design_task_type(task.task_type)))
     if not isinstance(status_value, str) or not status_value:
         return False, "Missing status value."
     if status_value not in allowed_statuses:
@@ -7111,7 +7140,7 @@ def design_task_detail(task_id):
     drawing_status_options = ["Draft", "Sent", "Approved", "Superseded"]
     allowed_drawing_types = {option["value"] for option in drawing_type_options}
     allowed_drawing_statuses = set(drawing_status_options)
-    task_status_options = _design_status_options_for(task.task_type)
+    task_status_options = _design_status_options_for(_normalize_design_task_type(task.task_type))
     stage_options = _get_active_procurement_stages()
     default_stage = _get_default_procurement_stage()
 
@@ -7275,7 +7304,9 @@ def design_task_detail(task_id):
 
             if status_value in task_status_options:
                 task.status = status_value
-            task.description = title
+            task.task_name = title
+            task.description = request.form.get("description") or title
+            task.attachment = request.form.get("attachment") or task.attachment
             task.priority = priority
             task.due_date = due_date
             task.assigned_to_user_id = int(assignee_id) if assignee_id else None
@@ -7292,6 +7323,31 @@ def design_task_detail(task_id):
             task.updated_at = datetime.datetime.utcnow()
             db.session.commit()
             flash("Design task updated.", "success")
+        elif action == "create_linked_task":
+            link_kind = (request.form.get("link_kind") or "").strip().lower()
+            linked_type = "site_visit" if link_kind == "srt" else "general"
+            linked_title = f"{link_kind.upper()} input for Task #{task.id}" if link_kind else f"Linked input for Task #{task.id}"
+            linked_task = DesignTask(
+                task_type=linked_type,
+                subtype=link_kind or None,
+                task_name=linked_title,
+                description=task.description or linked_title,
+                project_id=task.project_id,
+                project_name=task.project_name,
+                requested_by_user_id=current_user.id,
+                assigned_to_user_id=task.assigned_to_user_id,
+                status=_design_status_options_for(linked_type)[0],
+                has_pending_inputs=False,
+                priority=task.priority or "medium",
+                due_date=task.due_date,
+                origin_type="design",
+                origin_id=task.id,
+                origin_reference=f"Linked from Design Task #{task.id}",
+                parent_task_id=task.id,
+            )
+            db.session.add(linked_task)
+            db.session.commit()
+            flash("Linked task created.", "success")
         elif action == "create_bom_package":
             package_name = (request.form.get("package_name") or "").strip()
             template_id_raw = request.form.get("bom_template_id") or None
@@ -7610,7 +7666,7 @@ def design_task_detail(task_id):
                 flash("Please provide clarification details.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
 
-            task.status = "waiting_info"
+            task.status = "Hold"
             db.session.add(
                 DesignTaskComment(
                     design_task_id=task.id,
@@ -14268,6 +14324,10 @@ def ensure_design_task_columns():
         cur.execute("ALTER TABLE design_task ADD COLUMN subtype TEXT;")
         added_cols.append("subtype")
 
+    if "task_name" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN task_name TEXT;")
+        added_cols.append("task_name")
+
     if "origin_type" not in design_task_cols:
         cur.execute("ALTER TABLE design_task ADD COLUMN origin_type TEXT;")
         added_cols.append("origin_type")
@@ -14283,6 +14343,12 @@ def ensure_design_task_columns():
     if "notes" not in design_task_cols:
         cur.execute("ALTER TABLE design_task ADD COLUMN notes TEXT;")
         added_cols.append("notes")
+    if "attachment" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN attachment TEXT;")
+        added_cols.append("attachment")
+    if "parent_task_id" not in design_task_cols:
+        cur.execute("ALTER TABLE design_task ADD COLUMN parent_task_id INTEGER;")
+        added_cols.append("parent_task_id")
     if "project_task_id" not in design_task_cols:
         cur.execute("ALTER TABLE design_task ADD COLUMN project_task_id INTEGER;")
         added_cols.append("project_task_id")
@@ -14291,7 +14357,13 @@ def ensure_design_task_columns():
         added_cols.append("has_pending_inputs")
 
     cur.execute(
-        "UPDATE design_task SET status = 'Pending Inputs' WHERE status IS NULL OR TRIM(status) = '';"
+        "UPDATE design_task SET status = 'In progress' WHERE status IS NULL OR TRIM(status) = '';"
+    )
+    cur.execute(
+        "UPDATE design_task SET task_type = 'design' WHERE lower(trim(task_type)) IN ('drawing', 'bom', 'sales_query');"
+    )
+    cur.execute(
+        "UPDATE design_task SET task_name = COALESCE(NULLIF(TRIM(task_name), ''), description, 'Untitled task');"
     )
     cur.execute(
         """
@@ -21546,7 +21618,7 @@ def project_detail(project_id):
             return linked.status if linked else "Pending Inspection"
         if task.linked_record_type == "design_task":
             linked = db.session.get(DesignTask, task.linked_record_id)
-            return linked.status if linked else "Pending Inputs"
+            return linked.status if linked else "In progress"
         if task.linked_record_type == "srt_task":
             linked = db.session.get(SRTTask, task.linked_record_id)
             return linked.status if linked else "Scheduled"
@@ -21901,17 +21973,18 @@ def project_apply_template(project_id):
             continue
 
         if module == "design":
-            status_options = DESIGN_DRAWING_STATUS_OPTIONS if task_subtype == "drawing" else DESIGN_BOM_STATUS_OPTIONS
             design_task = DesignTask(
-                task_type=task_subtype,
+                task_type="design",
+                subtype=task_subtype,
                 project_id=project.id,
                 project_task_id=project_task.id,
                 project_name=project.name,
                 requested_by_user_id=current_user.id,
                 assigned_to_user_id=assignee_id,
-                status=status_options[0],
+                status=DESIGN_TASK_STATUS_OPTIONS[0],
                 priority="medium",
                 due_date=due_date.date() if isinstance(due_date, datetime.datetime) else None,
+                task_name=template_task.name,
                 description=template_task.description or template_task.name,
                 origin_type="operations",
                 origin_id=project.id,
