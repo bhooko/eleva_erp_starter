@@ -6,18 +6,22 @@
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Design Task · {{ task.task_type.replace('_',' ').title() }}</p>
-      <h1 class="text-2xl font-semibold">{{ task.description or task.project_label }}</h1>
+      <h1 class="text-2xl font-semibold">{{ task.task_name or task.description or task.project_label }}</h1>
       {% set can_update_status = current_user.is_admin or 'design' in (current_user.role or '').lower() %}
+      {% set normalized_task_type = 'design' if task.task_type in ['drawing','bom','sales_query'] else task.task_type %}
       {% set status_styles = {
-        'Pending Inputs': 'bg-slate-500 text-white',
-        'Drawing': 'bg-blue-500 text-white',
-        'In Drawing': 'bg-indigo-500 text-white',
-        'Sent for Approval': 'bg-amber-500 text-slate-900',
-        'Approved': 'bg-emerald-500 text-white',
-        'Revision Needed': 'bg-rose-500 text-white',
+        'In progress': 'bg-blue-500 text-white',
+        'Hold': 'bg-amber-500 text-slate-900',
+        'Complete': 'bg-emerald-500 text-white',
+        'Cancelled': 'bg-rose-500 text-white',
+        'Drawing pending': 'bg-indigo-500 text-white',
+        'SRT input': 'bg-violet-500 text-white',
+        'Sales input': 'bg-cyan-500 text-white',
+        'Sent for approval': 'bg-amber-500 text-slate-900',
+        'BOM pending': 'bg-blue-500 text-white',
+        'BOM approved': 'bg-emerald-500 text-white',
         'Finalized': 'bg-teal-600 text-white',
-        'In Preparation': 'bg-blue-500 text-white',
-        'Revised': 'bg-rose-500 text-white'
+        'Delayed': 'bg-rose-500 text-white'
       } %}
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
         {% if task.project_id %}
@@ -69,6 +73,21 @@
       {% if task.task_type == 'sales_query' or task.origin_type == 'sales' %}
       <button id="openClarificationModal" class="px-4 py-2 rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100">Request Clarification from Sales</button>
       {% endif %}
+      {% if normalized_task_type == 'design' and task.status == 'SRT input' %}
+      <form method="POST" class="inline">
+        {{ csrf_field() }}
+        <input type="hidden" name="action" value="create_linked_task" />
+        <input type="hidden" name="link_kind" value="srt" />
+        <button type="submit" class="px-4 py-2 rounded-xl border border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100">Create SRT linked task</button>
+      </form>
+      {% elif normalized_task_type == 'design' and task.status == 'Sales input' %}
+      <form method="POST" class="inline">
+        {{ csrf_field() }}
+        <input type="hidden" name="action" value="create_linked_task" />
+        <input type="hidden" name="link_kind" value="sales" />
+        <button type="submit" class="px-4 py-2 rounded-xl border border-cyan-200 text-cyan-700 bg-cyan-50 hover:bg-cyan-100">Create Sales linked task</button>
+      </form>
+      {% endif %}
       <a href="{{ url_for('design_tasks') }}" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Back to board</a>
     </div>
   </div>
@@ -79,7 +98,7 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-xs uppercase text-slate-500">Task summary</p>
-            <h2 class="text-lg font-semibold">{{ task.description or 'No description yet' }}</h2>
+            <h2 class="text-lg font-semibold">{{ task.task_name or task.description or 'No description yet' }}</h2>
           </div>
           <div class="flex items-center gap-2">
             <span
@@ -93,6 +112,18 @@
             {% endif %}
           </div>
         </div>
+        {% if task.description %}<p class="text-sm text-slate-600">{{ task.description }}</p>{% endif %}
+        {% if task.attachment %}<p class="text-sm">Attachment: <a href="{{ task.attachment }}" target="_blank" class="text-orange-600 hover:underline">{{ task.attachment }}</a></p>{% endif %}
+        {% if task.parent_task_id %}
+        <p class="text-xs text-slate-500">Linked to parent task <a href="{{ url_for('design_task_detail', task_id=task.parent_task_id) }}" class="text-orange-600 hover:underline">#{{ task.parent_task_id }}</a>.</p>
+        {% endif %}
+        {% if task.linked_tasks %}
+        <p class="text-xs text-slate-500">Linked tasks:
+          {% for linked in task.linked_tasks %}
+            <a href="{{ url_for('design_task_detail', task_id=linked.id) }}" class="text-orange-600 hover:underline">#{{ linked.id }}</a>{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </p>
+        {% endif %}
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-600">
           <div class="p-3 bg-slate-50 rounded-xl">Priority: <strong>{{ task.priority.title() }}</strong></div>
           <div class="p-3 bg-slate-50 rounded-xl">Due: <strong>{{ task.due_date or '—' }}</strong></div>
@@ -1116,15 +1147,18 @@
   const detailStatusPill = document.querySelector('[data-status-pill]');
   const detailStatusSummary = document.querySelector('[data-status-summary]');
   const statusStyles = {
-    'Pending Inputs': 'bg-slate-500 text-white',
-    Drawing: 'bg-blue-500 text-white',
-    'In Drawing': 'bg-indigo-500 text-white',
-    'Sent for Approval': 'bg-amber-500 text-slate-900',
-    Approved: 'bg-emerald-500 text-white',
-    'Revision Needed': 'bg-rose-500 text-white',
+    'In progress': 'bg-blue-500 text-white',
+    Hold: 'bg-amber-500 text-slate-900',
+    Complete: 'bg-emerald-500 text-white',
+    Cancelled: 'bg-rose-500 text-white',
+    'Drawing pending': 'bg-indigo-500 text-white',
+    'SRT input': 'bg-violet-500 text-white',
+    'Sales input': 'bg-cyan-500 text-white',
+    'Sent for approval': 'bg-amber-500 text-slate-900',
+    'BOM pending': 'bg-blue-500 text-white',
+    'BOM approved': 'bg-emerald-500 text-white',
     Finalized: 'bg-teal-600 text-white',
-    'In Preparation': 'bg-blue-500 text-white',
-    Revised: 'bg-rose-500 text-white'
+    Delayed: 'bg-rose-500 text-white'
   };
 
   function formatStatusLabel(status){

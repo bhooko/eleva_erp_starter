@@ -1,28 +1,27 @@
 <div class="space-y-4">
   {% set type_styles = {
-    'sales_query': 'design-task-type',
-    'drawing': 'design-task-type',
-    'bom': 'design-task-type',
     'general': 'design-task-type',
-    'design': 'design-task-type'
+    'design': 'design-task-type',
+    'site_visit': 'design-task-type'
   } %}
   {% set type_labels = {
-    'sales_query': 'Sales Query',
-    'drawing': 'Drawing',
-    'bom': 'BOM',
-    'general': 'General',
-    'design': 'Design Task'
+    'general': 'General Task',
+    'design': 'Design Task',
+    'site_visit': 'Site Visit Task'
   } %}
   {% set status_styles = {
-    'Pending Inputs': 'bg-slate-500 text-white',
-    'Drawing': 'bg-blue-500 text-white',
-    'In Drawing': 'bg-indigo-500 text-white',
-    'Sent for Approval': 'bg-amber-500 text-slate-900',
-    'Approved': 'bg-emerald-500 text-white',
-    'Revision Needed': 'bg-rose-500 text-white',
+    'In progress': 'bg-blue-500 text-white',
+    'Hold': 'bg-amber-500 text-slate-900',
+    'Complete': 'bg-emerald-500 text-white',
+    'Cancelled': 'bg-rose-500 text-white',
+    'Drawing pending': 'bg-indigo-500 text-white',
+    'SRT input': 'bg-violet-500 text-white',
+    'Sales input': 'bg-cyan-500 text-white',
+    'Sent for approval': 'bg-amber-500 text-slate-900',
+    'BOM pending': 'bg-blue-500 text-white',
+    'BOM approved': 'bg-emerald-500 text-white',
     'Finalized': 'bg-teal-600 text-white',
-    'In Preparation': 'bg-blue-500 text-white',
-    'Revised': 'bg-rose-500 text-white'
+    'Delayed': 'bg-rose-500 text-white'
   } %}
   {% set origin_icons = {
     'sales': '💼',
@@ -38,18 +37,19 @@
     </header>
     <div class="p-3 space-y-3">
       {% for task in ordered_tasks %}
-        {% set task_status_options = status_options_by_type.get(task.task_type, status_options_by_type.get('default', [])) %}
+        {% set normalized_task_type = 'design' if task.task_type in ['drawing','bom','sales_query'] else task.task_type %}
+        {% set task_status_options = status_options_by_type.get(normalized_task_type, status_options_by_type.get('default', [])) %}
         <article class="design-task-card border bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition cursor-pointer" data-task-id="{{ task.id }}" data-status="{{ task.status }}" onclick="window.location='{{ url_for('design_task_detail', task_id=task.id) }}'">
               <div class="flex items-start justify-between gap-2">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2 py-1 rounded-full text-xs font-semibold {{ type_styles.get(task.task_type, 'design-task-type') }}">{{ type_labels.get(task.task_type, task.task_type.title()) }}</span>
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold {{ type_styles.get(normalized_task_type, 'design-task-type') }}">{{ type_labels.get(normalized_task_type, normalized_task_type.replace('_',' ').title()) }}</span>
                     <span class="px-2 py-1 rounded-full text-xs font-semibold {{ status_styles.get(task.status, 'bg-slate-500 text-white') }}" data-status-label>{{ statuses.get(task.status, task.status) }}</span>
                     {% if task.has_pending_inputs %}
                       <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Inputs pending</span>
                     {% endif %}
                   </div>
-                  <p class="design-task-title font-semibold leading-tight">{{ task.description or 'Untitled task' }}</p>
+                  <p class="design-task-title font-semibold leading-tight">{{ task.task_name or task.description or 'Untitled task' }}</p>
                   <p class="text-xs text-muted-contrast">{{ task.project_label or 'Unlinked' }}</p>
                 </div>
                 <div class="flex flex-col items-end gap-2">

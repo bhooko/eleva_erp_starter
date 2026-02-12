@@ -1990,6 +1990,7 @@ class DesignTask(db.Model):
     project_name = db.Column(db.String(150), nullable=True)
     task_type = db.Column(db.String(50), nullable=False)
     subtype = db.Column(db.String(50), nullable=True)
+    task_name = db.Column(db.String(200), nullable=True)
     requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     assigned_to_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     status = db.Column(db.String(50), nullable=False, default="new")
@@ -2000,6 +2001,8 @@ class DesignTask(db.Model):
     origin_type = db.Column(db.String(50), nullable=True)
     origin_id = db.Column(db.Integer, nullable=True)
     origin_reference = db.Column(db.String(150), nullable=True)
+    attachment = db.Column(db.String(255), nullable=True)
+    parent_task_id = db.Column(db.Integer, db.ForeignKey("design_task.id"), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -2009,6 +2012,7 @@ class DesignTask(db.Model):
     project = db.relationship("Project", backref="design_tasks")
     requested_by = db.relationship("User", foreign_keys=[requested_by_user_id])
     assigned_to = db.relationship("User", foreign_keys=[assigned_to_user_id])
+    parent_task = db.relationship("DesignTask", remote_side=[id], backref="linked_tasks")
 
     @property
     def project_label(self):
