@@ -6429,9 +6429,6 @@ from eleva_app.models import (
     DeliveryOrderItem,
     Product,
     ProcurementStage,
-    ProjectBom,
-    ProjectBomInput,
-    ProjectBomLine,
     PurchaseOrderLine,
     VendorProductRate,
     VendorProductRateHistory,
@@ -8501,102 +8498,6 @@ def design_bom_template_edit(template_id):
         line_keys=line_keys,
         section_includes=section_includes,
         test_input_values=test_input_values,
-    )
-
-
-@app.route("/projects/<int:project_id>/bom/generate", methods=["GET", "POST"])
-@login_required
-def project_bom_generate(project_id):
-    _module_visibility_required("design")
-    project = Project.query.get_or_404(project_id)
-    templates_query = BomTemplate.query.filter(BomTemplate.is_active.is_(True))
-    if project.lift_type:
-        templates_query = templates_query.filter(BomTemplate.lift_type == project.lift_type)
-    templates = templates_query.order_by(BomTemplate.name.asc()).all()
-    template_id = request.args.get("template_id") or request.form.get("template_id")
-    selected_template = None
-    evaluation = None
-    errors = []
-
-    if template_id:
-        selected_template = (
-            BomTemplate.query.options(
-                joinedload(BomTemplate.inputs),
-                joinedload(BomTemplate.stages)
-                .joinedload(BomTemplateStage.sections)
-                .joinedload(BomTemplateSection.lines),
-            )
-            .get(template_id)
-        )
-
-    if request.method == "POST" and selected_template:
-        input_values = {
-            key.replace("input_", ""): value
-            for key, value in request.form.items()
-            if key.startswith("input_")
-        }
-        evaluation = evaluate_bom_template(selected_template, input_values)
-        errors = list(evaluation["errors"])
-        for line in evaluation["lines"]:
-            if line["errors"]:
-                errors.append({"type": "line", "id": line["id"], "message": "; ".join(line["errors"])})
-
-        action = (request.form.get("action") or "").strip()
-        if action == "generate":
-            if errors:
-                flash("Resolve template errors before generating the BOM.", "error")
-            else:
-                project_bom = ProjectBom(
-                    project_id=project.id,
-                    template_id=selected_template.id,
-                    created_by_id=current_user.id,
-                )
-                db.session.add(project_bom)
-                db.session.flush()
-                for template_input in selected_template.inputs:
-                    key = template_input.input_key
-                    raw_value = input_values.get(key, template_input.default_value)
-                    bom_input = ProjectBomInput(
-                        project_bom_id=project_bom.id,
-                        input_key=key,
-                        input_value=str(raw_value) if raw_value is not None else None,
-                    )
-                    db.session.add(bom_input)
-                for line_result in evaluation["lines"]:
-                    line = line_result["line"]
-                    override_snapshot = None
-                    if line.override_if_expr or line.override_qty_expr:
-                        override_snapshot = json.dumps(
-                            {
-                                "override_if_expr": line.override_if_expr,
-                                "override_qty_expr": line.override_qty_expr,
-                            },
-                            ensure_ascii=False,
-                        )
-                    bom_line = ProjectBomLine(
-                        project_bom_id=project_bom.id,
-                        ref_key=line.ref_key,
-                        part_class_id=line.part_class_id,
-                        specification_text=line.specification_text,
-                        unit=line.unit,
-                        final_qty=line_result["final_qty"],
-                        source_template_line_id=line.id,
-                        qty_expr_snapshot=line.qty_expr,
-                        include_if_expr_snapshot=line.include_if_expr,
-                        override_expr_snapshot=override_snapshot,
-                    )
-                    db.session.add(bom_line)
-                db.session.commit()
-                flash("Project BOM generated.", "success")
-                return redirect(url_for("project_detail", project_id=project.id))
-
-    return render_template(
-        "project_bom_generate.html",
-        project=project,
-        templates=templates,
-        selected_template=selected_template,
-        evaluation=evaluation,
-        errors=errors,
     )
 
 
@@ -13744,9 +13645,6 @@ def ensure_tables():
         BomTemplateStage.__table__,
         BomTemplateSection.__table__,
         BomTemplateLine.__table__,
-        ProjectBom.__table__,
-        ProjectBomInput.__table__,
-        ProjectBomLine.__table__,
         BillOfMaterials.__table__,
         BOMPackage.__table__,
         BOMItem.__table__,
@@ -13902,50 +13800,6 @@ def ensure_bom_template_line_table():
             ("override_if_expr", "TEXT"),
             ("override_qty_expr", "TEXT"),
             ("display_order", "INTEGER DEFAULT 0"),
-        ],
-    )
-
-
-def ensure_project_bom_table():
-    _ensure_sqlite_table(
-        "project_bom",
-        ProjectBom.__table__,
-        [
-            ("project_id", "INTEGER"),
-            ("template_id", "INTEGER"),
-            ("created_at", "DATETIME"),
-            ("created_by_id", "INTEGER"),
-        ],
-    )
-
-
-def ensure_project_bom_input_table():
-    _ensure_sqlite_table(
-        "project_bom_input",
-        ProjectBomInput.__table__,
-        [
-            ("project_bom_id", "INTEGER"),
-            ("input_key", "TEXT"),
-            ("input_value", "TEXT"),
-        ],
-    )
-
-
-def ensure_project_bom_line_table():
-    _ensure_sqlite_table(
-        "project_bom_line",
-        ProjectBomLine.__table__,
-        [
-            ("project_bom_id", "INTEGER"),
-            ("ref_key", "TEXT"),
-            ("part_class_id", "INTEGER"),
-            ("specification_text", "TEXT"),
-            ("unit", "TEXT"),
-            ("final_qty", "REAL DEFAULT 0"),
-            ("source_template_line_id", "INTEGER"),
-            ("qty_expr_snapshot", "TEXT"),
-            ("include_if_expr_snapshot", "TEXT"),
-            ("override_expr_snapshot", "TEXT"),
         ],
     )
 
@@ -15001,9 +14855,6 @@ def bootstrap_db():
     ensure_bom_template_stage_table()
     ensure_bom_template_section_table()
     ensure_bom_template_line_table()
-    ensure_project_bom_table()
-    ensure_project_bom_input_table()
-    ensure_project_bom_line_table()
     ensure_procurement_stage_seed()
     ensure_dropdown_options_seed()
     ensure_client_requirement_template_seed()
