@@ -3,15 +3,54 @@
 
 {% block content %}
 <div class="space-y-8">
-  <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <header class="flex flex-col gap-3">
     <div>
       <h1 class="text-2xl font-semibold text-theme-primary">Service Tasks</h1>
       <p class="text-sm text-slate-400">Operational hub for AMC visits, breakdowns, repairs and installation support calls.</p>
     </div>
-    <div class="flex gap-2">
-      <button type="button" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">New service task</button>
-      <button type="button" class="rounded-xl border border-slate-700/70 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:text-white">Bulk schedule</button>
-    </div>
+
+    <form method="post" action="{{ url_for('service_task_create') }}" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      {{ csrf_field() }}
+      <h2 class="text-sm font-semibold text-slate-100">New service task</h2>
+      <div class="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <input name="site" required placeholder="Site" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100" />
+
+        <select name="call_type" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          {% for call_type in call_types %}
+            <option value="{{ call_type }}">{{ call_type }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="priority" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          {% for priority in priority_options %}
+            <option value="{{ priority }}" {% if priority == 'Medium' %}selected{% endif %}>{{ priority }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="customer_id" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          <option value="">Customer (optional)</option>
+          {% for customer in customers %}
+            <option value="{{ customer.id }}">{{ customer.company_name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="lift_id" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          <option value="">Lift (optional)</option>
+          {% for lift in lifts %}
+            <option value="{{ lift.id }}">{{ lift.lift_code }}</option>
+          {% endfor %}
+        </select>
+
+        <input name="assigned_techs" placeholder="Assigned techs (comma-separated)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100" />
+      </div>
+      <label class="mt-3 inline-flex items-center gap-2 text-xs text-slate-300">
+        <input type="checkbox" name="requires_media" value="1" class="rounded border-slate-600 bg-slate-900" />
+        Requires media proof
+      </label>
+      <div class="mt-3">
+        <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">Create service task</button>
+      </div>
+    </form>
   </header>
 
   <section class="rounded-2xl border border-slate-800 bg-slate-900/60">
@@ -19,19 +58,17 @@
       <h2 class="text-base font-semibold text-slate-100">Live taskboard</h2>
       <p class="text-xs text-slate-400">Track progress, SLA, technicians and mandatory media rules per checklist.</p>
     </div>
-    <div class="overflow-x-auto">
+    <div class="max-h-[65vh] overflow-y-auto overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-800/70 text-sm">
-        <thead class="sticky top-[56px] z-20 bg-slate-900/95 backdrop-blur text-xs uppercase tracking-wide text-slate-200">
+        <thead class="sticky top-0 z-10 bg-slate-900 text-xs uppercase tracking-wide text-slate-200">
           <tr class="text-left">
-            <th class="px-6 py-3">Task ID</th>
+            <th class="px-6 py-3">Task</th>
             <th class="px-6 py-3">Site &amp; client</th>
             <th class="px-6 py-3">Lift ID</th>
             <th class="px-6 py-3">Call type</th>
             <th class="px-6 py-3">Priority</th>
             <th class="px-6 py-3">Owner</th>
             <th class="px-6 py-3">Assigned tech(s)</th>
-            <th class="px-6 py-3">Schedule window</th>
-            <th class="px-6 py-3">SLA</th>
             <th class="px-6 py-3">Status</th>
             <th class="px-6 py-3">Worklog</th>
             <th class="px-6 py-3">Parts used</th>
@@ -42,7 +79,7 @@
           {% for task in tasks %}
             <tr class="align-top hover:bg-slate-800/40 cursor-pointer" onclick="window.location='{{ url_for('service_task_detail', task_id=task.id) }}'">
               <td class="px-6 py-4 font-semibold text-theme-primary">
-                <a href="{{ url_for('service_task_detail', task_id=task.id) }}" class="hover:text-emerald-200">{{ task.id }}</a>
+                <a href="{{ url_for('service_task_detail', task_id=task.id) }}" class="hover:text-emerald-200">{{ task.task_code }}</a>
               </td>
               <td class="px-6 py-4">
                 <div class="font-medium text-slate-100">{{ task.site }}</div>
@@ -50,77 +87,24 @@
               </td>
               <td class="px-6 py-4">{{ task.lift_id }}</td>
               <td class="px-6 py-4">{{ task.call_type }}</td>
-              <td class="px-6 py-4">
-                <span class="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-200">{{ task.priority }}</span>
-              </td>
-              <td class="px-6 py-4 text-xs">{{ task.owner_display or 'Unassigned' }}</td>
-              <td class="px-6 py-4 text-xs">{{ task.technician_display or 'Unassigned' }}</td>
-              <td class="px-6 py-4 text-xs text-slate-300">{{ task.schedule_window }}</td>
-              <td class="px-6 py-4 text-xs text-slate-300">{{ task.sla }}</td>
-              <td class="px-6 py-4">
-                <span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-200">{{ task.status }}</span>
-              </td>
-              <td class="px-6 py-4 text-xs">
-                <ul class="space-y-1 text-slate-300">
-                  {% if task.worklog %}
-                    {% for entry in task.worklog %}
-                      <li>{{ entry.time }} · {{ entry.label }}</li>
-                    {% endfor %}
-                  {% else %}
-                    <li class="text-slate-500">No updates logged</li>
-                  {% endif %}
-                </ul>
-                <p class="mt-2 text-xs uppercase tracking-wide text-amber-300">{{ task.requires_media_label }}</p>
-              </td>
-              <td class="px-6 py-4 text-xs">
-                {% if task.parts_used %}
-                  <ul class="space-y-1 text-slate-300">
-                    {% for part in task.parts_used %}
-                      <li>{{ part.qty }} × {{ part.name }}</li>
-                    {% endfor %}
-                  </ul>
-                {% else %}
-                  <span class="text-slate-500">—</span>
-                {% endif %}
-              </td>
+              <td class="px-6 py-4"><span class="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-200">{{ task.priority }}</span></td>
+              <td class="px-6 py-4 text-xs">{{ task.owner_display }}</td>
+              <td class="px-6 py-4 text-xs">{{ task.technician_display }}</td>
+              <td class="px-6 py-4"><span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-200">{{ task.status }}</span></td>
+              <td class="px-6 py-4 text-xs text-slate-300">{{ task.worklog[-1].label if task.worklog else 'No updates logged' }}</td>
+              <td class="px-6 py-4 text-xs text-slate-300">{{ task.parts_used|length }}</td>
               <td class="px-6 py-4 text-xs">
                 <a href="{{ url_for('service_task_detail', task_id=task.id) }}" class="rounded-lg border border-slate-700/70 px-3 py-1 text-slate-200 hover:text-white">Open</a>
               </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="11" class="px-6 py-8 text-center text-sm text-slate-500">No service tasks yet.</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </section>
-
-  <section class="grid gap-6 lg:grid-cols-2">
-    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <h3 class="text-base font-semibold text-slate-100">Worklog &amp; media guardrails</h3>
-      <p class="mt-2 text-sm text-slate-400">Every checklist item enforces the right evidence capture before closure.</p>
-      <ul class="mt-4 space-y-3 text-sm text-slate-300">
-        <li>• Time logs auto-captured from technician start/stop with manual override.</li>
-        <li>• Multi-photo upload with optional short video. “NG” checklist items enforce photo proof.</li>
-        <li>• If all items marked “Good”, cabin + machine room + shaft photos remain mandatory.</li>
-      </ul>
-    </article>
-    <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <h3 class="text-base font-semibold text-slate-100">Outputs &amp; linkages</h3>
-      <p class="mt-2 text-sm text-slate-400">Service tasks stay connected across customer, lift, contract and support ticket records.</p>
-      <dl class="mt-4 space-y-3 text-sm text-slate-300">
-        <div>
-          <dt class="font-semibold text-slate-200">Auto PDF service report</dt>
-          <dd class="text-slate-400">Captures worklog, parts, signatures and checklist summary for client acknowledgement.</dd>
-        </div>
-        <div>
-          <dt class="font-semibold text-slate-200">Linked records</dt>
-          <dd class="text-slate-400">Customer, lift, AMC contract (if applicable) and originating support ticket stay in sync.</dd>
-        </div>
-        <div>
-          <dt class="font-semibold text-slate-200">Parts consumption</dt>
-          <dd class="text-slate-400">Deducts stock and pushes backorder / purchase requisition when levels dip below threshold.</dd>
-        </div>
-      </dl>
-    </article>
   </section>
 </div>
 {% endblock %}
