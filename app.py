@@ -2691,8 +2691,6 @@ SRT_SAMPLE_TASKS = []
 SRT_TASK_ACTIVITY = {}
 
 
-SERVICE_TASKS = []
-
 
 SERVICE_COMPLAINTS = []
 
@@ -3526,23 +3524,6 @@ def _service_complaint_tasks_from_support():
         )
 
     return complaint_tasks
-
-
-def _build_service_tasks():
-    def _normalize_task(task):
-        owner_display = task.get("owner") or task.get("owner_display") or "Unassigned"
-        assignee_display = task.get("assignee") or task.get("assignee_display") or ", ".join(task.get("technicians") or [])
-        return {
-            **task,
-            "owner_display": owner_display,
-            "assignee_display": assignee_display or "Unassigned",
-            "requires_media_label": "Photos mandatory" if task.get("requires_media") else "Flexible",
-            "technician_display": ", ".join(task.get("technicians") or []),
-        }
-
-    tasks = [_normalize_task(task) for task in SERVICE_TASKS]
-    tasks.extend(_normalize_task(task) for task in _service_complaint_tasks_from_support())
-    return tasks
 
 
 def _infer_attachment_type(filename, mimetype=None):
@@ -6377,6 +6358,7 @@ from eleva_app.models import (
     SalesTask,
     sales_task_assignees,
     ServiceRoute,
+    ServiceTask,
     DeliveryOrder,
     DeliveryOrderItem,
     Product,
@@ -13734,6 +13716,7 @@ def ensure_tables():
         SalesQuotationRequestItem.__table__,
         SalesQuotationNegotiationLog.__table__,
         ServiceRoute.__table__,
+        ServiceTask.__table__,
         Customer.__table__,
         CustomerComment.__table__,
         Lift.__table__,
@@ -23913,23 +23896,220 @@ def service_overview():
     return redirect(url_for("service_home"))
 
 
+SERVICE_TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Urgent"]
+SERVICE_TASK_STATUS_OPTIONS = ["Open", "In progress", "Waiting", "Completed", "Closed"]
+SERVICE_TASK_CALL_TYPE_OPTIONS = ["Complaint", "AMC", "Repair", "Install Support"]
+
+
+def _parse_json_list(value):
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _service_task_worklog_entries(task):
+    entries = []
+    for raw_line in (task.worklog or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if " - " in line:
+            stamp, label = line.split(" - ", 1)
+            entries.append({"time": stamp.strip(), "label": label.strip()})
+        else:
+            entries.append({"time": "", "label": line})
+    return entries
+
+
+def _service_task_payload(task):
+    assigned_techs = [str(item).strip() for item in _parse_json_list(task.assigned_techs_json) if str(item).strip()]
+    parts_used = []
+    for item in _parse_json_list(task.parts_used_json):
+        if not isinstance(item, dict):
+            continue
+        part_name = clean_str(item.get("part_name") or item.get("name"))
+        qty = clean_str(item.get("qty"))
+        notes = clean_str(item.get("notes"))
+        if not part_name:
+            continue
+        parts_used.append({"name": part_name, "qty": qty or "1", "notes": notes})
+
+    return {
+        "id": task.id,
+        "task_code": task.task_code,
+        "site": task.site or "Site not specified",
+        "client": task.customer.company_name if task.customer else "Customer pending",
+        "lift_id": task.lift.lift_code if task.lift else "—",
+        "call_type": task.call_type or "Complaint",
+        "priority": task.priority or "Medium",
+        "owner_display": task.owner_user.display_name if task.owner_user else "Unassigned",
+        "technician_display": ", ".join(assigned_techs) if assigned_techs else "Unassigned",
+        "status": task.status or "Open",
+        "worklog": _service_task_worklog_entries(task),
+        "parts_used": parts_used,
+        "requires_media": bool(task.requires_media),
+        "requires_media_label": "Photos mandatory" if task.requires_media else "Flexible",
+        "created_at": task.created_at,
+        "closed_at": task.closed_at,
+        "model": task,
+    }
+
+
+def _next_service_task_code(task_id):
+    return f"CS-{1000 + int(task_id)}"
+
+
 @app.route("/service/tasks")
 @login_required
 def service_tasks():
     _module_visibility_required("service")
-    tasks = _build_service_tasks()
-    return render_template("service/tasks.html", tasks=tasks)
+    tasks = (
+        ServiceTask.query.options(
+            joinedload(ServiceTask.customer),
+            joinedload(ServiceTask.lift),
+            joinedload(ServiceTask.owner_user),
+        )
+        .order_by(ServiceTask.created_at.desc(), ServiceTask.id.desc())
+        .all()
+    )
+    return render_template(
+        "service/tasks.html",
+        tasks=[_service_task_payload(task) for task in tasks],
+        customers=Customer.query.order_by(func.lower(Customer.company_name)).all(),
+        lifts=Lift.query.order_by(func.lower(Lift.lift_code)).limit(200).all(),
+        users=User.query.filter(User.active.is_(True)).order_by(func.lower(User.username)).all(),
+        call_types=SERVICE_TASK_CALL_TYPE_OPTIONS,
+        priority_options=SERVICE_TASK_PRIORITY_OPTIONS,
+    )
 
 
-@app.route("/service/tasks/<task_id>")
+@app.route("/service/tasks/create", methods=["POST"])
+@login_required
+def service_task_create():
+    _module_visibility_required("service")
+
+    site = clean_str(request.form.get("site"))
+    call_type = clean_str(request.form.get("call_type")) or "Complaint"
+    priority = clean_str(request.form.get("priority")) or "Medium"
+
+    if not site:
+        flash("Site is required to create a service task.", "error")
+        return redirect(url_for("service_tasks"))
+
+    if priority not in SERVICE_TASK_PRIORITY_OPTIONS:
+        priority = "Medium"
+
+    customer_id = _parse_optional_int(request.form.get("customer_id"))
+    lift_id = _parse_optional_int(request.form.get("lift_id"))
+
+    assigned_raw = clean_str(request.form.get("assigned_techs"))
+    assigned_techs = [item.strip() for item in (assigned_raw or "").split(",") if item.strip()]
+
+    task = ServiceTask(
+        task_code=f"CS-TEMP-{uuid.uuid4().hex[:6]}",
+        customer_id=customer_id,
+        lift_id=lift_id,
+        site=site,
+        call_type=call_type,
+        priority=priority,
+        owner_user_id=current_user.id,
+        assigned_techs_json=json.dumps(assigned_techs),
+        status="Open",
+        worklog="",
+        parts_used_json="[]",
+        requires_media=_parse_bool_payload(request.form.get("requires_media"), default=False),
+    )
+    db.session.add(task)
+    db.session.flush()
+    task.task_code = _next_service_task_code(task.id)
+    db.session.commit()
+
+    flash(f"Service task {task.task_code} created.", "success")
+    return redirect(url_for("service_task_detail", task_id=task.id))
+
+
+@app.route("/service/tasks/<int:task_id>")
 @login_required
 def service_task_detail(task_id):
     _module_visibility_required("service")
-    tasks = _build_service_tasks()
-    task = next((task for task in tasks if str(task.get("id")) == str(task_id)), None)
-    if not task:
-        abort(404)
-    return render_template("service/task_detail.html", task=task)
+    task = ServiceTask.query.options(
+        joinedload(ServiceTask.customer),
+        joinedload(ServiceTask.lift),
+        joinedload(ServiceTask.owner_user),
+    ).get_or_404(task_id)
+
+    return render_template(
+        "service/task_detail.html",
+        task=_service_task_payload(task),
+        priority_options=SERVICE_TASK_PRIORITY_OPTIONS,
+        status_options=SERVICE_TASK_STATUS_OPTIONS,
+    )
+
+
+@app.route("/service/tasks/<int:task_id>/update", methods=["POST"])
+@login_required
+def service_task_update(task_id):
+    _module_visibility_required("service")
+    task = ServiceTask.query.get_or_404(task_id)
+
+    priority = clean_str(request.form.get("priority"))
+    status = clean_str(request.form.get("status"))
+    note = clean_str(request.form.get("worklog_note"))
+
+    if priority in SERVICE_TASK_PRIORITY_OPTIONS:
+        task.priority = priority
+    if status in SERVICE_TASK_STATUS_OPTIONS:
+        task.status = status
+        if status == "Closed" and not task.closed_at:
+            task.closed_at = datetime.datetime.utcnow()
+    if note:
+        stamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        existing = (task.worklog or "").strip()
+        line = f"{stamp} - {note}"
+        task.worklog = f"{existing}\n{line}" if existing else line
+
+    db.session.commit()
+    flash("Service task updated.", "success")
+    return redirect(url_for("service_task_detail", task_id=task.id))
+
+
+@app.route("/service/tasks/<int:task_id>/parts", methods=["POST"])
+@login_required
+def service_task_parts(task_id):
+    _module_visibility_required("service")
+    task = ServiceTask.query.get_or_404(task_id)
+
+    part_name = clean_str(request.form.get("part_name"))
+    qty = clean_str(request.form.get("qty")) or "1"
+    notes = clean_str(request.form.get("notes"))
+
+    if not part_name:
+        flash("Part name is required.", "error")
+        return redirect(url_for("service_task_detail", task_id=task.id))
+
+    parts = _parse_json_list(task.parts_used_json)
+    parts.append({"part_name": part_name, "qty": qty, "notes": notes})
+    task.parts_used_json = json.dumps(parts)
+    db.session.commit()
+
+    flash("Part usage added.", "success")
+    return redirect(url_for("service_task_detail", task_id=task.id))
+
+
+@app.route("/service/tasks/<int:task_id>/close", methods=["POST"])
+@login_required
+def service_task_close(task_id):
+    _module_visibility_required("service")
+    task = ServiceTask.query.get_or_404(task_id)
+    task.status = "Closed"
+    task.closed_at = datetime.datetime.utcnow()
+    db.session.commit()
+    flash(f"{task.task_code} was closed.", "success")
+    return redirect(url_for("service_task_detail", task_id=task.id))
 
 
 @app.route("/service/customers")

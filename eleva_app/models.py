@@ -1299,6 +1299,35 @@ class ServiceRoute(db.Model):
         return self.state
 
 
+class ServiceTask(db.Model):
+    __tablename__ = "service_task"
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_code = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=True)
+    lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=True)
+    site = db.Column(db.String(255), nullable=True)
+    call_type = db.Column(db.String(64), nullable=True)
+    priority = db.Column(db.String(20), nullable=False, default="Medium")
+    owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assigned_techs_json = db.Column(db.Text, nullable=False, default="[]")
+    status = db.Column(db.String(32), nullable=False, default="Open")
+    worklog = db.Column(db.Text, nullable=True)
+    parts_used_json = db.Column(db.Text, nullable=False, default="[]")
+    requires_media = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+    closed_at = db.Column(db.DateTime, nullable=True)
+
+    customer = db.relationship("Customer", foreign_keys=[customer_id])
+    lift = db.relationship("Lift", foreign_keys=[lift_id])
+    owner_user = db.relationship("User", foreign_keys=[owner_user_id])
+
+
 class Customer(db.Model):
     __tablename__ = "customer"
 
