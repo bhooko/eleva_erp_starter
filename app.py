@@ -9751,7 +9751,16 @@ def generate_po_from_bom(bom_id):
     project_id_value = request.values.get("project_id") or bom.project_id
     po_notes = request.values.get("po_notes") or None
     pending_only = request.values.get("pending_only") is not None
+    allow_incomplete_spec = request.values.get("allow_incomplete_spec") is not None
     preview_items = None
+
+    # Purchase flow guardrail: classified lines must have specifications unless the
+    # user explicitly acknowledges an override.
+    missing_spec_items = [
+        item
+        for item in bom.items
+        if _bom_line_spec_required(item) and not (item.specification or "").strip()
+    ]
     selected_stage_name = next(
         (
             stage.name
@@ -9769,8 +9778,92 @@ def generate_po_from_bom(bom_id):
             return item.stage_id
         return default_stage.id if default_stage else None
 
+    def _procurement_stage_name(item: BOMItem):
+        """Purchase screens must use procurement stage (stage_id), never template stage."""
+        if item.procurement_stage:
+            return item.procurement_stage.name
+        if item.stage_id:
+            stage_record = ProcurementStage.query.get(item.stage_id)
+            if stage_record:
+                return stage_record.name
+        return default_stage.name if default_stage else "—"
+
+    def _edit_spec_url(item: BOMItem):
+        if bom.design_task_id:
+            return url_for("design_task_detail", task_id=bom.design_task_id)
+        if bom.drawing_site_id:
+            return url_for("design_drawing_site_detail", site_id=bom.drawing_site_id)
+        return None
+
+    missing_spec_items_payload = [
+        {
+            "item": item,
+            "item_code": item.item_code,
+            "description": item.description or item.specification or "—",
+            "section_label": item.section_title or item.category or "—",
+            "edit_url": _edit_spec_url(item),
+        }
+        for item in missing_spec_items
+    ]
+
+    def _build_preview_items(target_stage_id, is_pending_only):
+        rows = []
+        for item in bom.items:
+            item_stage_id = _stage_for_item(item)
+            if target_stage_id and item_stage_id != target_stage_id:
+                continue
+            bom_qty = item.quantity_required or 0
+            ordered_qty = 0
+            if is_pending_only:
+                book = BookInventory.query.filter_by(item_code=item.item_code).first()
+                ordered_qty = book.quantity_ordered_total if book else 0
+                suggested_qty = max(bom_qty - (ordered_qty or 0), 0)
+                if suggested_qty <= 0:
+                    continue
+                quantity_to_order = suggested_qty
+            else:
+                quantity_to_order = bom_qty
+
+            product = None
+            if item.item_code:
+                product = Product.query.filter(
+                    func.lower(Product.name) == (item.item_code or "").lower()
+                ).first()
+            unit_price = product.cost if product else None
+            rows.append(
+                {
+                    "item": item,
+                    "bom_qty": bom_qty,
+                    "ordered_qty": ordered_qty or 0,
+                    "quantity_to_order": quantity_to_order,
+                    "stage_name": _procurement_stage_name(item),
+                    "unit_price": unit_price,
+                }
+            )
+        return rows
+
     if request.method == "POST":
         step = (request.form.get("step") or "select").strip().lower()
+        allow_incomplete_spec = request.form.get("allow_incomplete_spec") is not None
+
+        if missing_spec_items and not allow_incomplete_spec:
+            flash(
+                "Specification is incomplete for one or more classified BOM items. Review the missing items below or tick override to proceed.",
+                "danger",
+            )
+            if step == "confirm":
+                selected_stage_id = request.form.get("stage_id") or None
+                selected_vendor_id = request.form.get("vendor_id") or None
+                project_id_value = request.form.get("project_id") or bom.project_id
+                po_notes = request.form.get("po_notes") or None
+                pending_only = request.form.get("pending_only") is not None
+                try:
+                    target_stage_id = int(selected_stage_id) if selected_stage_id else None
+                except (TypeError, ValueError):
+                    target_stage_id = None
+                preview_items = _build_preview_items(target_stage_id, pending_only)
+            step = "blocked"
+
         if step == "select":
             if not selected_stage_id:
                 flash("Please select a procurement stage to continue.", "danger")
@@ -9781,39 +9874,7 @@ def generate_po_from_bom(bom_id):
                     target_stage_id = int(selected_stage_id)
                 except (TypeError, ValueError):
                     target_stage_id = None
-                preview_items = []
-                for item in bom.items:
-                    item_stage_id = _stage_for_item(item)
-                    if target_stage_id and item_stage_id != target_stage_id:
-                        continue
-                    bom_qty = item.quantity_required or 0
-                    ordered_qty = 0
-                    if pending_only:
-                        book = BookInventory.query.filter_by(item_code=item.item_code).first()
-                        ordered_qty = book.quantity_ordered_total if book else 0
-                        suggested_qty = max(bom_qty - (ordered_qty or 0), 0)
-                        if suggested_qty <= 0:
-                            continue
-                        quantity_to_order = suggested_qty
-                    else:
-                        quantity_to_order = bom_qty
-
-                    product = None
-                    if item.item_code:
-                        product = Product.query.filter(
-                            func.lower(Product.name) == (item.item_code or "").lower()
-                        ).first()
-                    unit_price = product.cost if product else None
-                    preview_items.append(
-                        {
-                            "item": item,
-                            "bom_qty": bom_qty,
-                            "ordered_qty": ordered_qty or 0,
-                            "quantity_to_order": quantity_to_order,
-                            "stage_name": item.procurement_stage.name if item.procurement_stage else (default_stage.name if default_stage else "—"),
-                            "unit_price": unit_price,
-                        }
-                    )
+                preview_items = _build_preview_items(target_stage_id, pending_only)
 
         elif step == "confirm":
             selected_stage_id = request.form.get("stage_id") or None
@@ -9948,6 +10009,8 @@ def generate_po_from_bom(bom_id):
         project_id_value=project_id_value,
         po_notes=po_notes,
         pending_only=pending_only,
+        allow_incomplete_spec=allow_incomplete_spec,
+        missing_spec_items=missing_spec_items_payload,
         preview_items=preview_items,
         selected_stage_name=selected_stage_name,
         related_pos=related_pos,
