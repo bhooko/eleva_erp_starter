@@ -1286,10 +1286,17 @@ class ServiceRoute(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     state = db.Column(db.String(120), unique=True, nullable=False)
     branch = db.Column(db.String(120), nullable=True)
+    remark = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     @property
     def display_name(self):
+        if self.remark:
+            remark_text = self.remark.strip()
+            if remark_text:
+                if self.branch:
+                    return f"{self.state} · {self.branch} ({remark_text})"
+                return f"{self.state} ({remark_text})"
         if self.branch:
             return f"{self.state} · {self.branch}"
         return self.state
