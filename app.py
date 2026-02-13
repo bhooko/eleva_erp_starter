@@ -2559,6 +2559,28 @@ def get_service_dropdown_options(category, active_only=True):
     ).all()
 
 
+def _next_service_dropdown_sort_order(category):
+    max_sort_order = (
+        db.session.query(func.max(ServiceDropdownOption.sort_order))
+        .filter(ServiceDropdownOption.category == category)
+        .scalar()
+    )
+    return (max_sort_order or 0) + 1
+
+
+def _shift_service_dropdown_sort_orders(category, requested_sort_order, exclude_option_id=None):
+    query = ServiceDropdownOption.query.filter(
+        ServiceDropdownOption.category == category,
+        ServiceDropdownOption.sort_order >= requested_sort_order,
+    )
+    if exclude_option_id is not None:
+        query = query.filter(ServiceDropdownOption.id != exclude_option_id)
+
+    options_to_shift = query.order_by(ServiceDropdownOption.sort_order.desc()).all()
+    for option in options_to_shift:
+        option.sort_order = (option.sort_order or 0) + 1
+
+
 def service_dropdown_values_set(category):
     return {
         (option.value or "").strip().lower()
@@ -23518,9 +23540,13 @@ def service_settings_dropdown_add():
 
     sort_order_raw = clean_str(request.form.get("sort_order"))
     try:
-        sort_order = int(sort_order_raw) if sort_order_raw else 0
+        sort_order = int(sort_order_raw) if sort_order_raw else None
     except (TypeError, ValueError):
         flash("Sort order must be a whole number.", "error")
+        return redirect(url_for("service_settings"))
+
+    if sort_order is not None and sort_order < 1:
+        flash("Sort order must be 1 or greater.", "error")
         return redirect(url_for("service_settings"))
 
     existing = ServiceDropdownOption.query.filter(
@@ -23531,14 +23557,12 @@ def service_settings_dropdown_add():
         flash("That option already exists for this category.", "error")
         return redirect(url_for("service_settings"))
 
-    db.session.add(
-        ServiceDropdownOption(
-            category=category,
-            value=value,
-            sort_order=sort_order,
-            is_active=True,
-        )
-    )
+    if sort_order is None:
+        sort_order = _next_service_dropdown_sort_order(category)
+    else:
+        _shift_service_dropdown_sort_orders(category, sort_order)
+
+    db.session.add(ServiceDropdownOption(category=category, value=value, sort_order=sort_order, is_active=True))
     db.session.commit()
     flash("Service dropdown option added.", "success")
     return redirect(url_for("service_settings"))
@@ -23598,9 +23622,13 @@ def service_settings_dropdown_update():
 
     sort_order_raw = clean_str(request.form.get("sort_order"))
     try:
-        sort_order = int(sort_order_raw) if sort_order_raw else 0
+        sort_order = int(sort_order_raw) if sort_order_raw else None
     except (TypeError, ValueError):
         flash("Sort order must be a whole number.", "error")
+        return redirect(url_for("service_settings"))
+
+    if sort_order is None or sort_order < 1:
+        flash("Sort order must be 1 or greater.", "error")
         return redirect(url_for("service_settings"))
 
     existing = ServiceDropdownOption.query.filter(
@@ -23616,6 +23644,8 @@ def service_settings_dropdown_update():
         return redirect(url_for("service_settings"))
 
     option.value = value
+    if sort_order != option.sort_order:
+        _shift_service_dropdown_sort_orders(option.category, sort_order, exclude_option_id=option.id)
     option.sort_order = sort_order
     db.session.commit()
     flash("Service dropdown option saved.", "success")
@@ -23630,16 +23660,16 @@ def service_settings_dropdown_reorder():
 
     payload = request.get_json(silent=True) or {}
     category = clean_str(payload.get("category"))
-    order = payload.get("order")
+    ordered_ids = payload.get("ordered_ids")
 
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         return jsonify({"ok": False, "error": "invalid-category"}), 400
-    if not isinstance(order, list):
+    if not isinstance(ordered_ids, list):
         return jsonify({"ok": False, "error": "invalid-order"}), 400
 
     normalized_ids = []
     seen = set()
-    for raw_option_id in order:
+    for raw_option_id in ordered_ids:
         try:
             option_id = int(raw_option_id)
         except (TypeError, ValueError):
@@ -23649,18 +23679,19 @@ def service_settings_dropdown_reorder():
         seen.add(option_id)
         normalized_ids.append(option_id)
 
-    if not normalized_ids:
-        return jsonify({"ok": True})
-
-    options = ServiceDropdownOption.query.filter(
-        ServiceDropdownOption.category == category,
-        ServiceDropdownOption.id.in_(normalized_ids),
+    all_options = ServiceDropdownOption.query.filter(ServiceDropdownOption.category == category).order_by(
+        ServiceDropdownOption.sort_order.asc(), ServiceDropdownOption.id.asc()
     ).all()
-    if len(options) != len(normalized_ids):
+    option_map = {option.id: option for option in all_options}
+
+    if not normalized_ids:
+        return jsonify({"ok": False, "error": "invalid-order"}), 400
+    if any(option_id not in option_map for option_id in normalized_ids):
         return jsonify({"ok": False, "error": "missing-option"}), 400
 
-    option_map = {option.id: option for option in options}
-    for index, option_id in enumerate(normalized_ids):
+    full_order = normalized_ids + [option.id for option in all_options if option.id not in seen]
+
+    for index, option_id in enumerate(full_order, start=1):
         option_map[option_id].sort_order = index
 
     db.session.commit()
