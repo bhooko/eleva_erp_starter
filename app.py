@@ -23714,10 +23714,13 @@ def service_settings_dropdown_reorder():
 
     if not normalized_ids:
         return _json_error("invalid-order", 400)
-    if any(option_id not in option_map for option_id in normalized_ids):
-        return _json_error("missing-option", 400)
 
-    full_order = normalized_ids + [option.id for option in all_options if option.id not in seen]
+    category_ordered_ids = [option_id for option_id in normalized_ids if option_id in option_map]
+    if not category_ordered_ids:
+        return _json_error("invalid-order", 400)
+
+    category_seen = set(category_ordered_ids)
+    full_order = category_ordered_ids + [option.id for option in all_options if option.id not in category_seen]
 
     for index, option_id in enumerate(full_order, start=1):
         option_map[option_id].sort_order = index
