@@ -1,6 +1,6 @@
 <div id="{{ modal_id }}" class="fixed inset-0 z-50 hidden items-center justify-center">
   <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-close-modal></div>
-  <div class="relative bg-white w-full max-w-3xl max-h-[90vh] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+  <div class="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
     <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
       <div>
         <p class="text-xs text-slate-500 uppercase">Design intake</p>
@@ -8,14 +8,14 @@
       </div>
       <button class="text-slate-500" type="button" data-close-modal>✕</button>
     </div>
-    <form method="POST" action="{{ action_url or url_for('design_tasks') }}" class="p-5 flex flex-col min-h-0">
-      <div class="space-y-4 overflow-y-auto max-h-[70vh] pb-24 pr-1">
+    <form method="POST" action="{{ action_url or url_for('design_tasks') }}" class="flex min-h-0 flex-1 flex-col p-5">
+      <div class="min-h-0 flex-1 space-y-4 overflow-y-auto pb-24 pr-1">
         {{ csrf_field() }}
         <input type="hidden" name="parent_task_id" value="{{ default_parent_task_id or '' }}" />
         {% if default_subtype %}<input type="hidden" name="subtype" value="{{ default_subtype }}" />{% endif %}
         {% if redirect_url %}<input type="hidden" name="redirect_url" value="{{ redirect_url }}" />{% endif %}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label class="space-y-1">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Task type</span>
           <select name="task_type" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
             {% set task_types = task_type_options or {
@@ -27,20 +27,21 @@
             <option value="{{ value }}" {% if default_task_type and default_task_type == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Title</span>
           <input type="text" name="task_name" class="w-full rounded-lg border-slate-200" placeholder="Task title" value="{{ default_task_name or default_description or '' }}" required />
         </label>
 
-        <label class="space-y-1 md:col-span-2" data-site-visit-field hidden>
+
+          <label class="space-y-1 md:col-span-2" data-site-visit-field hidden>
           <span class="text-sm text-slate-600">Site visit purpose</span>
           <select name="subtype" class="w-full rounded-lg border-slate-200">
             <option value="sales_request">Sales team request</option>
             <option value="drawing_verification">Drawing verification</option>
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Project</span>
           <select name="project_id" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
             <option value="">Unlinked</option>
@@ -48,13 +49,13 @@
             <option value="{{ project.id }}" {% if default_project_id and default_project_id == project.id %}selected{% endif %}>{{ project.name }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Project / Site (text)</span>
           <input type="text" name="project_name" class="w-full rounded-lg border-slate-200" placeholder="If project not in list" value="{{ default_project_name or '' }}" />
         </label>
-        {% if show_origin_fields is not defined or show_origin_fields %}
-        <label class="space-y-1">
+          {% if show_origin_fields is not defined or show_origin_fields %}
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Origin Type</span>
           <select name="origin_type" class="w-full rounded-lg border-slate-200">
             <option value="sales" {% if default_origin_type == 'sales' %}selected{% endif %}>Sales Opportunity</option>
@@ -63,21 +64,21 @@
             <option value="manual" {% if default_origin_type == 'manual' or not default_origin_type %}selected{% endif %}>Manual</option>
             <option value="design" {% if default_origin_type == 'design' %}selected{% endif %}>Design</option>
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Origin Reference ID</span>
           <input type="text" name="origin_id" class="w-full rounded-lg border-slate-200" placeholder="Optional" value="{{ default_origin_id or '' }}" />
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Origin Notes</span>
           <input type="text" name="origin_reference" class="w-full rounded-lg border-slate-200" placeholder="Links or notes" value="{{ default_origin_reference or '' }}" />
         </label>
-        {% else %}
+          {% else %}
           <input type="hidden" name="origin_type" value="{{ default_origin_type or '' }}" />
           <input type="hidden" name="origin_id" value="{{ default_origin_id or '' }}" />
           <input type="hidden" name="origin_reference" value="{{ default_origin_reference or '' }}" />
-        {% endif %}
-        <label class="space-y-1">
+          {% endif %}
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Assigned designer</span>
           <select name="assigned_to_user_id" class="w-full rounded-lg border-slate-200">
             <option value="">Unassigned</option>
@@ -85,37 +86,37 @@
               <option value="{{ user.id }}" {% if default_assignee_id and default_assignee_id == user.id %}selected{% endif %}>{{ user.display_name }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Priority</span>
           <select name="priority" class="w-full rounded-lg border-slate-200">
             <option value="low" {% if default_priority == 'low' %}selected{% endif %}>Low</option>
             <option value="medium" {% if default_priority is undefined or default_priority == 'medium' %}selected{% endif %}>Medium</option>
             <option value="high" {% if default_priority == 'high' %}selected{% endif %}>High</option>
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Due date</span>
           <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" value="{{ default_due_date or '' }}" />
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Description</span>
           <textarea name="description" rows="2" class="w-full rounded-lg border-slate-200" placeholder="Description">{{ default_description or '' }}</textarea>
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Attachment (link/path)</span>
           <input type="text" name="attachment" class="w-full rounded-lg border-slate-200" placeholder="Paste file link" value="{{ default_attachment or '' }}" />
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Notes</span>
           <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context">{{ default_notes or '' }}</textarea>
         </label>
         </div>
       </div>
-      <div class="sticky bottom-0 z-10 -mx-5 mt-4 border-t border-slate-200 bg-white px-5 py-4">
+      <div class="sticky bottom-0 z-10 mt-4 border-t border-slate-200 bg-white pt-4">
         <div class="flex items-center justify-end gap-3">
-        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">{{ submit_label or 'Create' }}</button>
+          <button type="button" class="rounded-lg border px-4 py-2" data-close-modal>Cancel</button>
+          <button type="submit" class="btn-primary btn-shimmer rounded-lg px-5 py-2 shadow transition hover:scale-[1.02] hover:shadow-lg">{{ submit_label or 'Create' }}</button>
         </div>
       </div>
     </form>
