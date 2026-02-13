@@ -57,9 +57,6 @@
           </select>
           {% endif %}
         </div>
-        {% if task.origin_type %}
-        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-900 text-white">Origin: {{ task.origin_type.title() }} {% if task.origin_reference %}· {{ task.origin_reference }}{% endif %}</span>
-        {% endif %}
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -114,6 +111,16 @@
         </div>
         {% if task.description %}<p class="text-sm text-slate-600">{{ task.description }}</p>{% endif %}
         {% if task.attachment %}<p class="text-sm">Attachment: <a href="{{ task.attachment }}" target="_blank" class="text-orange-600 hover:underline">{{ task.attachment }}</a></p>{% endif %}
+        {% if task.origin_type or task.origin_id or task.origin_reference %}
+        <details class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">Linked to</summary>
+          <div class="mt-2 space-y-1 text-sm text-slate-700">
+            {% if task.origin_type %}<p><span class="text-slate-500">Origin Type:</span> {{ task.origin_type.replace('_', ' ').title() }}</p>{% endif %}
+            {% if task.origin_id %}<p><span class="text-slate-500">Origin Reference ID:</span> {{ task.origin_id }}</p>{% endif %}
+            {% if task.origin_reference %}<p><span class="text-slate-500">Origin Notes:</span> {{ task.origin_reference }}</p>{% endif %}
+          </div>
+        </details>
+        {% endif %}
         {% if task.parent_task_id %}
         <p class="text-xs text-slate-500">Linked to parent task <a href="{{ url_for('design_task_detail', task_id=task.parent_task_id) }}" class="text-orange-600 hover:underline">#{{ task.parent_task_id }}</a>.</p>
         {% endif %}

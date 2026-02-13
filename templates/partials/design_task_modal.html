@@ -1,6 +1,6 @@
 <div id="{{ modal_id }}" class="fixed inset-0 z-50 hidden items-center justify-center">
   <div class="absolute inset-0 bg-slate-900/70 backdrop-blur" data-close-modal></div>
-  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+  <div class="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
     <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
       <div>
         <p class="text-xs text-slate-500 uppercase">Design intake</p>
@@ -8,11 +8,12 @@
       </div>
       <button class="text-slate-500" type="button" data-close-modal>✕</button>
     </div>
-    <form method="POST" action="{{ action_url or url_for('design_tasks') }}" class="p-5 space-y-4">
+    <form method="POST" action="{{ action_url or url_for('design_tasks') }}" class="flex-1 min-h-0 overflow-y-auto">
       {{ csrf_field() }}
       <input type="hidden" name="parent_task_id" value="{{ default_parent_task_id or '' }}" />
       {% if default_subtype %}<input type="hidden" name="subtype" value="{{ default_subtype }}" />{% endif %}
       {% if redirect_url %}<input type="hidden" name="redirect_url" value="{{ redirect_url }}" />{% endif %}
+      <div class="p-5 pb-28">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="space-y-1">
           <span class="text-sm text-slate-600">Task type</span>
@@ -52,26 +53,7 @@
           <span class="text-sm text-slate-600">Project / Site (text)</span>
           <input type="text" name="project_name" class="w-full rounded-lg border-slate-200" placeholder="If project not in list" value="{{ default_project_name or '' }}" />
         </label>
-        {% if show_origin_fields is not defined or show_origin_fields %}
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Type</span>
-          <select name="origin_type" class="w-full rounded-lg border-slate-200">
-            <option value="sales" {% if default_origin_type == 'sales' %}selected{% endif %}>Sales Opportunity</option>
-            <option value="installation" {% if default_origin_type == 'installation' %}selected{% endif %}>New Installation</option>
-            <option value="service" {% if default_origin_type == 'service' %}selected{% endif %}>Service</option>
-            <option value="manual" {% if default_origin_type == 'manual' or not default_origin_type %}selected{% endif %}>Manual</option>
-            <option value="design" {% if default_origin_type == 'design' %}selected{% endif %}>Design</option>
-          </select>
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Reference ID</span>
-          <input type="text" name="origin_id" class="w-full rounded-lg border-slate-200" placeholder="Optional" value="{{ default_origin_id or '' }}" />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm text-slate-600">Origin Notes</span>
-          <input type="text" name="origin_reference" class="w-full rounded-lg border-slate-200" placeholder="Links or notes" value="{{ default_origin_reference or '' }}" />
-        </label>
-        {% else %}
+        {% if show_origin_fields is defined and not show_origin_fields %}
           <input type="hidden" name="origin_type" value="{{ default_origin_type or '' }}" />
           <input type="hidden" name="origin_id" value="{{ default_origin_id or '' }}" />
           <input type="hidden" name="origin_reference" value="{{ default_origin_reference or '' }}" />
@@ -110,8 +92,9 @@
           <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context">{{ default_notes or '' }}</textarea>
         </label>
       </div>
-      <div class="flex items-center justify-end gap-3 pt-2">
-        <button type="button" class="px-4 py-2 rounded-lg border" data-close-modal>Cancel</button>
+      </div>
+      <div class="sticky bottom-0 z-10 flex items-center justify-end gap-3 px-5 py-4 bg-slate-900/95 border-t border-slate-700">
+        <button type="button" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-100 hover:bg-slate-800" data-close-modal>Cancel</button>
         <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">{{ submit_label or 'Create' }}</button>
       </div>
     </form>
