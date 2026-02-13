@@ -2206,6 +2206,27 @@ class DrawingComment(db.Model):
     author = db.relationship("User")
 
 
+class DrawingStatusLog(db.Model):
+    __tablename__ = "drawing_status_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    drawing_site_id = db.Column(
+        db.Integer, db.ForeignKey("drawing_site.id"), nullable=True, index=True
+    )
+    drawing_id = db.Column(
+        db.Integer, db.ForeignKey("design_drawing.id"), nullable=True, index=True
+    )
+    old_status = db.Column(db.String(80), nullable=True)
+    new_status = db.Column(db.String(80), nullable=False)
+    changed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, nullable=False)
+    remark = db.Column(db.Text, nullable=True)
+
+    drawing_site = db.relationship("DrawingSite", backref="status_logs")
+    drawing = db.relationship("DesignDrawing", backref="status_logs")
+    changed_by = db.relationship("User")
+
+
 class DrawingHistory(db.Model):
     __tablename__ = "drawing_history"
 
