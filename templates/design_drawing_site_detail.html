@@ -145,6 +145,26 @@
       </div>
 
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Status timeline</p>
+          <h2 class="text-lg font-semibold">Status changes</h2>
+        </div>
+        <div class="space-y-2">
+          {% for log in status_logs %}
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            <p class="text-slate-800 font-medium">{{ log.changed_at|format_india_datetime('%d %b %Y, %I:%M %p') if log.changed_at else '—' }} · {{ log.changed_by.display_name if log.changed_by else 'System' }}</p>
+            <p class="text-slate-600">{{ log.old_status or '—' }} → {{ log.new_status }}</p>
+            {% if log.remark %}
+            <p class="text-slate-500">{{ log.remark }}</p>
+            {% endif %}
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-500">No status changes recorded yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-xs uppercase text-slate-500">Comments / Notes</p>

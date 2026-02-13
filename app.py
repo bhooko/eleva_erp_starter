@@ -6351,6 +6351,7 @@ from eleva_app.models import (
     DrawingComment,
     DrawingHistory,
     DrawingSite,
+    DrawingStatusLog,
     DrawingVersion,
     DesignDrawing,
     DesignDrawingRevision,
@@ -7278,8 +7279,14 @@ def design_task_detail(task_id):
             if status_value not in allowed_drawing_statuses:
                 flash("Invalid drawing status.", "danger")
             else:
+                previous_status = drawing.status
                 drawing.status = status_value
                 drawing.updated_at = datetime.datetime.utcnow()
+                _log_drawing_status_change(
+                    old_status=previous_status,
+                    new_status=status_value,
+                    drawing_id=drawing.id,
+                )
                 db.session.commit()
                 flash("Drawing status updated.", "success")
         elif action == "update_task":
@@ -8638,6 +8645,32 @@ def _is_completed_drawing_status(status_value: str) -> bool:
     return clean_str(status_value).lower() in COMPLETED_DRAWING_STATUSES
 
 
+def _log_drawing_status_change(
+    *,
+    old_status: Optional[str],
+    new_status: Optional[str],
+    drawing_site_id: Optional[int] = None,
+    drawing_id: Optional[int] = None,
+    remark: Optional[str] = None,
+):
+    normalized_old = clean_str(old_status)
+    normalized_new = clean_str(new_status)
+    if not normalized_new or normalized_old == normalized_new:
+        return
+
+    db.session.add(
+        DrawingStatusLog(
+            drawing_site_id=drawing_site_id,
+            drawing_id=drawing_id,
+            old_status=normalized_old or None,
+            new_status=normalized_new,
+            changed_by_user_id=(current_user.id if current_user else None),
+            changed_at=datetime.datetime.utcnow(),
+            remark=(remark.strip() if isinstance(remark, str) and remark.strip() else None),
+        )
+    )
+
+
 def _sync_drawing_history_for_site(site: DrawingSite):
     if not site:
         return
@@ -8817,12 +8850,20 @@ def design_drawing_site_detail(site_id: int):
             version.created_at = version.created_at or datetime.datetime.utcnow()
 
             previous_completion_state = _is_completed_drawing_status(previous_version_status)
+            previous_site_status = site.approval_status
 
             site.latest_drawing_number = drawing_number or site.latest_drawing_number
             site.latest_revision = revision_no or site.latest_revision
             site.approval_status = approval_status or site.approval_status
             site.last_updated = datetime.datetime.utcnow()
             site.apply_latest_version()
+
+            _log_drawing_status_change(
+                old_status=previous_site_status,
+                new_status=site.approval_status,
+                drawing_site_id=site.id,
+                remark=revision_reason,
+            )
 
             if _is_completed_drawing_status(version.approval_status) and not previous_completion_state:
                 _sync_drawing_history_for_site(site)
@@ -8923,6 +8964,11 @@ def design_drawing_site_detail(site_id: int):
         key=lambda c: c.created_at or datetime.datetime.min,
         reverse=True,
     )
+    status_logs = (
+        DrawingStatusLog.query.filter(DrawingStatusLog.drawing_site_id == site.id)
+        .order_by(DrawingStatusLog.changed_at.desc(), DrawingStatusLog.id.desc())
+        .all()
+    )
 
     project_options = (
         Project.query.order_by(Project.created_at.desc().nullslast()).limit(100).all()
@@ -8938,6 +8984,7 @@ def design_drawing_site_detail(site_id: int):
         site=site,
         versions=versions,
         comments=comments,
+        status_logs=status_logs,
         bom=bom,
         bom_item_count=bom_item_count,
         bom_stage_summary=bom_stage_summary,
@@ -14457,6 +14504,38 @@ def ensure_design_drawing_columns():
         print("✔️ design_drawing OK")
 
 
+def ensure_drawing_status_log_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_drawing_status_log_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS drawing_status_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            drawing_site_id INTEGER,
+            drawing_id INTEGER,
+            old_status TEXT,
+            new_status TEXT NOT NULL,
+            changed_by_user_id INTEGER,
+            changed_at DATETIME,
+            remark TEXT
+        );
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_drawing_status_log_drawing_site_id ON drawing_status_log (drawing_site_id);"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_drawing_status_log_drawing_id ON drawing_status_log (drawing_id);"
+    )
+    conn.commit()
+    conn.close()
+    print("✔️ drawing_status_log OK")
+
+
 def ensure_project_task_backfill():
     created = 0
     order_map = {}
@@ -15143,6 +15222,7 @@ def bootstrap_db():
     ensure_delivery_challan_columns()
     ensure_design_task_columns()
     ensure_design_drawing_columns()
+    ensure_drawing_status_log_table()
     ensure_bom_columns()
     ensure_bom_package_table()
     ensure_bom_package_backfill()
