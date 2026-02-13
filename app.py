@@ -13468,6 +13468,7 @@ def ensure_lift_columns():
         ("building_villa_number", "TEXT"),
         ("geo_location", "TEXT"),
         ("amc_duration_key", "TEXT"),
+        ("services_per_year", "INTEGER"),
         ("preferred_service_days_json", "TEXT"),
         ("lifetime_metrics_json", "TEXT"),
         ("amc_contacts_json", "TEXT"),
@@ -26161,30 +26162,77 @@ def service_lift_generate_schedule(lift_id):
 
     redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
     contract = get_service_contract_by_id(lift.amc_contract_id)
-    services_per_year = int(contract.get("services_per_year") or 0) if contract else 0
+    override_services_per_year_raw = clean_str(request.form.get("services_per_year"))
+    override_services_per_year = None
+    if override_services_per_year_raw:
+        try:
+            override_services_per_year = int(override_services_per_year_raw)
+        except (TypeError, ValueError):
+            flash("Services per year must be a whole number between 1 and 12.", "warning")
+            return redirect(redirect_url)
+        if override_services_per_year < 1 or override_services_per_year > 12:
+            flash("Services per year must be between 1 and 12.", "warning")
+            return redirect(redirect_url)
 
-    if not lift.amc_start or services_per_year < 1:
-        flash("Set AMC start date and services/year to generate schedule.", "warning")
+    if not lift.amc_start or not lift.amc_end:
+        flash("Set AMC start and AMC end dates to generate schedule.", "warning")
+        return redirect(redirect_url)
+
+    contract_services_per_year = 0
+    if contract:
+        try:
+            contract_services_per_year = int(contract.get("services_per_year") or 0)
+        except (TypeError, ValueError):
+            contract_services_per_year = 0
+
+    services_per_year = 0
+    if override_services_per_year:
+        services_per_year = override_services_per_year
+    elif contract_services_per_year >= 1:
+        services_per_year = contract_services_per_year
+    elif isinstance(lift.services_per_year, int) and lift.services_per_year >= 1:
+        services_per_year = lift.services_per_year
+
+    if services_per_year < 1:
+        flash("Set services per year to generate schedule.", "warning")
+        return redirect(redirect_url)
+
+    if (not contract or contract_services_per_year < 1) and override_services_per_year:
+        lift.services_per_year = override_services_per_year
+
+    amc_years = 0
+    amc_end_exclusive = lift.amc_end + datetime.timedelta(days=1)
+    total_months = (amc_end_exclusive.year - lift.amc_start.year) * 12 + (
+        amc_end_exclusive.month - lift.amc_start.month
+    )
+    if amc_end_exclusive.day < lift.amc_start.day:
+        total_months -= 1
+    if total_months >= 12:
+        amc_years = total_months // 12
+
+    if amc_years < 1:
+        flash("AMC duration must cover at least one full year to generate schedule.", "warning")
         return redirect(redirect_url)
 
     schedule_entries = []
-    for idx in range(services_per_year):
-        month_offset = int((12 * idx) / services_per_year)
-        visit_date = add_months(lift.amc_start, month_offset)
-        if not visit_date:
-            continue
-        service_type = SERVICE_TYPE_OPTIONS[idx % len(SERVICE_TYPE_OPTIONS)][0]
-        schedule_entries.append(
-            {
-                "date": visit_date.isoformat(),
-                "route": lift.route,
-                "status": "scheduled",
-                "service_type": service_type,
-                "details_json": None,
-                "slip_url": None,
-                "slip_label": None,
-            }
-        )
+    for year_idx in range(amc_years):
+        for idx in range(services_per_year):
+            month_offset = (12 * year_idx) + int((12 * idx) / services_per_year)
+            visit_date = add_months(lift.amc_start, month_offset)
+            if not visit_date or visit_date > lift.amc_end:
+                continue
+            service_type = SERVICE_TYPE_OPTIONS[idx % len(SERVICE_TYPE_OPTIONS)][0]
+            schedule_entries.append(
+                {
+                    "date": visit_date.isoformat(),
+                    "route": lift.route,
+                    "status": "scheduled",
+                    "service_type": service_type,
+                    "details_json": None,
+                    "slip_url": None,
+                    "slip_label": None,
+                }
+            )
 
     lift.service_schedule = schedule_entries
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
@@ -26483,6 +26531,18 @@ def service_lift_update(lift_id):
                 return redirect(redirect_url)
             amc_contract_id = contract_record.get("id")
 
+        services_per_year_raw = clean_str(request.form.get("services_per_year"))
+        services_per_year_value = None
+        if services_per_year_raw:
+            try:
+                services_per_year_value = int(services_per_year_raw)
+            except (TypeError, ValueError):
+                flash("Services per year must be a whole number between 1 and 12.", "error")
+                return redirect(redirect_url)
+            if services_per_year_value < 1 or services_per_year_value > 12:
+                flash("Services per year must be between 1 and 12.", "error")
+                return redirect(redirect_url)
+
         last_service_date, error = parse_date_field(
             request.form.get("last_service_date"), "Last service date"
         )
@@ -26495,6 +26555,7 @@ def service_lift_update(lift_id):
         lift.amc_end = computed_amc_end
         lift.amc_duration_key = amc_duration_key
         lift.amc_contract_id = amc_contract_id
+        lift.services_per_year = services_per_year_value
         lift.route = route_value
         lift.preferred_service_date = preferred_date
         lift.preferred_service_time = preferred_time
@@ -26818,6 +26879,18 @@ def service_lift_update(lift_id):
             return redirect(redirect_url)
         amc_contract_id = contract_record.get("id")
 
+    services_per_year_raw = clean_str(request.form.get("services_per_year"))
+    services_per_year_value = None
+    if services_per_year_raw:
+        try:
+            services_per_year_value = int(services_per_year_raw)
+        except (TypeError, ValueError):
+            flash("Services per year must be a whole number between 1 and 12.", "error")
+            return redirect(redirect_url)
+        if services_per_year_value < 1 or services_per_year_value > 12:
+            flash("Services per year must be between 1 and 12.", "error")
+            return redirect(redirect_url)
+
     lift.external_lift_id = clean_str(request.form.get("external_lift_id"))
     lift.site_address_line1 = clean_str(request.form.get("site_address_line1"))
     lift.site_address_line2 = clean_str(request.form.get("site_address_line2"))
@@ -26849,6 +26922,7 @@ def service_lift_update(lift_id):
     lift.amc_end = computed_amc_end
     lift.amc_duration_key = amc_duration_key
     lift.amc_contract_id = amc_contract_id
+    lift.services_per_year = services_per_year_value
     lift.qr_code_url = clean_str(request.form.get("qr_code_url"))
     lift.status = clean_str(request.form.get("status"))
     lift.remarks = clean_str(request.form.get("remarks"))

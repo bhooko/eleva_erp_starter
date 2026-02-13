@@ -1455,6 +1455,7 @@ class Lift(db.Model):
     amc_end = db.Column(db.Date, nullable=True)
     amc_duration_key = db.Column(db.String(40), nullable=True)
     amc_contract_id = db.Column(db.String(60), nullable=True)
+    services_per_year = db.Column(db.Integer, nullable=True)
     qr_code_url = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(40), nullable=True)
     last_service_date = db.Column(db.Date, nullable=True)
