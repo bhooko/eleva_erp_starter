@@ -375,17 +375,18 @@
             inlineError.textContent = '';
           }
           lastOrder = currentOrder;
-          const payload = { order: currentOrder };
-          if (isServiceList) {
-            payload.category = list.getAttribute('data-category');
-            payload.ordered_ids = currentOrder;
-            delete payload.order;
-          }
+          const payload = isServiceList
+            ? {
+                category: list.getAttribute('data-category'),
+                ordered_ids: currentOrder,
+              }
+            : { order: currentOrder };
           fetch(reorderUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
               'Content-Type': 'application/json',
+              Accept: 'application/json',
               'X-Requested-With': 'XMLHttpRequest',
             },
             body: JSON.stringify(payload),
@@ -396,13 +397,21 @@
               try {
                 data = responseText ? JSON.parse(responseText) : null;
               } catch (parseError) {
-                const statusText = `Reorder failed (non-JSON response). Likely auth/403/redirect. HTTP ${response.status}.`;
-                throw new Error(JSON.stringify({ message: statusText, responseText }));
+                const snippet = String(responseText || '').slice(0, 200);
+                if (snippet) {
+                  console.error('Reorder response snippet:', snippet);
+                }
+                throw {
+                  message: `Unable to save the new order right now (HTTP ${response.status}).`,
+                  responseText,
+                };
               }
               if (!response.ok || !data?.ok) {
                 const backendError = data?.error ? ` (${data.error})` : '';
-                const statusMessage = `Reorder failed: HTTP ${response.status}${backendError}`;
-                throw new Error(JSON.stringify({ message: statusMessage, responseText }));
+                throw {
+                  message: `Reorder failed: HTTP ${response.status}${backendError}`,
+                  responseText,
+                };
               }
               return data;
             })
@@ -421,15 +430,9 @@
             })
             .catch((error) => {
               console.error('Failed to reorder dropdown options', error);
-              let parsedError = null;
-              try {
-                parsedError = JSON.parse(error?.message || '{}');
-              } catch (parseErr) {
-                parsedError = null;
-              }
               renderInlineError(
-                parsedError?.message || 'Unable to save the new order.',
-                parsedError?.responseText || '',
+                error?.message || 'Unable to save the new order.',
+                error?.responseText || '',
               );
             });
         };

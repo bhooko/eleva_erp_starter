@@ -5368,6 +5368,14 @@ def apply_actor_context(entry, actor_name=None, actor_role=None):
 app = create_app()
 login_manager.login_view = "login"
 
+
+@login_manager.unauthorized_handler
+def _handle_unauthorized_user():
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if request.endpoint == "service_settings_dropdown_reorder" and is_ajax:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    return redirect(url_for(login_manager.login_view, next=request.url))
+
 from integrations.sarv.routes import sarv_bp
 
 app.register_blueprint(sarv_bp)
@@ -23678,46 +23686,78 @@ def service_settings_dropdown_reorder():
     def _json_error(error_key, status_code=400):
         return jsonify({"ok": False, "error": error_key}), status_code
 
+    def _normalize_ordered_ids(raw_ids):
+        if raw_ids is None:
+            return None
+        if isinstance(raw_ids, (list, tuple)):
+            values = list(raw_ids)
+        elif isinstance(raw_ids, str):
+            values = [chunk.strip() for chunk in raw_ids.split(",") if chunk.strip()]
+        else:
+            return None
+
+        normalized = []
+        seen = set()
+        for raw_option_id in values:
+            try:
+                option_id = int(raw_option_id)
+            except (TypeError, ValueError):
+                return "invalid"
+            if option_id in seen:
+                continue
+            seen.add(option_id)
+            normalized.append(option_id)
+        return normalized
+
     if not current_user.can_view_module("service"):
         return _json_error("module-disabled", 403)
 
     if not current_user.is_admin:
         return _json_error("not-admin", 403)
 
-    payload = request.get_json(silent=True) or {}
-    category = clean_str(payload.get("category"))
-    ordered_ids = payload.get("ordered_ids")
-    if not isinstance(ordered_ids, list):
-        ordered_ids = payload.get("order")
+    payload = request.get_json(silent=True)
+    category = ""
+    ordered_ids = None
+    if isinstance(payload, dict):
+        category = clean_str(payload.get("category"))
+        ordered_ids = payload.get("ordered_ids")
+        if ordered_ids is None:
+            ordered_ids = payload.get("order")
+    else:
+        category = clean_str(request.form.get("category"))
+        ordered_ids = request.form.getlist("ordered_ids[]")
+        if not ordered_ids:
+            ordered_ids = request.form.getlist("ordered_ids")
+        if not ordered_ids:
+            ordered_ids = request.form.get("ordered_ids")
+        if ordered_ids in (None, ""):
+            ordered_ids = request.form.getlist("order[]")
+        if not ordered_ids:
+            ordered_ids = request.form.getlist("order")
+        if not ordered_ids:
+            ordered_ids = request.form.get("order")
 
+    if not category:
+        return _json_error("missing-category", 400)
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         return _json_error("invalid-category", 400)
-    if not isinstance(ordered_ids, list):
-        return _json_error("invalid-order", 400)
+    if ordered_ids in (None, "", []):
+        return _json_error("missing-ordered-ids", 400)
 
-    normalized_ids = []
-    seen = set()
-    for raw_option_id in ordered_ids:
-        try:
-            option_id = int(raw_option_id)
-        except (TypeError, ValueError):
-            return _json_error("invalid-option-id", 400)
-        if option_id in seen:
-            continue
-        seen.add(option_id)
-        normalized_ids.append(option_id)
+    normalized_ids = _normalize_ordered_ids(ordered_ids)
+    if normalized_ids == "invalid":
+        return _json_error("invalid-ids", 400)
+    if normalized_ids is None:
+        return _json_error("invalid-ids", 400)
 
     all_options = ServiceDropdownOption.query.filter(ServiceDropdownOption.category == category).order_by(
         ServiceDropdownOption.sort_order.asc(), ServiceDropdownOption.id.asc()
     ).all()
     option_map = {option.id: option for option in all_options}
 
-    if not normalized_ids:
-        return _json_error("invalid-order", 400)
-
     category_ordered_ids = [option_id for option_id in normalized_ids if option_id in option_map]
     if not category_ordered_ids:
-        return _json_error("invalid-order", 400)
+        return _json_error("invalid-ids", 400)
 
     category_seen = set(category_ordered_ids)
     full_order = category_ordered_ids + [option.id for option in all_options if option.id not in category_seen]
