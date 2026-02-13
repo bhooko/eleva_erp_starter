@@ -23613,6 +23613,12 @@ def service_settings_dropdown_update():
     _module_visibility_required("service")
     _require_admin()
 
+    def _redirect_with_open(category_key):
+        if category_key in SERVICE_DROPDOWN_CATEGORIES:
+            redirect_url = url_for("service_settings", open=category_key)
+            return redirect(f"{redirect_url}#dropdown-{category_key}")
+        return redirect(url_for("service_settings"))
+
     option_id_raw = request.form.get("option_id")
     try:
         option_id = int(option_id_raw)
@@ -23625,57 +23631,69 @@ def service_settings_dropdown_update():
         flash("Option not found.", "error")
         return redirect(url_for("service_settings"))
 
+    category = option.category
+
     value = clean_str(request.form.get("value"))
     if not value:
         flash("Option value is required.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     sort_order_raw = clean_str(request.form.get("sort_order"))
     try:
         sort_order = int(sort_order_raw) if sort_order_raw else None
     except (TypeError, ValueError):
         flash("Sort order must be a whole number.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
-    if sort_order is None or sort_order < 1:
+    if sort_order is None:
+        sort_order = _next_service_dropdown_sort_order(category)
+    elif sort_order < 1:
         flash("Sort order must be 1 or greater.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     existing = ServiceDropdownOption.query.filter(
-        ServiceDropdownOption.category == option.category,
+        ServiceDropdownOption.category == category,
         func.lower(ServiceDropdownOption.value) == value.lower(),
         ServiceDropdownOption.id != option.id,
     ).first()
     if existing:
         flash(
-            f'"{value}" already exists in {SERVICE_DROPDOWN_CATEGORIES.get(option.category, "this category")}.',
+            f'"{value}" already exists in {SERVICE_DROPDOWN_CATEGORIES.get(category, "this category")}.',
             "error",
         )
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     option.value = value
     if sort_order != option.sort_order:
-        _shift_service_dropdown_sort_orders(option.category, sort_order, exclude_option_id=option.id)
+        _shift_service_dropdown_sort_orders(category, sort_order, exclude_option_id=option.id)
     option.sort_order = sort_order
     db.session.commit()
     flash("Service dropdown option saved.", "success")
-    return redirect(url_for("service_settings"))
+    return _redirect_with_open(category)
 
 
 @app.route("/service/settings/dropdowns/reorder", methods=["POST"])
 @login_required
 def service_settings_dropdown_reorder():
-    _module_visibility_required("service")
-    _require_admin()
+    def _json_error(error_key, status_code=400):
+        return jsonify({"ok": False, "error": error_key}), status_code
+
+    if not current_user.can_view_module("service"):
+        return _json_error("module-disabled", 403)
+
+    if not current_user.is_admin:
+        return _json_error("not-admin", 403)
 
     payload = request.get_json(silent=True) or {}
     category = clean_str(payload.get("category"))
     ordered_ids = payload.get("ordered_ids")
+    if not isinstance(ordered_ids, list):
+        ordered_ids = payload.get("order")
 
     if category not in SERVICE_DROPDOWN_CATEGORIES:
-        return jsonify({"ok": False, "error": "invalid-category"}), 400
+        return _json_error("invalid-category", 400)
     if not isinstance(ordered_ids, list):
-        return jsonify({"ok": False, "error": "invalid-order"}), 400
+        return _json_error("invalid-order", 400)
 
     normalized_ids = []
     seen = set()
@@ -23683,7 +23701,7 @@ def service_settings_dropdown_reorder():
         try:
             option_id = int(raw_option_id)
         except (TypeError, ValueError):
-            return jsonify({"ok": False, "error": "invalid-option-id"}), 400
+            return _json_error("invalid-option-id", 400)
         if option_id in seen:
             continue
         seen.add(option_id)
@@ -23695,9 +23713,9 @@ def service_settings_dropdown_reorder():
     option_map = {option.id: option for option in all_options}
 
     if not normalized_ids:
-        return jsonify({"ok": False, "error": "invalid-order"}), 400
+        return _json_error("invalid-order", 400)
     if any(option_id not in option_map for option_id in normalized_ids):
-        return jsonify({"ok": False, "error": "missing-option"}), 400
+        return _json_error("missing-option", 400)
 
     full_order = normalized_ids + [option.id for option in all_options if option.id not in seen]
 
