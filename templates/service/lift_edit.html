@@ -223,6 +223,14 @@
         <input type="date" name="install_date" value="{{ lift.install_date.isoformat() if lift.install_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty start date</span>
+        <input type="date" name="warranty_start_date" value="{{ lift.warranty_start_date.isoformat() if lift.warranty_start_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty end date</span>
+        <input type="date" name="warranty_end_date" value="{{ lift.warranty_end_date.isoformat() if lift.warranty_end_date else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty expiry</span>
         <input type="date" name="warranty_expiry" value="{{ lift.warranty_expiry.isoformat() if lift.warranty_expiry else '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>

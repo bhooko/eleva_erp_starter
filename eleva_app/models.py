@@ -1447,6 +1447,8 @@ class Lift(db.Model):
     cabin_finish = db.Column(db.String(120), nullable=True)
     power_supply = db.Column(db.String(40), nullable=True)
     install_date = db.Column(db.Date, nullable=True)
+    warranty_start_date = db.Column(db.Date, nullable=True)
+    warranty_end_date = db.Column(db.Date, nullable=True)
     warranty_expiry = db.Column(db.Date, nullable=True)
     amc_status = db.Column(db.String(40), nullable=True)
     amc_start = db.Column(db.Date, nullable=True)
@@ -1789,6 +1791,20 @@ class Lift(db.Model):
             return self.next_service_due
 
         return None
+
+    @property
+    def is_under_warranty(self) -> bool:
+        today = date.today()
+        start_date = self.warranty_start_date
+        end_date = self.warranty_end_date
+
+        if start_date and end_date:
+            return start_date <= today <= end_date
+        if start_date:
+            return today >= start_date
+        if end_date:
+            return today <= end_date
+        return False
 
     @property
     def amc_due_status(self) -> str:
