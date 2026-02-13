@@ -6932,6 +6932,12 @@ def design_overview():
     )
 
 
+@app.route("/design/metrics", methods=["GET"])
+@login_required
+def design_metrics_legacy_redirect():
+    return redirect(url_for("design_overview"), code=302)
+
+
 @event.listens_for(DesignTask, "after_insert")
 def _notify_design_task_assignee(mapper, connection, target):
     if not target.assigned_to_user_id:
