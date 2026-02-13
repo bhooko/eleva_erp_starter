@@ -2546,6 +2546,9 @@ def get_dropdown_options_map():
 SERVICE_DROPDOWN_CATEGORIES = {
     "g_plus": "Floors",
     "lift_brand": "Lift Brand Options",
+    "complaint_option": "Complaint options",
+    "solution_option": "Solution options",
+    "service_check": "Service checks",
 }
 
 
@@ -23615,6 +23618,122 @@ def service_settings_dropdown_toggle():
     db.session.commit()
     flash("Service dropdown option updated.", "success")
     return redirect(url_for("service_settings"))
+
+
+@app.route("/service/settings/dropdowns/<category>/template", methods=["GET"])
+@login_required
+def service_settings_dropdown_template(category):
+    _module_visibility_required("service")
+    _require_admin()
+
+    category = clean_str(category)
+    if category not in SERVICE_DROPDOWN_CATEGORIES:
+        abort(404)
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["value", "sort_order", "is_active"])
+    writer.writerow(["Sample option 1", "1", "true"])
+    writer.writerow(["Sample option 2", "2", "true"])
+    writer.writerow(["Sample option 3", "3", "false"])
+
+    buffer = BytesIO(output.getvalue().encode("utf-8"))
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype="text/csv; charset=utf-8",
+        as_attachment=True,
+        download_name=f"service_{category}_template.csv",
+    )
+
+
+@app.route("/service/settings/dropdowns/<category>/import", methods=["POST"])
+@login_required
+def service_settings_dropdown_import(category):
+    _module_visibility_required("service")
+    _require_admin()
+
+    category = clean_str(category)
+    if category not in SERVICE_DROPDOWN_CATEGORIES:
+        abort(404)
+
+    redirect_url = url_for("service_settings", open=category)
+    redirect_target = f"{redirect_url}#dropdown-{category}"
+
+    uploaded_file = request.files.get("import_file")
+    if not uploaded_file or not uploaded_file.filename:
+        flash("Please choose a CSV file to import.", "error")
+        return redirect(redirect_target)
+
+    filename = secure_filename(uploaded_file.filename)
+    if not filename.lower().endswith(".csv"):
+        flash("Only CSV files are supported.", "error")
+        return redirect(redirect_target)
+
+    try:
+        decoded_content = uploaded_file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        flash("Could not read CSV file. Please upload a UTF-8 encoded CSV.", "error")
+        return redirect(redirect_target)
+
+    reader = csv.DictReader(StringIO(decoded_content))
+    if not reader.fieldnames:
+        flash("CSV must include a header row.", "error")
+        return redirect(redirect_target)
+
+    imported_count = 0
+    bool_map = {
+        "1": True,
+        "0": False,
+        "true": True,
+        "false": False,
+        "yes": True,
+        "no": False,
+    }
+
+    for row in reader:
+        if not isinstance(row, dict):
+            continue
+
+        value = clean_str(row.get("value"))
+        if not value:
+            continue
+
+        sort_order_raw = clean_str(row.get("sort_order"))
+        sort_order = None
+        if sort_order_raw:
+            try:
+                parsed_sort_order = int(sort_order_raw)
+                if parsed_sort_order >= 1:
+                    sort_order = parsed_sort_order
+            except (TypeError, ValueError):
+                sort_order = None
+
+        if sort_order is None:
+            sort_order = _next_service_dropdown_sort_order(category)
+
+        is_active_raw = clean_str(row.get("is_active"))
+        is_active = True
+        if is_active_raw:
+            is_active = bool_map.get(is_active_raw.lower(), True)
+
+        db.session.add(
+            ServiceDropdownOption(
+                category=category,
+                value=value,
+                sort_order=sort_order,
+                is_active=is_active,
+            )
+        )
+        imported_count += 1
+
+    if not imported_count:
+        flash("No valid rows found to import.", "warning")
+        return redirect(redirect_target)
+
+    db.session.commit()
+    flash(f"Imported {imported_count} option(s) into {SERVICE_DROPDOWN_CATEGORIES.get(category)}.", "success")
+    return redirect(redirect_target)
 
 
 @app.route("/service/settings/dropdowns/update", methods=["POST"])
