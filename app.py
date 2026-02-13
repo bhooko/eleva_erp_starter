@@ -2544,7 +2544,7 @@ def get_dropdown_options_map():
 
 
 SERVICE_DROPDOWN_CATEGORIES = {
-    "g_plus": "G+ Options",
+    "g_plus": "Floors",
     "lift_brand": "Lift Brand Options",
 }
 
@@ -23573,6 +23573,100 @@ def service_settings_dropdown_toggle():
     return redirect(url_for("service_settings"))
 
 
+@app.route("/service/settings/dropdowns/update", methods=["POST"])
+@login_required
+def service_settings_dropdown_update():
+    _module_visibility_required("service")
+    _require_admin()
+
+    option_id_raw = request.form.get("option_id")
+    try:
+        option_id = int(option_id_raw)
+    except (TypeError, ValueError):
+        flash("Invalid option selected.", "error")
+        return redirect(url_for("service_settings"))
+
+    option = db.session.get(ServiceDropdownOption, option_id)
+    if not option or option.category not in SERVICE_DROPDOWN_CATEGORIES:
+        flash("Option not found.", "error")
+        return redirect(url_for("service_settings"))
+
+    value = clean_str(request.form.get("value"))
+    if not value:
+        flash("Option value is required.", "error")
+        return redirect(url_for("service_settings"))
+
+    sort_order_raw = clean_str(request.form.get("sort_order"))
+    try:
+        sort_order = int(sort_order_raw) if sort_order_raw else 0
+    except (TypeError, ValueError):
+        flash("Sort order must be a whole number.", "error")
+        return redirect(url_for("service_settings"))
+
+    existing = ServiceDropdownOption.query.filter(
+        ServiceDropdownOption.category == option.category,
+        func.lower(ServiceDropdownOption.value) == value.lower(),
+        ServiceDropdownOption.id != option.id,
+    ).first()
+    if existing:
+        flash(
+            f'"{value}" already exists in {SERVICE_DROPDOWN_CATEGORIES.get(option.category, "this category")}.',
+            "error",
+        )
+        return redirect(url_for("service_settings"))
+
+    option.value = value
+    option.sort_order = sort_order
+    db.session.commit()
+    flash("Service dropdown option saved.", "success")
+    return redirect(url_for("service_settings"))
+
+
+@app.route("/service/settings/dropdowns/reorder", methods=["POST"])
+@login_required
+def service_settings_dropdown_reorder():
+    _module_visibility_required("service")
+    _require_admin()
+
+    payload = request.get_json(silent=True) or {}
+    category = clean_str(payload.get("category"))
+    order = payload.get("order")
+
+    if category not in SERVICE_DROPDOWN_CATEGORIES:
+        return jsonify({"ok": False, "error": "invalid-category"}), 400
+    if not isinstance(order, list):
+        return jsonify({"ok": False, "error": "invalid-order"}), 400
+
+    normalized_ids = []
+    seen = set()
+    for raw_option_id in order:
+        try:
+            option_id = int(raw_option_id)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid-option-id"}), 400
+        if option_id in seen:
+            continue
+        seen.add(option_id)
+        normalized_ids.append(option_id)
+
+    if not normalized_ids:
+        return jsonify({"ok": True})
+
+    options = ServiceDropdownOption.query.filter(
+        ServiceDropdownOption.category == category,
+        ServiceDropdownOption.id.in_(normalized_ids),
+    ).all()
+    if len(options) != len(normalized_ids):
+        return jsonify({"ok": False, "error": "missing-option"}), 400
+
+    option_map = {option.id: option for option in options}
+    for index, option_id in enumerate(normalized_ids):
+        option_map[option_id].sort_order = index
+
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 def _coerce_date(value):
     if isinstance(value, datetime.datetime):
         return value.date()
@@ -25827,7 +25921,7 @@ def service_lifts_create():
         return redirect(redirect_url)
 
     g_plus_value, error = validate_service_dropdown_value(
-        "g_plus", request.form.get("building_floors"), "G+"
+        "g_plus", request.form.get("building_floors"), "Floors"
     )
     if error:
         flash(error, "error")
@@ -26178,7 +26272,7 @@ def service_lift_update(lift_id):
             return redirect(redirect_url)
 
         g_plus_value, error = validate_service_dropdown_value(
-            "g_plus", request.form.get("building_floors"), "G+"
+            "g_plus", request.form.get("building_floors"), "Floors"
         )
         if error:
             flash(error, "error")
