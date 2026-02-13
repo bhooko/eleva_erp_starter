@@ -286,6 +286,7 @@
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
+                {% if package.status != 'final' %}
                 <a
                   href="#package-items-{{ package.id }}"
                   class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-white"
@@ -299,6 +300,7 @@
                 >
                   Configure / Generate
                 </button>
+                {% endif %}
                 <button
                   type="button"
                   class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-400 cursor-not-allowed"
@@ -307,40 +309,25 @@
                 >
                   Export
                 </button>
-                {% if can_edit_bom %}
-                  {% if package.status == 'final' %}
-                  <form method="POST">
-                    {{ csrf_field() }}
-                    <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
-                    <button
-                      type="submit"
-                      name="action"
-                      value="unlock_bom_package"
-                      class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-orange-600 hover:bg-white"
-                      onclick="return confirm('Unlock this package to allow edits and regeneration?')"
-                    >
-                      Unlock
-                    </button>
-                  </form>
-                  {% else %}
-                  <form method="POST">
-                    {{ csrf_field() }}
-                    <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
-                    <button
-                      type="submit"
-                      name="action"
-                      value="finalize_bom_package"
-                      class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-emerald-700 hover:bg-white"
-                      onclick="return confirm('Finalize this package? Regeneration will be locked until unlocked.')"
-                    >
-                      Finalize
-                    </button>
-                  </form>
-                  {% endif %}
+                {% if can_edit_bom and package.status != 'final' %}
+                <form method="POST">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
+                  <button
+                    type="submit"
+                    name="action"
+                    value="finalize_bom_package"
+                    class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-emerald-700 hover:bg-white"
+                    onclick="return confirm('Finalize this package? Regeneration will be locked until unlocked.')"
+                  >
+                    Finalize
+                  </button>
+                </form>
                 {% endif %}
               </div>
             </div>
 
+            {% if package.status != 'final' %}
             <details id="package-config-{{ package.id }}" class="mt-4 rounded-xl border border-slate-200 bg-white p-4">
               <summary class="cursor-pointer text-sm font-semibold text-slate-700">Configure & Generate</summary>
               <div class="mt-4 space-y-4">
@@ -447,25 +434,30 @@
                 </div>
               </div>
             </details>
+            {% endif %}
 
             <div id="package-items-{{ package.id }}" class="mt-5 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <h4 class="text-sm font-semibold text-slate-700">Items in {{ package.name }}</h4>
+                <h4 class="text-sm font-semibold text-slate-700">
+                  {% if package.status == 'final' %}Final BOM List{% else %}Items in {{ package.name }}{% endif %}
+                </h4>
+                {% if package.status != 'final' %}
                 <input
                   type="search"
                   data-package-search="{{ package.id }}"
                   class="rounded-lg border-slate-200 text-sm px-3 py-2"
                   placeholder="Search items..."
                 />
+                {% endif %}
               </div>
-              {% if can_edit_bom %}
+              {% if can_edit_bom and package.status != 'final' %}
               <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-white border border-slate-200 rounded-xl p-3">
                 {{ csrf_field() }}
                 <input type="hidden" name="action" value="add_bom_item" />
                 <input type="hidden" name="bom_package_id" value="{{ package.id }}" />
                 <label class="space-y-1">
                   <span class="text-sm">Part Class</span>
-                  <select name="part_class_id" class="w-full rounded-lg border-slate-200" data-part-class-select>
+                  <select name="part_class_id" class="w-full rounded-lg border-slate-200" data-part-class-select required>
                     <option value="">Select</option>
                     {% for part in part_classes %}
                     <option value="{{ part.id }}">{{ part.name }}</option>
@@ -473,7 +465,7 @@
                   </select>
                 </label>
                 <label class="space-y-1">
-                  <span class="text-sm">Item Name / Description</span>
+                  <span class="text-sm">Item Name</span>
                   <input type="text" name="item_code" class="w-full rounded-lg border-slate-200" required />
                 </label>
                 <label class="space-y-1 lg:col-span-2">
@@ -482,27 +474,21 @@
                 </label>
                 <label class="space-y-1">
                   <span class="text-sm">Unit</span>
-                  <input type="text" name="unit" class="w-full rounded-lg border-slate-200" placeholder="nos / set" />
+                  <select name="unit" class="w-full rounded-lg border-slate-200" required>
+                    <option value="">Select unit</option>
+                    {% for unit in bom_unit_options %}
+                    <option value="{{ unit }}">{{ unit }}</option>
+                    {% endfor %}
+                  </select>
                 </label>
                 <label class="space-y-1">
                   <span class="text-sm">Qty</span>
                   <input type="number" step="0.01" name="quantity_required" class="w-full rounded-lg border-slate-200" value="1" />
                 </label>
-                <label class="space-y-1">
-                  <span class="text-sm font-semibold text-sky-700">Template stage</span>
-                  <input type="text" name="stage" class="w-full rounded-lg border-sky-300 bg-sky-50/60 text-slate-900" placeholder="Template stage (e.g. Stage 1 / Electrical)" />
-                </label>
-                <label class="space-y-1 lg:col-span-2">
-                  <span class="text-sm font-semibold text-violet-700">Section</span>
-                  <input type="text" name="section_title" class="w-full rounded-lg border-violet-300 bg-violet-50/60 text-slate-900" placeholder="Car Bracket Kit" />
-                </label>
                 <label class="space-y-1 lg:col-span-2">
                   <span class="text-sm font-semibold text-emerald-700">Suggested Part</span>
-                  <select name="suggested_part_id" class="w-full rounded-lg border-emerald-300 bg-emerald-50/60 text-slate-900" data-suggested-part-select>
-                    <option value="">— None —</option>
-                    {% for part in parts %}
-                    <option value="{{ part.id }}">{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
-                    {% endfor %}
+                  <select name="suggested_part_id" class="w-full rounded-lg border-emerald-300 bg-emerald-50/60 text-slate-900" data-suggested-part-select disabled>
+                    <option value="">Select part class first</option>
                   </select>
                   <p class="text-[11px] text-emerald-800">Suggested from Part Class. Specification on BOM line is authoritative.</p>
                 </label>
@@ -520,7 +506,7 @@
                   <thead>
                     <tr class="text-left text-slate-500">
                       <th class="py-2">Part Class</th>
-                      <th class="py-2">Item Name / Description</th>
+                      <th class="py-2">Item Name</th>
                       <th class="py-2 text-sky-700">Template stage</th>
                       <th class="py-2 text-violet-700">Section</th>
                       <th class="py-2 text-rose-700">Specification *</th>
@@ -528,7 +514,7 @@
                       <th class="py-2">Qty</th>
                       <th class="py-2 text-emerald-700">Suggested Part</th>
                       <th class="py-2">Remarks</th>
-                      <th class="py-2">Actions</th>
+                      {% if can_edit_bom and package.status != 'final' %}<th class="py-2">Actions</th>{% endif %}
                     </tr>
                   </thead>
                   <tbody class="divide-y">
@@ -537,7 +523,7 @@
                     {% set form_id = 'bom-item-' ~ item.id %}
                     {% set pending_req = pending_spec_requests_by_line.get(item.id) %}
                     {% set latest_req = latest_spec_requests_by_line.get(item.id) %}
-                    {% if can_edit_bom %}
+                    {% if can_edit_bom and package.status != 'final' %}
                     <form id="{{ form_id }}" method="POST" class="hidden">
                       {{ csrf_field() }}
                       <input type="hidden" name="item_id" value="{{ item.id }}" />
@@ -545,7 +531,7 @@
                     {% endif %}
                     <tr data-search-text="{{ row_label|lower }}">
                       <td class="py-2">
-                        {% if can_edit_bom %}
+                        {% if can_edit_bom and package.status != 'final' %}
                           <select form="{{ form_id }}" name="part_class_id" class="rounded-lg border-slate-200 text-xs" data-part-class-select>
                             <option value="">—</option>
                             {% for part in part_classes %}
@@ -634,11 +620,11 @@
                       <td class="py-2">{{ item.quantity_required }}</td>
                       <td class="py-2">{% if item.suggested_part_id %}{% set sp = parts|selectattr("id", "equalto", item.suggested_part_id)|first %}{{ sp.name if sp else "—" }}{% else %}—{% endif %}</td>
                       <td class="py-2">{{ item.remarks }}</td>
-                      <td class="py-2">—</td>
+                      {% if can_edit_bom and package.status != 'final' %}<td class="py-2">—</td>{% endif %}
                       {% endif %}
                     </tr>
                     {% else %}
-                    <tr><td colspan="10" class="py-3 text-slate-500">No items in this package yet.</td></tr>
+                    <tr><td colspan="{{ 10 if can_edit_bom and package.status != 'final' else 9 }}" class="py-3 text-slate-500">No items in this package yet.</td></tr>
                     {% endfor %}
                   </tbody>
                 </table>
@@ -1026,7 +1012,7 @@
 </div>
 
 <script>
-  const partClassPrimaryParts = {{ part_class_primary_parts|tojson }};
+  const partClassSuggestedParts = {{ part_class_suggested_parts|tojson }};
   const modals = document.querySelectorAll('[data-modal]');
   const toggleModal = (modal, state) => {
     if (!modal) return;
@@ -1106,10 +1092,31 @@
     const container = partClassSelect.closest('form') || partClassSelect.closest('tr') || document;
     const suggestedSelect = container.querySelector('[data-suggested-part-select]');
     if (!suggestedSelect) return;
+
     const selectedClassId = partClassSelect.value || '';
-    const suggestedPartId = partClassPrimaryParts[selectedClassId] || null;
-    if (suggestedPartId && !suggestedSelect.value) {
-      suggestedSelect.value = String(suggestedPartId);
+    const options = partClassSuggestedParts[selectedClassId] || [];
+    const previousValue = suggestedSelect.value || '';
+
+    suggestedSelect.innerHTML = '';
+    if (!selectedClassId) {
+      suggestedSelect.disabled = true;
+      suggestedSelect.append(new Option('Select part class first', ''));
+      return;
+    }
+
+    suggestedSelect.disabled = false;
+    suggestedSelect.append(new Option('— None —', ''));
+    options.forEach((part) => {
+      suggestedSelect.append(new Option(part.label, String(part.id)));
+    });
+
+    if (previousValue && options.some((part) => String(part.id) === previousValue)) {
+      suggestedSelect.value = previousValue;
+      return;
+    }
+
+    if (options.length) {
+      suggestedSelect.value = String(options[0].id);
     }
   };
 
