@@ -25741,7 +25741,6 @@ def service_lifts():
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
         amc_status_options=AMC_STATUS_OPTIONS,
-        service_type_options=SERVICE_TYPE_OPTIONS,
     )
 
 
@@ -25866,7 +25865,6 @@ def service_lifts_create():
         return redirect(redirect_url)
 
     contract_input = clean_str(request.form.get("amc_contract_id"))
-    generated_schedule = []
     amc_contract_id = None
     if contract_input:
         contract_record = get_service_contract_by_id(contract_input)
@@ -25875,39 +25873,6 @@ def service_lifts_create():
             return redirect(redirect_url)
         amc_contract_id = contract_record.get("id")
 
-    schedule_dates = request.form.getlist("generated_service_date")
-    schedule_types = request.form.getlist("generated_service_type")
-    schedule_details = request.form.getlist("generated_service_details")
-    max_schedule_len = max(len(schedule_dates), len(schedule_types), len(schedule_details))
-    for idx in range(max_schedule_len):
-        schedule_date_raw = schedule_dates[idx] if idx < len(schedule_dates) else ""
-        schedule_type = clean_str(schedule_types[idx]) if idx < len(schedule_types) else None
-        schedule_detail = clean_str(schedule_details[idx]) if idx < len(schedule_details) else None
-        if not any([schedule_date_raw, schedule_type, schedule_detail]):
-            continue
-        if not schedule_date_raw:
-            flash(f"Generated schedule row {idx + 1} is missing date.", "error")
-            return redirect(redirect_url)
-        schedule_date, schedule_error = parse_date_field(
-            schedule_date_raw, f"Generated service date (row {idx + 1})"
-        )
-        if schedule_error:
-            flash(schedule_error, "error")
-            return redirect(redirect_url)
-        if schedule_type and schedule_type not in SERVICE_TYPE_LABELS:
-            flash(f"Select a valid service type for generated row {idx + 1}.", "error")
-            return redirect(redirect_url)
-        generated_schedule.append(
-            {
-                "date": schedule_date.isoformat(),
-                "route": route_value,
-                "status": "scheduled",
-                "service_type": schedule_type,
-                "details_json": schedule_detail,
-                "slip_url": None,
-                "slip_label": None,
-            }
-        )
 
     lift = Lift(
         lift_code=lift_code,
@@ -25952,8 +25917,6 @@ def service_lifts_create():
         last_updated_by=current_user.id if current_user.is_authenticated else None,
     )
     lift.preferred_service_days = preferred_days
-    if generated_schedule:
-        lift.service_schedule = generated_schedule
     lift.set_capacity_display()
 
     db.session.add(lift)
@@ -26011,6 +25974,51 @@ def service_lift_detail(lift_id):
         current_user_is_service_manager=_user_is_service_manager(current_user),
         service_team_users=service_team_users,
     )
+
+
+@app.post("/service/lifts/<int:lift_id>/schedule/generate")
+@login_required
+def service_lift_generate_schedule(lift_id):
+    _module_visibility_required("service")
+
+    lift = db.session.get(Lift, lift_id)
+    if not lift:
+        flash("Lift not found.", "error")
+        return redirect(url_for("service_lifts"))
+
+    redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
+    contract = get_service_contract_by_id(lift.amc_contract_id)
+    services_per_year = int(contract.get("services_per_year") or 0) if contract else 0
+
+    if not lift.amc_start or services_per_year < 1:
+        flash("Set AMC start date and services/year to generate schedule.", "warning")
+        return redirect(redirect_url)
+
+    schedule_entries = []
+    for idx in range(services_per_year):
+        month_offset = int((12 * idx) / services_per_year)
+        visit_date = add_months(lift.amc_start, month_offset)
+        if not visit_date:
+            continue
+        service_type = SERVICE_TYPE_OPTIONS[idx % len(SERVICE_TYPE_OPTIONS)][0]
+        schedule_entries.append(
+            {
+                "date": visit_date.isoformat(),
+                "route": lift.route,
+                "status": "scheduled",
+                "service_type": service_type,
+                "details_json": None,
+                "slip_url": None,
+                "slip_label": None,
+            }
+        )
+
+    lift.service_schedule = schedule_entries
+    lift.last_updated_by = current_user.id if current_user.is_authenticated else None
+    db.session.commit()
+
+    flash("Schedule generated", "success")
+    return redirect(redirect_url)
 
 
 @app.post("/service/visits/<int:lift_id>/<visit_date_str>/assign")
