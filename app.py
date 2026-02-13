@@ -23715,34 +23715,38 @@ def service_settings_dropdown_reorder():
     if not current_user.is_admin:
         return _json_error("not-admin", 403)
 
+    def _extract_ordered_ids(payload_dict=None, form_data=None):
+        if isinstance(payload_dict, dict):
+            for key in ("ordered_ids", "ordered_ids[]", "order", "ids"):
+                if key in payload_dict:
+                    return payload_dict.get(key)
+            return None
+
+        if form_data is None:
+            return None
+
+        for list_key in ("ordered_ids[]", "ordered_ids", "order[]", "order", "ids[]", "ids"):
+            values = form_data.getlist(list_key)
+            if values:
+                return values
+        for scalar_key in ("ordered_ids", "ordered_ids[]", "order", "order[]", "ids", "ids[]"):
+            value = form_data.get(scalar_key)
+            if value not in (None, ""):
+                return value
+        return None
+
     payload = request.get_json(silent=True)
-    category = ""
-    ordered_ids = None
-    if isinstance(payload, dict):
-        category = clean_str(payload.get("category"))
-        ordered_ids = payload.get("ordered_ids")
-        if ordered_ids is None:
-            ordered_ids = payload.get("order")
-    else:
-        category = clean_str(request.form.get("category"))
-        ordered_ids = request.form.getlist("ordered_ids[]")
-        if not ordered_ids:
-            ordered_ids = request.form.getlist("ordered_ids")
-        if not ordered_ids:
-            ordered_ids = request.form.get("ordered_ids")
-        if ordered_ids in (None, ""):
-            ordered_ids = request.form.getlist("order[]")
-        if not ordered_ids:
-            ordered_ids = request.form.getlist("order")
-        if not ordered_ids:
-            ordered_ids = request.form.get("order")
+    payload_dict = payload if isinstance(payload, dict) else None
+    data_source = payload_dict or request.form
+    category = clean_str(data_source.get("category"))
+    ordered_ids = _extract_ordered_ids(payload_dict=payload_dict, form_data=None if payload_dict else request.form)
 
     if not category:
         return _json_error("missing-category", 400)
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         return _json_error("invalid-category", 400)
     if ordered_ids in (None, "", []):
-        return _json_error("missing-ordered-ids", 400)
+        return _json_error("missing-ids", 400)
 
     normalized_ids = _normalize_ordered_ids(ordered_ids)
     if normalized_ids == "invalid":
@@ -23755,14 +23759,9 @@ def service_settings_dropdown_reorder():
     ).all()
     option_map = {option.id: option for option in all_options}
 
-    category_ordered_ids = [option_id for option_id in normalized_ids if option_id in option_map]
-    if not category_ordered_ids:
-        return _json_error("invalid-ids", 400)
+    filtered_ids = [option_id for option_id in normalized_ids if option_id in option_map]
 
-    category_seen = set(category_ordered_ids)
-    full_order = category_ordered_ids + [option.id for option in all_options if option.id not in category_seen]
-
-    for index, option_id in enumerate(full_order, start=1):
+    for index, option_id in enumerate(filtered_ids, start=1):
         option_map[option_id].sort_order = index
 
     db.session.commit()
