@@ -220,7 +220,7 @@
       color-scheme: light;
       --color-base: #EFF4FF;
       --color-base-rgb: 239, 244, 255;
-      --color-card: rgba(255, 255, 255, 0.7);
+      --color-card: rgba(255, 255, 255, 0.9);
       --color-card-rgb: 255, 255, 255;
       --color-primary: #7C3AED;
       --color-primary-rgb: 124, 58, 237;
@@ -230,19 +230,19 @@
       --color-neutral-rgb: 215, 225, 242;
       --color-surface-2: #E2EAF8;
       --color-surface-2-rgb: 226, 234, 248;
-      --text-primary: #0F172A;
-      --text-secondary: #1E293B;
+      --text-primary: #0B1220;
+      --text-secondary: #1F2937;
       --text-muted-contrast: #334155;
-      --text-muted-soft: #475569;
-      --text-muted: #475569;
-      --text-dim: #64748B;
+      --text-muted-soft: #3F4F66;
+      --text-muted: #334155;
+      --text-dim: #475569;
       --accent-success: #16A34A;
       --accent-success-rgb: 22, 163, 74;
       --accent-warning: #D97706;
       --accent-warning-rgb: 217, 119, 6;
       --accent-error: #DC2626;
       --accent-error-rgb: 220, 38, 38;
-      --border-subtle: rgba(255, 255, 255, 0.6);
+      --border-subtle: rgba(148, 163, 184, 0.55);
       --stage-cold: #0284C7;
       --stage-cold-rgb: 2, 132, 199;
       --stage-warm: #7C3AED;
@@ -273,10 +273,25 @@
     html[data-theme="metallic-elevate"] .bg-slate-900\/80,
     html[data-theme="metallic-elevate"] .bg-slate-900\/90,
     html[data-theme="metallic-elevate"] .bg-slate-900\/95 {
+      background-color: rgba(255, 255, 255, 0.88) !important;
       backdrop-filter: blur(14px) saturate(130%);
       -webkit-backdrop-filter: blur(14px) saturate(130%);
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-      border-color: rgba(255, 255, 255, 0.62) !important;
+      border-color: rgba(148, 163, 184, 0.58) !important;
+    }
+
+    html[data-theme="metallic-elevate"] .bg-slate-800,
+    html[data-theme="metallic-elevate"] .bg-slate-800\/60,
+    html[data-theme="metallic-elevate"] .bg-slate-800\/70,
+    html[data-theme="metallic-elevate"] .bg-slate-800\/80,
+    html[data-theme="metallic-elevate"] .bg-slate-800\/90 {
+      background-color: rgba(226, 234, 248, 0.92) !important;
+      border-color: rgba(148, 163, 184, 0.6) !important;
+    }
+
+    html[data-theme="metallic-elevate"] .text-emerald-300\/80,
+    html[data-theme="metallic-elevate"] .text-emerald-100\/80 {
+      color: #1f2937 !important;
     }
 
     html[data-theme="metallic-elevate"] .fixed.inset-0 .bg-slate-900,
@@ -1104,7 +1119,8 @@
 
     html[data-theme="metallic-elevate"] input::placeholder,
     html[data-theme="metallic-elevate"] textarea::placeholder {
-      color: #64748b !important;
+      color: #475569 !important;
+      opacity: 1;
     }
 
     /* Disabled + Readonly fields */
