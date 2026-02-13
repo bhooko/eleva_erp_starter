@@ -206,8 +206,16 @@
         {% endif %}
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building floors</span>
-        <input name="building_floors" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="G+4" />
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">G+</span>
+        <select name="building_floors" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select G+</option>
+          {% for option in g_plus_options %}
+            <option value="{{ option.value }}">{{ option.value }}</option>
+          {% endfor %}
+        </select>
+        {% if not g_plus_options %}
+          <p class="text-xs text-slate-300">Add options in Service Settings.</p>
+        {% endif %}
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
@@ -223,7 +231,15 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift brand</span>
-        <input name="lift_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Schindler" />
+        <select name="lift_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift brand</option>
+          {% for option in lift_brand_dropdown_options %}
+            <option value="{{ option.value }}">{{ option.value }}</option>
+          {% endfor %}
+        </select>
+        {% if not lift_brand_dropdown_options %}
+          <p class="text-xs text-slate-300">Add options in Service Settings.</p>
+        {% endif %}
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>

@@ -2541,6 +2541,50 @@ def get_dropdown_options_map():
         field_key: get_dropdown_choices(field_key)
         for field_key in DROPDOWN_FIELD_DEFINITIONS.keys()
     }
+
+
+SERVICE_DROPDOWN_CATEGORIES = {
+    "g_plus": "G+ Options",
+    "lift_brand": "Lift Brand Options",
+}
+
+
+def get_service_dropdown_options(category, active_only=True):
+    query = ServiceDropdownOption.query.filter_by(category=category)
+    if active_only:
+        query = query.filter_by(is_active=True)
+    return query.order_by(
+        ServiceDropdownOption.sort_order.asc(),
+        func.lower(ServiceDropdownOption.value).asc(),
+    ).all()
+
+
+def service_dropdown_values_set(category):
+    return {
+        (option.value or "").strip().lower()
+        for option in get_service_dropdown_options(category, active_only=True)
+        if (option.value or "").strip()
+    }
+
+
+def service_dropdown_custom_value(category, current_value):
+    value = clean_str(current_value)
+    if not value:
+        return None
+    active_values = service_dropdown_values_set(category)
+    if value.lower() in active_values:
+        return None
+    return value
+
+
+def validate_service_dropdown_value(category, raw_value, label):
+    cleaned_value = clean_str(raw_value)
+    if not cleaned_value:
+        return None, None
+    active_values = service_dropdown_values_set(category)
+    if cleaned_value.lower() not in active_values:
+        return None, f"Select a valid {label} option from Service Settings."
+    return cleaned_value, None
 DEFAULT_TASK_FORM_NAME = "Generic Task Tracker"
 TASK_TYPE_LABELS = {
     "general": "General Task",
@@ -6381,6 +6425,7 @@ from eleva_app.models import (
     SalesQuotationRequestItem,
     SalesTask,
     sales_task_assignees,
+    ServiceDropdownOption,
     ServiceRoute,
     ServiceTask,
     DeliveryOrder,
@@ -13968,6 +14013,7 @@ def ensure_tables():
         LiftFile.__table__,
         LiftComment.__table__,
         DropdownOption.__table__,
+        ServiceDropdownOption.__table__,
         QCWork.__table__,
         QCWorkDependency.__table__,
         QCWorkComment.__table__,
@@ -23455,13 +23501,97 @@ def service_settings():
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
     dropdown_options = get_dropdown_options_map()
+    service_dropdown_groups = {
+        category: {
+            "label": label,
+            "active": get_service_dropdown_options(category, active_only=True),
+            "inactive": get_service_dropdown_options(category, active_only=False),
+        }
+        for category, label in SERVICE_DROPDOWN_CATEGORIES.items()
+    }
+    for group in service_dropdown_groups.values():
+        group["inactive"] = [option for option in group["inactive"] if not option.is_active]
 
     return render_template(
         "service/service_settings.html",
         service_routes=service_routes,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        service_dropdown_groups=service_dropdown_groups,
     )
+
+
+@app.route("/service/settings/dropdowns/add", methods=["POST"])
+@login_required
+def service_settings_dropdown_add():
+    _module_visibility_required("service")
+    _require_admin()
+
+    category = clean_str(request.form.get("category"))
+    if category not in SERVICE_DROPDOWN_CATEGORIES:
+        flash("Invalid dropdown category.", "error")
+        return redirect(url_for("service_settings"))
+
+    value = clean_str(request.form.get("value"))
+    if not value:
+        flash("Option value is required.", "error")
+        return redirect(url_for("service_settings"))
+
+    sort_order_raw = clean_str(request.form.get("sort_order"))
+    try:
+        sort_order = int(sort_order_raw) if sort_order_raw else 0
+    except (TypeError, ValueError):
+        flash("Sort order must be a whole number.", "error")
+        return redirect(url_for("service_settings"))
+
+    existing = ServiceDropdownOption.query.filter(
+        ServiceDropdownOption.category == category,
+        func.lower(ServiceDropdownOption.value) == value.lower(),
+    ).first()
+    if existing:
+        flash("That option already exists for this category.", "error")
+        return redirect(url_for("service_settings"))
+
+    db.session.add(
+        ServiceDropdownOption(
+            category=category,
+            value=value,
+            sort_order=sort_order,
+            is_active=True,
+        )
+    )
+    db.session.commit()
+    flash("Service dropdown option added.", "success")
+    return redirect(url_for("service_settings"))
+
+
+@app.route("/service/settings/dropdowns/toggle", methods=["POST"])
+@login_required
+def service_settings_dropdown_toggle():
+    _module_visibility_required("service")
+    _require_admin()
+
+    category = clean_str(request.form.get("category"))
+    if category not in SERVICE_DROPDOWN_CATEGORIES:
+        flash("Invalid dropdown category.", "error")
+        return redirect(url_for("service_settings"))
+
+    option_id_raw = request.form.get("option_id")
+    try:
+        option_id = int(option_id_raw)
+    except (TypeError, ValueError):
+        flash("Invalid option selected.", "error")
+        return redirect(url_for("service_settings"))
+
+    option = db.session.get(ServiceDropdownOption, option_id)
+    if not option or option.category != category:
+        flash("Option not found.", "error")
+        return redirect(url_for("service_settings"))
+
+    option.is_active = not bool(option.is_active)
+    db.session.commit()
+    flash("Service dropdown option updated.", "success")
+    return redirect(url_for("service_settings"))
 
 
 def _coerce_date(value):
@@ -25588,6 +25718,8 @@ def service_lifts():
     next_lift_code = generate_next_lift_code()
     next_customer_code = generate_next_customer_code()
     dropdown_options = get_dropdown_options_map()
+    g_plus_options = get_service_dropdown_options("g_plus", active_only=True)
+    lift_brand_dropdown_options = get_service_dropdown_options("lift_brand", active_only=True)
 
     return render_template(
         "service/lifts.html",
@@ -25601,6 +25733,8 @@ def service_lifts():
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        g_plus_options=g_plus_options,
+        lift_brand_dropdown_options=lift_brand_dropdown_options,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
         amc_status_options=AMC_STATUS_OPTIONS,
@@ -25692,6 +25826,20 @@ def service_lifts_create():
         flash(day_error, "error")
         return redirect(redirect_url)
 
+    g_plus_value, error = validate_service_dropdown_value(
+        "g_plus", request.form.get("building_floors"), "G+"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    lift_brand_value, error = validate_service_dropdown_value(
+        "lift_brand", request.form.get("lift_brand"), "Lift Brand"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
     contract_input = clean_str(request.form.get("amc_contract_id"))
     generated_schedule = []
     amc_contract_id = None
@@ -25749,9 +25897,9 @@ def service_lifts_create():
         country="India",
         building_villa_number=clean_str(request.form.get("building_villa_number")),
         route=route_value,
-        building_floors=clean_str(request.form.get("building_floors")),
+        building_floors=g_plus_value,
         lift_type=clean_str(request.form.get("lift_type")),
-        lift_brand=clean_str(request.form.get("lift_brand")),
+        lift_brand=lift_brand_value,
         capacity_persons=capacity_persons,
         capacity_kg=capacity_kg,
         speed_mps=speed_mps,
@@ -25920,6 +26068,10 @@ def service_lift_edit(lift_id):
         .all()
     )
     dropdown_options = get_dropdown_options_map()
+    g_plus_options = get_service_dropdown_options("g_plus", active_only=True)
+    lift_brand_dropdown_options = get_service_dropdown_options("lift_brand", active_only=True)
+    current_custom_g_plus = service_dropdown_custom_value("g_plus", lift.building_floors)
+    current_custom_lift_brand = service_dropdown_custom_value("lift_brand", lift.lift_brand)
     return render_template(
         "service/lift_edit.html",
         lift=lift,
@@ -25931,6 +26083,10 @@ def service_lift_edit(lift_id):
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        g_plus_options=g_plus_options,
+        lift_brand_dropdown_options=lift_brand_dropdown_options,
+        current_custom_g_plus=current_custom_g_plus,
+        current_custom_lift_brand=current_custom_lift_brand,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
         service_type_options=SERVICE_TYPE_OPTIONS,
@@ -26010,9 +26166,43 @@ def service_lift_update(lift_id):
             flash(error, "error")
             return redirect(redirect_url)
 
+        g_plus_value, error = validate_service_dropdown_value(
+            "g_plus", request.form.get("building_floors"), "G+"
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        lift_brand_value, error = validate_service_dropdown_value(
+            "lift_brand", request.form.get("lift_brand"), "Lift Brand"
+        )
+        if error:
+            flash(error, "error")
+            return redirect(redirect_url)
+
+        existing_custom_g_plus = clean_str(request.form.get("building_floors_existing_custom"))
+        if (
+            not g_plus_value
+            and existing_custom_g_plus
+            and clean_str(lift.building_floors)
+            and existing_custom_g_plus.lower() == clean_str(lift.building_floors).lower()
+            and service_dropdown_custom_value("g_plus", existing_custom_g_plus)
+        ):
+            g_plus_value = existing_custom_g_plus
+
+        existing_custom_lift_brand = clean_str(request.form.get("lift_brand_existing_custom"))
+        if (
+            not lift_brand_value
+            and existing_custom_lift_brand
+            and clean_str(lift.lift_brand)
+            and existing_custom_lift_brand.lower() == clean_str(lift.lift_brand).lower()
+            and service_dropdown_custom_value("lift_brand", existing_custom_lift_brand)
+        ):
+            lift_brand_value = existing_custom_lift_brand
+
         lift.lift_type = clean_str(request.form.get("lift_type"))
-        lift.lift_brand = clean_str(request.form.get("lift_brand"))
-        lift.building_floors = clean_str(request.form.get("building_floors"))
+        lift.lift_brand = lift_brand_value
+        lift.building_floors = g_plus_value
         lift.capacity_persons = capacity_persons
         lift.capacity_kg = capacity_kg
         lift.speed_mps = speed_mps
