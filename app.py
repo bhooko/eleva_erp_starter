@@ -6932,6 +6932,12 @@ def design_overview():
     )
 
 
+@app.route("/design/metrics", methods=["GET"])
+@login_required
+def design_metrics_legacy_redirect():
+    return redirect(url_for("design_overview"), code=302)
+
+
 @event.listens_for(DesignTask, "after_insert")
 def _notify_design_task_assignee(mapper, connection, target):
     if not target.assigned_to_user_id:
@@ -7021,9 +7027,9 @@ def design_tasks():
             due_date=due_date,
             task_name=task_name,
             description=request.form.get("description") or task_name,
-            origin_type=request.form.get("origin_type") or None,
-            origin_id=request.form.get("origin_id") or None,
-            origin_reference=request.form.get("origin_reference") or None,
+            origin_type=None,
+            origin_id=None,
+            origin_reference=None,
             attachment=request.form.get("attachment") or None,
             parent_task_id=request.form.get("parent_task_id") or None,
             notes=request.form.get("notes") or None,
