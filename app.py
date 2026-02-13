@@ -13428,61 +13428,37 @@ def ensure_lift_columns():
     lift_cols = [row[1] for row in cur.fetchall()]
     added_cols = []
 
-    if "remarks" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN remarks TEXT;")
-        added_cols.append("remarks")
+    column_defs = [
+        ("remarks", "TEXT"),
+        ("preferred_service_date", "DATE"),
+        ("preferred_service_time", "TEXT"),
+        ("preferred_service_day", "TEXT"),
+        ("lift_brand", "TEXT"),
+        ("amc_contract_id", "TEXT"),
+        ("building_villa_number", "TEXT"),
+        ("geo_location", "TEXT"),
+        ("amc_duration_key", "TEXT"),
+        ("preferred_service_days_json", "TEXT"),
+        ("lifetime_metrics_json", "TEXT"),
+        ("amc_contacts_json", "TEXT"),
+        ("timeline_entries_json", "TEXT"),
+        ("service_schedule_json", "TEXT"),
+        # Backward-compatibility columns for databases created before
+        # warranty/AMC enhancements landed.
+        ("warranty_start_date", "DATE"),
+        ("warranty_end_date", "DATE"),
+        ("warranty_expiry", "DATE"),
+        ("amc_status", "TEXT"),
+        ("amc_start", "DATE"),
+        ("amc_end", "DATE"),
+        ("capacity_display", "TEXT"),
+        ("last_updated_by", "TEXT"),
+    ]
 
-    if "preferred_service_date" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_date DATE;")
-        added_cols.append("preferred_service_date")
-
-    if "preferred_service_time" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_time TEXT;")
-        added_cols.append("preferred_service_time")
-
-    if "preferred_service_day" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_day TEXT;")
-        added_cols.append("preferred_service_day")
-
-    if "lift_brand" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN lift_brand TEXT;")
-        added_cols.append("lift_brand")
-
-    if "amc_contract_id" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN amc_contract_id TEXT;")
-        added_cols.append("amc_contract_id")
-
-    if "building_villa_number" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN building_villa_number TEXT;")
-        added_cols.append("building_villa_number")
-
-    if "geo_location" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN geo_location TEXT;")
-        added_cols.append("geo_location")
-
-    if "amc_duration_key" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN amc_duration_key TEXT;")
-        added_cols.append("amc_duration_key")
-
-    if "preferred_service_days_json" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN preferred_service_days_json TEXT;")
-        added_cols.append("preferred_service_days_json")
-
-    if "lifetime_metrics_json" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN lifetime_metrics_json TEXT;")
-        added_cols.append("lifetime_metrics_json")
-
-    if "amc_contacts_json" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN amc_contacts_json TEXT;")
-        added_cols.append("amc_contacts_json")
-
-    if "timeline_entries_json" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN timeline_entries_json TEXT;")
-        added_cols.append("timeline_entries_json")
-
-    if "service_schedule_json" not in lift_cols:
-        cur.execute("ALTER TABLE lift ADD COLUMN service_schedule_json TEXT;")
-        added_cols.append("service_schedule_json")
+    for column_name, column_type in column_defs:
+        if column_name not in lift_cols:
+            cur.execute(f"ALTER TABLE lift ADD COLUMN {column_name} {column_type};")
+            added_cols.append(column_name)
 
     conn.commit()
     conn.close()
