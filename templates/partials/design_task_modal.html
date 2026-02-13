@@ -27,20 +27,21 @@
             <option value="{{ value }}" {% if default_task_type and default_task_type == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Title</span>
           <input type="text" name="task_name" class="w-full rounded-lg border-slate-200" placeholder="Task title" value="{{ default_task_name or default_description or '' }}" required />
         </label>
 
-        <label class="space-y-1 md:col-span-2" data-site-visit-field hidden>
+
+          <label class="space-y-1 md:col-span-2" data-site-visit-field hidden>
           <span class="text-sm text-slate-600">Site visit purpose</span>
           <select name="subtype" class="w-full rounded-lg border-slate-200">
             <option value="sales_request">Sales team request</option>
             <option value="drawing_verification">Drawing verification</option>
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Project</span>
           <select name="project_id" class="w-full rounded-lg border-slate-200 focus:ring-orange-400">
             <option value="">Unlinked</option>
@@ -48,8 +49,8 @@
             <option value="{{ project.id }}" {% if default_project_id and default_project_id == project.id %}selected{% endif %}>{{ project.name }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Project / Site (text)</span>
           <input type="text" name="project_name" class="w-full rounded-lg border-slate-200" placeholder="If project not in list" value="{{ default_project_name or '' }}" />
         </label>
@@ -57,8 +58,8 @@
           <input type="hidden" name="origin_type" value="{{ default_origin_type or '' }}" />
           <input type="hidden" name="origin_id" value="{{ default_origin_id or '' }}" />
           <input type="hidden" name="origin_reference" value="{{ default_origin_reference or '' }}" />
-        {% endif %}
-        <label class="space-y-1">
+          {% endif %}
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Assigned designer</span>
           <select name="assigned_to_user_id" class="w-full rounded-lg border-slate-200">
             <option value="">Unassigned</option>
@@ -66,31 +67,32 @@
               <option value="{{ user.id }}" {% if default_assignee_id and default_assignee_id == user.id %}selected{% endif %}>{{ user.display_name }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Priority</span>
           <select name="priority" class="w-full rounded-lg border-slate-200">
             <option value="low" {% if default_priority == 'low' %}selected{% endif %}>Low</option>
             <option value="medium" {% if default_priority is undefined or default_priority == 'medium' %}selected{% endif %}>Medium</option>
             <option value="high" {% if default_priority == 'high' %}selected{% endif %}>High</option>
           </select>
-        </label>
-        <label class="space-y-1">
+          </label>
+          <label class="space-y-1">
           <span class="text-sm text-slate-600">Due date</span>
           <input type="date" name="due_date" class="w-full rounded-lg border-slate-200" value="{{ default_due_date or '' }}" />
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Description</span>
           <textarea name="description" rows="2" class="w-full rounded-lg border-slate-200" placeholder="Description">{{ default_description or '' }}</textarea>
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Attachment (link/path)</span>
           <input type="text" name="attachment" class="w-full rounded-lg border-slate-200" placeholder="Paste file link" value="{{ default_attachment or '' }}" />
         </label>
-        <label class="space-y-1 md:col-span-2">
+          <label class="space-y-1 md:col-span-2">
           <span class="text-sm text-slate-600">Notes</span>
           <textarea name="notes" rows="3" class="w-full rounded-lg border-slate-200" placeholder="Additional context">{{ default_notes or '' }}</textarea>
         </label>
+        </div>
       </div>
       </div>
       <div class="sticky bottom-0 z-10 flex items-center justify-end gap-3 px-5 py-4 bg-slate-900/95 border-t border-slate-700">
