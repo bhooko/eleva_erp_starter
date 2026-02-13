@@ -275,6 +275,10 @@
         </select>
       </label>
       <label class="space-y-1">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Services per year</span>
+        <input type="number" name="services_per_year" value="{{ lift.services_per_year or '' }}" min="1" max="12" step="1" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+      </label>
+      <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">QR code URL</span>
         <input type="url" name="qr_code_url" value="{{ lift.qr_code_url or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
       </label>

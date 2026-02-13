@@ -1026,9 +1026,13 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="space-y-1">
             <p class="text-sm font-semibold text-slate-100">Generate schedule</p>
-            <p>Creates preventive visits for 12 months from AMC start date using services/year from the linked AMC contract.</p>
+            <p>Creates preventive visits across the AMC period using linked contract services/year or lift fallback.</p>
           </div>
-          <button type="submit" formaction="{{ url_for('service_lift_generate_schedule', lift_id=lift.id) }}" formmethod="post" class="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20">Generate schedule</button>
+          {% set effective_services_per_year = payload.amc.services_per_year if payload.amc.services_per_year and payload.amc.services_per_year >= 1 else (lift.services_per_year or '') %}
+          <div class="flex items-center gap-2">
+            <input type="number" name="services_per_year" min="1" max="12" step="1" value="{{ effective_services_per_year }}" class="w-24 rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs" placeholder="/yr" />
+            <button type="submit" formaction="{{ url_for('service_lift_generate_schedule', lift_id=lift.id) }}" formmethod="post" class="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20">Generate schedule</button>
+          </div>
         </div>
       </div>
       <div class="grid grid-cols-1 gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid-cols-2 xl:grid-cols-7">
@@ -1089,9 +1093,9 @@
                     <span>Current slip{% if visit.slip_display_label %}: {{ visit.slip_display_label }}{% endif %}</span>
                   </a>
                 {% endif %}
-                <label class="block">
+                <label class="block service-slip-upload {% if visit.status_key != 'completed' %}hidden{% endif %}">
                   <span class="sr-only">Upload service slip</span>
-                  <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
+                  <input type="file" name="service_slip_file" {% if visit.status_key != 'completed' %}disabled{% endif %} class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
                 </label>
               </div>
               <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70 sm:self-start">Remove</button>
@@ -1586,10 +1590,11 @@
     function toggleSlipInput(row) {
       const statusSelect = row.querySelector('select[name="service_status"]');
       const fileInput = row.querySelector('input[type="file"][name="service_slip_file"]');
-      if (!statusSelect || !fileInput) return;
+      const uploadWrapper = row.querySelector('.service-slip-upload');
+      if (!statusSelect || !fileInput || !uploadWrapper) return;
       const enabled = statusSelect.value === 'completed';
       fileInput.disabled = !enabled;
-      fileInput.closest('label')?.classList.toggle('opacity-50', !enabled);
+      uploadWrapper.classList.toggle('hidden', !enabled);
       if (!enabled) {
         fileInput.value = '';
       }
@@ -1662,9 +1667,9 @@
           <input type="hidden" name="service_slip_existing" value="">
           <input type="hidden" name="service_slip_label" value="">
           <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-            <label class="block">
+            <label class="block service-slip-upload hidden">
               <span class="sr-only">Upload service slip</span>
-              <input type="file" name="service_slip_file" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
+              <input type="file" name="service_slip_file" disabled class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-100 sm:w-auto" aria-label="Upload service slip" accept=".pdf,.png,.jpg,.jpeg,.webp,.mp4,.mov,.avi,.mkv,.doc,.docx,.xls,.xlsx" />
             </label>
           </div>
           <button type="button" class="remove-service hidden rounded-xl border border-slate-700/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800/70 sm:self-start">Remove</button>
