@@ -5959,7 +5959,10 @@ def build_lift_payload(lift):
         "machine_brand": lift.machine_brand or "—",
         "controller_brand": controller_brand_value or "—",
         "install_date_display": format_service_date(lift.install_date),
+        "warranty_start_date_display": format_service_date(lift.warranty_start_date),
+        "warranty_end_date_display": format_service_date(lift.warranty_end_date),
         "warranty_expiry_display": format_service_date(lift.warranty_expiry),
+        "is_under_warranty": lift.is_under_warranty,
         "last_service_date_display": format_service_date(lift.last_service_date),
         "commissioned_date_display": format_service_date(insight_config.get("commissioned_date") or lift.install_date),
         "documents": documents,
@@ -25794,6 +25797,28 @@ def service_lifts_create():
         flash(error, "error")
         return redirect(redirect_url)
 
+    warranty_start_date, error = parse_date_field(
+        request.form.get("warranty_start_date"), "Warranty start date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    warranty_end_date, error = parse_date_field(
+        request.form.get("warranty_end_date"), "Warranty end date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    if (
+        warranty_start_date
+        and warranty_end_date
+        and warranty_end_date < warranty_start_date
+    ):
+        flash("Warranty end date cannot be earlier than warranty start date.", "error")
+        return redirect(redirect_url)
+
     amc_start, error = parse_date_field(request.form.get("amc_start"), "AMC start")
     if error:
         flash(error, "error")
@@ -25911,6 +25936,8 @@ def service_lifts_create():
         cabin_finish=clean_str(request.form.get("cabin_finish")),
         power_supply=clean_str(request.form.get("power_supply")),
         install_date=install_date,
+        warranty_start_date=warranty_start_date,
+        warranty_end_date=warranty_end_date,
         warranty_expiry=warranty_expiry,
         amc_status=clean_str(request.form.get("amc_status")),
         amc_start=amc_start,
@@ -26547,6 +26574,28 @@ def service_lift_update(lift_id):
         flash(error, "error")
         return redirect(redirect_url)
 
+    warranty_start_date, error = parse_date_field(
+        request.form.get("warranty_start_date"), "Warranty start date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    warranty_end_date, error = parse_date_field(
+        request.form.get("warranty_end_date"), "Warranty end date"
+    )
+    if error:
+        flash(error, "error")
+        return redirect(redirect_url)
+
+    if (
+        warranty_start_date
+        and warranty_end_date
+        and warranty_end_date < warranty_start_date
+    ):
+        flash("Warranty end date cannot be earlier than warranty start date.", "error")
+        return redirect(redirect_url)
+
     amc_start, error = parse_date_field(request.form.get("amc_start"), "AMC start")
     if error:
         flash(error, "error")
@@ -26611,6 +26660,8 @@ def service_lift_update(lift_id):
     lift.cabin_finish = clean_str(request.form.get("cabin_finish"))
     lift.power_supply = clean_str(request.form.get("power_supply"))
     lift.install_date = install_date
+    lift.warranty_start_date = warranty_start_date
+    lift.warranty_end_date = warranty_end_date
     lift.warranty_expiry = warranty_expiry
     lift.amc_status = clean_str(request.form.get("amc_status"))
     lift.amc_start = amc_start
