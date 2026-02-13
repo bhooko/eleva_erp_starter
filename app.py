@@ -15887,6 +15887,7 @@ def settings_dropdown_option_delete(field_key, option_id):
 
 
 @app.route("/settings/dropdowns/<field_key>/reorder", methods=["POST"])
+@csrf.exempt
 @login_required
 def settings_dropdown_option_reorder(field_key):
     if not current_user.is_admin:
@@ -15895,7 +15896,7 @@ def settings_dropdown_option_reorder(field_key):
     payload = request.get_json(silent=True) or {}
     order_ids = payload.get("order")
     if not isinstance(order_ids, list):
-        return jsonify({"status": "error", "message": "Invalid payload."}), 400
+        return jsonify({"ok": False, "error": "Invalid payload."}), 400
     options = {
         option.id: option
         for option in DropdownOption.query.filter_by(field_key=field_key).all()
@@ -15909,7 +15910,7 @@ def settings_dropdown_option_reorder(field_key):
         if option:
             option.order_index = index
     db.session.commit()
-    return jsonify({"status": "ok"})
+    return jsonify({"ok": True})
 
 
 @app.route("/sales")
@@ -23681,6 +23682,7 @@ def service_settings_dropdown_update():
 
 
 @app.route("/service/settings/dropdowns/reorder", methods=["POST"])
+@csrf.exempt
 @login_required
 def service_settings_dropdown_reorder():
     def _json_error(error_key, status_code=400):
