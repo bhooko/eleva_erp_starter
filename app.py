@@ -26333,17 +26333,23 @@ def service_lift_generate_schedule(lift_id):
         flash("AMC duration must cover at least one full year to generate schedule.", "warning")
         return redirect(redirect_url)
 
-    schedule_entries = []
+    existing_schedule = lift.service_schedule or []
+    existing_dates = set(e.get("date") for e in existing_schedule if e.get("date"))
+
+    new_entries = []
     for year_idx in range(amc_years):
         for idx in range(services_per_year):
             month_offset = (12 * year_idx) + int((12 * idx) / services_per_year)
             visit_date = add_months(lift.amc_start, month_offset)
             if not visit_date or visit_date > lift.amc_end:
                 continue
+            iso_date = visit_date.isoformat()
+            if iso_date in existing_dates:
+                continue
             service_type = SERVICE_TYPE_OPTIONS[idx % len(SERVICE_TYPE_OPTIONS)][0]
-            schedule_entries.append(
+            new_entries.append(
                 {
-                    "date": visit_date.isoformat(),
+                    "date": iso_date,
                     "route": lift.route,
                     "status": "scheduled",
                     "service_type": service_type,
@@ -26353,11 +26359,14 @@ def service_lift_generate_schedule(lift_id):
                 }
             )
 
-    lift.service_schedule = schedule_entries
+    lift.service_schedule = existing_schedule + new_entries
     lift.last_updated_by = current_user.id if current_user.is_authenticated else None
     db.session.commit()
 
-    flash("Schedule generated", "success")
+    if len(new_entries) == 0:
+        flash("No new services added.", "warning")
+    else:
+        flash(f"Added {len(new_entries)} new service{'s' if len(new_entries) != 1 else ''}.", "success")
     return redirect(redirect_url)
 
 
