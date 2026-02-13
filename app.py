@@ -23528,26 +23528,36 @@ def service_settings_dropdown_add():
     _module_visibility_required("service")
     _require_admin()
 
+    def _redirect_with_open(category_key=None, *, focus_value=False):
+        if category_key in SERVICE_DROPDOWN_CATEGORIES:
+            redirect_url = url_for(
+                "service_settings",
+                open=category_key,
+                focus="value" if focus_value else None,
+            )
+            return redirect(f"{redirect_url}#dropdown-{category_key}")
+        return redirect(url_for("service_settings"))
+
     category = clean_str(request.form.get("category"))
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         flash("Invalid dropdown category.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     value = clean_str(request.form.get("value"))
     if not value:
         flash("Option value is required.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     sort_order_raw = clean_str(request.form.get("sort_order"))
     try:
         sort_order = int(sort_order_raw) if sort_order_raw else None
     except (TypeError, ValueError):
         flash("Sort order must be a whole number.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     if sort_order is not None and sort_order < 1:
         flash("Sort order must be 1 or greater.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     existing = ServiceDropdownOption.query.filter(
         ServiceDropdownOption.category == category,
@@ -23555,7 +23565,7 @@ def service_settings_dropdown_add():
     ).first()
     if existing:
         flash("That option already exists for this category.", "error")
-        return redirect(url_for("service_settings"))
+        return _redirect_with_open(category)
 
     if sort_order is None:
         sort_order = _next_service_dropdown_sort_order(category)
@@ -23565,7 +23575,7 @@ def service_settings_dropdown_add():
     db.session.add(ServiceDropdownOption(category=category, value=value, sort_order=sort_order, is_active=True))
     db.session.commit()
     flash("Service dropdown option added.", "success")
-    return redirect(url_for("service_settings"))
+    return _redirect_with_open(category, focus_value=True)
 
 
 @app.route("/service/settings/dropdowns/toggle", methods=["POST"])
