@@ -81,8 +81,23 @@
         {% endif %}
       </label>
       <label class="space-y-1">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Building floors</span>
-        <input name="building_floors" value="{{ lift.building_floors or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" />
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">G+</span>
+        {% set g_plus_value = lift.building_floors or '' %}
+        <select name="building_floors" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select G+</option>
+          {% for option in g_plus_options %}
+            <option value="{{ option.value }}" {% if g_plus_value and g_plus_value.lower() == option.value.lower() %}selected{% endif %}>{{ option.value }}</option>
+          {% endfor %}
+          {% if current_custom_g_plus %}
+            <option value="" selected disabled>(Custom: {{ current_custom_g_plus }})</option>
+          {% endif %}
+        </select>
+        {% if current_custom_g_plus %}
+          <input type="hidden" name="building_floors_existing_custom" value="{{ current_custom_g_plus }}" />
+        {% endif %}
+        {% if not g_plus_options %}
+          <p class="text-xs text-slate-300">Add options in Service Settings.</p>
+        {% endif %}
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift type</span>
@@ -98,7 +113,22 @@
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lift brand</span>
-        <input name="lift_brand" value="{{ lift.lift_brand or '' }}" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="e.g. Schindler" />
+        {% set lift_brand_value = lift.lift_brand or '' %}
+        <select name="lift_brand" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
+          <option value="">Select lift brand</option>
+          {% for option in lift_brand_dropdown_options %}
+            <option value="{{ option.value }}" {% if lift_brand_value and lift_brand_value.lower() == option.value.lower() %}selected{% endif %}>{{ option.value }}</option>
+          {% endfor %}
+          {% if current_custom_lift_brand %}
+            <option value="" selected disabled>(Custom: {{ current_custom_lift_brand }})</option>
+          {% endif %}
+        </select>
+        {% if current_custom_lift_brand %}
+          <input type="hidden" name="lift_brand_existing_custom" value="{{ current_custom_lift_brand }}" />
+        {% endif %}
+        {% if not lift_brand_dropdown_options %}
+          <p class="text-xs text-slate-300">Add options in Service Settings.</p>
+        {% endif %}
       </label>
       <label class="space-y-1">
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Capacity (persons)</span>

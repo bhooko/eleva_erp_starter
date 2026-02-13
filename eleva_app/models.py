@@ -1306,6 +1306,21 @@ class ServiceRoute(db.Model):
         return self.state
 
 
+class ServiceDropdownOption(db.Model):
+    __tablename__ = "service_dropdown_option"
+
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String(50), nullable=False, index=True)
+    value = db.Column(db.String(150), nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("category", "value", name="uq_service_dropdown_option_category_value"),
+    )
+
+
 class ServiceTask(db.Model):
     __tablename__ = "service_task"
 
