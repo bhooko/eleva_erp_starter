@@ -175,6 +175,7 @@ ORG_BACKUP_PATH = os.path.join(BASE_DIR, "instance", "org_structure_backup.json"
 CUSTOMER_SUPPORT_DATA_PATH = os.path.join(
     BASE_DIR, "instance", "customer_support_data.json"
 )
+BOM_UNIT_OPTIONS = ["Nos", "Set", "Mtr", "Kg", "Sqft", "Ltr"]
 
 
 def _ensure_openpyxl():
@@ -7372,7 +7373,7 @@ def design_task_detail(task_id):
             if package.bom and package.bom.design_task_id != task.id:
                 abort(404)
             if package.status == "final":
-                flash("Unlock the package before editing settings.", "warning")
+                flash("This BOM package is finalized and cannot be edited.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
             package.name = (request.form.get("package_name") or package.name).strip()
             template_id_raw = request.form.get("bom_template_id") or None
@@ -7386,6 +7387,9 @@ def design_task_detail(task_id):
             package = BOMPackage.query.get_or_404(package_id)
             if package.bom and package.bom.design_task_id != task.id:
                 abort(404)
+            if package.status == "final":
+                flash("This BOM package is finalized and cannot be edited.", "warning")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             if action == "finalize_bom_package":
                 missing_spec_items = _bom_package_missing_spec_items(package.id)
                 if missing_spec_items:
@@ -7395,13 +7399,10 @@ def design_task_detail(task_id):
                     )
                     return redirect(url_for("design_task_detail", task_id=task.id))
                 package.status = "final"
+                db.session.commit()
+                flash("Package finalized.", "success")
             else:
-                package.status = "draft"
-            db.session.commit()
-            flash(
-                "Package finalized." if package.status == "final" else "Package unlocked.",
-                "success",
-            )
+                flash("This BOM package is finalized and cannot be edited.", "warning")
         elif action in {"validate_bom_package", "generate_bom_package"}:
             package_id = request.form.get("bom_package_id")
             package = BOMPackage.query.get_or_404(package_id)
@@ -7444,7 +7445,7 @@ def design_task_detail(task_id):
                     flash("Validation successful. Ready to generate.", "success")
                 return redirect(url_for("design_task_detail", task_id=task.id))
             if package.status == "final":
-                flash("Unlock the package before regenerating.", "warning")
+                flash("This BOM package is finalized and cannot be edited.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
             if error_count or expression_error_count:
                 flash("Resolve template errors before generating items.", "danger")
@@ -7520,32 +7521,44 @@ def design_task_detail(task_id):
             if package.bom and package.bom.design_task_id != task.id:
                 abort(404)
             if package.status == "final":
-                flash("Unlock the package before editing items.", "warning")
+                flash("This BOM package is finalized and cannot be edited.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
             item_code = (request.form.get("item_code") or "").strip()
             if not item_code:
-                flash("Item name/description is required.", "danger")
+                flash("Item name is required.", "danger")
                 return redirect(url_for("design_task_detail", task_id=task.id))
-            stage_value = (request.form.get("stage") or "").strip() or None
-            section_title = (request.form.get("section_title") or "").strip() or None
             specification = (request.form.get("specification") or "").strip() or None
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
+            if not part_class_id:
+                flash("Part class is required.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             suggested_part_id = _parse_optional_int(request.form.get("suggested_part_id"))
             part_class = PartClass.query.get(part_class_id) if part_class_id else None
+            if not part_class:
+                flash("Part class was not found.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            allowed_suggested_part_ids = {part_class.primary_part_id} if part_class.primary_part_id else set()
             if suggested_part_id is None and part_class and part_class.primary_part_id:
                 suggested_part_id = part_class.primary_part_id
+            if suggested_part_id and suggested_part_id not in allowed_suggested_part_ids:
+                flash("Suggested part must belong to the selected part class.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            unit = (request.form.get("unit") or "").strip()
+            if unit not in BOM_UNIT_OPTIONS:
+                flash("Please select a valid unit.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             item = BOMItem(
                 bom_id=package.bom_id,
                 bom_package_id=package.id,
                 part_class_id=part_class_id,
                 item_code=item_code,
                 description=specification,
-                category=section_title,
-                stage=stage_value,
-                section_title=section_title,
+                category=None,
+                stage=None,
+                section_title=None,
                 specification=specification,
-                unit=request.form.get("unit"),
+                unit=unit,
                 quantity_required=float(request.form.get("quantity_required") or 0),
                 stage_id=(default_stage.id if default_stage else None),
                 remarks=request.form.get("remarks"),
@@ -7570,7 +7583,7 @@ def design_task_detail(task_id):
             if item.bom and item.bom.design_task_id != task.id:
                 abort(404)
             if item.bom_package and item.bom_package.status == "final":
-                flash("Unlock the package before editing items.", "warning")
+                flash("This BOM package is finalized and cannot be edited.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
 
             active_request = (
@@ -7595,7 +7608,18 @@ def design_task_detail(task_id):
 
             part_class_id_raw = request.form.get("part_class_id") or None
             part_class_id = int(part_class_id_raw) if part_class_id_raw else None
+            if not part_class_id:
+                flash("Part class is required.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             suggested_part_id = _parse_optional_int(request.form.get("suggested_part_id"))
+            part_class = PartClass.query.get(part_class_id)
+            if not part_class:
+                flash("Part class was not found.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
+            allowed_suggested_part_ids = {part_class.primary_part_id} if part_class.primary_part_id else set()
+            if suggested_part_id and suggested_part_id not in allowed_suggested_part_ids:
+                flash("Suggested part must belong to the selected part class.", "danger")
+                return redirect(url_for("design_task_detail", task_id=task.id))
             old_specification = (item.specification or "").strip()
             item.part_class_id = part_class_id
             item.suggested_part_id = suggested_part_id
@@ -7655,7 +7679,7 @@ def design_task_detail(task_id):
             if item.bom and item.bom.design_task_id != task.id:
                 abort(404)
             if item.bom_package and item.bom_package.status == "final":
-                flash("Unlock the package before editing items.", "warning")
+                flash("This BOM package is finalized and cannot be edited.", "warning")
                 return redirect(url_for("design_task_detail", task_id=task.id))
             db.session.delete(item)
             db.session.commit()
@@ -7785,11 +7809,19 @@ def design_task_detail(task_id):
         .order_by(Product.name.asc())
         .all()
     )
-    part_class_primary_parts = {
-        part_class.id: part_class.primary_part_id
-        for part_class in part_classes
-        if part_class.primary_part_id
-    }
+    part_class_suggested_parts = {}
+    for part_class in part_classes:
+        suggestions = []
+        if part_class.primary_part_id:
+            primary_part = Product.query.get(part_class.primary_part_id)
+            if primary_part:
+                suggestions.append(
+                    {
+                        "id": primary_part.id,
+                        "label": _product_option_label(primary_part),
+                    }
+                )
+        part_class_suggested_parts[part_class.id] = suggestions
     bom_template_options = (
         BomTemplate.query.filter(BomTemplate.is_active.is_(True))
         .order_by(BomTemplate.name.asc())
@@ -7820,7 +7852,8 @@ def design_task_detail(task_id):
         all_bom_items=all_bom_items,
         part_classes=part_classes,
         parts=parts,
-        part_class_primary_parts=part_class_primary_parts,
+        part_class_suggested_parts=part_class_suggested_parts,
+        bom_unit_options=BOM_UNIT_OPTIONS,
         bom_template_options=bom_template_options,
         bom_template_map=bom_template_map,
         package_input_values=package_input_values,
