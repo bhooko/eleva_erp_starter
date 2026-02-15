@@ -23927,12 +23927,23 @@ def service_settings_dropdown_template(category):
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         abort(404)
 
+    options = (
+        ServiceDropdownOption.query.filter_by(category=category)
+        .order_by(ServiceDropdownOption.sort_order.asc(), ServiceDropdownOption.id.asc())
+        .all()
+    )
+
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["value", "sort_order", "is_active"])
-    writer.writerow(["Sample option 1", "1", "true"])
-    writer.writerow(["Sample option 2", "2", "true"])
-    writer.writerow(["Sample option 3", "3", "false"])
+    for option in options:
+        writer.writerow(
+            [
+                option.value,
+                option.sort_order,
+                1 if option.is_active else 0,
+            ]
+        )
 
     buffer = BytesIO(output.getvalue().encode("utf-8"))
     buffer.seek(0)
@@ -23940,7 +23951,7 @@ def service_settings_dropdown_template(category):
         buffer,
         mimetype="text/csv; charset=utf-8",
         as_attachment=True,
-        download_name=f"service_{category}_template.csv",
+        download_name=f"service_{category}_export.csv",
     )
 
 
