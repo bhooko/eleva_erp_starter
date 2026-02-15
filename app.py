@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Integer, case, inspect, func, or_, and_, event
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import joinedload, subqueryload, load_only, object_session
 from sqlalchemy.engine.url import make_url
 
@@ -23913,7 +23913,14 @@ def service_settings_dropdown_import(category):
         flash("CSV must include a header row.", "error")
         return redirect(redirect_target)
 
-    imported_count = 0
+    normalized_fieldnames = {clean_str(field).lower() for field in reader.fieldnames if field}
+    if "value" not in normalized_fieldnames:
+        flash("CSV must include a 'value' column.", "error")
+        return redirect(redirect_target)
+
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
     bool_map = {
         "1": True,
         "0": False,
@@ -23923,48 +23930,74 @@ def service_settings_dropdown_import(category):
         "no": False,
     }
 
-    for row in reader:
-        if not isinstance(row, dict):
-            continue
+    try:
+        for row in reader:
+            if not isinstance(row, dict):
+                skipped_count += 1
+                continue
 
-        value = clean_str(row.get("value"))
-        if not value:
-            continue
+            value = clean_str(row.get("value"))
+            if not value:
+                skipped_count += 1
+                continue
 
-        sort_order_raw = clean_str(row.get("sort_order"))
-        sort_order = None
-        if sort_order_raw:
-            try:
-                parsed_sort_order = int(sort_order_raw)
-                if parsed_sort_order >= 1:
-                    sort_order = parsed_sort_order
-            except (TypeError, ValueError):
-                sort_order = None
+            sort_order_raw = clean_str(row.get("sort_order"))
+            sort_order = None
+            if sort_order_raw:
+                try:
+                    parsed_sort_order = int(sort_order_raw)
+                    if parsed_sort_order >= 1:
+                        sort_order = parsed_sort_order
+                except (TypeError, ValueError):
+                    sort_order = None
 
-        if sort_order is None:
-            sort_order = _next_service_dropdown_sort_order(category)
+            is_active_raw = clean_str(row.get("is_active"))
+            is_active = True
+            if is_active_raw:
+                is_active = bool_map.get(is_active_raw.lower(), True)
 
-        is_active_raw = clean_str(row.get("is_active"))
-        is_active = True
-        if is_active_raw:
-            is_active = bool_map.get(is_active_raw.lower(), True)
+            existing = ServiceDropdownOption.query.filter_by(category=category, value=value).first()
+            if existing:
+                row_updated = False
+                if not bool(existing.is_active) and is_active:
+                    existing.is_active = True
+                    row_updated = True
 
-        db.session.add(
-            ServiceDropdownOption(
-                category=category,
-                value=value,
-                sort_order=sort_order,
-                is_active=is_active,
+                if sort_order is not None and existing.sort_order != sort_order:
+                    existing.sort_order = sort_order
+                    row_updated = True
+
+                if row_updated:
+                    updated_count += 1
+                else:
+                    skipped_count += 1
+                continue
+
+            if sort_order is None:
+                sort_order = _next_service_dropdown_sort_order(category)
+
+            db.session.add(
+                ServiceDropdownOption(
+                    category=category,
+                    value=value,
+                    sort_order=sort_order,
+                    is_active=is_active,
+                )
             )
-        )
-        imported_count += 1
-
-    if not imported_count:
-        flash("No valid rows found to import.", "warning")
+            created_count += 1
+    except Exception:
+        db.session.rollback()
+        flash("Could not process CSV rows. Please verify the file format and try again.", "error")
         return redirect(redirect_target)
 
-    db.session.commit()
-    flash(f"Imported {imported_count} option(s) into {SERVICE_DROPDOWN_CATEGORIES.get(category)}.", "success")
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Import failed due to a database error. No changes were saved.", "error")
+        return redirect(redirect_target)
+
+    flash(f"Imported {created_count} new, updated {updated_count}, skipped {skipped_count}.", "success")
     return redirect(redirect_target)
 
 
