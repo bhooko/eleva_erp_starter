@@ -1350,6 +1350,82 @@ class ServiceTask(db.Model):
     owner_user = db.relationship("User", foreign_keys=[owner_user_id])
 
 
+class ServiceContractTemplate(db.Model):
+    __tablename__ = "service_contract_templates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    intro_html = db.Column(db.Text, nullable=True)
+    spec_html = db.Column(db.Text, nullable=True)
+    terms_html = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+
+class ServiceContractPrice(db.Model):
+    __tablename__ = "service_contract_prices"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lift_type_key = db.Column(db.String(60), nullable=False, index=True)
+    floors_value = db.Column(db.String(60), nullable=False, index=True)
+    contract_type = db.Column(db.String(40), nullable=False, index=True)
+    duration_years = db.Column(db.Integer, nullable=False)
+    frequency_per_year = db.Column(db.Integer, nullable=False, default=0)
+    price = db.Column(db.Float, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "lift_type_key",
+            "floors_value",
+            "contract_type",
+            "duration_years",
+            "frequency_per_year",
+            name="uq_service_contract_prices_combo",
+        ),
+    )
+
+
+class ServiceContract(db.Model):
+    __tablename__ = "service_contracts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    contract_no = db.Column(db.String(80), nullable=True)
+    lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=True, index=True)
+    customer_name = db.Column(db.String(255), nullable=True)
+    customer_phone = db.Column(db.String(60), nullable=True)
+    customer_email = db.Column(db.String(255), nullable=True)
+    customer_address = db.Column(db.Text, nullable=True)
+    lift_type_key = db.Column(db.String(60), nullable=True)
+    floors_value = db.Column(db.String(60), nullable=True)
+    contract_type = db.Column(db.String(40), nullable=True)
+    duration_years = db.Column(db.Integer, nullable=True)
+    frequency_per_year = db.Column(db.Integer, nullable=False, default=0)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    standard_price = db.Column(db.Float, nullable=False, default=0)
+    discount_type = db.Column(db.String(20), nullable=True)
+    discount_value = db.Column(db.Float, nullable=True)
+    final_price = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default="draft")
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    lift = db.relationship("Lift", foreign_keys=[lift_id])
+
+
 class Customer(db.Model):
     __tablename__ = "customer"
 

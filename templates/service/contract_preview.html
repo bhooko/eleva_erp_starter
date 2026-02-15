@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Contract Preview · Eleva ERP{% endblock %}
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-semibold text-theme-primary">Contract Preview #{{ contract.id }}</h1>
+    <div class="flex gap-2">
+      <a href="{{ url_for('service_contract_edit', contract_id=contract.id) }}" class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300">Edit</a>
+      <a href="{{ url_for('service_contract_pdf', contract_id=contract.id) }}" class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300">Download PDF</a>
+      <button type="button" onclick="window.print()" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">Print</button>
+    </div>
+  </div>
+
+  <article class="rounded-2xl border border-slate-800 bg-white text-slate-900 p-8 space-y-8">
+    <section>{{ intro_html|safe }}</section>
+    <section>{{ spec_html|safe }}</section>
+    <section>{{ terms_html|safe }}</section>
+  </article>
+</div>
+{% endblock %}

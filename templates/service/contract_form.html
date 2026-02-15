@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if is_edit else 'New' }} Contract · Eleva ERP{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-6">
+  <h1 class="text-2xl font-semibold text-theme-primary">{{ 'Edit' if is_edit else 'New' }} Service Contract</h1>
+  <form method="post" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+    {{ csrf_field() }}
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="space-y-1 text-sm">Contract No<input name="contract_no" value="{{ contract.contract_no or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+      <label class="space-y-1 text-sm">Lift<select name="lift_id" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"><option value="">Optional</option>{% for lift in lift_choices %}<option value="{{ lift.id }}" {% if contract.lift_id==lift.id %}selected{% endif %}>{{ lift.lift_code }}{% if lift.customer %} · {{ lift.customer.company_name }}{% endif %}</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm">Customer Name<input name="customer_name" required value="{{ contract.customer_name or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+      <label class="space-y-1 text-sm">Phone<input name="customer_phone" value="{{ contract.customer_phone or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+      <label class="space-y-1 text-sm">Email<input name="customer_email" value="{{ contract.customer_email or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+      <label class="space-y-1 text-sm">Address<textarea name="customer_address" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{{ contract.customer_address or '' }}</textarea></label>
+      <label class="space-y-1 text-sm">Lift Type<select name="lift_type_key" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for option in lift_type_options %}<option value="{{ option.value }}" {% if contract.lift_type_key==option.value %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm">Floors<select name="floors_value" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for option in floors_options %}<option value="{{ option.value }}" {% if contract.floors_value==option.value %}selected{% endif %}>{{ option.value }}</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm">Contract Type<select name="contract_type" required data-contract-type class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for value,label in contract_type_options %}<option value="{{ value }}" {% if contract.contract_type==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm">Duration<select name="duration_years" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for years in duration_options %}<option value="{{ years }}" {% if contract.duration_years==years %}selected{% endif %}>{{ years }} years</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm" data-frequency-wrap>Frequency<select name="frequency_per_year" required data-frequency class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></select></label>
+      <label class="space-y-1 text-sm">Start Date<input type="date" name="start_date" value="{{ contract.start_date.isoformat() if contract.start_date else '' }}" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+      <label class="space-y-1 text-sm">Discount Type<select name="discount_type" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"><option value="">None</option><option value="percent" {% if contract.discount_type=='percent' %}selected{% endif %}>Percent</option><option value="amount" {% if contract.discount_type=='amount' %}selected{% endif %}>Amount</option></select></label>
+      <label class="space-y-1 text-sm">Discount Value<input type="number" step="0.01" min="0" name="discount_value" value="{{ contract.discount_value or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
+    </div>
+    <label class="inline-flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" name="apply_to_lift_amc" value="1" class="rounded border-slate-600 bg-slate-900">Apply to lift AMC fields</label>
+    <div class="flex justify-end gap-2"><input type="hidden" name="status" value="draft"><button class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100">Save draft</button></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const typeEl = document.querySelector('[data-contract-type]');
+    const freqEl = document.querySelector('[data-frequency]');
+    const wrap = document.querySelector('[data-frequency-wrap]');
+    const options = {{ frequency_options|tojson }};
+    const current = {{ (contract.frequency_per_year or 0)|tojson }};
+    const refresh = () => {
+      const values = options[typeEl.value] || [];
+      freqEl.innerHTML = '';
+      values.forEach((v) => {
+        const option = document.createElement('option');
+        option.value = String(v);
+        option.textContent = v === 0 ? 'N/A' : `${v} / year`;
+        if (v === current) option.selected = true;
+        freqEl.appendChild(option);
+      });
+      wrap.style.display = typeEl.value === 'call_basis' ? 'none' : '';
+    };
+    typeEl.addEventListener('change', refresh);
+    refresh();
+  });
+</script>
+{% endblock %}
