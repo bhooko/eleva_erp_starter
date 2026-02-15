@@ -2571,6 +2571,14 @@ def get_dropdown_options_map():
 SERVICE_DROPDOWN_CATEGORIES = {
     "floors": "Floors",
     "lift_brand": "Lift Brand Options",
+    "lift_type": "Lift Type",
+    "door_type": "Door Type",
+    "door_finish": "Door Finish",
+    "power_supply": "Power Supply",
+    "machine_type": "Machine Type",
+    "passenger_capacity": "Passenger Capacity",
+    "load_capacity": "Load Capacity (Kg)",
+    "service_routes": "Service Routes",
     "complaint_option": "Complaint options",
     "solution_option": "Solution options",
     "service_check": "Service checks",
@@ -24008,8 +24016,8 @@ def service_settings_dropdown_import(category):
     }
 
     try:
-        existing_values = {
-            clean_str(option.value).lower()
+        existing_options = {
+            clean_str(option.value).lower(): option
             for option in ServiceDropdownOption.query.filter_by(category=category).all()
             if clean_str(option.value)
         }
@@ -24029,11 +24037,6 @@ def service_settings_dropdown_import(category):
             if not value:
                 continue
 
-            normalized_value = value.lower()
-            if normalized_value in existing_values:
-                duplicate_count += 1
-                continue
-
             sort_order_raw = clean_str(row.get("sort_order"))
             sort_order = None
             if sort_order_raw:
@@ -24049,18 +24052,30 @@ def service_settings_dropdown_import(category):
             if is_active_raw:
                 is_active = bool_map.get(is_active_raw.lower(), True)
 
+            normalized_value = value.lower()
+            existing_option = existing_options.get(normalized_value)
+            if existing_option:
+                if clean_str(existing_option.value) != value:
+                    existing_option.value = value
+
+                if sort_order is not None:
+                    existing_option.sort_order = sort_order
+
+                existing_option.is_active = is_active
+                duplicate_count += 1
+                continue
+
             if sort_order is None:
                 sort_order = _next_service_dropdown_sort_order(category)
 
-            db.session.add(
-                ServiceDropdownOption(
-                    category=category,
-                    value=value,
-                    sort_order=sort_order,
-                    is_active=is_active,
-                )
+            new_option = ServiceDropdownOption(
+                category=category,
+                value=value,
+                sort_order=sort_order,
+                is_active=is_active,
             )
-            existing_values.add(normalized_value)
+            db.session.add(new_option)
+            existing_options[normalized_value] = new_option
             added_count += 1
     except Exception:
         db.session.rollback()
