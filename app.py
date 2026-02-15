@@ -2473,6 +2473,31 @@ def ensure_dropdown_options_seed():
     db.session.commit()
 
 
+def migrate_service_dropdown_category_g_plus_to_floors():
+    legacy_rows = ServiceDropdownOption.query.filter_by(category="g_plus").all()
+    if not legacy_rows:
+        return
+
+    for option in legacy_rows:
+        existing = ServiceDropdownOption.query.filter_by(
+            category="floors",
+            value=option.value,
+        ).first()
+        if existing:
+            if option.sort_order and (
+                not existing.sort_order or option.sort_order < existing.sort_order
+            ):
+                existing.sort_order = option.sort_order
+            existing.is_active = bool(existing.is_active) or bool(option.is_active)
+            db.session.delete(option)
+            continue
+
+        option.category = "floors"
+
+    db.session.commit()
+    print("Migrated g_plus category to floors")
+
+
 def ensure_default_org_structure_seed():
     """Seed a minimal department/position structure for fresh databases."""
 
@@ -2544,7 +2569,7 @@ def get_dropdown_options_map():
 
 
 SERVICE_DROPDOWN_CATEGORIES = {
-    "g_plus": "Floors",
+    "floors": "Floors",
     "lift_brand": "Lift Brand Options",
     "complaint_option": "Complaint options",
     "solution_option": "Solution options",
@@ -15460,6 +15485,7 @@ def bootstrap_db():
     ensure_bom_template_line_table()
     ensure_procurement_stage_seed()
     ensure_dropdown_options_seed()
+    migrate_service_dropdown_category_g_plus_to_floors()
     ensure_client_requirement_template_seed()
     seeded_org_structure = ensure_default_org_structure_seed()
     purge_legacy_demo_records()
@@ -23677,7 +23703,7 @@ def service_settings():
     ).all()
 
     lift_type_options = get_dropdown_choices("lift_type")
-    floors_options = get_service_dropdown_options("g_plus", active_only=True)
+    floors_options = get_service_dropdown_options("floors", active_only=True)
 
     return render_template(
         "service/service_settings.html",
@@ -23722,7 +23748,7 @@ def service_contract_template_settings():
         contract_duration_options=CONTRACT_DURATION_OPTIONS,
         contract_frequency_options=CONTRACT_FREQUENCY_OPTIONS,
         lift_type_options=get_dropdown_choices("lift_type"),
-        floors_options=get_service_dropdown_options("g_plus", active_only=True),
+        floors_options=get_service_dropdown_options("floors", active_only=True),
     )
 
 
@@ -26301,7 +26327,7 @@ def service_lifts():
     next_lift_code = generate_next_lift_code()
     next_customer_code = generate_next_customer_code()
     dropdown_options = get_dropdown_options_map()
-    g_plus_options = get_service_dropdown_options("g_plus", active_only=True)
+    floors_options = get_service_dropdown_options("floors", active_only=True)
     lift_brand_dropdown_options = get_service_dropdown_options("lift_brand", active_only=True)
 
     return render_template(
@@ -26316,7 +26342,7 @@ def service_lifts():
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
-        g_plus_options=g_plus_options,
+        floors_options=floors_options,
         lift_brand_dropdown_options=lift_brand_dropdown_options,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
@@ -26430,8 +26456,8 @@ def service_lifts_create():
         flash(day_error, "error")
         return redirect(redirect_url)
 
-    g_plus_value, error = validate_service_dropdown_value(
-        "g_plus", request.form.get("building_floors"), "Floors"
+    floors_value, error = validate_service_dropdown_value(
+        "floors", request.form.get("building_floors"), "Floors"
     )
     if error:
         flash(error, "error")
@@ -26467,7 +26493,7 @@ def service_lifts_create():
         country="India",
         building_villa_number=clean_str(request.form.get("building_villa_number")),
         route=route_value,
-        building_floors=g_plus_value,
+        building_floors=floors_value,
         lift_type=clean_str(request.form.get("lift_type")),
         lift_brand=lift_brand_value,
         capacity_persons=capacity_persons,
@@ -26823,9 +26849,9 @@ def service_lift_edit(lift_id):
         .all()
     )
     dropdown_options = get_dropdown_options_map()
-    g_plus_options = get_service_dropdown_options("g_plus", active_only=True)
+    floors_options = get_service_dropdown_options("floors", active_only=True)
     lift_brand_dropdown_options = get_service_dropdown_options("lift_brand", active_only=True)
-    current_custom_g_plus = service_dropdown_custom_value("g_plus", lift.building_floors)
+    current_custom_floors = service_dropdown_custom_value("floors", lift.building_floors)
     current_custom_lift_brand = service_dropdown_custom_value("lift_brand", lift.lift_brand)
     return render_template(
         "service/lift_edit.html",
@@ -26838,9 +26864,9 @@ def service_lift_edit(lift_id):
         service_day_options=SERVICE_PREFERRED_DAY_OPTIONS,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
-        g_plus_options=g_plus_options,
+        floors_options=floors_options,
         lift_brand_dropdown_options=lift_brand_dropdown_options,
-        current_custom_g_plus=current_custom_g_plus,
+        current_custom_floors=current_custom_floors,
         current_custom_lift_brand=current_custom_lift_brand,
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
@@ -26921,8 +26947,8 @@ def service_lift_update(lift_id):
             flash(error, "error")
             return redirect(redirect_url)
 
-        g_plus_value, error = validate_service_dropdown_value(
-            "g_plus", request.form.get("building_floors"), "Floors"
+        floors_value, error = validate_service_dropdown_value(
+            "floors", request.form.get("building_floors"), "Floors"
         )
         if error:
             flash(error, "error")
@@ -26935,15 +26961,15 @@ def service_lift_update(lift_id):
             flash(error, "error")
             return redirect(redirect_url)
 
-        existing_custom_g_plus = clean_str(request.form.get("building_floors_existing_custom"))
+        existing_custom_floors = clean_str(request.form.get("building_floors_existing_custom"))
         if (
-            not g_plus_value
-            and existing_custom_g_plus
+            not floors_value
+            and existing_custom_floors
             and clean_str(lift.building_floors)
-            and existing_custom_g_plus.lower() == clean_str(lift.building_floors).lower()
-            and service_dropdown_custom_value("g_plus", existing_custom_g_plus)
+            and existing_custom_floors.lower() == clean_str(lift.building_floors).lower()
+            and service_dropdown_custom_value("floors", existing_custom_floors)
         ):
-            g_plus_value = existing_custom_g_plus
+            floors_value = existing_custom_floors
 
         existing_custom_lift_brand = clean_str(request.form.get("lift_brand_existing_custom"))
         if (
@@ -26957,7 +26983,7 @@ def service_lift_update(lift_id):
 
         lift.lift_type = clean_str(request.form.get("lift_type"))
         lift.lift_brand = lift_brand_value
-        lift.building_floors = g_plus_value
+        lift.building_floors = floors_value
         lift.capacity_persons = capacity_persons
         lift.capacity_kg = capacity_kg
         lift.speed_mps = speed_mps
@@ -27617,7 +27643,7 @@ def service_contracts():
 def _contract_form_context(contract=None, lift_id=None):
     lift_choices = Lift.query.options(joinedload(Lift.customer)).order_by(Lift.lift_code.asc()).all()
     lift_type_options = get_dropdown_choices("lift_type")
-    floors_options = get_service_dropdown_options("g_plus", active_only=True)
+    floors_options = get_service_dropdown_options("floors", active_only=True)
     selected_lift = None
     if lift_id:
         selected_lift = Lift.query.options(joinedload(Lift.customer)).get(lift_id)
