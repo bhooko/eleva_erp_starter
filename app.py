@@ -2551,6 +2551,102 @@ SERVICE_DROPDOWN_CATEGORIES = {
     "service_check": "Service checks",
 }
 
+CONTRACT_TYPE_OPTIONS = [
+    ("non_comprehensive", "Non-comprehensive"),
+    ("semi_comprehensive", "Semi-comprehensive"),
+    ("comprehensive", "Comprehensive"),
+    ("call_basis", "Call basis"),
+]
+CONTRACT_TYPE_LABELS = {value: label for value, label in CONTRACT_TYPE_OPTIONS}
+CONTRACT_DURATION_OPTIONS = [1, 2, 3, 5]
+# call_basis uses 0 as frequency_per_year to represent N/A.
+CONTRACT_FREQUENCY_OPTIONS = {
+    "non_comprehensive": [12, 6, 4],
+    "semi_comprehensive": [12],
+    "comprehensive": [12],
+    "call_basis": [0],
+}
+
+
+def _strip_script_tags(raw_html):
+    value = raw_html or ""
+    return re.sub(r"<script[^>]*>.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL)
+
+
+def _contract_frequency_label(contract_type, frequency):
+    if contract_type == "call_basis" or int(frequency or 0) == 0:
+        return "N/A"
+    return f"{int(frequency)} / year"
+
+
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _calculate_contract_prices(standard_price, discount_type, discount_value):
+    standard = max(0.0, _safe_float(standard_price, 0))
+    discount = _safe_float(discount_value, 0)
+    final_price = standard
+    if discount_type == "percent":
+        final_price = standard * (1 - (discount / 100.0))
+    elif discount_type == "amount":
+        final_price = standard - discount
+    return standard, max(0.0, final_price)
+
+
+def _compute_contract_end_date(start_date, duration_years):
+    if not isinstance(start_date, datetime.date):
+        return None
+    try:
+        end_same_day = start_date.replace(year=start_date.year + int(duration_years or 0))
+    except ValueError:
+        end_same_day = start_date + datetime.timedelta(days=365 * int(duration_years or 0))
+    return end_same_day - datetime.timedelta(days=1)
+
+
+def _ensure_service_contract_templates_row():
+    template = ServiceContractTemplate.query.first()
+    if template:
+        return template
+    template = ServiceContractTemplate(intro_html="", spec_html="", terms_html="")
+    db.session.add(template)
+    db.session.commit()
+    return template
+
+
+def _price_lookup(lift_type_key, floors_value, contract_type, duration_years, frequency_per_year):
+    return ServiceContractPrice.query.filter_by(
+        lift_type_key=lift_type_key,
+        floors_value=floors_value,
+        contract_type=contract_type,
+        duration_years=duration_years,
+        frequency_per_year=frequency_per_year,
+        is_active=True,
+    ).first()
+
+
+def _contract_placeholder_map(contract):
+    lift = contract.lift
+    return {
+        "customer_name": contract.customer_name or "",
+        "lift_name": (lift.lift_code if lift else "") or "",
+        "lift_address": ((lift.site_address_line1 if lift else "") or "") if lift else "",
+        "contract_type_label": CONTRACT_TYPE_LABELS.get(contract.contract_type, contract.contract_type or ""),
+        "duration_years": str(contract.duration_years or ""),
+        "frequency_label": _contract_frequency_label(contract.contract_type, contract.frequency_per_year),
+        "final_price": f"{_safe_float(contract.final_price):.2f}",
+    }
+
+
+def _render_contract_html(template_html, mapping):
+    rendered = template_html or ""
+    for key, value in mapping.items():
+        rendered = rendered.replace("{{" + key + "}}", html.escape(str(value)))
+    return rendered
+
 
 def get_service_dropdown_options(category, active_only=True):
     query = ServiceDropdownOption.query.filter_by(category=category)
@@ -6462,6 +6558,9 @@ from eleva_app.models import (
     SalesTask,
     sales_task_assignees,
     ServiceDropdownOption,
+    ServiceContract,
+    ServiceContractPrice,
+    ServiceContractTemplate,
     ServiceRoute,
     ServiceTask,
     DeliveryOrder,
@@ -14020,6 +14119,9 @@ def ensure_tables():
         SalesQuotationNegotiationLog.__table__,
         ServiceRoute.__table__,
         ServiceTask.__table__,
+        ServiceContractTemplate.__table__,
+        ServiceContractPrice.__table__,
+        ServiceContract.__table__,
         Customer.__table__,
         CustomerComment.__table__,
         Lift.__table__,
@@ -23526,13 +23628,143 @@ def service_settings():
     for group in service_dropdown_groups.values():
         group["inactive"] = [option for option in group["inactive"] if not option.is_active]
 
+    template_config = _ensure_service_contract_templates_row()
+    contract_prices = ServiceContractPrice.query.order_by(
+        ServiceContractPrice.lift_type_key.asc(),
+        ServiceContractPrice.floors_value.asc(),
+        ServiceContractPrice.contract_type.asc(),
+        ServiceContractPrice.duration_years.asc(),
+        ServiceContractPrice.frequency_per_year.asc(),
+    ).all()
+
+    lift_type_options = get_dropdown_choices("lift_type")
+    floors_options = get_service_dropdown_options("g_plus", active_only=True)
+
     return render_template(
         "service/service_settings.html",
         service_routes=service_routes,
         dropdown_options=dropdown_options,
         dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         service_dropdown_groups=service_dropdown_groups,
+        contract_template=template_config,
+        contract_prices=contract_prices,
+        contract_type_options=CONTRACT_TYPE_OPTIONS,
+        contract_duration_options=CONTRACT_DURATION_OPTIONS,
+        contract_frequency_options=CONTRACT_FREQUENCY_OPTIONS,
+        lift_type_options=lift_type_options,
+        floors_options=floors_options,
     )
+
+
+@app.route("/service/settings/contracts/templates", methods=["GET", "POST"])
+@login_required
+def service_contract_template_settings():
+    _module_visibility_required("service")
+    _require_admin()
+
+    template_row = _ensure_service_contract_templates_row()
+    if request.method == "POST":
+        template_row.intro_html = _strip_script_tags(request.form.get("intro_html"))
+        template_row.spec_html = _strip_script_tags(request.form.get("spec_html"))
+        template_row.terms_html = _strip_script_tags(request.form.get("terms_html"))
+        db.session.commit()
+        flash("Contract templates updated.", "success")
+        return redirect(url_for("service_settings") + "#contract-settings")
+
+    return render_template(
+        "service/service_settings.html",
+        service_routes=[],
+        dropdown_options=get_dropdown_options_map(),
+        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
+        service_dropdown_groups={},
+        contract_template=template_row,
+        contract_prices=[],
+        contract_type_options=CONTRACT_TYPE_OPTIONS,
+        contract_duration_options=CONTRACT_DURATION_OPTIONS,
+        contract_frequency_options=CONTRACT_FREQUENCY_OPTIONS,
+        lift_type_options=get_dropdown_choices("lift_type"),
+        floors_options=get_service_dropdown_options("g_plus", active_only=True),
+    )
+
+
+@app.route("/service/settings/contracts/prices/add", methods=["POST"])
+@login_required
+def service_contract_price_add():
+    _module_visibility_required("service")
+    _require_admin()
+
+    lift_type_key = clean_str(request.form.get("lift_type_key"))
+    floors_value = clean_str(request.form.get("floors_value"))
+    contract_type = clean_str(request.form.get("contract_type"))
+    try:
+        duration_years = int((request.form.get("duration_years") or "").strip())
+    except ValueError:
+        duration_years = None
+    try:
+        frequency_per_year = int((request.form.get("frequency_per_year") or "").strip())
+    except ValueError:
+        frequency_per_year = None
+    price = _safe_float(request.form.get("price"), 0)
+
+    if contract_type == "call_basis":
+        frequency_per_year = 0
+    allowed_frequencies = CONTRACT_FREQUENCY_OPTIONS.get(contract_type, [])
+    if not lift_type_key or not floors_value or contract_type not in CONTRACT_TYPE_LABELS or duration_years not in CONTRACT_DURATION_OPTIONS:
+        flash("Please fill all required price settings fields.", "error")
+        return redirect(url_for("service_settings") + "#price-settings")
+    if frequency_per_year not in allowed_frequencies:
+        flash("Invalid frequency for selected contract type.", "error")
+        return redirect(url_for("service_settings") + "#price-settings")
+
+    exists = ServiceContractPrice.query.filter_by(
+        lift_type_key=lift_type_key,
+        floors_value=floors_value,
+        contract_type=contract_type,
+        duration_years=duration_years,
+        frequency_per_year=frequency_per_year,
+    ).first()
+    if exists:
+        flash("Duplicate price row exists for this combination.", "error")
+        return redirect(url_for("service_settings") + "#price-settings")
+
+    db.session.add(
+        ServiceContractPrice(
+            lift_type_key=lift_type_key,
+            floors_value=floors_value,
+            contract_type=contract_type,
+            duration_years=duration_years,
+            frequency_per_year=frequency_per_year,
+            price=max(0.0, price),
+            is_active=True,
+        )
+    )
+    db.session.commit()
+    flash("Contract price row added.", "success")
+    return redirect(url_for("service_settings") + "#price-settings")
+
+
+@app.route("/service/settings/contracts/prices/<int:price_id>/update", methods=["POST"])
+@login_required
+def service_contract_price_update(price_id):
+    _module_visibility_required("service")
+    _require_admin()
+    row = ServiceContractPrice.query.get_or_404(price_id)
+    row.price = max(0.0, _safe_float(request.form.get("price"), row.price))
+    db.session.commit()
+    flash("Contract price updated.", "success")
+    return redirect(url_for("service_settings") + "#price-settings")
+
+
+@app.route("/service/settings/contracts/prices/<int:price_id>/toggle", methods=["POST"])
+@login_required
+def service_contract_price_toggle(price_id):
+    _module_visibility_required("service")
+    _require_admin()
+    row = ServiceContractPrice.query.get_or_404(price_id)
+    row.is_active = not bool(row.is_active)
+    db.session.commit()
+    flash("Contract price status updated.", "success")
+    return redirect(url_for("service_settings") + "#price-settings")
 
 
 @app.route("/service/settings/dropdowns/add", methods=["POST"])
@@ -27315,53 +27547,181 @@ def service_complaints():
     return render_template("service/complaints.html", complaints=SERVICE_COMPLAINTS)
 
 
-@app.route("/service/contracts/export")
-@login_required
-def service_contracts_export():
-    _module_visibility_required("service")
-    if not current_user.is_admin:
-        abort(403)
-
-    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d")
-    filename = f"contracts_export_{timestamp}.xlsx"
-
-    if OPENPYXL_AVAILABLE:
-        workbook = build_contract_export_workbook(SERVICE_CONTRACTS)
-        output = BytesIO()
-        workbook.save(output)
-        output.seek(0)
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-    csv_rows = [_contract_export_row(contract) for contract in SERVICE_CONTRACTS]
-    csv_output = _build_csv_output(SERVICE_CONTRACT_EXPORT_HEADERS, csv_rows)
-    return send_file(
-        csv_output,
-        as_attachment=True,
-        download_name=filename.replace(".xlsx", ".csv"),
-        mimetype="text/csv",
-    )
-
-
 @app.route("/service/contracts")
 @login_required
 def service_contracts():
     _module_visibility_required("service")
-    contracts = []
-    for contract in SERVICE_CONTRACTS:
-        contracts.append(
-            {
-                **contract,
-                "start_display": contract.get("start").strftime("%d %b %Y") if isinstance(contract.get("start"), datetime.date) else "—",
-                "end_display": contract.get("end").strftime("%d %b %Y") if isinstance(contract.get("end"), datetime.date) else "—",
-                "renewal_display": contract.get("renewal").strftime("%d %b %Y") if isinstance(contract.get("renewal"), datetime.date) else "—",
-            }
-        )
-    return render_template("service/contracts.html", contracts=contracts)
+    contracts = ServiceContract.query.options(joinedload(ServiceContract.lift)).order_by(ServiceContract.created_at.desc()).all()
+    return render_template(
+        "service/contract_list.html",
+        contracts=contracts,
+        contract_type_labels=CONTRACT_TYPE_LABELS,
+    )
+
+
+def _contract_form_context(contract=None, lift_id=None):
+    lift_choices = Lift.query.options(joinedload(Lift.customer)).order_by(Lift.lift_code.asc()).all()
+    lift_type_options = get_dropdown_choices("lift_type")
+    floors_options = get_service_dropdown_options("g_plus", active_only=True)
+    selected_lift = None
+    if lift_id:
+        selected_lift = Lift.query.options(joinedload(Lift.customer)).get(lift_id)
+    if not contract:
+        contract = ServiceContract(status="draft", frequency_per_year=12, duration_years=1)
+    if selected_lift and not contract.lift_id:
+        contract.lift_id = selected_lift.id
+        contract.lift_type_key = selected_lift.lift_type
+        contract.floors_value = selected_lift.building_floors
+        if selected_lift.customer:
+            contract.customer_name = selected_lift.customer.company_name
+            contract.customer_phone = selected_lift.customer.mobile or selected_lift.customer.phone
+            contract.customer_email = selected_lift.customer.email
+            contract.customer_address = "\n".join([x for x in [selected_lift.customer.billing_address_line1, selected_lift.customer.billing_address_line2, selected_lift.customer.city] if x])
+    return {
+        "contract": contract,
+        "lift_choices": lift_choices,
+        "lift_type_options": lift_type_options,
+        "floors_options": floors_options,
+        "contract_type_options": CONTRACT_TYPE_OPTIONS,
+        "duration_options": CONTRACT_DURATION_OPTIONS,
+        "frequency_options": CONTRACT_FREQUENCY_OPTIONS,
+    }
+
+
+def _save_contract_from_form(contract):
+    lift_id_raw = (request.form.get("lift_id") or "").strip()
+    contract.contract_no = clean_str(request.form.get("contract_no"))
+    contract.customer_name = clean_str(request.form.get("customer_name"))
+    contract.customer_phone = clean_str(request.form.get("customer_phone"))
+    contract.customer_email = clean_str(request.form.get("customer_email"))
+    contract.customer_address = clean_str(request.form.get("customer_address"))
+    contract.lift_type_key = clean_str(request.form.get("lift_type_key"))
+    contract.floors_value = clean_str(request.form.get("floors_value"))
+    contract.contract_type = clean_str(request.form.get("contract_type"))
+    contract.discount_type = clean_str(request.form.get("discount_type")) or None
+    contract.discount_value = _safe_float(request.form.get("discount_value"), 0)
+    contract.status = clean_str(request.form.get("status")) or "draft"
+
+    try:
+        contract.lift_id = int(lift_id_raw) if lift_id_raw else None
+    except ValueError:
+        contract.lift_id = None
+
+    try:
+        contract.duration_years = int((request.form.get("duration_years") or "").strip())
+    except ValueError:
+        contract.duration_years = None
+    try:
+        selected_frequency = int((request.form.get("frequency_per_year") or "").strip())
+    except ValueError:
+        selected_frequency = None
+
+    if contract.contract_type == "call_basis":
+        contract.frequency_per_year = 0
+    else:
+        contract.frequency_per_year = selected_frequency or 0
+
+    contract.start_date = _coerce_date(request.form.get("start_date"))
+    contract.end_date = _compute_contract_end_date(contract.start_date, contract.duration_years)
+
+    allowed = CONTRACT_FREQUENCY_OPTIONS.get(contract.contract_type, [])
+    if contract.frequency_per_year not in allowed:
+        raise ValueError("Invalid frequency selected for this contract type.")
+
+    price_row = _price_lookup(
+        contract.lift_type_key,
+        contract.floors_value,
+        contract.contract_type,
+        contract.duration_years,
+        contract.frequency_per_year,
+    )
+    if price_row:
+        contract.standard_price = _safe_float(price_row.price, 0)
+    else:
+        contract.standard_price = 0.0
+        flash("No standard price set for this combination.", "warning")
+
+    standard, final_price = _calculate_contract_prices(contract.standard_price, contract.discount_type, contract.discount_value)
+    contract.standard_price = standard
+    contract.final_price = final_price
+
+    apply_to_lift = bool(request.form.get("apply_to_lift_amc"))
+    if apply_to_lift and contract.lift_id:
+        lift = Lift.query.get(contract.lift_id)
+        if lift:
+            lift.amc_start = contract.start_date
+            lift.amc_end = contract.end_date
+            if contract.frequency_per_year:
+                lift.services_per_year = contract.frequency_per_year
+
+
+@app.route("/service/contracts/new", methods=["GET", "POST"])
+@login_required
+def service_contract_new():
+    _module_visibility_required("service")
+    lift_id = request.args.get("lift_id", type=int)
+    contract = ServiceContract(status="draft")
+
+    if request.method == "POST":
+        try:
+            _save_contract_from_form(contract)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=lift_id), is_edit=False)
+        db.session.add(contract)
+        db.session.commit()
+        flash("Contract saved.", "success")
+        return redirect(url_for("service_contract_preview", contract_id=contract.id))
+
+    return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=lift_id), is_edit=False)
+
+
+@app.route("/service/contracts/<int:contract_id>/edit", methods=["GET", "POST"])
+@login_required
+def service_contract_edit(contract_id):
+    _module_visibility_required("service")
+    contract = ServiceContract.query.get_or_404(contract_id)
+    if request.method == "POST":
+        try:
+            _save_contract_from_form(contract)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=contract.lift_id), is_edit=True)
+        contract.status = "draft"
+        db.session.commit()
+        flash("Contract updated.", "success")
+        return redirect(url_for("service_contract_preview", contract_id=contract.id))
+
+    return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=contract.lift_id), is_edit=True)
+
+
+@app.route("/service/contracts/<int:contract_id>/preview")
+@login_required
+def service_contract_preview(contract_id):
+    _module_visibility_required("service")
+    contract = ServiceContract.query.options(joinedload(ServiceContract.lift)).get_or_404(contract_id)
+    template_row = _ensure_service_contract_templates_row()
+    placeholders = _contract_placeholder_map(contract)
+    intro_html = _render_contract_html(template_row.intro_html, placeholders)
+    spec_html = _render_contract_html(template_row.spec_html, placeholders)
+    terms_html = _render_contract_html(template_row.terms_html, placeholders)
+    return render_template(
+        "service/contract_preview.html",
+        contract=contract,
+        intro_html=intro_html,
+        spec_html=spec_html,
+        terms_html=terms_html,
+        contract_type_labels=CONTRACT_TYPE_LABELS,
+    )
+
+
+@app.route("/service/contracts/<int:contract_id>/pdf")
+@login_required
+def service_contract_pdf(contract_id):
+    _module_visibility_required("service")
+    ServiceContract.query.get_or_404(contract_id)
+    flash("PDF export not implemented yet.", "warning")
+    return redirect(url_for("service_contract_preview", contract_id=contract_id))
 
 
 @app.route("/service/parts-materials")

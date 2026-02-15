@@ -216,6 +216,81 @@
       </div>
     </section>
 
+    <section id="contract-settings" class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-100">Contract Settings</h2>
+        <p class="text-sm text-slate-400">Maintain contract document template sections with simple rich text formatting.</p>
+      </div>
+      <form method="post" action="{{ url_for('service_contract_template_settings') }}" class="space-y-4">
+        {{ csrf_field() }}
+        {% for key, label, value in [("intro", "Intro pages format", contract_template.intro_html or ""), ("spec", "Contract & lift specs format", contract_template.spec_html or ""), ("terms", "Terms & Conditions format", contract_template.terms_html or "")] %}
+          <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3 space-y-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ label }}</p>
+            <div class="flex gap-2 text-xs">
+              <button type="button" data-editor-action="bold" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Bold</button>
+              <button type="button" data-editor-action="italic" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Italic</button>
+              <button type="button" data-editor-action="underline" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Underline</button>
+              <button type="button" data-editor-action="insertUnorderedList" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Bullets</button>
+              <button type="button" data-editor-action="formatBlock:h2" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">H2</button>
+              <button type="button" data-editor-action="formatBlock:p" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Paragraph</button>
+            </div>
+            <div contenteditable="true" data-editor="{{ key }}" class="min-h-[140px] rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-100">{{ value|safe }}</div>
+            <textarea name="{{ key }}_html" data-editor-input="{{ key }}" class="hidden"></textarea>
+          </div>
+        {% endfor %}
+        <div class="flex justify-end">
+          <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100">Save Contract Templates</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="price-settings" class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-100">Price Settings</h2>
+        <p class="text-sm text-slate-400">Maintain standard contract pricing combinations for lift type, floors, duration and frequency.</p>
+      </div>
+      <form method="post" action="{{ url_for('service_contract_price_add') }}" class="grid gap-3 md:grid-cols-6">
+        {{ csrf_field() }}
+        <select name="lift_type_key" required class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
+          <option value="">Lift type</option>
+          {% for option in lift_type_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
+        </select>
+        <select name="floors_value" required class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
+          <option value="">Floors</option>
+          {% for option in floors_options %}<option value="{{ option.value }}">{{ option.value }}</option>{% endfor %}
+        </select>
+        <select name="contract_type" required data-contract-type-select class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
+          <option value="">Contract type</option>
+          {% for value, label in contract_type_options %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+        <select name="duration_years" required class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
+          <option value="">Duration</option>
+          {% for years in contract_duration_options %}<option value="{{ years }}">{{ years }} years</option>{% endfor %}
+        </select>
+        <select name="frequency_per_year" required data-frequency-select class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs"></select>
+        <input name="price" type="number" min="0" step="0.01" required placeholder="Price" class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs" />
+        <div class="md:col-span-6 flex justify-end"><button type="submit" class="rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100">Add price row</button></div>
+      </form>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs text-slate-200">
+          <thead class="text-slate-400"><tr><th class="px-2 py-2 text-left">Lift Type</th><th class="px-2 py-2 text-left">Floors</th><th class="px-2 py-2 text-left">Type</th><th class="px-2 py-2 text-left">Duration</th><th class="px-2 py-2 text-left">Frequency</th><th class="px-2 py-2 text-left">Price</th><th class="px-2 py-2 text-left">Actions</th></tr></thead>
+          <tbody>
+            {% for row in contract_prices %}
+              <tr class="border-t border-slate-800">
+                <td class="px-2 py-2">{{ row.lift_type_key }}</td><td class="px-2 py-2">{{ row.floors_value }}</td><td class="px-2 py-2">{{ row.contract_type }}</td><td class="px-2 py-2">{{ row.duration_years }}y</td><td class="px-2 py-2">{{ 'N/A' if row.frequency_per_year == 0 else row.frequency_per_year }}</td>
+                <td class="px-2 py-2">
+                  <form method="post" action="{{ url_for('service_contract_price_update', price_id=row.id) }}" class="flex gap-2">{{ csrf_field() }}<input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
+                </td>
+                <td class="px-2 py-2"><form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}<button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" class="px-2 py-4 text-center text-slate-500">No price rows configured.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6 space-y-6">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -509,6 +584,57 @@
           view.classList.remove('hidden');
         });
       });
+
+      const editorActions = document.querySelectorAll('[data-editor-action]');
+      editorActions.forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = button.getAttribute('data-editor-target');
+          const editor = document.querySelector(`[data-editor="${target}"]`);
+          if (!editor) return;
+          editor.focus();
+          const actionRaw = button.getAttribute('data-editor-action') || '';
+          if (actionRaw.startsWith('formatBlock:')) {
+            document.execCommand('formatBlock', false, actionRaw.split(':')[1]);
+          } else {
+            document.execCommand(actionRaw, false, null);
+          }
+        });
+      });
+
+      document.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', () => {
+          form.querySelectorAll('[data-editor-input]').forEach((input) => {
+            const key = input.getAttribute('data-editor-input');
+            const editor = form.querySelector(`[data-editor="${key}"]`);
+            if (editor) {
+              input.value = editor.innerHTML;
+            }
+          });
+        });
+      });
+
+      const contractTypeSelect = document.querySelector('[data-contract-type-select]');
+      const frequencySelect = document.querySelector('[data-frequency-select]');
+      const frequencyOptions = {{ contract_frequency_options|tojson }};
+      const setFrequencyOptions = () => {
+        if (!contractTypeSelect || !frequencySelect) return;
+        const contractType = contractTypeSelect.value;
+        const values = frequencyOptions[contractType] || [];
+        frequencySelect.innerHTML = '';
+        values.forEach((value) => {
+          const option = document.createElement('option');
+          option.value = String(value);
+          option.textContent = value === 0 ? 'N/A' : `${value} / year`;
+          frequencySelect.appendChild(option);
+        });
+        const hide = contractType === 'call_basis';
+        const frequencyWrap = frequencySelect.parentElement;
+        if (frequencyWrap) { frequencyWrap.style.display = hide ? 'none' : ''; }
+      };
+      if (contractTypeSelect && frequencySelect) {
+        contractTypeSelect.addEventListener('change', setFrequencyOptions);
+        setFrequencyOptions();
+      }
     });
   </script>
 {% endblock %}
