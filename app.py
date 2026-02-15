@@ -23983,9 +23983,10 @@ def service_settings_dropdown_import(category):
         flash("CSV must include a 'value' column.", "error")
         return redirect(redirect_target)
 
-    created_count = 0
-    updated_count = 0
-    skipped_count = 0
+    added_count = 0
+    duplicate_count = 0
+    error_count = 0
+    error_lines = []
     bool_map = {
         "1": True,
         "0": False,
@@ -23996,14 +23997,30 @@ def service_settings_dropdown_import(category):
     }
 
     try:
-        for row in reader:
+        existing_values = {
+            clean_str(option.value).lower()
+            for option in ServiceDropdownOption.query.filter_by(category=category).all()
+            if clean_str(option.value)
+        }
+
+        for line_number, row in enumerate(reader, start=2):
             if not isinstance(row, dict):
-                skipped_count += 1
+                error_count += 1
+                error_lines.append(line_number)
+                continue
+
+            if "value" not in row:
+                error_count += 1
+                error_lines.append(line_number)
                 continue
 
             value = clean_str(row.get("value"))
             if not value:
-                skipped_count += 1
+                continue
+
+            normalized_value = value.lower()
+            if normalized_value in existing_values:
+                duplicate_count += 1
                 continue
 
             sort_order_raw = clean_str(row.get("sort_order"))
@@ -24021,18 +24038,19 @@ def service_settings_dropdown_import(category):
             if is_active_raw:
                 is_active = bool_map.get(is_active_raw.lower(), True)
 
-            result = upsert_service_dropdown_option(
-                category=category,
-                value=value,
-                is_active=is_active,
-                sort_order=sort_order,
+            if sort_order is None:
+                sort_order = _next_service_dropdown_sort_order(category)
+
+            db.session.add(
+                ServiceDropdownOption(
+                    category=category,
+                    value=value,
+                    sort_order=sort_order,
+                    is_active=is_active,
+                )
             )
-            if result == "created":
-                created_count += 1
-            elif result == "updated":
-                updated_count += 1
-            else:
-                skipped_count += 1
+            existing_values.add(normalized_value)
+            added_count += 1
     except Exception:
         db.session.rollback()
         flash("Could not process CSV rows. Please verify the file format and try again.", "error")
@@ -24045,7 +24063,12 @@ def service_settings_dropdown_import(category):
         flash("Import failed due to database error.", "danger")
         return redirect(redirect_target)
 
-    flash(f"Imported {created_count} new, updated {updated_count}, skipped {skipped_count}.", "success")
+    session["import_result"] = {
+        "added": added_count,
+        "duplicates": duplicate_count,
+        "errors": error_count,
+        "error_lines": error_lines,
+    }
     return redirect(redirect_target)
 
 
