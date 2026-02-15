@@ -26282,7 +26282,9 @@ def service_lift_generate_schedule(lift_id):
     redirect_url = request.form.get("next") or url_for("service_lift_detail", lift_id=lift.id)
     contract = get_service_contract_by_id(lift.amc_contract_id)
     override_services_per_year_raw = clean_str(request.form.get("services_per_year"))
+    override_preferred_day_raw = clean_str(request.form.get("preferred_day_of_month"))
     override_services_per_year = None
+    override_preferred_day_of_month = None
     if override_services_per_year_raw:
         try:
             override_services_per_year = int(override_services_per_year_raw)
@@ -26291,6 +26293,16 @@ def service_lift_generate_schedule(lift_id):
             return redirect(redirect_url)
         if override_services_per_year < 1 or override_services_per_year > 12:
             flash("Services per year must be between 1 and 12.", "warning")
+            return redirect(redirect_url)
+
+    if override_preferred_day_raw:
+        try:
+            override_preferred_day_of_month = int(override_preferred_day_raw)
+        except (TypeError, ValueError):
+            flash("Preferred day of month must be a whole number between 1 and 30.", "warning")
+            return redirect(redirect_url)
+        if override_preferred_day_of_month < 1 or override_preferred_day_of_month > 30:
+            flash("Preferred day of month must be between 1 and 30.", "warning")
             return redirect(redirect_url)
 
     if not lift.amc_start or not lift.amc_end:
@@ -26336,14 +26348,86 @@ def service_lift_generate_schedule(lift_id):
     existing_schedule = lift.service_schedule or []
     existing_dates = set(e.get("date") for e in existing_schedule if e.get("date"))
 
+    preferred_date_day = None
+    if is_monthly_preference_date(lift.preferred_service_date):
+        preferred_date_day = lift.preferred_service_date.day
+
+    preferred_weekday_map = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+    }
+    preferred_weekday_key = None
+    preferred_days = list(getattr(lift, "preferred_service_days", []) or [])
+    if not preferred_days:
+        legacy_preferred_day = clean_str(getattr(lift, "preferred_service_day", None))
+        if legacy_preferred_day:
+            preferred_days = [legacy_preferred_day]
+    for day_key in preferred_days:
+        normalized = clean_str(day_key).lower()
+        if normalized in preferred_weekday_map:
+            preferred_weekday_key = normalized
+            break
+
+    def clamp_day(year, month, desired_day):
+        return min(desired_day, calendar.monthrange(year, month)[1])
+
+    def shift_if_sunday(date_obj):
+        if not isinstance(date_obj, datetime.date):
+            return date_obj
+        if date_obj.weekday() == 6:
+            return date_obj + datetime.timedelta(days=1)
+        return date_obj
+
+    def apply_preferred_day_of_month(year, month, desired_day):
+        clamped = clamp_day(year, month, desired_day)
+        return shift_if_sunday(datetime.date(year, month, clamped))
+
+    def apply_preferred_weekday(base_date, preferred_weekday):
+        if not isinstance(base_date, datetime.date):
+            return None
+        weekday_index = preferred_weekday_map.get(preferred_weekday)
+        if weekday_index is None:
+            return None
+        offset = (weekday_index - base_date.weekday()) % 7
+        candidate = base_date + datetime.timedelta(days=offset)
+        if candidate.month != base_date.month:
+            return None
+        return shift_if_sunday(candidate)
+
     new_entries = []
     for year_idx in range(amc_years):
         for idx in range(services_per_year):
             month_offset = (12 * year_idx) + int((12 * idx) / services_per_year)
             visit_date = add_months(lift.amc_start, month_offset)
-            if not visit_date or visit_date > lift.amc_end:
+            if not visit_date:
                 continue
-            iso_date = visit_date.isoformat()
+
+            final_date = visit_date
+            if preferred_date_day:
+                final_date = apply_preferred_day_of_month(
+                    visit_date.year,
+                    visit_date.month,
+                    preferred_date_day,
+                )
+            elif preferred_weekday_key:
+                final_date = apply_preferred_weekday(visit_date, preferred_weekday_key)
+            elif override_preferred_day_of_month:
+                final_date = apply_preferred_day_of_month(
+                    visit_date.year,
+                    visit_date.month,
+                    override_preferred_day_of_month,
+                )
+            else:
+                final_date = shift_if_sunday(visit_date)
+
+            if not final_date or final_date > lift.amc_end:
+                continue
+
+            iso_date = final_date.isoformat()
             if iso_date in existing_dates:
                 continue
             service_type = SERVICE_TYPE_OPTIONS[idx % len(SERVICE_TYPE_OPTIONS)][0]
