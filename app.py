@@ -23689,7 +23689,6 @@ def service_settings():
     service_routes = ServiceRoute.query.order_by(
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
     ).all()
-    dropdown_options = get_dropdown_options_map()
     service_dropdown_groups = {
         category: {
             "label": label,
@@ -23716,8 +23715,6 @@ def service_settings():
     return render_template(
         "service/service_settings.html",
         service_routes=service_routes,
-        dropdown_options=dropdown_options,
-        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         service_dropdown_groups=service_dropdown_groups,
         contract_template=template_config,
         contract_prices=contract_prices,
@@ -23747,8 +23744,6 @@ def service_contract_template_settings():
     return render_template(
         "service/service_settings.html",
         service_routes=[],
-        dropdown_options=get_dropdown_options_map(),
-        dropdown_meta=DROPDOWN_FIELD_DEFINITIONS,
         service_dropdown_groups={},
         contract_template=template_row,
         contract_prices=[],
