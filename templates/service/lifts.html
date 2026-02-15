@@ -209,11 +209,11 @@
         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Floors</span>
         <select name="building_floors" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2">
           <option value="">Select floors</option>
-          {% for option in g_plus_options %}
+          {% for option in floors_options %}
             <option value="{{ option.value }}">{{ option.value }}</option>
           {% endfor %}
         </select>
-        {% if not g_plus_options %}
+        {% if not floors_options %}
           <p class="text-xs text-slate-300">Add options in Service Settings.</p>
         {% endif %}
       </label>
