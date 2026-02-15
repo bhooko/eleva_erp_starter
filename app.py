@@ -2680,6 +2680,45 @@ def _shift_service_dropdown_sort_orders(category, requested_sort_order, exclude_
         option.sort_order = (option.sort_order or 0) + 1
 
 
+def upsert_service_dropdown_option(category, value, is_active=True, sort_order=None):
+    """
+    Inserts or updates a ServiceDropdownOption safely.
+    - If value exists in category:
+        * If is_active=True and existing inactive → reactivate.
+        * If sort_order provided → update sort_order.
+        * Return "updated".
+    - If not exists:
+        * Create new row.
+        * Return "created".
+    """
+    existing = ServiceDropdownOption.query.filter_by(category=category, value=value).first()
+    if existing:
+        row_updated = False
+
+        if is_active and not bool(existing.is_active):
+            existing.is_active = True
+            row_updated = True
+
+        if sort_order is not None and existing.sort_order != sort_order:
+            existing.sort_order = sort_order
+            row_updated = True
+
+        return "updated" if row_updated else "skipped"
+
+    if sort_order is None:
+        sort_order = _next_service_dropdown_sort_order(category)
+
+    db.session.add(
+        ServiceDropdownOption(
+            category=category,
+            value=value,
+            sort_order=sort_order,
+            is_active=is_active,
+        )
+    )
+    return "created"
+
+
 def service_dropdown_values_set(category):
     return {
         (option.value or "").strip().lower()
@@ -23956,35 +23995,18 @@ def service_settings_dropdown_import(category):
             if is_active_raw:
                 is_active = bool_map.get(is_active_raw.lower(), True)
 
-            existing = ServiceDropdownOption.query.filter_by(category=category, value=value).first()
-            if existing:
-                row_updated = False
-                if not bool(existing.is_active) and is_active:
-                    existing.is_active = True
-                    row_updated = True
-
-                if sort_order is not None and existing.sort_order != sort_order:
-                    existing.sort_order = sort_order
-                    row_updated = True
-
-                if row_updated:
-                    updated_count += 1
-                else:
-                    skipped_count += 1
-                continue
-
-            if sort_order is None:
-                sort_order = _next_service_dropdown_sort_order(category)
-
-            db.session.add(
-                ServiceDropdownOption(
-                    category=category,
-                    value=value,
-                    sort_order=sort_order,
-                    is_active=is_active,
-                )
+            result = upsert_service_dropdown_option(
+                category=category,
+                value=value,
+                is_active=is_active,
+                sort_order=sort_order,
             )
-            created_count += 1
+            if result == "created":
+                created_count += 1
+            elif result == "updated":
+                updated_count += 1
+            else:
+                skipped_count += 1
     except Exception:
         db.session.rollback()
         flash("Could not process CSV rows. Please verify the file format and try again.", "error")
@@ -23992,9 +24014,9 @@ def service_settings_dropdown_import(category):
 
     try:
         db.session.commit()
-    except SQLAlchemyError:
+    except Exception:
         db.session.rollback()
-        flash("Import failed due to a database error. No changes were saved.", "error")
+        flash("Import failed due to database error.", "danger")
         return redirect(redirect_target)
 
     flash(f"Imported {created_count} new, updated {updated_count}, skipped {skipped_count}.", "success")
