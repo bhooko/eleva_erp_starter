@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Contract Preview · Eleva ERP{% endblock %}
 {% block content %}
+<style>
+  @media print {
+    .contract-header { position: fixed; top: 0; left: 0; right: 0; }
+    .contract-footer { position: fixed; bottom: 0; left: 0; right: 0; }
+    .contract-body { margin-top: 120px; margin-bottom: 120px; }
+  }
+</style>
 <div class="space-y-4">
   <div class="flex items-center justify-between">
     <h1 class="text-2xl font-semibold text-theme-primary">Contract Preview #{{ contract.id }}</h1>
@@ -12,9 +19,13 @@
   </div>
 
   <article class="rounded-2xl border border-slate-800 bg-white text-slate-900 p-8 space-y-8">
-    <section>{{ intro_html|safe }}</section>
-    <section>{{ spec_html|safe }}</section>
-    <section>{{ terms_html|safe }}</section>
+    <div class="contract-header">{{ header_html|safe }}</div>
+    <div class="contract-body space-y-8">
+      <section>{{ intro_html|safe }}</section>
+      <section>{{ spec_html|safe }}</section>
+      <section>{{ terms_html|safe }}</section>
+    </div>
+    <div class="contract-footer">{{ footer_html|safe }}</div>
   </article>
 </div>
 {% endblock %}

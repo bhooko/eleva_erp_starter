@@ -245,26 +245,68 @@
               <h2 class="text-base font-semibold text-slate-100">Contract Settings</h2>
               <p class="text-sm text-slate-400">Maintain contract document template sections with simple rich text formatting.</p>
             </div>
-            <form method="post" action="{{ url_for('service_contract_template_settings') }}" class="space-y-4">
+            <form method="post" action="{{ url_for('service_contract_template_settings') }}" class="grid gap-4 lg:grid-cols-[minmax(0,1fr),320px]" data-contract-template-form>
               {{ csrf_field() }}
-              {% for key, label, value in [("intro", "Intro pages format", contract_template.intro_html or ""), ("spec", "Contract & lift specs format", contract_template.spec_html or ""), ("terms", "Terms & Conditions format", contract_template.terms_html or "")] %}
-                <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3 space-y-2">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ label }}</p>
-                  <div class="flex gap-2 text-xs">
-                    <button type="button" data-editor-action="bold" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Bold</button>
-                    <button type="button" data-editor-action="italic" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Italic</button>
-                    <button type="button" data-editor-action="underline" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Underline</button>
-                    <button type="button" data-editor-action="insertUnorderedList" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Bullets</button>
-                    <button type="button" data-editor-action="formatBlock:h2" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">H2</button>
-                    <button type="button" data-editor-action="formatBlock:p" data-editor-target="{{ key }}" class="rounded border border-slate-700 px-2 py-1">Paragraph</button>
+              <div class="space-y-4">
+                {% for field in [
+                  ("header", "Header", contract_template.header_html or ""),
+                  ("intro", "Intro pages format", contract_template.intro_html or ""),
+                  ("spec", "Contract & lift specs format", contract_template.spec_html or ""),
+                  ("terms", "Terms & Conditions format", contract_template.terms_html or ""),
+                  ("footer", "Footer", contract_template.footer_html or ""),
+                ] %}
+                  <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3 space-y-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ field[1] }}</p>
+                    <div class="flex flex-wrap gap-2 text-xs" data-rt-toolbar data-editor-target="{{ field[0] }}">
+                      <button type="button" data-editor-command="bold" class="rounded border border-slate-700 px-2 py-1">Bold</button>
+                      <button type="button" data-editor-command="italic" class="rounded border border-slate-700 px-2 py-1">Italic</button>
+                      <button type="button" data-editor-command="underline" class="rounded border border-slate-700 px-2 py-1">Underline</button>
+                      <button type="button" data-editor-command="insertUnorderedList" class="rounded border border-slate-700 px-2 py-1">Bullets</button>
+                      <button type="button" data-editor-command="insertOrderedList" class="rounded border border-slate-700 px-2 py-1">Numbered</button>
+                      <button type="button" data-editor-command="formatBlock" data-editor-value="H2" class="rounded border border-slate-700 px-2 py-1">H2</button>
+                      <button type="button" data-editor-command="formatBlock" data-editor-value="P" class="rounded border border-slate-700 px-2 py-1">Paragraph</button>
+                      <button type="button" data-editor-command="justifyLeft" class="rounded border border-slate-700 px-2 py-1">Align Left</button>
+                      <button type="button" data-editor-command="justifyCenter" class="rounded border border-slate-700 px-2 py-1">Align Center</button>
+                      <button type="button" data-editor-command="justifyRight" class="rounded border border-slate-700 px-2 py-1">Align Right</button>
+                      <button type="button" data-editor-command="indent" class="rounded border border-slate-700 px-2 py-1">Indent</button>
+                      <button type="button" data-editor-command="outdent" class="rounded border border-slate-700 px-2 py-1">Outdent</button>
+                    </div>
+                    <div class="rt-editor min-h-[140px] rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-100" contenteditable="true" data-rt-editor="{{ field[0] }}" data-target="{{ field[0] }}_html_editor" data-initial-html="{{ field[2]|e }}"></div>
+                    <textarea name="{{ field[0] }}_html" id="{{ field[0] }}_html" hidden data-rt-input="{{ field[0] }}"></textarea>
                   </div>
-                  <div contenteditable="true" data-editor="{{ key }}" class="min-h-[140px] rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-100">{{ value|safe }}</div>
-                  <textarea name="{{ key }}_html" data-editor-input="{{ key }}" class="hidden"></textarea>
+                {% endfor %}
+                <div class="flex justify-end">
+                  <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100">Save Contract Templates</button>
                 </div>
-              {% endfor %}
-              <div class="flex justify-end">
-                <button type="submit" class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100">Save Contract Templates</button>
               </div>
+              <aside class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3">
+                <button type="button" class="flex w-full items-center justify-between rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100" data-variable-panel-toggle>
+                  <span>Available Variables</span>
+                  <span data-variable-panel-icon>▾</span>
+                </button>
+                <div class="mt-3 space-y-3" data-variable-panel-body>
+                  {% for group_name, variables in contract_variable_groups %}
+                    <section class="space-y-2 rounded-lg border border-slate-800/70 bg-slate-950/50 p-2">
+                      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">{{ group_name }}</h3>
+                      <div class="space-y-2">
+                        {% for token, description in variables %}
+                          <div class="rounded border border-slate-800/80 p-2 text-xs text-slate-300">
+                            <div class="flex items-start justify-between gap-2">
+                              <code class="font-mono text-[11px] text-slate-100">{{ token }}</code>
+                              <div class="flex gap-1">
+                                <button type="button" class="rounded border border-slate-700 px-1.5 py-0.5" data-variable-copy="{{ token }}">Copy</button>
+                                <button type="button" class="rounded border border-emerald-500/50 px-1.5 py-0.5 text-emerald-200" data-variable-insert="{{ token }}">Insert</button>
+                              </div>
+                            </div>
+                            <p class="mt-1 text-[11px] text-slate-400">{{ description }}</p>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </section>
+                  {% endfor %}
+                </div>
+                <p class="mt-2 text-xs text-emerald-300" data-variable-feedback hidden>Copied</p>
+              </aside>
             </form>
           </section>
         </section>
@@ -664,33 +706,122 @@
         });
       });
 
-      const editorActions = document.querySelectorAll('[data-editor-action]');
-      editorActions.forEach((button) => {
-        button.addEventListener('click', () => {
-          const target = button.getAttribute('data-editor-target');
-          const editor = document.querySelector(`[data-editor="${target}"]`);
-          if (!editor) return;
-          editor.focus();
-          const actionRaw = button.getAttribute('data-editor-action') || '';
-          if (actionRaw.startsWith('formatBlock:')) {
-            document.execCommand('formatBlock', false, actionRaw.split(':')[1]);
-          } else {
-            document.execCommand(actionRaw, false, null);
-          }
-        });
-      });
+      const templateForm = document.querySelector('[data-contract-template-form]');
+      let activeEditor = null;
+      const clipboardWrite = async (value) => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(value);
+          return;
+        }
+        const fallbackInput = document.createElement('textarea');
+        fallbackInput.value = value;
+        fallbackInput.setAttribute('readonly', 'readonly');
+        fallbackInput.style.position = 'absolute';
+        fallbackInput.style.left = '-9999px';
+        document.body.appendChild(fallbackInput);
+        fallbackInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(fallbackInput);
+      };
 
-      document.querySelectorAll('form').forEach((form) => {
-        form.addEventListener('submit', () => {
-          form.querySelectorAll('[data-editor-input]').forEach((input) => {
-            const key = input.getAttribute('data-editor-input');
-            const editor = form.querySelector(`[data-editor="${key}"]`);
-            if (editor) {
-              input.value = editor.innerHTML;
-            }
+      if (templateForm) {
+        const editors = Array.from(templateForm.querySelectorAll('[data-rt-editor]'));
+        const syncEditor = (editor) => {
+          const key = editor.getAttribute('data-rt-editor');
+          const input = templateForm.querySelector(`[data-rt-input="${key}"]`);
+          if (input) {
+            input.value = editor.innerHTML;
+          }
+        };
+
+        const syncAllEditors = () => {
+          editors.forEach((editor) => syncEditor(editor));
+        };
+
+        editors.forEach((editor) => {
+          editor.innerHTML = editor.dataset.initialHtml || '';
+          syncEditor(editor);
+          ['focus', 'click', 'keyup'].forEach((eventName) => {
+            editor.addEventListener(eventName, () => {
+              activeEditor = editor;
+            });
+          });
+          editor.addEventListener('input', () => syncEditor(editor));
+          editor.addEventListener('blur', () => syncEditor(editor));
+        });
+
+        templateForm.querySelectorAll('[data-rt-toolbar]').forEach((toolbar) => {
+          const targetKey = toolbar.getAttribute('data-editor-target');
+          const toolbarEditor = templateForm.querySelector(`[data-rt-editor="${targetKey}"]`);
+          toolbar.querySelectorAll('[data-editor-command]').forEach((button) => {
+            button.addEventListener('click', (event) => {
+              event.preventDefault();
+              const editor = activeEditor || toolbarEditor;
+              if (!editor) {
+                return;
+              }
+              activeEditor = editor;
+              editor.focus();
+              const command = button.getAttribute('data-editor-command');
+              const value = button.getAttribute('data-editor-value');
+              document.execCommand(command, false, value || null);
+              syncEditor(editor);
+            });
           });
         });
-      });
+
+        const feedback = templateForm.querySelector('[data-variable-feedback]');
+        const showFeedback = (message) => {
+          if (!feedback) {
+            return;
+          }
+          feedback.textContent = message;
+          feedback.hidden = false;
+          window.setTimeout(() => {
+            feedback.hidden = true;
+          }, 1200);
+        };
+
+        const insertToken = (editor, token) => {
+          editor.focus();
+          document.execCommand('insertText', false, token);
+          syncEditor(editor);
+        };
+
+        templateForm.querySelectorAll('[data-variable-copy]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            const token = button.getAttribute('data-variable-copy') || '';
+            await clipboardWrite(token);
+            showFeedback('Copied');
+          });
+        });
+
+        templateForm.querySelectorAll('[data-variable-insert]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            const token = button.getAttribute('data-variable-insert') || '';
+            if (activeEditor) {
+              insertToken(activeEditor, token);
+              return;
+            }
+            await clipboardWrite(token);
+            showFeedback('Copied');
+          });
+        });
+
+        templateForm.addEventListener('submit', () => {
+          syncAllEditors();
+        });
+
+        const panelToggle = templateForm.querySelector('[data-variable-panel-toggle]');
+        const panelBody = templateForm.querySelector('[data-variable-panel-body]');
+        const panelIcon = templateForm.querySelector('[data-variable-panel-icon]');
+        if (panelToggle && panelBody && panelIcon) {
+          panelToggle.addEventListener('click', () => {
+            const isHidden = panelBody.classList.toggle('hidden');
+            panelIcon.textContent = isHidden ? '▸' : '▾';
+          });
+        }
+      }
 
       const contractTypeSelect = document.querySelector('[data-contract-type-select]');
       const frequencySelect = document.querySelector('[data-frequency-select]');
