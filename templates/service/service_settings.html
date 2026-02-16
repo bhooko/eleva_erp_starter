@@ -3,7 +3,7 @@
 {% block content %}
 {% set import_result = session.pop('import_result', none) %}
 {% set price_import_result = session.pop('price_import_result', none) %}
-{% set active = request.args.get('tab', 'dropdowns') %}
+{% set active = active_tab|default(request.args.get('tab', 'dropdowns'), true) %}
 {% set tabs = [
   {'id': 'dropdowns', 'label': 'Dropdowns & Routes'},
   {'id': 'contracts', 'label': 'Contract Settings'},
