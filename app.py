@@ -23986,6 +23986,9 @@ def service_settings():
     lift_type_options = get_dropdown_choices("lift_type")
     floors_options = get_service_dropdown_options("floors", active_only=True)
 
+    requested_tab = (request.args.get("tab") or "").strip().lower()
+    active_tab = requested_tab if requested_tab in {"dropdowns", "contracts", "pricing"} else "dropdowns"
+
     return render_template(
         "service/service_settings.html",
         service_routes=service_routes,
@@ -23998,6 +24001,7 @@ def service_settings():
         contract_variable_groups=CONTRACT_VARIABLE_GROUPS,
         lift_type_options=lift_type_options,
         floors_options=floors_options,
+        active_tab=active_tab,
     )
 
 
@@ -24043,6 +24047,7 @@ def service_contract_template_settings():
         contract_variable_groups=CONTRACT_VARIABLE_GROUPS,
         lift_type_options=get_dropdown_choices("lift_type"),
         floors_options=get_service_dropdown_options("floors", active_only=True),
+        active_tab="contracts",
     )
 
 
