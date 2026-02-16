@@ -15968,6 +15968,18 @@ def settings_admin_upload_limit():
     return redirect(url_for("settings", tab="admin"))
 
 
+def _service_settings_active_tab(default="dropdowns"):
+    tab = (request.form.get("active_tab") or "").strip().lower()
+    if tab in {"dropdowns", "contracts", "pricing"}:
+        return tab
+    return default
+
+
+def _service_settings_redirect(*, default_tab="dropdowns", **kwargs):
+    tab = _service_settings_active_tab(default=default_tab)
+    return redirect(url_for("service_settings", tab=tab, **kwargs))
+
+
 @app.route("/settings/service/routes/create", methods=["POST"])
 @login_required
 def settings_service_route_create():
@@ -15977,12 +15989,12 @@ def settings_service_route_create():
     route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
     if not route_name:
         flash("Route name is required to add a route.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     branch_value, error = validate_branch(request.form.get("branch"), required=True)
     if error:
         flash(error, "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     remark_value = clean_str(request.form.get("remark"))
     if remark_value and len(remark_value) > 255:
@@ -15992,12 +16004,12 @@ def settings_service_route_create():
     existing = ServiceRoute.query.filter(func.lower(ServiceRoute.state) == route_name.lower()).first()
     if existing:
         flash("A route with that name already exists.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     db.session.add(ServiceRoute(state=route_name, branch=branch_value, remark=remark_value))
     db.session.commit()
     flash(f"Route '{route_name}' for branch {branch_value} added.", "success")
-    return redirect(url_for("service_settings"))
+    return _service_settings_redirect()
 
 
 @app.route("/settings/service/routes/<int:route_id>/update", methods=["POST"])
@@ -16009,17 +16021,17 @@ def settings_service_route_update(route_id):
     route = db.session.get(ServiceRoute, route_id)
     if not route:
         flash("Route not found.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     route_name = clean_str(request.form.get("route_name") or request.form.get("state"))
     if not route_name:
         flash("Route name cannot be empty.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     branch_value, error = validate_branch(request.form.get("branch"), required=True)
     if error:
         flash(error, "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     remark_value = clean_str(request.form.get("remark"))
     if remark_value and len(remark_value) > 255:
@@ -16032,7 +16044,7 @@ def settings_service_route_update(route_id):
     )
     if duplicate:
         flash("Another route already uses that name.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     route.state = route_name
     route.branch = branch_value
@@ -16040,7 +16052,7 @@ def settings_service_route_update(route_id):
     db.session.commit()
 
     flash("Route updated.", "success")
-    return redirect(url_for("service_settings"))
+    return _service_settings_redirect()
 
 
 @app.route("/settings/service/routes/<int:route_id>/delete", methods=["POST"])
@@ -16052,12 +16064,12 @@ def settings_service_route_delete(route_id):
     route = db.session.get(ServiceRoute, route_id)
     if not route:
         flash("Route not found.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     db.session.delete(route)
     db.session.commit()
     flash(f"Route '{route.display_name}' removed.", "success")
-    return redirect(url_for("service_settings"))
+    return _service_settings_redirect()
 
 
 @app.route("/admin/reset-workspace", methods=["POST"])
@@ -16129,7 +16141,7 @@ def settings_dropdown_option_create(field_key):
     value = clean_str(request.form.get("value")) if definition.get("value_editable") else None
     if not label:
         flash("Option label cannot be empty.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     if not definition.get("value_editable"):
         value = label
     elif not value:
@@ -16143,7 +16155,7 @@ def settings_dropdown_option_create(field_key):
     )
     if existing:
         flash("An option with that label already exists.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     max_order = (
         db.session.query(func.coalesce(func.max(DropdownOption.order_index), -1))
         .filter(DropdownOption.field_key == field_key)
@@ -16158,7 +16170,7 @@ def settings_dropdown_option_create(field_key):
     db.session.add(option)
     db.session.commit()
     flash("Dropdown option added.", "success")
-    return redirect(url_for("service_settings"))
+    return redirect(url_for("settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/options/<int:option_id>", methods=["POST"])
@@ -16170,12 +16182,12 @@ def settings_dropdown_option_update(field_key, option_id):
     option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
     if not option:
         flash("Option not found.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     label = clean_str(request.form.get("label"))
     value = clean_str(request.form.get("value")) if definition.get("value_editable") else option.label
     if not label:
         flash("Option label cannot be empty.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     if not definition.get("value_editable") or not value:
         value = label
     duplicate = (
@@ -16188,12 +16200,12 @@ def settings_dropdown_option_update(field_key, option_id):
     )
     if duplicate:
         flash("Another option already uses that label.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     option.label = label
     option.value = value
     db.session.commit()
     flash("Option updated.", "success")
-    return redirect(url_for("service_settings"))
+    return redirect(url_for("settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/options/<int:option_id>/delete", methods=["POST"])
@@ -16205,11 +16217,11 @@ def settings_dropdown_option_delete(field_key, option_id):
     option = DropdownOption.query.filter_by(field_key=field_key, id=option_id).first()
     if not option:
         flash("Option not found.", "error")
-        return redirect(url_for("service_settings"))
+        return redirect(url_for("settings"))
     db.session.delete(option)
     db.session.commit()
     flash("Option removed.", "success")
-    return redirect(url_for("service_settings"))
+    return redirect(url_for("settings"))
 
 
 @app.route("/settings/dropdowns/<field_key>/reorder", methods=["POST"])
@@ -23900,7 +23912,7 @@ def service_contract_template_settings():
         )
         db.session.commit()
         flash("Contract templates updated.", "success")
-        return redirect(url_for("service_settings") + "#contract-settings")
+        return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#contract-settings")
 
     return render_template(
         "service/service_settings.html",
@@ -23941,10 +23953,10 @@ def service_contract_price_add():
     allowed_frequencies = CONTRACT_FREQUENCY_OPTIONS.get(contract_type, [])
     if not lift_type_key or not floors_value or contract_type not in CONTRACT_TYPE_LABELS or duration_years not in CONTRACT_DURATION_OPTIONS:
         flash("Please fill all required price settings fields.", "error")
-        return redirect(url_for("service_settings") + "#price-settings")
+        return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
     if frequency_per_year not in allowed_frequencies:
         flash("Invalid frequency for selected contract type.", "error")
-        return redirect(url_for("service_settings") + "#price-settings")
+        return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
 
     exists = ServiceContractPrice.query.filter_by(
         lift_type_key=lift_type_key,
@@ -23955,7 +23967,7 @@ def service_contract_price_add():
     ).first()
     if exists:
         flash("Duplicate price row exists for this combination.", "error")
-        return redirect(url_for("service_settings") + "#price-settings")
+        return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
 
     db.session.add(
         ServiceContractPrice(
@@ -23970,7 +23982,7 @@ def service_contract_price_add():
     )
     db.session.commit()
     flash("Contract price row added.", "success")
-    return redirect(url_for("service_settings") + "#price-settings")
+    return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
 
 
 @app.route("/service/settings/contracts/prices/<int:price_id>/update", methods=["POST"])
@@ -23982,7 +23994,7 @@ def service_contract_price_update(price_id):
     row.price = max(0.0, _safe_float(request.form.get("price"), row.price))
     db.session.commit()
     flash("Contract price updated.", "success")
-    return redirect(url_for("service_settings") + "#price-settings")
+    return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
 
 
 @app.route("/service/settings/contracts/prices/<int:price_id>/toggle", methods=["POST"])
@@ -23994,7 +24006,215 @@ def service_contract_price_toggle(price_id):
     row.is_active = not bool(row.is_active)
     db.session.commit()
     flash("Contract price status updated.", "success")
-    return redirect(url_for("service_settings") + "#price-settings")
+    return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
+
+
+@app.route("/service/settings/prices/export", methods=["GET"])
+@login_required
+def service_contract_price_export():
+    _module_visibility_required("service")
+    _require_admin()
+
+    rows = ServiceContractPrice.query.order_by(
+        ServiceContractPrice.lift_type_key.asc(),
+        ServiceContractPrice.floors_value.asc(),
+        ServiceContractPrice.contract_type.asc(),
+        ServiceContractPrice.duration_years.asc(),
+        ServiceContractPrice.frequency_per_year.asc(),
+    ).all()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "lift_type_key",
+            "floors_value",
+            "contract_type",
+            "duration_years",
+            "frequency_per_year",
+            "price",
+            "is_active",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.lift_type_key,
+                row.floors_value,
+                row.contract_type,
+                row.duration_years,
+                row.frequency_per_year,
+                row.price,
+                1 if row.is_active else 0,
+            ]
+        )
+
+    buffer = BytesIO(output.getvalue().encode("utf-8"))
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype="text/csv; charset=utf-8",
+        as_attachment=True,
+        download_name="service_contract_prices_export.csv",
+    )
+
+
+@app.route("/service/settings/prices/import", methods=["POST"])
+@login_required
+def service_contract_price_import():
+    _module_visibility_required("service")
+    _require_admin()
+
+    redirect_target = url_for("service_settings", tab="pricing")
+    uploaded_file = request.files.get("price_import_file")
+    if not uploaded_file or not uploaded_file.filename:
+        flash("Please choose a CSV file to import.", "error")
+        return redirect(redirect_target)
+
+    filename = secure_filename(uploaded_file.filename)
+    if not filename.lower().endswith(".csv"):
+        flash("Only CSV files are supported.", "error")
+        return redirect(redirect_target)
+
+    try:
+        decoded_content = uploaded_file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        flash("Could not read CSV file. Please upload a UTF-8 encoded CSV.", "error")
+        return redirect(redirect_target)
+
+    reader = csv.DictReader(StringIO(decoded_content))
+    if not reader.fieldnames:
+        flash("CSV must include a header row.", "error")
+        return redirect(redirect_target)
+
+    required_fields = {
+        "lift_type_key",
+        "floors_value",
+        "contract_type",
+        "duration_years",
+        "frequency_per_year",
+        "price",
+    }
+    normalized_headers = {
+        clean_str(field).lower(): field for field in reader.fieldnames if clean_str(field)
+    }
+    missing_fields = [field for field in required_fields if field not in normalized_headers]
+    if missing_fields:
+        flash("CSV missing required columns: " + ", ".join(sorted(missing_fields)), "error")
+        return redirect(redirect_target)
+
+    bool_map = {
+        "1": True,
+        "0": False,
+        "true": True,
+        "false": False,
+        "yes": True,
+        "no": False,
+        "active": True,
+        "inactive": False,
+    }
+    added_count = 0
+    updated_count = 0
+    error_count = 0
+    error_lines = []
+
+    def _value_from_row(row_data, key):
+        source_key = normalized_headers.get(key)
+        return row_data.get(source_key) if source_key else None
+
+    try:
+        for line_number, row in enumerate(reader, start=2):
+            if not isinstance(row, dict):
+                error_count += 1
+                error_lines.append(line_number)
+                continue
+
+            lift_type_key = clean_str(_value_from_row(row, "lift_type_key"))
+            floors_value = clean_str(_value_from_row(row, "floors_value"))
+            contract_type = clean_str(_value_from_row(row, "contract_type"))
+            duration_raw = clean_str(_value_from_row(row, "duration_years"))
+            frequency_raw = clean_str(_value_from_row(row, "frequency_per_year"))
+            price_raw = clean_str(_value_from_row(row, "price"))
+            is_active_raw = clean_str(_value_from_row(row, "is_active"))
+
+            try:
+                duration_years = int(duration_raw)
+                frequency_per_year = int(frequency_raw)
+                price = float(price_raw)
+            except (TypeError, ValueError):
+                error_count += 1
+                error_lines.append(line_number)
+                continue
+
+            if contract_type == "call_basis":
+                frequency_per_year = 0
+
+            allowed_frequencies = CONTRACT_FREQUENCY_OPTIONS.get(contract_type, [])
+            if (
+                not lift_type_key
+                or not floors_value
+                or contract_type not in CONTRACT_TYPE_LABELS
+                or duration_years not in CONTRACT_DURATION_OPTIONS
+                or frequency_per_year not in allowed_frequencies
+                or price < 0
+            ):
+                error_count += 1
+                error_lines.append(line_number)
+                continue
+
+            is_active_value = None
+            if is_active_raw:
+                is_active_value = bool_map.get(is_active_raw.lower())
+                if is_active_value is None:
+                    error_count += 1
+                    error_lines.append(line_number)
+                    continue
+
+            existing_row = ServiceContractPrice.query.filter_by(
+                lift_type_key=lift_type_key,
+                floors_value=floors_value,
+                contract_type=contract_type,
+                duration_years=duration_years,
+                frequency_per_year=frequency_per_year,
+            ).first()
+
+            if existing_row:
+                existing_row.price = max(0.0, price)
+                if is_active_value is not None:
+                    existing_row.is_active = is_active_value
+                updated_count += 1
+            else:
+                db.session.add(
+                    ServiceContractPrice(
+                        lift_type_key=lift_type_key,
+                        floors_value=floors_value,
+                        contract_type=contract_type,
+                        duration_years=duration_years,
+                        frequency_per_year=frequency_per_year,
+                        price=max(0.0, price),
+                        is_active=is_active_value if is_active_value is not None else True,
+                    )
+                )
+                added_count += 1
+    except Exception:
+        db.session.rollback()
+        flash("Could not process CSV rows. Please verify the file format and try again.", "error")
+        return redirect(redirect_target)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Price import failed due to database error.", "danger")
+        return redirect(redirect_target)
+
+    session["price_import_result"] = {
+        "added": added_count,
+        "updated": updated_count,
+        "errors": error_count,
+        "error_lines": error_lines,
+    }
+    return redirect(redirect_target)
 
 
 @app.route("/service/settings/dropdowns/add", methods=["POST"])
@@ -24007,11 +24227,12 @@ def service_settings_dropdown_add():
         if category_key in SERVICE_DROPDOWN_CATEGORIES:
             redirect_url = url_for(
                 "service_settings",
+                tab=_service_settings_active_tab(),
                 open=category_key,
                 focus="value" if focus_value else None,
             )
             return redirect(f"{redirect_url}#dropdown-{category_key}")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     category = clean_str(request.form.get("category"))
     if category not in SERVICE_DROPDOWN_CATEGORIES:
@@ -24062,24 +24283,24 @@ def service_settings_dropdown_toggle():
     category = clean_str(request.form.get("category"))
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         flash("Invalid dropdown category.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     option_id_raw = request.form.get("option_id")
     try:
         option_id = int(option_id_raw)
     except (TypeError, ValueError):
         flash("Invalid option selected.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     option = db.session.get(ServiceDropdownOption, option_id)
     if not option or option.category != category:
         flash("Option not found.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     option.is_active = not bool(option.is_active)
     db.session.commit()
     flash("Service dropdown option updated.", "success")
-    return redirect(url_for("service_settings"))
+    return _service_settings_redirect()
 
 
 @app.route("/service/settings/dropdowns/<category>/template", methods=["GET"])
@@ -24130,7 +24351,7 @@ def service_settings_dropdown_import(category):
     if category not in SERVICE_DROPDOWN_CATEGORIES:
         abort(404)
 
-    redirect_url = url_for("service_settings", open=category)
+    redirect_url = url_for("service_settings", tab=_service_settings_active_tab(), open=category)
     redirect_target = f"{redirect_url}#dropdown-{category}"
 
     uploaded_file = request.files.get("import_file")
@@ -24263,21 +24484,21 @@ def service_settings_dropdown_update():
 
     def _redirect_with_open(category_key):
         if category_key in SERVICE_DROPDOWN_CATEGORIES:
-            redirect_url = url_for("service_settings", open=category_key)
+            redirect_url = url_for("service_settings", tab=_service_settings_active_tab(), open=category_key)
             return redirect(f"{redirect_url}#dropdown-{category_key}")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     option_id_raw = request.form.get("option_id")
     try:
         option_id = int(option_id_raw)
     except (TypeError, ValueError):
         flash("Invalid option selected.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     option = db.session.get(ServiceDropdownOption, option_id)
     if not option or option.category not in SERVICE_DROPDOWN_CATEGORIES:
         flash("Option not found.", "error")
-        return redirect(url_for("service_settings"))
+        return _service_settings_redirect()
 
     category = option.category
 
