@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Price History · Eleva ERP{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-slate-950/70 text-slate-100">
+  <div class="mx-auto max-w-6xl px-6 py-10 space-y-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-emerald-300">Service</p>
+        <h1 class="text-2xl font-bold text-slate-100">Price Change History</h1>
+        <p class="text-sm text-slate-400">
+          {{ price_row.lift_type_key }} · {{ price_row.floors_value }} · {{ price_row.contract_type }} · {{ price_row.duration_years }} year(s) · {{ 'N/A' if price_row.frequency_per_year == 0 else price_row.frequency_per_year ~ '/year' }}
+        </p>
+      </div>
+      <a href="{{ url_for('service_settings', tab='pricing') }}#price-settings" class="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/70">
+        Back to Pricing
+      </a>
+    </div>
+
+    <section class="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-6">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs text-slate-200">
+          <thead class="text-slate-400">
+            <tr>
+              <th class="px-2 py-2 text-left">Changed At</th>
+              <th class="px-2 py-2 text-left">Changed By</th>
+              <th class="px-2 py-2 text-left">Action</th>
+              <th class="px-2 py-2 text-left">Old Price</th>
+              <th class="px-2 py-2 text-left">New Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in history_rows %}
+              <tr class="border-t border-slate-800">
+                <td class="px-2 py-2">{{ row.changed_at }}</td>
+                <td class="px-2 py-2">{{ row.changed_by or 'system' }}</td>
+                <td class="px-2 py-2">{{ row.action_type }}</td>
+                <td class="px-2 py-2">{{ '-' if row.old_price is none else '%.2f'|format(row.old_price) }}</td>
+                <td class="px-2 py-2">{{ '-' if row.new_price is none else '%.2f'|format(row.new_price) }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="px-2 py-4 text-center text-slate-500">No history available for this price row.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

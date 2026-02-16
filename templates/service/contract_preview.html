@@ -20,12 +20,13 @@
 
   <article class="rounded-2xl border border-slate-800 bg-white text-slate-900 p-8 space-y-8">
     <div class="contract-header">{{ header_html|safe }}</div>
+    <div class="contract-footer">{{ footer_html|safe }}</div>
     <div class="contract-body space-y-8">
+      <section>{{ cover_letter_html|safe }}</section>
       <section>{{ intro_html|safe }}</section>
       <section>{{ spec_html|safe }}</section>
       <section>{{ terms_html|safe }}</section>
     </div>
-    <div class="contract-footer">{{ footer_html|safe }}</div>
   </article>
 </div>
 {% endblock %}
