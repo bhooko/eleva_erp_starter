@@ -3,7 +3,7 @@
 {% block content %}
 {% set import_result = session.pop('import_result', none) %}
 {% set price_import_result = session.pop('price_import_result', none) %}
-{% set active = active_tab|default(request.args.get('tab', 'dropdowns'), true) %}
+{% set active_tab = request.args.get('tab', 'dropdowns') %}
 {% set tabs = [
   {'id': 'dropdowns', 'label': 'Dropdowns & Routes'},
   {'id': 'contracts', 'label': 'Contract Settings'},
@@ -29,9 +29,9 @@
       <div class="flex flex-wrap gap-2 border-b border-slate-800/60 bg-slate-900/60 px-4 pt-4" role="tablist">
         {% for tab in tabs %}
           <button type="button"
-                  class="tab-trigger relative rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 {{ 'bg-slate-800/70 text-slate-100' if tab.id == active else 'text-slate-400 hover:text-slate-200' }}"
+                  class="tab-trigger relative rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 {{ 'bg-slate-800/70 text-slate-100' if tab.id == active_tab else 'text-slate-400 hover:text-slate-200' }}"
                   data-tab-button="{{ tab.id }}"
-                  aria-selected="{{ 'true' if tab.id == active else 'false' }}"
+                  aria-selected="{{ 'true' if tab.id == active_tab else 'false' }}"
                   aria-controls="service-settings-panel-{{ tab.id }}"
                   id="service-settings-tab-{{ tab.id }}">
             {{ tab.label }}
@@ -41,7 +41,7 @@
 
       <div class="space-y-6 p-6">
         <section id="service-settings-panel-dropdowns"
-                 class="motion-panel space-y-6 {{ 'is-active' if active == 'dropdowns' else 'hidden' }}"
+                 class="motion-panel space-y-6 {{ 'is-active' if active_tab == 'dropdowns' else 'hidden' }}"
                  role="tabpanel"
                  aria-labelledby="service-settings-tab-dropdowns"
                  data-tab-panel="dropdowns">
@@ -72,7 +72,7 @@
                 </div>
                 <form method="post" action="{{ url_for('service_settings_dropdown_import', category=category) }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
                   {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                   <input type="file" name="import_file" accept=".csv" required class="block w-full max-w-xs rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100" />
                   <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100">Import</button>
                 </form>
@@ -80,7 +80,7 @@
 
               <form method="post" action="{{ url_for('service_settings_dropdown_add') }}" class="grid gap-3 sm:grid-cols-[minmax(0,1fr),120px,auto] sm:items-end">
                 {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                 <input type="hidden" name="category" value="{{ category }}" />
                 <label class="space-y-1">
                   <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Value</span>
@@ -107,7 +107,7 @@
                           <button type="button" class="rounded-lg border border-slate-600/60 bg-slate-800 px-2 py-1 text-xs text-slate-200" data-service-dropdown-edit>Edit</button>
                           <form method="post" action="{{ url_for('service_settings_dropdown_toggle') }}">
                             {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                             <input type="hidden" name="category" value="{{ category }}" />
                             <input type="hidden" name="option_id" value="{{ option.id }}" />
                             <button type="submit" class="rounded-lg border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-200">Deactivate</button>
@@ -116,7 +116,7 @@
                       </div>
                       <form method="post" action="{{ url_for('service_settings_dropdown_update') }}" class="mt-2 hidden" data-service-dropdown-edit-form>
                         {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                         <input type="hidden" name="option_id" value="{{ option.id }}" />
                         <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),120px,auto,auto] sm:items-end">
                           <label class="space-y-1">
@@ -148,7 +148,7 @@
                         <span>{{ option.value }}</span>
                         <form method="post" action="{{ url_for('service_settings_dropdown_toggle') }}">
                           {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                           <input type="hidden" name="category" value="{{ category }}" />
                           <input type="hidden" name="option_id" value="{{ option.id }}" />
                           <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-xs text-emerald-200">Reactivate</button>
@@ -175,7 +175,7 @@
 
       <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
         {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
           <input name="route_name" required placeholder="e.g. Panaji Urban" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
@@ -203,7 +203,7 @@
             <div class="space-y-3 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200">
               <form method="post" action="{{ url_for('settings_service_route_update', route_id=route.id) }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
                 {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                 <label class="space-y-1">
                   <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
                   <input name="route_name" value="{{ route.route_name }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
@@ -229,7 +229,7 @@
                 <span class="text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</span>
                 <form method="post" action="{{ url_for('settings_service_route_delete', route_id=route.id) }}" class="flex items-center">
                   {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                   <button type="submit" class="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20" onclick="return confirm('Remove this route?');">Remove</button>
                 </form>
               </div>
@@ -245,7 +245,7 @@
         </section>
 
         <section id="service-settings-panel-contracts"
-                 class="motion-panel space-y-6 {{ 'is-active' if active == 'contracts' else 'hidden' }}"
+                 class="motion-panel space-y-6 {{ 'is-active' if active_tab == 'contracts' else 'hidden' }}"
                  role="tabpanel"
                  aria-labelledby="service-settings-tab-contracts"
                  data-tab-panel="contracts">
@@ -256,7 +256,7 @@
             </div>
             <form method="post" action="{{ url_for('service_contract_template_settings') }}" class="grid gap-4 lg:grid-cols-[minmax(0,1fr),320px]" data-contract-template-form>
               {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
               <div class="space-y-4">
                 {% for field in [
                   ("header", "Header Template", contract_template.header_html or ""),
@@ -325,7 +325,7 @@
         </section>
 
         <section id="service-settings-panel-pricing"
-                 class="motion-panel space-y-6 {{ 'is-active' if active == 'pricing' else 'hidden' }}"
+                 class="motion-panel space-y-6 {{ 'is-active' if active_tab == 'pricing' else 'hidden' }}"
                  role="tabpanel"
                  aria-labelledby="service-settings-tab-pricing"
                  data-tab-panel="pricing">
@@ -341,14 +341,14 @@
               </div>
               <form method="post" action="{{ url_for('service_contract_price_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
                 {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
                 <input type="file" name="price_import_file" accept=".csv" required class="block w-full max-w-xs rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100" />
                 <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100">Import CSV</button>
               </form>
             </div>
             <form method="post" action="{{ url_for('service_contract_price_add') }}" class="grid gap-3 md:grid-cols-6">
               {{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input />
               <select name="lift_type_key" required class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
                 <option value="">Lift type</option>
                 {% for option in lift_type_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
@@ -378,12 +378,12 @@
                       <td class="px-2 py-2">{{ row.lift_type_key }}</td><td class="px-2 py-2">{{ row.floors_value }}</td><td class="px-2 py-2">{{ row.contract_type }}</td><td class="px-2 py-2">{{ row.duration_years }}y</td><td class="px-2 py-2">{{ 'N/A' if row.frequency_per_year == 0 else row.frequency_per_year }}</td>
                       <td class="px-2 py-2">
                         <form method="post" action="{{ url_for('service_contract_price_update', price_id=row.id) }}" class="flex gap-2">{{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input /><input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
                       </td>
                       <td class="px-2 py-2">
                         <div class="flex flex-wrap gap-2">
                           <form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form>
+                  <input type="hidden" name="active_tab" value="{{ active_tab }}" data-active-tab-input /><button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form>
                           <a href="{{ url_for('service_contract_price_history', price_id=row.id) }}" class="rounded border border-slate-700 px-2 py-1 text-slate-200">View History</a>
                         </div>
                       </td>
@@ -461,7 +461,7 @@
       const buttons = Array.from(document.querySelectorAll('[data-tab-button]'));
       const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
       const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let currentActiveTab = {{ active|tojson }};
+      let currentActiveTab = {{ active_tab|tojson }};
       const syncActiveTabInputs = (tabId) => {
         document.querySelectorAll('[data-active-tab-input]').forEach((input) => {
           input.value = tabId || 'dropdowns';
