@@ -2,6 +2,7 @@
 {% block title %}Service Settings · Eleva ERP{% endblock %}
 {% block content %}
 {% set import_result = session.pop('import_result', none) %}
+{% set price_import_result = session.pop('price_import_result', none) %}
 {% set active = request.args.get('tab', 'dropdowns') %}
 {% set tabs = [
   {'id': 'dropdowns', 'label': 'Dropdowns & Routes'},
@@ -71,6 +72,7 @@
                 </div>
                 <form method="post" action="{{ url_for('service_settings_dropdown_import', category=category) }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
                   {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                   <input type="file" name="import_file" accept=".csv" required class="block w-full max-w-xs rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100" />
                   <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100">Import</button>
                 </form>
@@ -78,6 +80,7 @@
 
               <form method="post" action="{{ url_for('service_settings_dropdown_add') }}" class="grid gap-3 sm:grid-cols-[minmax(0,1fr),120px,auto] sm:items-end">
                 {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                 <input type="hidden" name="category" value="{{ category }}" />
                 <label class="space-y-1">
                   <span class="text-xs font-semibold uppercase tracking-wide text-slate-300">Value</span>
@@ -104,6 +107,7 @@
                           <button type="button" class="rounded-lg border border-slate-600/60 bg-slate-800 px-2 py-1 text-xs text-slate-200" data-service-dropdown-edit>Edit</button>
                           <form method="post" action="{{ url_for('service_settings_dropdown_toggle') }}">
                             {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                             <input type="hidden" name="category" value="{{ category }}" />
                             <input type="hidden" name="option_id" value="{{ option.id }}" />
                             <button type="submit" class="rounded-lg border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-200">Deactivate</button>
@@ -112,6 +116,7 @@
                       </div>
                       <form method="post" action="{{ url_for('service_settings_dropdown_update') }}" class="mt-2 hidden" data-service-dropdown-edit-form>
                         {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                         <input type="hidden" name="option_id" value="{{ option.id }}" />
                         <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),120px,auto,auto] sm:items-end">
                           <label class="space-y-1">
@@ -143,6 +148,7 @@
                         <span>{{ option.value }}</span>
                         <form method="post" action="{{ url_for('service_settings_dropdown_toggle') }}">
                           {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                           <input type="hidden" name="category" value="{{ category }}" />
                           <input type="hidden" name="option_id" value="{{ option.id }}" />
                           <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-xs text-emerald-200">Reactivate</button>
@@ -169,6 +175,7 @@
 
       <form method="post" action="{{ url_for('settings_service_route_create') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
         {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
         <label class="space-y-1">
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
           <input name="route_name" required placeholder="e.g. Panaji Urban" class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
@@ -196,6 +203,7 @@
             <div class="space-y-3 rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 text-sm text-slate-200">
               <form method="post" action="{{ url_for('settings_service_route_update', route_id=route.id) }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),minmax(0,1fr),minmax(0,1fr),auto] md:items-end">
                 {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                 <label class="space-y-1">
                   <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Route name</span>
                   <input name="route_name" value="{{ route.route_name }}" required class="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" />
@@ -221,6 +229,7 @@
                 <span class="text-slate-500">Created {{ route.created_at.strftime('%d %b %Y') if route.created_at else '—' }}</span>
                 <form method="post" action="{{ url_for('settings_service_route_delete', route_id=route.id) }}" class="flex items-center">
                   {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
                   <button type="submit" class="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20" onclick="return confirm('Remove this route?');">Remove</button>
                 </form>
               </div>
@@ -247,6 +256,7 @@
             </div>
             <form method="post" action="{{ url_for('service_contract_template_settings') }}" class="grid gap-4 lg:grid-cols-[minmax(0,1fr),320px]" data-contract-template-form>
               {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
               <div class="space-y-4">
                 {% for field in [
                   ("header", "Header", contract_template.header_html or ""),
@@ -270,8 +280,10 @@
                       <button type="button" data-editor-command="justifyRight" class="rounded border border-slate-700 px-2 py-1">Align Right</button>
                       <button type="button" data-editor-command="indent" class="rounded border border-slate-700 px-2 py-1">Indent</button>
                       <button type="button" data-editor-command="outdent" class="rounded border border-slate-700 px-2 py-1">Outdent</button>
+                      <button type="button" data-editor-toggle-html class="rounded border border-slate-700 px-2 py-1">View HTML</button>
                     </div>
                     <div class="rt-editor min-h-[140px] rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-100" contenteditable="true" data-rt-editor="{{ field[0] }}" data-target="{{ field[0] }}_html_editor" data-initial-html="{{ field[2]|e }}"></div>
+                    <textarea class="hidden min-h-[140px] w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 font-mono text-xs text-slate-100" data-rt-html-source="{{ field[0] }}"></textarea>
                     <textarea name="{{ field[0] }}_html" id="{{ field[0] }}_html" hidden data-rt-input="{{ field[0] }}"></textarea>
                   </div>
                 {% endfor %}
@@ -321,8 +333,21 @@
               <h2 class="text-base font-semibold text-slate-100">Price Settings</h2>
               <p class="text-sm text-slate-400">Maintain standard contract pricing combinations for lift type, floors, duration and frequency.</p>
             </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-slate-800/70 bg-slate-900/70 px-3 py-2">
+              <div class="space-y-1">
+                <a href="{{ url_for('service_contract_price_export') }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700/70">Export CSV</a>
+                <p class="text-[11px] text-slate-500">Export all active and inactive price combinations for bulk updates.</p>
+              </div>
+              <form method="post" action="{{ url_for('service_contract_price_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
+                {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
+                <input type="file" name="price_import_file" accept=".csv" required class="block w-full max-w-xs rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100" />
+                <button type="submit" class="rounded-lg border border-emerald-400/40 bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100">Import CSV</button>
+              </form>
+            </div>
             <form method="post" action="{{ url_for('service_contract_price_add') }}" class="grid gap-3 md:grid-cols-6">
               {{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
               <select name="lift_type_key" required class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
                 <option value="">Lift type</option>
                 {% for option in lift_type_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
@@ -351,9 +376,11 @@
                     <tr class="border-t border-slate-800">
                       <td class="px-2 py-2">{{ row.lift_type_key }}</td><td class="px-2 py-2">{{ row.floors_value }}</td><td class="px-2 py-2">{{ row.contract_type }}</td><td class="px-2 py-2">{{ row.duration_years }}y</td><td class="px-2 py-2">{{ 'N/A' if row.frequency_per_year == 0 else row.frequency_per_year }}</td>
                       <td class="px-2 py-2">
-                        <form method="post" action="{{ url_for('service_contract_price_update', price_id=row.id) }}" class="flex gap-2">{{ csrf_field() }}<input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
+                        <form method="post" action="{{ url_for('service_contract_price_update', price_id=row.id) }}" class="flex gap-2">{{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
                       </td>
-                      <td class="px-2 py-2"><form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}<button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form></td>
+                      <td class="px-2 py-2"><form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form></td>
                     </tr>
                   {% else %}
                     <tr><td colspan="7" class="px-2 py-4 text-center text-slate-500">No price rows configured.</td></tr>
@@ -368,11 +395,11 @@
   </div>
 </div>
 {% if import_result %}
-  <div id="import-summary-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="import-summary-title">
-    <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" data-import-summary-panel>
+  <div id="import-summary-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="import-summary-title" data-summary-modal>
+    <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" data-summary-panel>
       <div class="flex items-start justify-between gap-3">
         <h2 id="import-summary-title" class="text-lg font-semibold text-slate-100">Import Summary</h2>
-        <button type="button" class="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-700" data-import-summary-close>Close</button>
+        <button type="button" class="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-700" data-summary-close>Close</button>
       </div>
       <div class="mt-4 space-y-2 text-sm text-slate-200">
         {% set added = import_result.get('added', 0) %}
@@ -401,6 +428,24 @@
     </div>
   </div>
 {% endif %}
+{% if price_import_result %}
+  <div id="price-import-summary-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="price-import-summary-title" data-summary-modal>
+    <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" data-summary-panel>
+      <div class="flex items-start justify-between gap-3">
+        <h2 id="price-import-summary-title" class="text-lg font-semibold text-slate-100">Import Summary</h2>
+        <button type="button" class="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-700" data-summary-close>Close</button>
+      </div>
+      <div class="mt-4 space-y-2 text-sm text-slate-200">
+        <p>{{ price_import_result.get('added', 0) }} added</p>
+        <p>{{ price_import_result.get('updated', 0) }} updated</p>
+        <p>{{ price_import_result.get('errors', 0) }} errors</p>
+        {% if price_import_result.get('error_lines') %}
+          <p>Errors found on line(s): {{ price_import_result.get('error_lines', [])|join(', ') }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -410,8 +455,16 @@
       const buttons = Array.from(document.querySelectorAll('[data-tab-button]'));
       const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
       const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let currentActiveTab = {{ active|tojson }};
+      const syncActiveTabInputs = (tabId) => {
+        document.querySelectorAll('[data-active-tab-input]').forEach((input) => {
+          input.value = tabId || 'dropdowns';
+        });
+      };
       if (buttons.length) {
         const activateTab = (id) => {
+          currentActiveTab = id;
+          syncActiveTabInputs(id);
           buttons.forEach((button) => {
             const isActive = button.dataset.tabButton === id;
             button.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -465,33 +518,39 @@
 
         const initialTab = new URLSearchParams(window.location.search).get('tab') || buttons[0].dataset.tabButton;
         activateTab(initialTab);
+      } else {
+        syncActiveTabInputs(currentActiveTab || 'dropdowns');
       }
 
-      const importSummaryModal = document.getElementById('import-summary-modal');
-      const closeImportSummaryModal = () => {
-        if (!importSummaryModal) {
+      const summaryModals = Array.from(document.querySelectorAll('[data-summary-modal]'));
+      const closeSummaryModal = (modal) => {
+        if (!modal) {
           return;
         }
-        importSummaryModal.remove();
-        document.removeEventListener('keydown', handleImportSummaryEsc);
+        modal.remove();
       };
-      const handleImportSummaryEsc = (event) => {
+      const handleSummaryEsc = (event) => {
         if (event.key === 'Escape') {
-          closeImportSummaryModal();
+          const topModal = document.querySelector('[data-summary-modal]');
+          if (topModal) {
+            closeSummaryModal(topModal);
+          }
         }
       };
-      if (importSummaryModal) {
-        const panel = importSummaryModal.querySelector('[data-import-summary-panel]');
-        const closeButton = importSummaryModal.querySelector('[data-import-summary-close]');
-        if (closeButton) {
-          closeButton.addEventListener('click', closeImportSummaryModal);
-        }
-        importSummaryModal.addEventListener('click', (event) => {
-          if (panel && !panel.contains(event.target)) {
-            closeImportSummaryModal();
+      if (summaryModals.length) {
+        summaryModals.forEach((modal) => {
+          const panel = modal.querySelector('[data-summary-panel]');
+          const closeButton = modal.querySelector('[data-summary-close]');
+          if (closeButton) {
+            closeButton.addEventListener('click', () => closeSummaryModal(modal));
           }
+          modal.addEventListener('click', (event) => {
+            if (panel && !panel.contains(event.target)) {
+              closeSummaryModal(modal);
+            }
+          });
         });
-        document.addEventListener('keydown', handleImportSummaryEsc);
+        document.addEventListener('keydown', handleSummaryEsc);
       }
 
       const openCategory = {{ request.args.get('open', '')|tojson }};
@@ -726,19 +785,64 @@
 
       if (templateForm) {
         const editors = Array.from(templateForm.querySelectorAll('[data-rt-editor]'));
+        const editorStates = new Map();
+
         const syncEditor = (editor) => {
           const key = editor.getAttribute('data-rt-editor');
-          const input = templateForm.querySelector(`[data-rt-input="${key}"]`);
-          if (input) {
-            input.value = editor.innerHTML;
+          const state = editorStates.get(key);
+          if (!state || !state.input) {
+            return;
           }
+          state.input.value = state.isHtmlMode ? state.htmlSource.value : editor.innerHTML;
         };
 
         const syncAllEditors = () => {
           editors.forEach((editor) => syncEditor(editor));
         };
 
+        const toggleHtmlMode = (key) => {
+          const state = editorStates.get(key);
+          if (!state) {
+            return;
+          }
+          if (!state.isHtmlMode) {
+            state.htmlSource.value = state.editor.innerHTML;
+            state.editor.classList.add('hidden');
+            state.htmlSource.classList.remove('hidden');
+            state.toggleButton.textContent = 'View Visual';
+            state.isHtmlMode = true;
+            syncEditor(state.editor);
+            state.htmlSource.focus();
+            return;
+          }
+
+          state.editor.innerHTML = state.htmlSource.value;
+          state.htmlSource.classList.add('hidden');
+          state.editor.classList.remove('hidden');
+          state.toggleButton.textContent = 'View HTML';
+          state.isHtmlMode = false;
+          syncEditor(state.editor);
+          state.editor.focus();
+        };
+
         editors.forEach((editor) => {
+          const key = editor.getAttribute('data-rt-editor');
+          const input = templateForm.querySelector(`[data-rt-input="${key}"]`);
+          const htmlSource = templateForm.querySelector(`[data-rt-html-source="${key}"]`);
+          const toolbar = templateForm.querySelector(`[data-rt-toolbar][data-editor-target="${key}"]`);
+          const toggleButton = toolbar ? toolbar.querySelector('[data-editor-toggle-html]') : null;
+          if (!key || !input || !htmlSource || !toggleButton) {
+            return;
+          }
+
+          editorStates.set(key, {
+            editor,
+            input,
+            htmlSource,
+            toggleButton,
+            isHtmlMode: false,
+          });
+
           editor.innerHTML = editor.dataset.initialHtml || '';
           syncEditor(editor);
           ['focus', 'click', 'keyup'].forEach((eventName) => {
@@ -748,6 +852,14 @@
           });
           editor.addEventListener('input', () => syncEditor(editor));
           editor.addEventListener('blur', () => syncEditor(editor));
+          htmlSource.addEventListener('focus', () => {
+            activeEditor = editor;
+          });
+          htmlSource.addEventListener('input', () => syncEditor(editor));
+          toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            toggleHtmlMode(key);
+          });
         });
 
         templateForm.querySelectorAll('[data-rt-toolbar]').forEach((toolbar) => {
@@ -758,6 +870,11 @@
               event.preventDefault();
               const editor = activeEditor || toolbarEditor;
               if (!editor) {
+                return;
+              }
+              const key = editor.getAttribute('data-rt-editor');
+              const state = editorStates.get(key);
+              if (state && state.isHtmlMode) {
                 return;
               }
               activeEditor = editor;
@@ -783,6 +900,18 @@
         };
 
         const insertToken = (editor, token) => {
+          const key = editor.getAttribute('data-rt-editor');
+          const state = editorStates.get(key);
+          if (state && state.isHtmlMode) {
+            const source = state.htmlSource;
+            const start = source.selectionStart || 0;
+            const end = source.selectionEnd || 0;
+            source.value = `${source.value.slice(0, start)}${token}${source.value.slice(end)}`;
+            source.selectionStart = source.selectionEnd = start + token.length;
+            syncEditor(editor);
+            source.focus();
+            return;
+          }
           editor.focus();
           document.execCommand('insertText', false, token);
           syncEditor(editor);
