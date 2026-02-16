@@ -28,7 +28,7 @@ from collections import OrderedDict, Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Integer, case, inspect, func, or_, and_, event
+from sqlalchemy import Integer, case, inspect, func, or_, and_, event, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import joinedload, subqueryload, load_only, object_session
 from sqlalchemy.engine.url import make_url
@@ -2600,6 +2600,56 @@ CONTRACT_FREQUENCY_OPTIONS = {
     "call_basis": [0],
 }
 
+CONTRACT_VARIABLE_GROUPS = [
+    ("Client", [
+        ("{{client_name}}", "Client name"),
+        ("{{client_contact_person}}", "Contact person"),
+        ("{{client_phone}}", "Phone"),
+        ("{{client_email}}", "Email"),
+        ("{{client_address}}", "Address"),
+        ("{{site_location}}", "Site location"),
+    ]),
+    ("Lift", [
+        ("{{lift_name}}", "Lift name"),
+        ("{{lift_type}}", "Lift type"),
+        ("{{floors}}", "Floors (G+...)"),
+        ("{{stops}}", "Stops"),
+        ("{{capacity_kg}}", "Capacity (kg)"),
+        ("{{capacity_persons}}", "Capacity (persons)"),
+        ("{{speed}}", "Speed"),
+        ("{{machine_type}}", "Machine type"),
+        ("{{door_type}}", "Door type"),
+        ("{{door_finish}}", "Door finish"),
+        ("{{power_supply}}", "Power supply"),
+    ]),
+    ("Contract", [
+        ("{{contract_no}}", "Contract number"),
+        ("{{contract_type}}", "Contract type key"),
+        ("{{contract_type_label}}", "Contract type label"),
+        ("{{duration_years}}", "Duration (years)"),
+        ("{{frequency_per_year}}", "Frequency per year"),
+        ("{{frequency_label}}", "Frequency label"),
+        ("{{start_date}}", "Start date"),
+        ("{{end_date}}", "End date"),
+        ("{{standard_price}}", "Standard price"),
+        ("{{discount_type}}", "Discount type"),
+        ("{{discount_value}}", "Discount value"),
+        ("{{final_price}}", "Final price"),
+    ]),
+    ("Company", [
+        ("{{company_name}}", "Company name"),
+        ("{{company_address}}", "Company address"),
+        ("{{company_phone}}", "Company phone"),
+        ("{{company_email}}", "Company email"),
+        ("{{company_website}}", "Company website"),
+        ("{{authorized_signatory}}", "Authorized signatory"),
+    ]),
+    ("System", [
+        ("{{current_date}}", "Today’s date"),
+        ("{{document_generated_on}}", "Generated timestamp"),
+    ]),
+]
+
 
 def _strip_script_tags(raw_html):
     value = raw_html or ""
@@ -2641,13 +2691,55 @@ def _compute_contract_end_date(start_date, duration_years):
 
 
 def _ensure_service_contract_templates_row():
-    template = ServiceContractTemplate.query.first()
-    if template:
-        return template
-    template = ServiceContractTemplate(intro_html="", spec_html="", terms_html="")
-    db.session.add(template)
+    rows = ServiceContractTemplate.query.order_by(ServiceContractTemplate.id.asc()).all()
+    template = rows[0] if rows else None
+    if not template:
+        template = ServiceContractTemplate(intro_html="", spec_html="", terms_html="")
+        db.session.add(template)
+        db.session.flush()
+
+    for extra in rows[1:]:
+        db.session.delete(extra)
+
+    db.session.execute(
+        text(
+            """
+            UPDATE service_contract_templates
+            SET
+                intro_html = COALESCE(intro_html, ''),
+                spec_html = COALESCE(spec_html, ''),
+                terms_html = COALESCE(terms_html, ''),
+                header_html = COALESCE(header_html, ''),
+                footer_html = COALESCE(footer_html, '')
+            WHERE id = :template_id
+            """
+        ),
+        {"template_id": template.id},
+    )
     db.session.commit()
     return template
+
+
+def _contract_template_payload(template_row):
+    payload = {
+        "id": template_row.id,
+        "intro_html": template_row.intro_html or "",
+        "spec_html": template_row.spec_html or "",
+        "terms_html": template_row.terms_html or "",
+        "header_html": "",
+        "footer_html": "",
+    }
+    extra_cols = db.session.execute(
+        text(
+            "SELECT COALESCE(header_html, '') AS header_html, COALESCE(footer_html, '') AS footer_html "
+            "FROM service_contract_templates WHERE id = :template_id"
+        ),
+        {"template_id": template_row.id},
+    ).mappings().first()
+    if extra_cols:
+        payload["header_html"] = extra_cols.get("header_html") or ""
+        payload["footer_html"] = extra_cols.get("footer_html") or ""
+    return payload
 
 
 def _price_lookup(lift_type_key, floors_value, contract_type, duration_years, frequency_per_year):
@@ -2663,22 +2755,61 @@ def _price_lookup(lift_type_key, floors_value, contract_type, duration_years, fr
 
 def _contract_placeholder_map(contract):
     lift = contract.lift
+    customer = lift.customer if lift and lift.customer else None
+    today = datetime.date.today()
+    now = datetime_cls.now()
     return {
+        "client_name": contract.customer_name or "",
+        "client_contact_person": contract.customer_name or "",
+        "client_phone": contract.customer_phone or "",
+        "client_email": contract.customer_email or "",
+        "client_address": contract.customer_address or "",
+        "site_location": ((lift.site_address_line1 if lift else "") or "") if lift else "",
+        "lift_type": contract.lift_type_key or "",
+        "floors": contract.floors_value or "",
+        "stops": (getattr(lift, "stops", None) if lift else "") or "",
+        "capacity_kg": (getattr(lift, "capacity_kg", None) if lift else "") or "",
+        "capacity_persons": (getattr(lift, "capacity_persons", None) if lift else "") or "",
+        "speed": (getattr(lift, "speed", None) if lift else "") or "",
+        "machine_type": (getattr(lift, "machine_type", None) if lift else "") or "",
+        "door_type": (getattr(lift, "door_type", None) if lift else "") or "",
+        "door_finish": (getattr(lift, "door_finish", None) if lift else "") or "",
+        "power_supply": (getattr(lift, "power_supply", None) if lift else "") or "",
+        "contract_no": contract.contract_no or "",
+        "contract_type": contract.contract_type or "",
         "customer_name": contract.customer_name or "",
         "lift_name": (lift.lift_code if lift else "") or "",
         "lift_address": ((lift.site_address_line1 if lift else "") or "") if lift else "",
         "contract_type_label": CONTRACT_TYPE_LABELS.get(contract.contract_type, contract.contract_type or ""),
         "duration_years": str(contract.duration_years or ""),
+        "frequency_per_year": str(contract.frequency_per_year or ""),
         "frequency_label": _contract_frequency_label(contract.contract_type, contract.frequency_per_year),
+        "start_date": contract.start_date.strftime("%Y-%m-%d") if contract.start_date else "",
+        "end_date": contract.end_date.strftime("%Y-%m-%d") if contract.end_date else "",
+        "standard_price": f"{_safe_float(contract.standard_price):.2f}",
+        "discount_type": contract.discount_type or "",
+        "discount_value": f"{_safe_float(contract.discount_value):.2f}",
         "final_price": f"{_safe_float(contract.final_price):.2f}",
+        "company_name": (customer.company_name if customer else "") or "",
+        "company_address": "",
+        "company_phone": "",
+        "company_email": "",
+        "company_website": "",
+        "authorized_signatory": "",
+        "current_date": today.strftime("%Y-%m-%d"),
+        "document_generated_on": now.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
 def _render_contract_html(template_html, mapping):
     rendered = template_html or ""
-    for key, value in mapping.items():
-        rendered = rendered.replace("{{" + key + "}}", html.escape(str(value)))
-    return rendered
+
+    def _replace_token(match):
+        token = (match.group(1) or "").strip()
+        value = mapping.get(token, "")
+        return html.escape(str(value or ""))
+
+    return re.sub(r"{{\s*([^{}]+?)\s*}}", _replace_token, rendered)
 
 
 def get_service_dropdown_options(category, active_only=True):
@@ -14383,6 +14514,21 @@ def ensure_bom_template_line_table():
     )
 
 
+def ensure_service_contract_template_columns():
+    _ensure_sqlite_table(
+        "service_contract_templates",
+        ServiceContractTemplate.__table__,
+        [
+            ("intro_html", "TEXT"),
+            ("spec_html", "TEXT"),
+            ("terms_html", "TEXT"),
+            ("header_html", "TEXT"),
+            ("footer_html", "TEXT"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+
+
 def ensure_bom_package_table():
     _ensure_sqlite_table(
         "bom_package",
@@ -15482,6 +15628,7 @@ def bootstrap_db():
     ensure_sales_opportunity_item_columns()
     ensure_sales_opportunity_engagement_columns()
     ensure_sales_opportunity_file_columns()
+    ensure_service_contract_template_columns()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
@@ -23700,7 +23847,7 @@ def service_settings():
     for group in service_dropdown_groups.values():
         group["inactive"] = [option for option in group["inactive"] if not option.is_active]
 
-    template_config = _ensure_service_contract_templates_row()
+    template_config = _contract_template_payload(_ensure_service_contract_templates_row())
     contract_prices = ServiceContractPrice.query.order_by(
         ServiceContractPrice.lift_type_key.asc(),
         ServiceContractPrice.floors_value.asc(),
@@ -23721,6 +23868,7 @@ def service_settings():
         contract_type_options=CONTRACT_TYPE_OPTIONS,
         contract_duration_options=CONTRACT_DURATION_OPTIONS,
         contract_frequency_options=CONTRACT_FREQUENCY_OPTIONS,
+        contract_variable_groups=CONTRACT_VARIABLE_GROUPS,
         lift_type_options=lift_type_options,
         floors_options=floors_options,
     )
@@ -23734,9 +23882,22 @@ def service_contract_template_settings():
 
     template_row = _ensure_service_contract_templates_row()
     if request.method == "POST":
+        header_html = _strip_script_tags(request.form.get("header_html"))
         template_row.intro_html = _strip_script_tags(request.form.get("intro_html"))
         template_row.spec_html = _strip_script_tags(request.form.get("spec_html"))
         template_row.terms_html = _strip_script_tags(request.form.get("terms_html"))
+        footer_html = _strip_script_tags(request.form.get("footer_html"))
+        db.session.flush()
+        db.session.execute(
+            text(
+                "UPDATE service_contract_templates SET header_html = :header_html, footer_html = :footer_html WHERE id = :template_id"
+            ),
+            {
+                "header_html": header_html or "",
+                "footer_html": footer_html or "",
+                "template_id": template_row.id,
+            },
+        )
         db.session.commit()
         flash("Contract templates updated.", "success")
         return redirect(url_for("service_settings") + "#contract-settings")
@@ -23745,11 +23906,12 @@ def service_contract_template_settings():
         "service/service_settings.html",
         service_routes=[],
         service_dropdown_groups={},
-        contract_template=template_row,
+        contract_template=_contract_template_payload(template_row),
         contract_prices=[],
         contract_type_options=CONTRACT_TYPE_OPTIONS,
         contract_duration_options=CONTRACT_DURATION_OPTIONS,
         contract_frequency_options=CONTRACT_FREQUENCY_OPTIONS,
+        contract_variable_groups=CONTRACT_VARIABLE_GROUPS,
         lift_type_options=get_dropdown_choices("lift_type"),
         floors_options=get_service_dropdown_options("floors", active_only=True),
     )
@@ -27825,17 +27987,21 @@ def service_contract_edit(contract_id):
 def service_contract_preview(contract_id):
     _module_visibility_required("service")
     contract = ServiceContract.query.options(joinedload(ServiceContract.lift)).get_or_404(contract_id)
-    template_row = _ensure_service_contract_templates_row()
+    template_payload = _contract_template_payload(_ensure_service_contract_templates_row())
     placeholders = _contract_placeholder_map(contract)
-    intro_html = _render_contract_html(template_row.intro_html, placeholders)
-    spec_html = _render_contract_html(template_row.spec_html, placeholders)
-    terms_html = _render_contract_html(template_row.terms_html, placeholders)
+    header_html = _render_contract_html(template_payload.get("header_html"), placeholders)
+    intro_html = _render_contract_html(template_payload.get("intro_html"), placeholders)
+    spec_html = _render_contract_html(template_payload.get("spec_html"), placeholders)
+    terms_html = _render_contract_html(template_payload.get("terms_html"), placeholders)
+    footer_html = _render_contract_html(template_payload.get("footer_html"), placeholders)
     return render_template(
         "service/contract_preview.html",
         contract=contract,
+        header_html=header_html,
         intro_html=intro_html,
         spec_html=spec_html,
         terms_html=terms_html,
+        footer_html=footer_html,
         contract_type_labels=CONTRACT_TYPE_LABELS,
     )
 
