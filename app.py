@@ -2710,7 +2710,8 @@ def _ensure_service_contract_templates_row():
                 spec_html = COALESCE(spec_html, ''),
                 terms_html = COALESCE(terms_html, ''),
                 header_html = COALESCE(header_html, ''),
-                footer_html = COALESCE(footer_html, '')
+                footer_html = COALESCE(footer_html, ''),
+                cover_letter_html = COALESCE(cover_letter_html, '')
             WHERE id = :template_id
             """
         ),
@@ -2728,10 +2729,13 @@ def _contract_template_payload(template_row):
         "terms_html": template_row.terms_html or "",
         "header_html": "",
         "footer_html": "",
+        "cover_letter_html": "",
     }
     extra_cols = db.session.execute(
         text(
-            "SELECT COALESCE(header_html, '') AS header_html, COALESCE(footer_html, '') AS footer_html "
+            "SELECT COALESCE(header_html, '') AS header_html, "
+            "COALESCE(footer_html, '') AS footer_html, "
+            "COALESCE(cover_letter_html, '') AS cover_letter_html "
             "FROM service_contract_templates WHERE id = :template_id"
         ),
         {"template_id": template_row.id},
@@ -2739,7 +2743,74 @@ def _contract_template_payload(template_row):
     if extra_cols:
         payload["header_html"] = extra_cols.get("header_html") or ""
         payload["footer_html"] = extra_cols.get("footer_html") or ""
+        payload["cover_letter_html"] = extra_cols.get("cover_letter_html") or ""
     return payload
+
+
+def _log_service_contract_price_audit(
+    *,
+    price_id,
+    lift_type_key,
+    floors_value,
+    contract_type,
+    duration_years,
+    frequency_per_year,
+    old_price,
+    new_price,
+    old_is_active,
+    new_is_active,
+    action_type,
+):
+    db.session.execute(
+        text(
+            """
+            INSERT INTO service_contract_price_audit (
+                price_id,
+                lift_type_key,
+                floors_value,
+                contract_type,
+                duration_years,
+                frequency_per_year,
+                old_price,
+                new_price,
+                old_is_active,
+                new_is_active,
+                action_type,
+                changed_by,
+                changed_at
+            ) VALUES (
+                :price_id,
+                :lift_type_key,
+                :floors_value,
+                :contract_type,
+                :duration_years,
+                :frequency_per_year,
+                :old_price,
+                :new_price,
+                :old_is_active,
+                :new_is_active,
+                :action_type,
+                :changed_by,
+                :changed_at
+            )
+            """
+        ),
+        {
+            "price_id": price_id,
+            "lift_type_key": lift_type_key,
+            "floors_value": floors_value,
+            "contract_type": contract_type,
+            "duration_years": duration_years,
+            "frequency_per_year": frequency_per_year,
+            "old_price": old_price,
+            "new_price": new_price,
+            "old_is_active": old_is_active,
+            "new_is_active": new_is_active,
+            "action_type": action_type,
+            "changed_by": getattr(current_user, "username", "system") or "system",
+            "changed_at": datetime_cls.utcnow(),
+        },
+    )
 
 
 def _price_lookup(lift_type_key, floors_value, contract_type, duration_years, frequency_per_year):
@@ -14524,9 +14595,52 @@ def ensure_service_contract_template_columns():
             ("terms_html", "TEXT"),
             ("header_html", "TEXT"),
             ("footer_html", "TEXT"),
+            ("cover_letter_html", "TEXT"),
             ("updated_at", "DATETIME"),
         ],
     )
+
+
+def ensure_service_contract_price_audit_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_service_contract_price_audit_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='service_contract_price_audit'"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE service_contract_price_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                price_id INTEGER,
+                lift_type_key TEXT,
+                floors_value TEXT,
+                contract_type TEXT,
+                duration_years INTEGER,
+                frequency_per_year INTEGER,
+                old_price REAL,
+                new_price REAL,
+                old_is_active INTEGER,
+                new_is_active INTEGER,
+                action_type TEXT,
+                changed_by TEXT,
+                changed_at TEXT,
+                FOREIGN KEY(price_id) REFERENCES service_contract_prices(id)
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+        print("✅ Created missing table: service_contract_price_audit")
+        return
+
+    conn.close()
+    print("✔️ service_contract_price_audit OK")
 
 
 def ensure_bom_package_table():
@@ -15629,6 +15743,7 @@ def bootstrap_db():
     ensure_sales_opportunity_engagement_columns()
     ensure_sales_opportunity_file_columns()
     ensure_service_contract_template_columns()
+    ensure_service_contract_price_audit_table()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
@@ -23898,15 +24013,17 @@ def service_contract_template_settings():
         template_row.intro_html = _strip_script_tags(request.form.get("intro_html"))
         template_row.spec_html = _strip_script_tags(request.form.get("spec_html"))
         template_row.terms_html = _strip_script_tags(request.form.get("terms_html"))
+        cover_letter_html = _strip_script_tags(request.form.get("cover_letter_html"))
         footer_html = _strip_script_tags(request.form.get("footer_html"))
         db.session.flush()
         db.session.execute(
             text(
-                "UPDATE service_contract_templates SET header_html = :header_html, footer_html = :footer_html WHERE id = :template_id"
+                "UPDATE service_contract_templates SET header_html = :header_html, footer_html = :footer_html, cover_letter_html = :cover_letter_html WHERE id = :template_id"
             ),
             {
                 "header_html": header_html or "",
                 "footer_html": footer_html or "",
+                "cover_letter_html": cover_letter_html or "",
                 "template_id": template_row.id,
             },
         )
@@ -23969,16 +24086,30 @@ def service_contract_price_add():
         flash("Duplicate price row exists for this combination.", "error")
         return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
 
-    db.session.add(
-        ServiceContractPrice(
-            lift_type_key=lift_type_key,
-            floors_value=floors_value,
-            contract_type=contract_type,
-            duration_years=duration_years,
-            frequency_per_year=frequency_per_year,
-            price=max(0.0, price),
-            is_active=True,
-        )
+    new_price = max(0.0, price)
+    new_row = ServiceContractPrice(
+        lift_type_key=lift_type_key,
+        floors_value=floors_value,
+        contract_type=contract_type,
+        duration_years=duration_years,
+        frequency_per_year=frequency_per_year,
+        price=new_price,
+        is_active=True,
+    )
+    db.session.add(new_row)
+    db.session.flush()
+    _log_service_contract_price_audit(
+        price_id=new_row.id,
+        lift_type_key=new_row.lift_type_key,
+        floors_value=new_row.floors_value,
+        contract_type=new_row.contract_type,
+        duration_years=new_row.duration_years,
+        frequency_per_year=new_row.frequency_per_year,
+        old_price=None,
+        new_price=new_row.price,
+        old_is_active=None,
+        new_is_active=1,
+        action_type="create",
     )
     db.session.commit()
     flash("Contract price row added.", "success")
@@ -23991,7 +24122,23 @@ def service_contract_price_update(price_id):
     _module_visibility_required("service")
     _require_admin()
     row = ServiceContractPrice.query.get_or_404(price_id)
-    row.price = max(0.0, _safe_float(request.form.get("price"), row.price))
+    old_price = _safe_float(row.price, 0)
+    new_price = max(0.0, _safe_float(request.form.get("price"), row.price))
+    if old_price != new_price:
+        row.price = new_price
+        _log_service_contract_price_audit(
+            price_id=row.id,
+            lift_type_key=row.lift_type_key,
+            floors_value=row.floors_value,
+            contract_type=row.contract_type,
+            duration_years=row.duration_years,
+            frequency_per_year=row.frequency_per_year,
+            old_price=old_price,
+            new_price=new_price,
+            old_is_active=int(bool(row.is_active)),
+            new_is_active=int(bool(row.is_active)),
+            action_type="update",
+        )
     db.session.commit()
     flash("Contract price updated.", "success")
     return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
@@ -24003,10 +24150,49 @@ def service_contract_price_toggle(price_id):
     _module_visibility_required("service")
     _require_admin()
     row = ServiceContractPrice.query.get_or_404(price_id)
+    old_is_active = int(bool(row.is_active))
     row.is_active = not bool(row.is_active)
+    new_is_active = int(bool(row.is_active))
+    _log_service_contract_price_audit(
+        price_id=row.id,
+        lift_type_key=row.lift_type_key,
+        floors_value=row.floors_value,
+        contract_type=row.contract_type,
+        duration_years=row.duration_years,
+        frequency_per_year=row.frequency_per_year,
+        old_price=row.price,
+        new_price=row.price,
+        old_is_active=old_is_active,
+        new_is_active=new_is_active,
+        action_type="reactivate" if new_is_active else "deactivate",
+    )
     db.session.commit()
     flash("Contract price status updated.", "success")
     return redirect(url_for("service_settings", tab=_service_settings_active_tab()) + "#price-settings")
+
+
+@app.route("/service/settings/prices/<int:price_id>/history", methods=["GET"])
+@login_required
+def service_contract_price_history(price_id):
+    _module_visibility_required("service")
+    _require_admin()
+    price_row = ServiceContractPrice.query.get_or_404(price_id)
+    history_rows = db.session.execute(
+        text(
+            """
+            SELECT id, changed_at, changed_by, action_type, old_price, new_price, old_is_active, new_is_active
+            FROM service_contract_price_audit
+            WHERE price_id = :price_id
+            ORDER BY id DESC
+            """
+        ),
+        {"price_id": price_id},
+    ).mappings().all()
+    return render_template(
+        "service/price_history.html",
+        price_row=price_row,
+        history_rows=history_rows,
+    )
 
 
 @app.route("/service/settings/prices/export", methods=["GET"])
@@ -24179,21 +24365,69 @@ def service_contract_price_import():
             ).first()
 
             if existing_row:
-                existing_row.price = max(0.0, price)
-                if is_active_value is not None:
-                    existing_row.is_active = is_active_value
-                updated_count += 1
-            else:
-                db.session.add(
-                    ServiceContractPrice(
-                        lift_type_key=lift_type_key,
-                        floors_value=floors_value,
-                        contract_type=contract_type,
-                        duration_years=duration_years,
-                        frequency_per_year=frequency_per_year,
-                        price=max(0.0, price),
-                        is_active=is_active_value if is_active_value is not None else True,
+                row_updated = False
+                old_price = _safe_float(existing_row.price, 0)
+                new_price = max(0.0, price)
+                old_is_active = int(bool(existing_row.is_active))
+                if old_price != new_price:
+                    existing_row.price = new_price
+                    _log_service_contract_price_audit(
+                        price_id=existing_row.id,
+                        lift_type_key=existing_row.lift_type_key,
+                        floors_value=existing_row.floors_value,
+                        contract_type=existing_row.contract_type,
+                        duration_years=existing_row.duration_years,
+                        frequency_per_year=existing_row.frequency_per_year,
+                        old_price=old_price,
+                        new_price=new_price,
+                        old_is_active=old_is_active,
+                        new_is_active=old_is_active,
+                        action_type="update",
                     )
+                    row_updated = True
+                if is_active_value is not None and bool(is_active_value) != bool(existing_row.is_active):
+                    existing_row.is_active = bool(is_active_value)
+                    new_is_active = int(bool(existing_row.is_active))
+                    _log_service_contract_price_audit(
+                        price_id=existing_row.id,
+                        lift_type_key=existing_row.lift_type_key,
+                        floors_value=existing_row.floors_value,
+                        contract_type=existing_row.contract_type,
+                        duration_years=existing_row.duration_years,
+                        frequency_per_year=existing_row.frequency_per_year,
+                        old_price=existing_row.price,
+                        new_price=existing_row.price,
+                        old_is_active=old_is_active,
+                        new_is_active=new_is_active,
+                        action_type="reactivate" if new_is_active else "deactivate",
+                    )
+                    row_updated = True
+                if row_updated:
+                    updated_count += 1
+            else:
+                new_row = ServiceContractPrice(
+                    lift_type_key=lift_type_key,
+                    floors_value=floors_value,
+                    contract_type=contract_type,
+                    duration_years=duration_years,
+                    frequency_per_year=frequency_per_year,
+                    price=max(0.0, price),
+                    is_active=is_active_value if is_active_value is not None else True,
+                )
+                db.session.add(new_row)
+                db.session.flush()
+                _log_service_contract_price_audit(
+                    price_id=new_row.id,
+                    lift_type_key=new_row.lift_type_key,
+                    floors_value=new_row.floors_value,
+                    contract_type=new_row.contract_type,
+                    duration_years=new_row.duration_years,
+                    frequency_per_year=new_row.frequency_per_year,
+                    old_price=None,
+                    new_price=new_row.price,
+                    old_is_active=None,
+                    new_is_active=int(bool(new_row.is_active)),
+                    action_type="create",
                 )
                 added_count += 1
     except Exception:
@@ -28211,6 +28445,7 @@ def service_contract_preview(contract_id):
     template_payload = _contract_template_payload(_ensure_service_contract_templates_row())
     placeholders = _contract_placeholder_map(contract)
     header_html = _render_contract_html(template_payload.get("header_html"), placeholders)
+    cover_letter_html = _render_contract_html(template_payload.get("cover_letter_html"), placeholders)
     intro_html = _render_contract_html(template_payload.get("intro_html"), placeholders)
     spec_html = _render_contract_html(template_payload.get("spec_html"), placeholders)
     terms_html = _render_contract_html(template_payload.get("terms_html"), placeholders)
@@ -28219,10 +28454,11 @@ def service_contract_preview(contract_id):
         "service/contract_preview.html",
         contract=contract,
         header_html=header_html,
+        footer_html=footer_html,
+        cover_letter_html=cover_letter_html,
         intro_html=intro_html,
         spec_html=spec_html,
         terms_html=terms_html,
-        footer_html=footer_html,
         contract_type_labels=CONTRACT_TYPE_LABELS,
     )
 

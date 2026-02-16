@@ -259,11 +259,12 @@
                   <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input />
               <div class="space-y-4">
                 {% for field in [
-                  ("header", "Header", contract_template.header_html or ""),
-                  ("intro", "Intro pages format", contract_template.intro_html or ""),
-                  ("spec", "Contract & lift specs format", contract_template.spec_html or ""),
-                  ("terms", "Terms & Conditions format", contract_template.terms_html or ""),
-                  ("footer", "Footer", contract_template.footer_html or ""),
+                  ("header", "Header Template", contract_template.header_html or ""),
+                  ("footer", "Footer Template", contract_template.footer_html or ""),
+                  ("cover_letter", "Cover Letter Template", contract_template.cover_letter_html or ""),
+                  ("intro", "Intro Template", contract_template.intro_html or ""),
+                  ("spec", "Contract & Lift Specs Template", contract_template.spec_html or ""),
+                  ("terms", "Terms & Conditions Template", contract_template.terms_html or ""),
                 ] %}
                   <div class="rounded-xl border border-slate-800/70 bg-slate-900/70 p-3 space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ field[1] }}</p>
@@ -379,8 +380,13 @@
                         <form method="post" action="{{ url_for('service_contract_price_update', price_id=row.id) }}" class="flex gap-2">{{ csrf_field() }}
                   <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><input type="number" name="price" step="0.01" min="0" value="{{ '%.2f'|format(row.price or 0) }}" class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1"><button class="rounded border border-slate-700 px-2">Edit</button></form>
                       </td>
-                      <td class="px-2 py-2"><form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}
-                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form></td>
+                      <td class="px-2 py-2">
+                        <div class="flex flex-wrap gap-2">
+                          <form method="post" action="{{ url_for('service_contract_price_toggle', price_id=row.id) }}">{{ csrf_field() }}
+                  <input type="hidden" name="active_tab" value="{{ active }}" data-active-tab-input /><button class="rounded border px-2 py-1 {{ 'border-amber-500/50 text-amber-200' if row.is_active else 'border-emerald-500/50 text-emerald-200' }}">{{ 'Deactivate' if row.is_active else 'Activate' }}</button></form>
+                          <a href="{{ url_for('service_contract_price_history', price_id=row.id) }}" class="rounded border border-slate-700 px-2 py-1 text-slate-200">View History</a>
+                        </div>
+                      </td>
                     </tr>
                   {% else %}
                     <tr><td colspan="7" class="px-2 py-4 text-center text-slate-500">No price rows configured.</td></tr>
