@@ -6989,6 +6989,7 @@ from eleva_app.models import (
     sales_task_assignees,
     ServiceDropdownOption,
     ServiceContract,
+    ServiceContractLift,
     ServiceContractPrice,
     ServiceContractTemplate,
     ServiceRoute,
@@ -14798,6 +14799,51 @@ def ensure_service_contract_price_audit_table():
     conn.close()
     print("✔️ service_contract_price_audit OK")
 
+def ensure_service_contract_lifts_table():
+    _ensure_sqlite_table(
+        "service_contract_lifts",
+        ServiceContractLift.__table__,
+        [
+            ("contract_id", "INTEGER NOT NULL"),
+            ("linked_lift_id", "INTEGER"),
+            ("lift_identity", "TEXT NOT NULL"),
+            ("lift_type_key", "TEXT NOT NULL"),
+            ("floors_value", "TEXT NOT NULL"),
+            ("created_at", "DATETIME"),
+        ],
+    )
+
+
+def ensure_service_contract_no_unique_index():
+    conn, _ = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_service_contract_no_unique_index: database is not a SQLite file.")
+        return
+    cur = conn.cursor()
+    cur.execute("PRAGMA index_list('service_contracts')")
+    indexes = cur.fetchall()
+    has_unique_contract_no = False
+    for index in indexes:
+        index_name = index[1]
+        is_unique = bool(index[2])
+        if not is_unique:
+            continue
+        cur.execute(f"PRAGMA index_info('{index_name}')")
+        columns = [row[2] for row in cur.fetchall()]
+        if columns == ["contract_no"]:
+            has_unique_contract_no = True
+            break
+
+    if not has_unique_contract_no:
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_service_contracts_contract_no ON service_contracts(contract_no) WHERE contract_no IS NOT NULL AND TRIM(contract_no) != ''"
+        )
+        conn.commit()
+        print("✅ Created unique index for service_contracts.contract_no")
+    else:
+        print("✔️ service_contracts.contract_no unique index OK")
+    conn.close()
+
 
 def ensure_bom_package_table():
     _ensure_sqlite_table(
@@ -15900,6 +15946,8 @@ def bootstrap_db():
     ensure_sales_opportunity_file_columns()
     ensure_service_contract_template_columns()
     ensure_service_contract_price_audit_table()
+    ensure_service_contract_lifts_table()
+    ensure_service_contract_no_unique_index()
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
@@ -28439,6 +28487,114 @@ def service_contracts():
     )
 
 
+def generate_next_contract_no():
+    now = datetime_cls.now()
+    prefix = f"GA{now.strftime('%y%m')}"
+    existing_rows = (
+        db.session.query(ServiceContract.contract_no)
+        .filter(ServiceContract.contract_no.like(f"{prefix}%"))
+        .all()
+    )
+    max_sequence = 0
+    for (contract_no,) in existing_rows:
+        if not contract_no:
+            continue
+        suffix = contract_no[-3:]
+        if suffix.isdigit():
+            max_sequence = max(max_sequence, int(suffix))
+    next_sequence = max_sequence + 1
+    if next_sequence > 999:
+        raise ValueError("Monthly contract number sequence exhausted.")
+    return f"{prefix}{next_sequence:03d}"
+
+
+def _generate_unique_contract_no():
+    contract_no = generate_next_contract_no()
+    prefix = contract_no[:-3]
+    sequence = int(contract_no[-3:])
+    while ServiceContract.query.filter_by(contract_no=contract_no).first() is not None:
+        sequence += 1
+        if sequence > 999:
+            raise ValueError("Unable to allocate a unique contract number for this month.")
+        contract_no = f"{prefix}{sequence:03d}"
+    return contract_no
+
+
+def _parse_contract_lift_rows_from_form():
+    row_pattern = re.compile(r"^lift_rows\[(\d+)\]\[(identity|lift_type|floors|linked_lift_id)\]$")
+    parsed = {}
+    for field_name, value in request.form.items():
+        match = row_pattern.match(field_name)
+        if not match:
+            continue
+        row_index = int(match.group(1))
+        key = match.group(2)
+        parsed.setdefault(row_index, {})[key] = clean_str(value)
+
+    lift_rows = []
+    for display_index, row_index in enumerate(sorted(parsed.keys()), start=1):
+        row = parsed[row_index]
+        identity = clean_str(row.get("identity"))
+        lift_type = clean_str(row.get("lift_type"))
+        floors = clean_str(row.get("floors"))
+        linked_lift_id = None
+        linked_lift_raw = (row.get("linked_lift_id") or "").strip()
+        if linked_lift_raw:
+            try:
+                linked_lift_id = int(linked_lift_raw)
+            except ValueError:
+                linked_lift_id = None
+
+        if not identity or not lift_type or not floors:
+            raise ValueError(f"Lift row {display_index} is incomplete. Identity, lift type, and floors are required.")
+
+        lift_rows.append(
+            {
+                "linked_lift_id": linked_lift_id,
+                "lift_identity": identity,
+                "lift_type_key": lift_type,
+                "floors_value": floors,
+            }
+        )
+
+    if not lift_rows:
+        raise ValueError("At least one lift row is required.")
+
+    return lift_rows
+
+
+def _build_contract_lift_rows(contract=None, selected_lift=None):
+    rows = []
+    if contract and contract.id:
+        for item in contract.contract_lifts:
+            rows.append(
+                {
+                    "linked_lift_id": item.linked_lift_id,
+                    "lift_identity": item.lift_identity,
+                    "lift_type_key": item.lift_type_key,
+                    "floors_value": item.floors_value,
+                }
+            )
+
+    if rows:
+        return rows
+
+    target_lift = selected_lift
+    if not target_lift and contract and contract.lift_id:
+        target_lift = Lift.query.options(joinedload(Lift.customer)).get(contract.lift_id)
+
+    if target_lift:
+        rows.append(
+            {
+                "linked_lift_id": target_lift.id,
+                "lift_identity": target_lift.lift_code,
+                "lift_type_key": target_lift.lift_type or "",
+                "floors_value": target_lift.building_floors or "",
+            }
+        )
+    return rows
+
+
 def _contract_form_context(contract=None, lift_id=None):
     lift_choices = Lift.query.options(joinedload(Lift.customer)).order_by(Lift.lift_code.asc()).all()
     lift_type_options = get_dropdown_choices("lift_type")
@@ -28457,6 +28613,20 @@ def _contract_form_context(contract=None, lift_id=None):
             contract.customer_phone = selected_lift.customer.mobile or selected_lift.customer.phone
             contract.customer_email = selected_lift.customer.email
             contract.customer_address = "\n".join([x for x in [selected_lift.customer.billing_address_line1, selected_lift.customer.billing_address_line2, selected_lift.customer.city] if x])
+
+    contract_lift_rows = _build_contract_lift_rows(contract=contract, selected_lift=selected_lift)
+
+    lift_choices_payload = [
+        {
+            "id": lift.id,
+            "lift_code": lift.lift_code,
+            "customer_name": lift.customer.company_name if lift.customer else "",
+            "lift_type": lift.lift_type or "",
+            "floors_value": lift.building_floors or "",
+        }
+        for lift in lift_choices
+    ]
+
     return {
         "contract": contract,
         "lift_choices": lift_choices,
@@ -28465,26 +28635,41 @@ def _contract_form_context(contract=None, lift_id=None):
         "contract_type_options": CONTRACT_TYPE_OPTIONS,
         "duration_options": CONTRACT_DURATION_OPTIONS,
         "frequency_options": CONTRACT_FREQUENCY_OPTIONS,
+        "contract_lift_rows": contract_lift_rows,
+        "lift_choices_payload": lift_choices_payload,
     }
 
 
-def _save_contract_from_form(contract):
-    lift_id_raw = (request.form.get("lift_id") or "").strip()
+def _save_contract_from_form(contract, lift_rows=None):
     contract.contract_no = clean_str(request.form.get("contract_no"))
     contract.customer_name = clean_str(request.form.get("customer_name"))
     contract.customer_phone = clean_str(request.form.get("customer_phone"))
     contract.customer_email = clean_str(request.form.get("customer_email"))
     contract.customer_address = clean_str(request.form.get("customer_address"))
-    contract.lift_type_key = clean_str(request.form.get("lift_type_key"))
-    contract.floors_value = clean_str(request.form.get("floors_value"))
     contract.contract_type = clean_str(request.form.get("contract_type"))
     contract.discount_type = clean_str(request.form.get("discount_type")) or None
     contract.discount_value = _safe_float(request.form.get("discount_value"), 0)
     contract.status = clean_str(request.form.get("status")) or "draft"
 
-    try:
-        contract.lift_id = int(lift_id_raw) if lift_id_raw else None
-    except ValueError:
+    if not contract.contract_no:
+        contract.contract_no = _generate_unique_contract_no()
+
+    duplicate_contract = ServiceContract.query.filter(
+        ServiceContract.contract_no == contract.contract_no,
+        ServiceContract.id != contract.id,
+    ).first()
+    if duplicate_contract:
+        if clean_str(request.form.get("contract_no")):
+            raise ValueError("Contract No already exists. Please use a unique value.")
+        contract.contract_no = _generate_unique_contract_no()
+
+    active_lift_rows = lift_rows or []
+    if active_lift_rows:
+        first_row = active_lift_rows[0]
+        contract.lift_id = first_row.get("linked_lift_id")
+        contract.lift_type_key = first_row.get("lift_type_key")
+        contract.floors_value = first_row.get("floors_value")
+    else:
         contract.lift_id = None
 
     try:
@@ -28534,7 +28719,6 @@ def _save_contract_from_form(contract):
             if contract.frequency_per_year:
                 lift.services_per_year = contract.frequency_per_year
 
-
 @app.route("/service/contracts/new", methods=["GET", "POST"])
 @login_required
 def service_contract_new():
@@ -28544,15 +28728,28 @@ def service_contract_new():
 
     if request.method == "POST":
         try:
-            _save_contract_from_form(contract)
+            lift_rows = _parse_contract_lift_rows_from_form()
+            _save_contract_from_form(contract, lift_rows=lift_rows)
         except ValueError as exc:
             flash(str(exc), "error")
             return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=lift_id), is_edit=False)
         db.session.add(contract)
+        db.session.flush()
+        for row in lift_rows:
+            db.session.add(
+                ServiceContractLift(
+                    contract_id=contract.id,
+                    linked_lift_id=row.get("linked_lift_id"),
+                    lift_identity=row.get("lift_identity"),
+                    lift_type_key=row.get("lift_type_key"),
+                    floors_value=row.get("floors_value"),
+                )
+            )
         db.session.commit()
         flash("Contract saved.", "success")
         return redirect(url_for("service_contract_preview", contract_id=contract.id))
 
+    contract.contract_no = generate_next_contract_no()
     return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=lift_id), is_edit=False)
 
 
@@ -28560,10 +28757,19 @@ def service_contract_new():
 @login_required
 def service_contract_edit(contract_id):
     _module_visibility_required("service")
-    contract = ServiceContract.query.get_or_404(contract_id)
+    contract = ServiceContract.query.options(joinedload(ServiceContract.contract_lifts)).get_or_404(contract_id)
     if request.method == "POST":
         try:
-            _save_contract_from_form(contract)
+            existing_rows = [
+                {
+                    "linked_lift_id": row.linked_lift_id,
+                    "lift_identity": row.lift_identity,
+                    "lift_type_key": row.lift_type_key,
+                    "floors_value": row.floors_value,
+                }
+                for row in contract.contract_lifts
+            ]
+            _save_contract_from_form(contract, lift_rows=existing_rows)
         except ValueError as exc:
             flash(str(exc), "error")
             return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=contract.lift_id), is_edit=True)
@@ -28579,7 +28785,7 @@ def service_contract_edit(contract_id):
 @login_required
 def service_contract_preview(contract_id):
     _module_visibility_required("service")
-    contract = ServiceContract.query.options(joinedload(ServiceContract.lift)).get_or_404(contract_id)
+    contract = ServiceContract.query.options(joinedload(ServiceContract.lift), joinedload(ServiceContract.contract_lifts)).get_or_404(contract_id)
     template_payload = _contract_template_payload(_ensure_service_contract_templates_row())
     placeholders = _contract_placeholder_map(contract)
     header_html = _render_contract_html(template_payload.get("header_html"), placeholders)

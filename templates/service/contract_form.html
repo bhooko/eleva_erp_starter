@@ -6,14 +6,29 @@
   <form method="post" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
     {{ csrf_field() }}
     <div class="grid gap-4 md:grid-cols-2">
-      <label class="space-y-1 text-sm">Contract No<input name="contract_no" value="{{ contract.contract_no or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
-      <label class="space-y-1 text-sm">Lift<select name="lift_id" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"><option value="">Optional</option>{% for lift in lift_choices %}<option value="{{ lift.id }}" {% if contract.lift_id==lift.id %}selected{% endif %}>{{ lift.lift_code }}{% if lift.customer %} · {{ lift.customer.company_name }}{% endif %}</option>{% endfor %}</select></label>
+      <label class="space-y-1 text-sm">Contract No
+        <input name="contract_no" value="{{ contract.contract_no or '' }}" {% if not is_edit %}readonly{% endif %} class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" title="Auto-generated. You can copy this value.">
+      </label>
+      {% if not is_edit %}
+      <div class="space-y-1 text-sm">
+        <label for="link-existing-lift">Link existing lift</label>
+        <select id="link-existing-lift" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
+          <option value="">Optional</option>
+          {% for lift in lift_choices %}
+          <option value="{{ lift.id }}">{{ lift.lift_code }}{% if lift.customer %} · {{ lift.customer.company_name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <div class="space-y-1 text-sm">
+        <span class="text-slate-300">Linked lift (header)</span>
+        <div class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-200">{{ contract.lift.lift_code if contract.lift else '—' }}</div>
+      </div>
+      {% endif %}
       <label class="space-y-1 text-sm">Customer Name<input name="customer_name" required value="{{ contract.customer_name or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
       <label class="space-y-1 text-sm">Phone<input name="customer_phone" value="{{ contract.customer_phone or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
       <label class="space-y-1 text-sm">Email<input name="customer_email" value="{{ contract.customer_email or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
       <label class="space-y-1 text-sm">Address<textarea name="customer_address" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{{ contract.customer_address or '' }}</textarea></label>
-      <label class="space-y-1 text-sm">Lift Type<select name="lift_type_key" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for option in lift_type_options %}<option value="{{ option.value }}" {% if contract.lift_type_key==option.value %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
-      <label class="space-y-1 text-sm">Floors<select name="floors_value" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for option in floors_options %}<option value="{{ option.value }}" {% if contract.floors_value==option.value %}selected{% endif %}>{{ option.value }}</option>{% endfor %}</select></label>
       <label class="space-y-1 text-sm">Contract Type<select name="contract_type" required data-contract-type class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for value,label in contract_type_options %}<option value="{{ value }}" {% if contract.contract_type==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
       <label class="space-y-1 text-sm">Duration<select name="duration_years" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">{% for years in duration_options %}<option value="{{ years }}" {% if contract.duration_years==years %}selected{% endif %}>{{ years }} years</option>{% endfor %}</select></label>
       <label class="space-y-1 text-sm" data-frequency-wrap>Frequency<select name="frequency_per_year" required data-frequency class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></select></label>
@@ -21,6 +36,51 @@
       <label class="space-y-1 text-sm">Discount Type<select name="discount_type" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"><option value="">None</option><option value="percent" {% if contract.discount_type=='percent' %}selected{% endif %}>Percent</option><option value="amount" {% if contract.discount_type=='amount' %}selected{% endif %}>Amount</option></select></label>
       <label class="space-y-1 text-sm">Discount Value<input type="number" step="0.01" min="0" name="discount_value" value="{{ contract.discount_value or '' }}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"></label>
     </div>
+
+    <section class="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-100">Lifts in this contract</h2>
+        {% if not is_edit %}
+        <button type="button" id="add-lift-btn" class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">+ Add lift</button>
+        {% endif %}
+      </div>
+      <p class="text-xs text-slate-400">At least one lift row is required. Lift link is optional.</p>
+      <div id="lift-rows" class="space-y-2">
+        {% for row in contract_lift_rows %}
+          <div class="lift-row rounded-lg border border-slate-800 p-3" data-row-index="{{ loop.index0 }}">
+            {% if is_edit %}
+              <div class="grid gap-2 md:grid-cols-4 text-sm">
+                <div><span class="text-slate-400">Identity</span><div>{{ row.lift_identity or '—' }}</div></div>
+                <div><span class="text-slate-400">Lift Type</span><div>{{ row.lift_type_key or '—' }}</div></div>
+                <div><span class="text-slate-400">Floors</span><div>{{ row.floors_value or '—' }}</div></div>
+                <div><span class="text-slate-400">Linked Lift ID</span><div>{{ row.linked_lift_id or '—' }}</div></div>
+              </div>
+            {% else %}
+              <div class="grid gap-2 md:grid-cols-4">
+                <input name="lift_rows[{{ loop.index0 }}][identity]" value="{{ row.lift_identity or '' }}" placeholder="Lift identity" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+                <select name="lift_rows[{{ loop.index0 }}][lift_type]" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+                  <option value="">Select lift type</option>
+                  {% for option in lift_type_options %}
+                  <option value="{{ option.value }}" {% if row.lift_type_key==option.value %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                <select name="lift_rows[{{ loop.index0 }}][floors]" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+                  <option value="">Select floors</option>
+                  {% for option in floors_options %}
+                  <option value="{{ option.value }}" {% if row.floors_value==option.value %}selected{% endif %}>{{ option.value }}</option>
+                  {% endfor %}
+                </select>
+                <div class="flex gap-2">
+                  <input type="hidden" name="lift_rows[{{ loop.index0 }}][linked_lift_id]" value="{{ row.linked_lift_id or '' }}" data-linked-lift-id>
+                  <button type="button" class="remove-row rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">Remove</button>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
     <label class="inline-flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" name="apply_to_lift_amc" value="1" class="rounded border-slate-600 bg-slate-900">Apply to lift AMC fields</label>
     <div class="flex justify-end gap-2"><input type="hidden" name="status" value="draft"><button class="rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100">Save draft</button></div>
   </form>
@@ -49,6 +109,91 @@
     };
     typeEl.addEventListener('change', refresh);
     refresh();
+
+    if ({{ 'true' if is_edit else 'false' }}) return;
+
+    const liftRowsContainer = document.getElementById('lift-rows');
+    const addLiftBtn = document.getElementById('add-lift-btn');
+    const linkExistingLiftEl = document.getElementById('link-existing-lift');
+    const liftChoices = {{ lift_choices_payload|tojson }};
+    const liftTypeOptions = {{ lift_type_options|tojson }};
+    const floorsOptions = {{ floors_options|tojson }};
+
+    const buildOptions = (source, selectedValue, valueKey = 'value', labelKey = 'label') => {
+      return source.map((item) => {
+        const value = item[valueKey] || '';
+        const label = item[labelKey] || item[valueKey] || '';
+        const selected = value === selectedValue ? 'selected' : '';
+        return `<option value="${value}" ${selected}>${label}</option>`;
+      }).join('');
+    };
+
+    const rowTemplate = (index, rowData = {}) => `
+      <div class="lift-row rounded-lg border border-slate-800 p-3" data-row-index="${index}">
+        <div class="grid gap-2 md:grid-cols-4">
+          <input name="lift_rows[${index}][identity]" value="${rowData.identity || ''}" placeholder="Lift identity" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+          <select name="lift_rows[${index}][lift_type]" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+            <option value="">Select lift type</option>
+            ${buildOptions(liftTypeOptions, rowData.lift_type, 'value', 'label')}
+          </select>
+          <select name="lift_rows[${index}][floors]" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required>
+            <option value="">Select floors</option>
+            ${buildOptions(floorsOptions, rowData.floors, 'value', 'value')}
+          </select>
+          <div class="flex gap-2">
+            <input type="hidden" name="lift_rows[${index}][linked_lift_id]" value="${rowData.linked_lift_id || ''}" data-linked-lift-id>
+            <button type="button" class="remove-row rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">Remove</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const reindexRows = () => {
+      [...liftRowsContainer.querySelectorAll('.lift-row')].forEach((row, idx) => {
+        row.dataset.rowIndex = String(idx);
+        const fields = row.querySelectorAll('input[name], select[name]');
+        fields.forEach((field) => {
+          field.name = field.name.replace(/lift_rows\[\d+\]/, `lift_rows[${idx}]`);
+        });
+      });
+    };
+
+    const addRow = (rowData = {}) => {
+      const idx = liftRowsContainer.querySelectorAll('.lift-row').length;
+      liftRowsContainer.insertAdjacentHTML('beforeend', rowTemplate(idx, rowData));
+    };
+
+    addLiftBtn?.addEventListener('click', () => {
+      const selectedId = linkExistingLiftEl?.value;
+      if (selectedId) {
+        const selectedLift = liftChoices.find((lift) => String(lift.id) === String(selectedId));
+        addRow({
+          linked_lift_id: selectedLift?.id || '',
+          identity: selectedLift?.lift_code || '',
+          lift_type: selectedLift?.lift_type || '',
+          floors: selectedLift?.floors_value || '',
+        });
+      } else {
+        addRow();
+      }
+      reindexRows();
+    });
+
+    liftRowsContainer.addEventListener('click', (event) => {
+      const removeBtn = event.target.closest('.remove-row');
+      if (!removeBtn) return;
+      const rows = liftRowsContainer.querySelectorAll('.lift-row');
+      if (rows.length <= 1) {
+        alert('At least one lift row is required.');
+        return;
+      }
+      removeBtn.closest('.lift-row')?.remove();
+      reindexRows();
+    });
+
+    if (!liftRowsContainer.querySelector('.lift-row')) {
+      addRow();
+    }
   });
 </script>
 {% endblock %}

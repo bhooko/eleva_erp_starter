@@ -1398,7 +1398,7 @@ class ServiceContract(db.Model):
     __tablename__ = "service_contracts"
 
     id = db.Column(db.Integer, primary_key=True)
-    contract_no = db.Column(db.String(80), nullable=True)
+    contract_no = db.Column(db.String(80), nullable=True, unique=True, index=True)
     lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=True, index=True)
     customer_name = db.Column(db.String(255), nullable=True)
     customer_phone = db.Column(db.String(60), nullable=True)
@@ -1424,6 +1424,32 @@ class ServiceContract(db.Model):
     )
 
     lift = db.relationship("Lift", foreign_keys=[lift_id])
+    contract_lifts = db.relationship(
+        "ServiceContractLift",
+        back_populates="contract",
+        cascade="all, delete-orphan",
+        order_by="ServiceContractLift.id.asc()",
+    )
+
+
+class ServiceContractLift(db.Model):
+    __tablename__ = "service_contract_lifts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    contract_id = db.Column(
+        db.Integer,
+        db.ForeignKey("service_contracts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    linked_lift_id = db.Column(db.Integer, db.ForeignKey("lift.id"), nullable=True, index=True)
+    lift_identity = db.Column(db.String(255), nullable=False)
+    lift_type_key = db.Column(db.String(60), nullable=False)
+    floors_value = db.Column(db.String(60), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    contract = db.relationship("ServiceContract", back_populates="contract_lifts")
+    linked_lift = db.relationship("Lift", foreign_keys=[linked_lift_id])
 
 
 class Customer(db.Model):
