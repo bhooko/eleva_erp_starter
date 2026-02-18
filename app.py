@@ -24164,9 +24164,27 @@ def service_settings():
     _module_visibility_required("service")
     _require_admin()
 
-    service_routes = ServiceRoute.query.order_by(
-        func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
-    ).all()
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+    sort_query_args.pop("tab", None)
+
+    route_sort_columns = {
+        "route": func.lower(ServiceRoute.state),
+        "branch": func.lower(ServiceRoute.branch),
+        "remark": func.lower(ServiceRoute.remark),
+        "created": ServiceRoute.created_at,
+    }
+    route_query = ServiceRoute.query
+    route_column = route_sort_columns.get(sort_col)
+    if route_column is not None:
+        route_query = route_query.order_by(route_column.desc() if sort_order == "desc" else route_column.asc())
+    else:
+        route_query = route_query.order_by(func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch))
+
+    service_routes = route_query.all()
     service_dropdown_groups = {
         category: {
             "label": label,
@@ -24179,13 +24197,27 @@ def service_settings():
         group["inactive"] = [option for option in group["inactive"] if not option.is_active]
 
     template_config = _contract_template_payload(_ensure_service_contract_templates_row())
-    contract_prices = ServiceContractPrice.query.order_by(
-        ServiceContractPrice.lift_type_key.asc(),
-        ServiceContractPrice.floors_value.asc(),
-        ServiceContractPrice.contract_type.asc(),
-        ServiceContractPrice.duration_years.asc(),
-        ServiceContractPrice.frequency_per_year.asc(),
-    ).all()
+    price_sort_columns = {
+        "lift_type": func.lower(ServiceContractPrice.lift_type_key),
+        "floors": ServiceContractPrice.floors_value,
+        "type": ServiceContractPrice.contract_type,
+        "duration": ServiceContractPrice.duration_years,
+        "frequency": ServiceContractPrice.frequency_per_year,
+        "price": ServiceContractPrice.price,
+    }
+    price_query = ServiceContractPrice.query
+    price_column = price_sort_columns.get(sort_col)
+    if price_column is not None:
+        price_query = price_query.order_by(price_column.desc() if sort_order == "desc" else price_column.asc())
+    else:
+        price_query = price_query.order_by(
+            ServiceContractPrice.lift_type_key.asc(),
+            ServiceContractPrice.floors_value.asc(),
+            ServiceContractPrice.contract_type.asc(),
+            ServiceContractPrice.duration_years.asc(),
+            ServiceContractPrice.frequency_per_year.asc(),
+        )
+    contract_prices = price_query.all()
 
     lift_type_options = get_dropdown_choices("lift_type")
     floors_options = get_service_dropdown_options("floors", active_only=True)
@@ -24206,6 +24238,9 @@ def service_settings():
         lift_type_options=lift_type_options,
         floors_options=floors_options,
         active_tab=active_tab,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
     )
 
 
@@ -25892,15 +25927,34 @@ def _next_service_task_code(task_id):
 @login_required
 def service_tasks():
     _module_visibility_required("service")
-    tasks = (
-        ServiceTask.query.options(
-            joinedload(ServiceTask.customer),
-            joinedload(ServiceTask.lift),
-            joinedload(ServiceTask.owner_user),
-        )
-        .order_by(ServiceTask.created_at.desc(), ServiceTask.id.desc())
-        .all()
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+
+    query = ServiceTask.query.options(
+        joinedload(ServiceTask.customer),
+        joinedload(ServiceTask.lift),
+        joinedload(ServiceTask.owner_user),
     )
+    allowed_sort_columns = {
+        "task": ServiceTask.task_code,
+        "site": ServiceTask.site,
+        "lift_id": ServiceTask.lift_id,
+        "call_type": ServiceTask.call_type,
+        "priority": ServiceTask.priority,
+        "owner": ServiceTask.owner_user_id,
+        "status": ServiceTask.status,
+        "created": ServiceTask.created_at,
+    }
+    column = allowed_sort_columns.get(sort_col)
+    if column is not None:
+        query = query.order_by(column.desc() if sort_order == "desc" else column.asc())
+    else:
+        query = query.order_by(ServiceTask.created_at.desc(), ServiceTask.id.desc())
+
+    tasks = query.all()
     return render_template(
         "service/tasks.html",
         tasks=[_service_task_payload(task) for task in tasks],
@@ -25909,6 +25963,9 @@ def service_tasks():
         users=User.query.filter(User.active.is_(True)).order_by(func.lower(User.username)).all(),
         call_types=SERVICE_TASK_CALL_TYPE_OPTIONS,
         priority_options=SERVICE_TASK_PRIORITY_OPTIONS,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
     )
 
 
@@ -27168,6 +27225,12 @@ def service_lifts():
     _module_visibility_required("service")
 
     search_query = (request.args.get("q") or "").strip()
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+
     query = Lift.query.options(
         joinedload(Lift.customer),
         subqueryload(Lift.attachments),
@@ -27189,7 +27252,24 @@ def service_lifts():
             )
         )
 
-    lifts = query.order_by(func.lower(Lift.lift_code)).all()
+    allowed_sort_columns = {
+        "lift_code": func.lower(Lift.lift_code),
+        "customer": func.lower(Lift.customer_code),
+        "type": func.lower(Lift.lift_type),
+        "brand": func.lower(Lift.lift_brand),
+        "route": func.lower(Lift.route),
+        "city": func.lower(Lift.city),
+        "status": func.lower(Lift.status),
+        "amc_status": func.lower(Lift.amc_status),
+        "next_due": Lift.next_service_due,
+    }
+    column = allowed_sort_columns.get(sort_col)
+    if column is not None:
+        query = query.order_by(column.desc() if sort_order == "desc" else column.asc())
+    else:
+        query = query.order_by(func.lower(Lift.lift_code))
+
+    lifts = query.all()
     customers = Customer.query.order_by(func.lower(Customer.company_name)).all()
     service_routes = ServiceRoute.query.order_by(
         func.lower(ServiceRoute.state), func.lower(ServiceRoute.branch)
@@ -27217,6 +27297,9 @@ def service_lifts():
         amc_duration_choices=AMC_DURATION_CHOICES,
         amc_duration_months=AMC_DURATION_MONTHS,
         amc_status_options=AMC_STATUS_OPTIONS,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
     )
 
 
@@ -28472,18 +28555,71 @@ def service_lift_upload_file(lift_id):
 @login_required
 def service_complaints():
     _module_visibility_required("service")
-    return render_template("service/complaints.html", complaints=SERVICE_COMPLAINTS)
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+
+    allowed_sort_columns = {
+        "id": lambda item: item.get("id") or 0,
+        "source": lambda item: str(item.get("source") or "").lower(),
+        "category": lambda item: str(item.get("category") or "").lower(),
+        "priority": lambda item: str(item.get("priority") or "").lower(),
+        "location": lambda item: str(item.get("location") or "").lower(),
+        "lift": lambda item: str(item.get("lift") or "").lower(),
+        "status": lambda item: str(item.get("status") or "").lower(),
+        "linked_task": lambda item: str(item.get("linked_task") or "").lower(),
+    }
+    complaints = list(SERVICE_COMPLAINTS)
+    key_fn = allowed_sort_columns.get(sort_col)
+    if key_fn is not None:
+        complaints = sorted(complaints, key=key_fn, reverse=(sort_order == "desc"))
+
+    return render_template(
+        "service/complaints.html",
+        complaints=complaints,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
+    )
 
 
 @app.route("/service/contracts")
 @login_required
 def service_contracts():
     _module_visibility_required("service")
-    contracts = ServiceContract.query.options(joinedload(ServiceContract.lift)).order_by(ServiceContract.created_at.desc()).all()
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+
+    query = ServiceContract.query.options(joinedload(ServiceContract.lift))
+    allowed_sort_columns = {
+        "id": ServiceContract.id,
+        "customer": func.lower(ServiceContract.customer_name),
+        "lift": ServiceContract.lift_id,
+        "type": ServiceContract.contract_type,
+        "start": ServiceContract.start_date,
+        "end": ServiceContract.end_date,
+        "price": ServiceContract.final_price,
+        "created": ServiceContract.created_at,
+    }
+    column = allowed_sort_columns.get(sort_col)
+    if column is not None:
+        query = query.order_by(column.desc() if sort_order == "desc" else column.asc())
+    else:
+        query = query.order_by(ServiceContract.created_at.desc())
+
+    contracts = query.all()
     return render_template(
         "service/contract_list.html",
         contracts=contracts,
         contract_type_labels=CONTRACT_TYPE_LABELS,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
     )
 
 
@@ -28858,6 +28994,12 @@ def _count_unscheduled_amc_lifts():
 @login_required
 def service_preventive_maintenance():
     _module_visibility_required("service")
+    sort_col = (request.args.get("sort") or "").strip().lower()
+    sort_order = "desc" if (request.args.get("order") or "asc").strip().lower() == "desc" else "asc"
+    sort_query_args = request.args.to_dict(flat=True)
+    sort_query_args.pop("sort", None)
+    sort_query_args.pop("order", None)
+
     snapshot = get_service_schedule_snapshot()
     today = snapshot["today"]
 
@@ -28912,6 +29054,7 @@ def service_preventive_maintenance():
         base_payload = {
             "site": site_name,
             "lift": (lift.lift_code if lift and lift.lift_code else (f"Lift #{lift.id}" if lift else "Lift")),
+            "lift_id": (lift.id if lift else None),
             "technician": entry.get("technician") or "Unassigned",
             "checklist": entry.get("checklist") or "—",
             "preference_warning": preference_warning(lift, visit_date),
@@ -28933,8 +29076,22 @@ def service_preventive_maintenance():
                 }
             )
 
-    upcoming.sort(key=lambda item: item.get("_sort_date"))
-    overdue.sort(key=lambda item: item.get("_sort_date"))
+    allowed_sort_columns = {
+        "date": lambda item: item.get("_sort_date") or datetime.date.min,
+        "site": lambda item: str(item.get("site") or "").lower(),
+        "lift": lambda item: str(item.get("lift") or "").lower(),
+        "technician": lambda item: str(item.get("technician") or "").lower(),
+        "checklist": lambda item: str(item.get("checklist") or "").lower(),
+        "overdue_days": lambda item: item.get("days_overdue") or 0,
+    }
+    sort_key = allowed_sort_columns.get(sort_col)
+    if sort_key is not None:
+        reverse = sort_order == "desc"
+        upcoming.sort(key=sort_key, reverse=reverse)
+        overdue.sort(key=sort_key, reverse=reverse)
+    else:
+        upcoming.sort(key=lambda item: item.get("_sort_date"))
+        overdue.sort(key=lambda item: item.get("_sort_date"))
     for collection in (upcoming, overdue):
         for item in collection:
             item.pop("_sort_date", None)
@@ -28994,6 +29151,9 @@ def service_preventive_maintenance():
         checklists=checklists,
         summary=summary,
         today=today,
+        current_sort=sort_col,
+        current_order=sort_order,
+        sort_query_args=sort_query_args,
     )
 
 

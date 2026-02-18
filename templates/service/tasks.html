@@ -2,6 +2,9 @@
 {% block title %}Eleva ERP – Service Tasks{% endblock %}
 
 {% block content %}
+{% set current_sort = current_sort or '' %}
+{% set current_order = current_order or 'asc' %}
+{% set sort_query_args = sort_query_args or {} %}
 <div class="space-y-8">
   <header class="flex flex-col gap-3">
     <div>
@@ -31,14 +34,14 @@
       <table class="min-w-full divide-y divide-slate-800/70 text-sm">
         <thead class="sticky top-0 z-10 bg-slate-900 text-xs uppercase tracking-wide text-slate-200">
           <tr class="text-left">
-            <th class="px-6 py-3">Task</th>
-            <th class="px-6 py-3">Site &amp; client</th>
-            <th class="px-6 py-3">Lift ID</th>
-            <th class="px-6 py-3">Call type</th>
-            <th class="px-6 py-3">Priority</th>
-            <th class="px-6 py-3">Owner</th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='task', order='desc' if current_sort == 'task' and current_order == 'asc' else 'asc', **sort_query_args) }}">Task{% if current_sort == 'task' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='site', order='desc' if current_sort == 'site' and current_order == 'asc' else 'asc', **sort_query_args) }}">Site &amp; client{% if current_sort == 'site' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='lift_id', order='desc' if current_sort == 'lift_id' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift ID{% if current_sort == 'lift_id' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='call_type', order='desc' if current_sort == 'call_type' and current_order == 'asc' else 'asc', **sort_query_args) }}">Call type{% if current_sort == 'call_type' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='priority', order='desc' if current_sort == 'priority' and current_order == 'asc' else 'asc', **sort_query_args) }}">Priority{% if current_sort == 'priority' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='owner', order='desc' if current_sort == 'owner' and current_order == 'asc' else 'asc', **sort_query_args) }}">Owner{% if current_sort == 'owner' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
             <th class="px-6 py-3">Assigned tech(s)</th>
-            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='status', order='desc' if current_sort == 'status' and current_order == 'asc' else 'asc', **sort_query_args) }}">Status{% if current_sort == 'status' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
             <th class="px-6 py-3">Worklog</th>
             <th class="px-6 py-3">Parts used</th>
             <th class="px-6 py-3">Open</th>

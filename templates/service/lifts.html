@@ -2,6 +2,9 @@
 {% block title %}Eleva ERP – Lifts{% endblock %}
 
 {% block content %}
+{% set current_sort = current_sort or "" %}
+{% set current_order = current_order or "asc" %}
+{% set sort_query_args = sort_query_args or {} %}
 <div class="space-y-8">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
@@ -38,15 +41,15 @@
       <table class="min-w-full divide-y divide-slate-800 text-sm">
         <thead class="bg-slate-900/90 text-xs uppercase tracking-wide text-slate-200">
           <tr>
-            <th class="px-4 py-3 text-left">Lift code</th>
-            <th class="px-4 py-3 text-left">Customer</th>
-            <th class="px-4 py-3 text-left">Type</th>
-            <th class="px-4 py-3 text-left">Brand</th>
-            <th class="px-4 py-3 text-left">Route</th>
-            <th class="px-4 py-3 text-left">City</th>
-            <th class="px-4 py-3 text-left">Status</th>
-            <th class="px-4 py-3 text-left">AMC status</th>
-            <th class="px-4 py-3 text-left">Next due</th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='lift_code', order='desc' if current_sort == 'lift_code' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift code{% if current_sort == 'lift_code' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='customer', order='desc' if current_sort == 'customer' and current_order == 'asc' else 'asc', **sort_query_args) }}">Customer{% if current_sort == 'customer' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='type', order='desc' if current_sort == 'type' and current_order == 'asc' else 'asc', **sort_query_args) }}">Type{% if current_sort == 'type' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='brand', order='desc' if current_sort == 'brand' and current_order == 'asc' else 'asc', **sort_query_args) }}">Brand{% if current_sort == 'brand' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='route', order='desc' if current_sort == 'route' and current_order == 'asc' else 'asc', **sort_query_args) }}">Route{% if current_sort == 'route' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='city', order='desc' if current_sort == 'city' and current_order == 'asc' else 'asc', **sort_query_args) }}">City{% if current_sort == 'city' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='status', order='desc' if current_sort == 'status' and current_order == 'asc' else 'asc', **sort_query_args) }}">Status{% if current_sort == 'status' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='amc_status', order='desc' if current_sort == 'amc_status' and current_order == 'asc' else 'asc', **sort_query_args) }}">AMC status{% if current_sort == 'amc_status' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='next_due', order='desc' if current_sort == 'next_due' and current_order == 'asc' else 'asc', **sort_query_args) }}">Next due{% if current_sort == 'next_due' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
             <th class="px-4 py-3 text-left">Actions</th>
           </tr>
         </thead>
