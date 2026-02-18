@@ -5793,13 +5793,13 @@ def is_lift_open(lift):
     return not status or status not in {"inactive", "scrapped", "decommissioned"}
 
 
-def _safe_float(value):
+def _safe_float(value, default=None):
     if value in (None, ""):
-        return None
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):
-        return None
+        return default
 
 
 def _parse_worklog_timestamp(line_value):
