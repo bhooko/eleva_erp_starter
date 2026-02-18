@@ -5793,6 +5793,197 @@ def is_lift_open(lift):
     return not status or status not in {"inactive", "scrapped", "decommissioned"}
 
 
+def _safe_float(value):
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_worklog_timestamp(line_value):
+    if not isinstance(line_value, str):
+        return None
+    line = line_value.strip()
+    if not line:
+        return None
+    stamp = line.split(" - ", 1)[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(stamp, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _task_first_attended_at(task):
+    entries = []
+    for line in (task.worklog or "").splitlines():
+        stamp = _parse_worklog_timestamp(line)
+        if stamp:
+            entries.append(stamp)
+    return min(entries) if entries else None
+
+
+def _task_parts_cost(task):
+    total = 0.0
+    found_cost = False
+    for item in _parse_json_list(task.parts_used_json):
+        if not isinstance(item, dict):
+            continue
+
+        qty = _safe_float(item.get("qty"))
+        if qty is None:
+            qty = 1.0
+
+        explicit_total = (
+            _safe_float(item.get("total_cost"))
+            or _safe_float(item.get("line_total"))
+            or _safe_float(item.get("amount"))
+            or _safe_float(item.get("cost"))
+        )
+        if explicit_total is not None:
+            total += explicit_total
+            found_cost = True
+            continue
+
+        unit_cost = (
+            _safe_float(item.get("unit_cost"))
+            or _safe_float(item.get("unit_price"))
+            or _safe_float(item.get("price"))
+        )
+        if unit_cost is not None:
+            total += unit_cost * qty
+            found_cost = True
+
+    return total if found_cost else None
+
+
+def _task_repair_revenue(task):
+    total = 0.0
+    found_revenue = False
+    for item in _parse_json_list(task.parts_used_json):
+        if not isinstance(item, dict):
+            continue
+        for key in (
+            "billed_amount",
+            "invoice_amount",
+            "received_amount",
+            "repair_revenue",
+            "revenue",
+        ):
+            amount = _safe_float(item.get(key))
+            if amount is not None:
+                total += amount
+                found_revenue = True
+    return total if found_revenue else None
+
+
+def _compute_lift_lifetime_metrics(lift):
+    today = datetime.date.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+    start_next_year = datetime.datetime(today.year + 1, 1, 1)
+
+    def _status_badge(status_key):
+        labels = {
+            "overdue": "Overdue",
+            "due_today": "Due today",
+            "due_this_week": "Due this week",
+            "upcoming": "Upcoming",
+        }
+        return labels.get(status_key, "No upcoming visit")
+
+    next_visit_date = lift.next_amc_date
+    if isinstance(next_visit_date, datetime.date):
+        next_visit_display = f"{next_visit_date.strftime('%d %b %Y')} · {_status_badge(lift.amc_due_status)}"
+    else:
+        next_visit_display = "—"
+
+    months_to_renewal_display = "—"
+    if isinstance(lift.amc_end, datetime.date):
+        delta_months = (lift.amc_end.year - today.year) * 12 + (lift.amc_end.month - today.month)
+        if lift.amc_end.day < today.day:
+            delta_months -= 1
+        months_to_renewal_display = str(max(0, delta_months))
+
+    try:
+        lift_tasks = ServiceTask.query.filter(ServiceTask.lift_id == lift.id).all()
+    except SQLAlchemyError:
+        lift_tasks = None
+
+    if lift_tasks is None:
+        return {
+            "next_visit_display": next_visit_display,
+            "total_breakdowns": None,
+            "average_response_hours": None,
+            "average_close_hours": None,
+            "repair_revenue_this_year": None,
+            "total_cost_this_year": None,
+            "months_to_renewal_display": months_to_renewal_display,
+        }
+
+    breakdown_tasks = []
+    for task in lift_tasks:
+        call_type = (task.call_type or "").strip().lower()
+        if call_type in {"complaint", "breakdown"}:
+            breakdown_tasks.append(task)
+
+    breakdowns_this_year = [
+        task
+        for task in breakdown_tasks
+        if isinstance(task.created_at, datetime.datetime)
+        and start_of_year <= task.created_at < start_next_year
+    ]
+
+    response_hours = []
+    close_hours = []
+    for task in breakdown_tasks:
+        if not isinstance(task.created_at, datetime.datetime):
+            continue
+        first_attended_at = _task_first_attended_at(task)
+        if isinstance(first_attended_at, datetime.datetime) and first_attended_at >= task.created_at:
+            response_hours.append((first_attended_at - task.created_at).total_seconds() / 3600)
+        if isinstance(task.closed_at, datetime.datetime) and task.closed_at >= task.created_at:
+            close_hours.append((task.closed_at - task.created_at).total_seconds() / 3600)
+
+    repair_revenue_total = 0.0
+    repair_revenue_found = False
+    total_cost_year = 0.0
+    total_cost_found = False
+
+    for task in lift_tasks:
+        if not isinstance(task.created_at, datetime.datetime):
+            continue
+        if not (start_of_year <= task.created_at < start_next_year):
+            continue
+
+        parts_cost = _task_parts_cost(task)
+        if parts_cost is not None:
+            total_cost_year += parts_cost
+            total_cost_found = True
+
+        call_type = (task.call_type or "").strip().lower()
+        if call_type == "repair":
+            repair_revenue = _task_repair_revenue(task)
+            if repair_revenue is not None:
+                repair_revenue_total += repair_revenue
+                repair_revenue_found = True
+
+    average_response_hours = (sum(response_hours) / len(response_hours)) if response_hours else None
+    average_close_hours = (sum(close_hours) / len(close_hours)) if close_hours else None
+
+    return {
+        "next_visit_display": next_visit_display,
+        "total_breakdowns": len(breakdowns_this_year),
+        "average_response_hours": average_response_hours,
+        "average_close_hours": average_close_hours,
+        "repair_revenue_this_year": repair_revenue_total if repair_revenue_found else None,
+        "total_cost_this_year": total_cost_year if total_cost_found else None,
+        "months_to_renewal_display": months_to_renewal_display,
+    }
+
+
 def build_lift_payload(lift):
     insight_config = copy.deepcopy(DEFAULT_LIFT_INSIGHT)
 
@@ -5854,93 +6045,44 @@ def build_lift_payload(lift):
     machine_model = machine_details.get("model") or "—"
     machine_serial = machine_details.get("serial") or "—"
 
-    lifetime_value = insight_config.get("lifetime_value", {}) or {}
     amc_config = insight_config.get("amc", {}) or {}
-    total_breakdowns = lifetime_value.get("total_breakdowns_this_year", 0)
-    average_response_value = (
-        lifetime_value.get("average_call_response_time_hours")
-        or lifetime_value.get("avg_call_response_time_hours")
-        or lifetime_value.get("avg_response_time_hours")
+    computed_lifetime_metrics = _compute_lift_lifetime_metrics(lift)
+
+    total_breakdowns_display = (
+        str(computed_lifetime_metrics["total_breakdowns"])
+        if computed_lifetime_metrics["total_breakdowns"] is not None
+        else "—"
     )
-    if average_response_value is not None:
-        average_response_display = format_duration_hours(average_response_value)
-    else:
-        average_response_raw = (
-            lifetime_value.get("average_call_response_time")
-            or lifetime_value.get("avg_call_response_time")
-            or lifetime_value.get("average_response_time")
-        )
-        average_response_display = (
-            format_duration_hours(average_response_raw)
-            if average_response_raw not in (None, "")
-            else "—"
-        )
-
-    average_close_value = (
-        lifetime_value.get("average_call_close_time_hours")
-        or lifetime_value.get("avg_call_close_time_hours")
-        or lifetime_value.get("avg_close_time_hours")
+    average_response_display = (
+        format_duration_hours(computed_lifetime_metrics["average_response_hours"])
+        if computed_lifetime_metrics["average_response_hours"] is not None
+        else "—"
     )
-    if average_close_value is not None:
-        average_close_display = format_duration_hours(average_close_value)
-    else:
-        average_close_raw = (
-            lifetime_value.get("average_call_close_time")
-            or lifetime_value.get("avg_call_close_time")
-            or lifetime_value.get("average_close_time")
-        )
-        average_close_display = (
-            format_duration_hours(average_close_raw)
-            if average_close_raw not in (None, "")
-            else "—"
-        )
-
-    repair_revenue_this_year = lifetime_value.get("repair_revenue_this_year")
-    if repair_revenue_this_year is None:
-        repair_revenue_this_year = lifetime_value.get("total_repair_revenue", 0)
-    total_cost_this_year = lifetime_value.get("total_cost_this_year")
-    if total_cost_this_year is None:
-        total_cost_this_year = lifetime_value.get("total_cost", 0)
-
-    months_to_renewal_value = (
-        lifetime_value.get("months_to_renewal")
-        if lifetime_value.get("months_to_renewal") not in (None, "")
-        else lifetime_value.get("months_until_renewal")
+    average_close_display = (
+        format_duration_hours(computed_lifetime_metrics["average_close_hours"])
+        if computed_lifetime_metrics["average_close_hours"] is not None
+        else "—"
     )
 
-    amc_end_source = amc_config.get("end") or lift.amc_end
-    amc_end_date = None
-    if isinstance(amc_end_source, datetime.datetime):
-        amc_end_date = amc_end_source.date()
-    elif isinstance(amc_end_source, datetime.date):
-        amc_end_date = amc_end_source
-    elif isinstance(amc_end_source, str):
-        for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%d %b %Y", "%d %B %Y"):
-            try:
-                amc_end_date = datetime.datetime.strptime(amc_end_source, fmt).date()
-                break
-            except ValueError:
-                continue
-
-    if months_to_renewal_value in (None, "") and amc_end_date:
-        today = datetime.date.today()
-        delta_months = (amc_end_date.year - today.year) * 12 + (amc_end_date.month - today.month)
-        if amc_end_date.day < today.day:
-            delta_months -= 1
-        months_to_renewal_value = max(0, delta_months)
-
-    if months_to_renewal_value in (None, ""):
-        months_to_renewal_display = "—"
-    else:
-        try:
-            months_to_renewal_display = str(int(float(months_to_renewal_value)))
-        except (TypeError, ValueError):
-            months_to_renewal_display = str(months_to_renewal_value)
+    repair_revenue_display = (
+        format_currency(computed_lifetime_metrics["repair_revenue_this_year"])
+        if computed_lifetime_metrics["repair_revenue_this_year"] is not None
+        else "—"
+    )
+    total_cost_display = (
+        format_currency(computed_lifetime_metrics["total_cost_this_year"])
+        if computed_lifetime_metrics["total_cost_this_year"] is not None
+        else "—"
+    )
 
     lifetime_metrics = [
         {
+            "label": "Next AMC / Preventive visit date and status",
+            "display": computed_lifetime_metrics["next_visit_display"],
+        },
+        {
             "label": "Total breakdowns this year",
-            "display": str(total_breakdowns),
+            "display": total_breakdowns_display,
         },
         {
             "label": "Average call response time",
@@ -5952,27 +6094,17 @@ def build_lift_payload(lift):
         },
         {
             "label": "Repair revenue this year",
-            "display": format_currency(repair_revenue_this_year or 0),
+            "display": repair_revenue_display,
         },
         {
             "label": "Total cost this year",
-            "display": format_currency(total_cost_this_year or 0),
+            "display": total_cost_display,
         },
         {
             "label": "Months to next renewal",
-            "display": months_to_renewal_display,
+            "display": computed_lifetime_metrics["months_to_renewal_display"],
         },
     ]
-
-    stored_metrics = lift.lifetime_metrics
-    if stored_metrics:
-        lifetime_metrics = [
-            {
-                "label": item.get("label", "Metric"),
-                "display": item.get("display", "—"),
-            }
-            for item in stored_metrics
-        ]
 
     amc_start = amc_config.get("start") or lift.amc_start
     amc_end = amc_config.get("end") or lift.amc_end
@@ -27939,22 +28071,7 @@ def service_lift_update(lift_id):
         return redirect(redirect_url)
 
     if form_section == "lifetime_metrics":
-        labels = request.form.getlist("metric_label")
-        displays = request.form.getlist("metric_display")
-        max_len = max(len(labels), len(displays))
-        metrics = []
-        for idx in range(max_len):
-            label = clean_str(labels[idx]) if idx < len(labels) else None
-            display_raw = displays[idx] if idx < len(displays) else ""
-            display = display_raw.strip() if isinstance(display_raw, str) else None
-            if not label and not display:
-                continue
-            metrics.append({"label": label or "Metric", "display": display or "—"})
-        lift.lifetime_metrics = metrics
-        lift.last_updated_by = current_user.id if current_user.is_authenticated else None
-        db.session.commit()
-        flash("Lifetime value metrics updated.", "success")
-        return redirect(redirect_url)
+        abort(404)
 
     if form_section == "timeline":
         timeline_date, error = parse_date_field(request.form.get("timeline_date"), "Timeline date")
