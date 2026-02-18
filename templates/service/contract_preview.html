@@ -26,6 +26,21 @@
       <section>{{ intro_html|safe }}</section>
       <section>{{ spec_html|safe }}</section>
       <section>{{ terms_html|safe }}</section>
+      {% if contract.contract_lifts %}
+      <section>
+        <h2 class="text-lg font-semibold mb-2">Lifts in this contract</h2>
+        <div class="space-y-2">
+          {% for lift_row in contract.contract_lifts %}
+          <div class="rounded border border-slate-300 px-3 py-2 text-sm">
+            <div><strong>Identity:</strong> {{ lift_row.lift_identity }}</div>
+            <div><strong>Lift Type:</strong> {{ lift_row.lift_type_key }}</div>
+            <div><strong>Floors:</strong> {{ lift_row.floors_value }}</div>
+            <div><strong>Linked Lift:</strong> {{ lift_row.linked_lift.lift_code if lift_row.linked_lift else '—' }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
   </article>
 </div>
