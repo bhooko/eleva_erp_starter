@@ -898,40 +898,79 @@
       box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.3);
     }
 
-    /* Metallic Elevate: improve global alert contrast/readability only for this theme */
+    /* Metallic Elevate: enforce readable flash/alert banners only for this theme */
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message,
     html[data-theme="metallic-elevate"] .alert,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message,
+    body[data-theme="metallic-elevate"] .alert,
+    body.theme-metallic-elevate .flash-messages .flash-message,
     body.theme-metallic-elevate .alert {
-      font-weight: 500;
+      font-weight: 600;
+      text-shadow: none;
+      filter: none;
+      backdrop-filter: none;
+      mix-blend-mode: normal;
+      opacity: 1 !important;
     }
 
-    html[data-theme="metallic-elevate"] .alert-danger,
-    html[data-theme="metallic-elevate"] .alert-error,
-    body.theme-metallic-elevate .alert-danger,
-    body.theme-metallic-elevate .alert-error {
-      color: #7a0f0f;
-      background: rgba(220, 53, 69, 0.12);
-      border: 1px solid rgba(220, 53, 69, 0.4);
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message a,
+    html[data-theme="metallic-elevate"] .alert a,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message a,
+    body[data-theme="metallic-elevate"] .alert a,
+    body.theme-metallic-elevate .flash-messages .flash-message a,
+    body.theme-metallic-elevate .alert a {
+      color: inherit;
+      text-decoration-color: currentColor;
     }
 
-    html[data-theme="metallic-elevate"] .alert-warning,
-    body.theme-metallic-elevate .alert-warning {
-      color: #5a3a00;
-      background: rgba(255, 193, 7, 0.16);
-      border: 1px solid rgba(255, 193, 7, 0.42);
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-danger,
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-error,
+    html[data-theme="metallic-elevate"] .alert.alert-danger,
+    html[data-theme="metallic-elevate"] .alert.alert-error,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-danger,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-error,
+    body[data-theme="metallic-elevate"] .alert.alert-danger,
+    body[data-theme="metallic-elevate"] .alert.alert-error,
+    body.theme-metallic-elevate .flash-messages .flash-message.alert-danger,
+    body.theme-metallic-elevate .flash-messages .flash-message.alert-error,
+    body.theme-metallic-elevate .alert.alert-danger,
+    body.theme-metallic-elevate .alert.alert-error {
+      color: #7a0f0f !important;
+      background: rgba(220, 53, 69, 0.18) !important;
+      border-color: rgba(220, 53, 69, 0.55) !important;
     }
 
-    html[data-theme="metallic-elevate"] .alert-success,
-    body.theme-metallic-elevate .alert-success {
-      color: #0f5132;
-      background: rgba(25, 135, 84, 0.14);
-      border: 1px solid rgba(25, 135, 84, 0.4);
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-warning,
+    html[data-theme="metallic-elevate"] .alert.alert-warning,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-warning,
+    body[data-theme="metallic-elevate"] .alert.alert-warning,
+    body.theme-metallic-elevate .flash-messages .flash-message.alert-warning,
+    body.theme-metallic-elevate .alert.alert-warning {
+      color: #5a3a00 !important;
+      background: rgba(255, 193, 7, 0.2) !important;
+      border-color: rgba(255, 193, 7, 0.58) !important;
     }
 
-    html[data-theme="metallic-elevate"] .alert-info,
-    body.theme-metallic-elevate .alert-info {
-      color: #084298;
-      background: rgba(13, 110, 253, 0.14);
-      border: 1px solid rgba(13, 110, 253, 0.4);
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-success,
+    html[data-theme="metallic-elevate"] .alert.alert-success,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-success,
+    body[data-theme="metallic-elevate"] .alert.alert-success,
+    body.theme-metallic-elevate .flash-messages .flash-message.alert-success,
+    body.theme-metallic-elevate .alert.alert-success {
+      color: #0f5132 !important;
+      background: rgba(25, 135, 84, 0.2) !important;
+      border-color: rgba(25, 135, 84, 0.55) !important;
+    }
+
+    html[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-info,
+    html[data-theme="metallic-elevate"] .alert.alert-info,
+    body[data-theme="metallic-elevate"] .flash-messages .flash-message.alert-info,
+    body[data-theme="metallic-elevate"] .alert.alert-info,
+    body.theme-metallic-elevate .flash-messages .flash-message.alert-info,
+    body.theme-metallic-elevate .alert.alert-info {
+      color: #084298 !important;
+      background: rgba(13, 110, 253, 0.2) !important;
+      border-color: rgba(13, 110, 253, 0.55) !important;
     }
 
     .focus\:ring-emerald-500\/50:focus,
@@ -2009,18 +2048,22 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="mb-5 space-y-3">
+            <div class="flash-messages mb-5 space-y-3">
               {% for category, message in messages %}
                 {% if category in ['success', 'ok'] %}
                   {% set tone_classes = 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100' %}
+                  {% set alert_class = 'alert-success' %}
                 {% elif category in ['error', 'danger'] %}
                   {% set tone_classes = 'border-rose-500/50 bg-rose-500/10 text-rose-100' %}
+                  {% set alert_class = 'alert-danger alert-error' %}
                 {% elif category in ['warning'] %}
                   {% set tone_classes = 'border-amber-400/60 bg-amber-500/10 text-amber-100' %}
+                  {% set alert_class = 'alert-warning' %}
                 {% else %}
                   {% set tone_classes = 'border-slate-700/60 bg-slate-800/60 text-slate-200' %}
+                  {% set alert_class = 'alert-info' %}
                 {% endif %}
-                <div class="rounded-xl border px-4 py-3 text-sm font-medium shadow-sm {{ tone_classes }}">
+                <div class="flash-message alert {{ alert_class }} rounded-xl border px-4 py-3 text-sm font-medium shadow-sm {{ tone_classes }}">
                   {{ message }}
                 </div>
               {% endfor %}
