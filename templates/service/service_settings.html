@@ -4,6 +4,9 @@
 {% set import_result = session.pop('import_result', none) %}
 {% set price_import_result = session.pop('price_import_result', none) %}
 {% set active_tab = request.args.get('tab', 'dropdowns') %}
+{% set current_sort = current_sort or '' %}
+{% set current_order = current_order or 'asc' %}
+{% set sort_query_args = sort_query_args or {} %}
 {% set tabs = [
   {'id': 'dropdowns', 'label': 'Dropdowns & Routes'},
   {'id': 'contracts', 'label': 'Contract Settings'},
@@ -371,7 +374,7 @@
             </form>
             <div class="overflow-x-auto">
               <table class="min-w-full text-xs text-slate-200">
-                <thead class="text-slate-400"><tr><th class="px-2 py-2 text-left">Lift Type</th><th class="px-2 py-2 text-left">Floors</th><th class="px-2 py-2 text-left">Type</th><th class="px-2 py-2 text-left">Duration</th><th class="px-2 py-2 text-left">Frequency</th><th class="px-2 py-2 text-left">Price</th><th class="px-2 py-2 text-left">Actions</th></tr></thead>
+                <thead class="text-slate-400"><tr><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='lift_type', order='desc' if current_sort == 'lift_type' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift Type{% if current_sort == 'lift_type' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='floors', order='desc' if current_sort == 'floors' and current_order == 'asc' else 'asc', **sort_query_args) }}">Floors{% if current_sort == 'floors' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='type', order='desc' if current_sort == 'type' and current_order == 'asc' else 'asc', **sort_query_args) }}">Type{% if current_sort == 'type' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='duration', order='desc' if current_sort == 'duration' and current_order == 'asc' else 'asc', **sort_query_args) }}">Duration{% if current_sort == 'duration' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='frequency', order='desc' if current_sort == 'frequency' and current_order == 'asc' else 'asc', **sort_query_args) }}">Frequency{% if current_sort == 'frequency' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, tab=active_tab, sort='price', order='desc' if current_sort == 'price' and current_order == 'asc' else 'asc', **sort_query_args) }}">Price{% if current_sort == 'price' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-2 py-2 text-left">Actions</th></tr></thead>
                 <tbody>
                   {% for row in contract_prices %}
                     <tr class="border-t border-slate-800">

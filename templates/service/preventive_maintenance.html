@@ -2,6 +2,9 @@
 {% block title %}Eleva ERP – Preventive Maintenance{% endblock %}
 
 {% block content %}
+{% set current_sort = current_sort or "" %}
+{% set current_order = current_order or "asc" %}
+{% set sort_query_args = sort_query_args or {} %}
 <div class="space-y-8">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
@@ -62,57 +65,53 @@
     </article>
   </section>
 
-  {% macro visit_list(title, items, empty_text) %}
+  {% macro visit_list(title, items, empty_text, date_label) %}
   <section class="space-y-2">
     <div class="flex items-center justify-between">
       <h2 class="text-sm font-semibold text-slate-200">{{ title }}</h2>
-      <p class="text-xs text-slate-500">
-        {{ items|length }} visit{{ '' if items|length == 1 else 's' }}
-      </p>
+      <p class="text-xs text-slate-500">{{ items|length }} visit{{ '' if items|length == 1 else 's' }}</p>
     </div>
-    <div class="space-y-2">
-      {% if items %}
-        {% for visit in items %}
-          <article class="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-3 text-sm text-slate-200 transition hover:border-emerald-500/70 hover:bg-slate-900">
-            <div class="flex items-start justify-between gap-3">
-              <div class="space-y-1">
-                <p class="font-semibold text-slate-100">
-                  {{ visit.site }} · {{ visit.lift }}
-                </p>
-                <p class="text-xs text-slate-400">
-                  Visit on {{ visit.visit_display }} · Technician: {{ visit.technician or 'Unassigned' }}
-                </p>
-                <p class="text-xs text-slate-400">
-                  Checklist: {{ visit.checklist or '—' }}
-                </p>
-                {% if visit.preference_warning %}
-                  <p class="mt-1 flex items-center gap-2 text-sm text-amber-300">
-                    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-400/60 bg-amber-400/10 text-xs">!</span>
-                    {{ visit.preference_warning }}
-                  </p>
-                {% endif %}
-              </div>
-              {% if visit.lift_id %}
-                <a href="{{ url_for('service_lift_detail', lift_id=visit.lift_id) }}"
-                   class="mt-1 inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-xs text-slate-100 hover:bg-emerald-500/90 hover:text-slate-900 transition">
-                  View lift
-                </a>
+    {% if items %}
+      <div class="overflow-x-auto rounded-2xl border border-slate-800/70 bg-slate-900/70">
+        <table class="min-w-full divide-y divide-slate-800/70 text-sm">
+          <thead class="bg-slate-900/90 text-xs uppercase tracking-wide text-slate-300">
+            <tr>
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='site', order='desc' if current_sort == 'site' and current_order == 'asc' else 'asc', **sort_query_args) }}">Site{% if current_sort == 'site' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='lift', order='desc' if current_sort == 'lift' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift{% if current_sort == 'lift' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='date', order='desc' if current_sort == 'date' and current_order == 'asc' else 'asc', **sort_query_args) }}">{{ date_label }}{% if current_sort == 'date' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='technician', order='desc' if current_sort == 'technician' and current_order == 'asc' else 'asc', **sort_query_args) }}">Technician{% if current_sort == 'technician' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='checklist', order='desc' if current_sort == 'checklist' and current_order == 'asc' else 'asc', **sort_query_args) }}">Checklist{% if current_sort == 'checklist' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+              {% if date_label == 'Due date' %}
+              <th class="px-3 py-2 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='overdue_days', order='desc' if current_sort == 'overdue_days' and current_order == 'asc' else 'asc', **sort_query_args) }}">Overdue days{% if current_sort == 'overdue_days' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
               {% endif %}
-            </div>
-          </article>
-        {% endfor %}
-      {% else %}
-        <p class="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/40 px-4 py-3 text-xs text-slate-500">
-          {{ empty_text }}
-        </p>
-      {% endif %}
-    </div>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70 text-slate-200">
+          {% for visit in items %}
+            <tr class="hover:bg-slate-800/30">
+              <td class="px-3 py-2">{{ visit.site }}</td>
+              <td class="px-3 py-2">{{ visit.lift }}</td>
+              <td class="px-3 py-2">{{ visit.visit_display or visit.due_display }}</td>
+              <td class="px-3 py-2">{{ visit.technician }}</td>
+              <td class="px-3 py-2">{{ visit.checklist }}</td>
+              {% if date_label == 'Due date' %}<td class="px-3 py-2">{{ visit.days_overdue }}</td>{% endif %}
+            </tr>
+            {% if visit.preference_warning %}
+            <tr><td colspan="{{ 6 if date_label == 'Due date' else 5 }}" class="px-3 pb-2 text-xs text-amber-300">{{ visit.preference_warning }}</td></tr>
+            {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/40 px-4 py-3 text-xs text-slate-500">{{ empty_text }}</p>
+    {% endif %}
   </section>
-  {% endmacro %}
+{% endmacro %}
 
   <section class="grid gap-6 lg:grid-cols-2">
-    {{ visit_list("Overdue AMC visits", overdue, "No overdue preventive visits at the moment.") }}
-    {{ visit_list("Upcoming AMC visits", upcoming, "No upcoming preventive visits scheduled yet.") }}
+    {{ visit_list("Overdue AMC visits", overdue, "No overdue preventive visits at the moment.", "Due date") }}
+    {{ visit_list("Upcoming AMC visits", upcoming, "No upcoming preventive visits scheduled yet.", "Visit date") }}
   </section>
 
   <section class="space-y-3">

@@ -2,6 +2,9 @@
 {% block title %}Eleva ERP – All Complaints{% endblock %}
 
 {% block content %}
+{% set current_sort = current_sort or "" %}
+{% set current_order = current_order or "asc" %}
+{% set sort_query_args = sort_query_args or {} %}
 <div class="space-y-8">
   <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
@@ -23,14 +26,14 @@
       <table class="min-w-full divide-y divide-slate-800 text-sm">
         <thead class="bg-slate-900/80 text-xs uppercase tracking-wide text-slate-400">
           <tr>
-            <th scope="col" class="px-6 py-3 text-left">Complaint ID</th>
-            <th scope="col" class="px-4 py-3 text-left">Source</th>
-            <th scope="col" class="px-4 py-3 text-left">Category</th>
-            <th scope="col" class="px-4 py-3 text-left">Priority</th>
-            <th scope="col" class="px-4 py-3 text-left">Location</th>
-            <th scope="col" class="px-4 py-3 text-left">Lift</th>
-            <th scope="col" class="px-4 py-3 text-left">Status</th>
-            <th scope="col" class="px-4 py-3 text-left">Linked task</th>
+            <th scope="col" class="px-6 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='id', order='desc' if current_sort == 'id' and current_order == 'asc' else 'asc', **sort_query_args) }}">Complaint ID{% if current_sort == 'id' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='source', order='desc' if current_sort == 'source' and current_order == 'asc' else 'asc', **sort_query_args) }}">Source{% if current_sort == 'source' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='category', order='desc' if current_sort == 'category' and current_order == 'asc' else 'asc', **sort_query_args) }}">Category{% if current_sort == 'category' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='priority', order='desc' if current_sort == 'priority' and current_order == 'asc' else 'asc', **sort_query_args) }}">Priority{% if current_sort == 'priority' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='location', order='desc' if current_sort == 'location' and current_order == 'asc' else 'asc', **sort_query_args) }}">Location{% if current_sort == 'location' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='lift', order='desc' if current_sort == 'lift' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift{% if current_sort == 'lift' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='status', order='desc' if current_sort == 'status' and current_order == 'asc' else 'asc', **sort_query_args) }}">Status{% if current_sort == 'status' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
+            <th scope="col" class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='linked_task', order='desc' if current_sort == 'linked_task' and current_order == 'asc' else 'asc', **sort_query_args) }}">Linked task{% if current_sort == 'linked_task' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th>
             <th scope="col" class="px-4 py-3 text-left">Actions</th>
           </tr>
         </thead>

@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Service Contracts · Eleva ERP{% endblock %}
 {% block content %}
+{% set current_sort = current_sort or "" %}
+{% set current_order = current_order or "asc" %}
+{% set sort_query_args = sort_query_args or {} %}
 <div class="space-y-6">
   <div class="flex items-center justify-between">
     <div>
@@ -13,7 +16,7 @@
   <section class="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
     <table class="min-w-full text-sm text-slate-200">
       <thead class="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-3 text-left">#</th><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Lift</th><th class="px-4 py-3 text-left">Type</th><th class="px-4 py-3 text-left">Period</th><th class="px-4 py-3 text-left">Final price</th><th class="px-4 py-3 text-left">Actions</th></tr>
+        <tr><th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='id', order='desc' if current_sort == 'id' and current_order == 'asc' else 'asc', **sort_query_args) }}">#{% if current_sort == 'id' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='customer', order='desc' if current_sort == 'customer' and current_order == 'asc' else 'asc', **sort_query_args) }}">Customer{% if current_sort == 'customer' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='lift', order='desc' if current_sort == 'lift' and current_order == 'asc' else 'asc', **sort_query_args) }}">Lift{% if current_sort == 'lift' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='type', order='desc' if current_sort == 'type' and current_order == 'asc' else 'asc', **sort_query_args) }}">Type{% if current_sort == 'type' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-4 py-3 text-left">Period</th><th class="px-4 py-3 text-left"><a class="hover:text-emerald-200" href="{{ url_for(request.endpoint, sort='price', order='desc' if current_sort == 'price' and current_order == 'asc' else 'asc', **sort_query_args) }}">Final price{% if current_sort == 'price' %} {{ '▲' if current_order == 'asc' else '▼' }}{% endif %}</a></th><th class="px-4 py-3 text-left">Actions</th></tr>
       </thead>
       <tbody>
         {% for contract in contracts %}
