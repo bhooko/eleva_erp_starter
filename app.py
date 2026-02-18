@@ -28626,12 +28626,21 @@ def _contract_form_context(contract=None, lift_id=None):
         }
         for lift in lift_choices
     ]
+    floors_options_payload = [
+        {
+            "id": option.id,
+            "value": option.value,
+            "sort_order": option.sort_order,
+        }
+        for option in floors_options
+    ]
 
     return {
         "contract": contract,
         "lift_choices": lift_choices,
         "lift_type_options": lift_type_options,
         "floors_options": floors_options,
+        "floors_options_payload": floors_options_payload,
         "contract_type_options": CONTRACT_TYPE_OPTIONS,
         "duration_options": CONTRACT_DURATION_OPTIONS,
         "frequency_options": CONTRACT_FREQUENCY_OPTIONS,

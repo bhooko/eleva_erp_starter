@@ -117,7 +117,7 @@
     const linkExistingLiftEl = document.getElementById('link-existing-lift');
     const liftChoices = {{ lift_choices_payload|tojson }};
     const liftTypeOptions = {{ lift_type_options|tojson }};
-    const floorsOptions = {{ floors_options|tojson }};
+    const floorsOptions = {{ floors_options_payload|tojson }};
 
     const buildOptions = (source, selectedValue, valueKey = 'value', labelKey = 'label') => {
       return source.map((item) => {
