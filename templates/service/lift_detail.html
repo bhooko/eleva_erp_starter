@@ -976,7 +976,7 @@
           <option value="monthly" {% if preferred_service_date_day %}selected{% endif %}>Specific day each month</option>
         </select>
         <div id="preferredServiceDateSpecificDetail" class="{% if not preferred_service_date_day %}hidden{% endif %}">
-          <input type="number" min="1" max="28" name="preferred_service_date_day" value="{{ preferred_service_date_day }}" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Day of month (1-28)" />
+          <input type="number" min="1" max="30" name="preferred_service_date_day" value="{{ preferred_service_date_day }}" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-800/70 px-3 py-2" placeholder="Day of month (1-30)" />
         </div>
       </label>
       <label class="space-y-1">

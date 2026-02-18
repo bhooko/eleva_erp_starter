@@ -1150,8 +1150,10 @@ def parse_preferred_service_date(value):
     value = clean_str(value)
     if not value:
         return None, None
-    if re.fullmatch(r"0?[1-9]|[12][0-9]|30", value):
-        day = int(value)
+    if not value.isdigit():
+        return None, "Preferred service date must be a day between 01 and 30."
+    day = int(value)
+    if 1 <= day <= 30:
         return (
             datetime.date(
                 PREFERRED_SERVICE_DATE_BASE_YEAR,
@@ -1161,6 +1163,28 @@ def parse_preferred_service_date(value):
             None,
         )
     return None, "Preferred service date must be a day between 01 and 30."
+
+
+def parse_preferred_service_date_from_form(form_data):
+    raw_preferred_date_value = form_data.get("preferred_service_date")
+    raw_preferred_date_day_value = form_data.get("preferred_service_date_day")
+    print("preferred_service_date raw:", raw_preferred_date_value)
+    print("request.form keys:", list(form_data.keys()))
+
+    preferred_date_value = clean_str(raw_preferred_date_value)
+    preferred_date_day_value = clean_str(raw_preferred_date_day_value)
+
+    if preferred_date_value and preferred_date_value.lower() == "monthly":
+        preferred_date_raw = preferred_date_day_value
+    elif preferred_date_value:
+        preferred_date_raw = preferred_date_value
+    else:
+        preferred_date_raw = preferred_date_day_value
+
+    if not preferred_date_raw:
+        return None, None
+
+    return parse_preferred_service_date(preferred_date_raw)
 
 
 def parse_preferred_service_days(values):
@@ -27102,9 +27126,7 @@ def service_lifts_create():
         return redirect(redirect_url)
     computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
 
-    preferred_date, error = parse_preferred_service_date(
-        request.form.get("preferred_service_date")
-    )
+    preferred_date, error = parse_preferred_service_date_from_form(request.form)
     if error:
         flash(error, "error")
         return redirect(redirect_url)
@@ -27693,9 +27715,7 @@ def service_lift_update(lift_id):
             return redirect(redirect_url)
         computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
 
-        preferred_date, error = parse_preferred_service_date(
-            request.form.get("preferred_service_date")
-        )
+        preferred_date, error = parse_preferred_service_date_from_form(request.form)
         if error:
             flash(error, "error")
             return redirect(redirect_url)
@@ -28041,9 +28061,7 @@ def service_lift_update(lift_id):
         return redirect(redirect_url)
     computed_amc_end = calculate_amc_end_date(amc_start, amc_duration_key)
 
-    preferred_date, error = parse_preferred_service_date(
-        request.form.get("preferred_service_date")
-    )
+    preferred_date, error = parse_preferred_service_date_from_form(request.form)
     if error:
         flash(error, "error")
         return redirect(redirect_url)
@@ -28172,9 +28190,7 @@ def service_lift_update_notes(lift_id):
 
     lift.remarks = clean_str(request.form.get("remarks"))
 
-    preferred_date, error = parse_preferred_service_date(
-        request.form.get("preferred_service_date")
-    )
+    preferred_date, error = parse_preferred_service_date_from_form(request.form)
     if error:
         flash(error, "error")
         return redirect(redirect_url)
