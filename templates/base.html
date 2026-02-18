@@ -898,6 +898,42 @@
       box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.3);
     }
 
+    /* Metallic Elevate: improve global alert contrast/readability only for this theme */
+    html[data-theme="metallic-elevate"] .alert,
+    body.theme-metallic-elevate .alert {
+      font-weight: 500;
+    }
+
+    html[data-theme="metallic-elevate"] .alert-danger,
+    html[data-theme="metallic-elevate"] .alert-error,
+    body.theme-metallic-elevate .alert-danger,
+    body.theme-metallic-elevate .alert-error {
+      color: #7a0f0f;
+      background: rgba(220, 53, 69, 0.12);
+      border: 1px solid rgba(220, 53, 69, 0.4);
+    }
+
+    html[data-theme="metallic-elevate"] .alert-warning,
+    body.theme-metallic-elevate .alert-warning {
+      color: #5a3a00;
+      background: rgba(255, 193, 7, 0.16);
+      border: 1px solid rgba(255, 193, 7, 0.42);
+    }
+
+    html[data-theme="metallic-elevate"] .alert-success,
+    body.theme-metallic-elevate .alert-success {
+      color: #0f5132;
+      background: rgba(25, 135, 84, 0.14);
+      border: 1px solid rgba(25, 135, 84, 0.4);
+    }
+
+    html[data-theme="metallic-elevate"] .alert-info,
+    body.theme-metallic-elevate .alert-info {
+      color: #084298;
+      background: rgba(13, 110, 253, 0.14);
+      border: 1px solid rgba(13, 110, 253, 0.4);
+    }
+
     .focus\:ring-emerald-500\/50:focus,
     .focus\:ring-emerald-500\/40:focus { --tw-ring-color: rgba(var(--color-primary-rgb), 0.5) !important; }
     .focus\:ring-emerald-400\/60:focus { --tw-ring-color: rgba(var(--color-primary-rgb), 0.6) !important; }
