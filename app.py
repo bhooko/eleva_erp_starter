@@ -9881,8 +9881,30 @@ def purchase_orders():
             "specification_locked": True,
             "is_bom_line": True,
         }
+
+    def _next_po_number():
+        recent_po_numbers = (
+            db.session.query(PurchaseOrder.po_number)
+            .order_by(PurchaseOrder.id.desc())
+            .limit(200)
+            .all()
+        )
+        max_number = 0
+        for (po_value,) in recent_po_numbers:
+            match = re.match(r"^PO-(\d+)$", (po_value or "").strip())
+            if not match:
+                continue
+            max_number = max(max_number, int(match.group(1)))
+        if max_number <= 0:
+            return "PO-0001"
+        return f"PO-{max_number + 1:04d}"
+
     if request.method == "POST":
-        po_number = request.form.get("po_number") or f"PO-{uuid.uuid4().hex[:6].upper()}"
+        po_number_raw = (request.form.get("po_number") or "").strip()
+        if (not po_number_raw) or (po_number_raw.lower() == "auto"):
+            po_number = _next_po_number()
+        else:
+            po_number = po_number_raw
         project_id = request.form.get("project_id") or None
         vendor_id = request.form.get("vendor_id") or None
         bom_id_raw = request.form.get("bom_id") or None
@@ -10181,6 +10203,7 @@ def purchase_orders():
         .limit(200)
         .all()
     )
+    next_po_number = _next_po_number()
 
     return render_template(
         "purchase_orders.html",
@@ -10189,6 +10212,7 @@ def purchase_orders():
         projects=projects,
         bom_items=bom_items,
         bom_options=bom_options,
+        next_po_number=next_po_number,
     )
 
 

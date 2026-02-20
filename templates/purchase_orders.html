@@ -33,7 +33,7 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label class="space-y-1">
               <span class="text-sm">PO Number</span>
-              <input type="text" name="po_number" class="w-full rounded-lg border-slate-200 h-10 px-3" placeholder="auto" />
+              <input type="text" name="po_number" class="w-full rounded-lg border-slate-200 h-10 px-3 bg-slate-50 text-slate-700 cursor-not-allowed" value="{{ next_po_number }}" readonly />
             </label>
             <label class="space-y-1">
               <span class="text-sm">Project</span>
@@ -76,7 +76,7 @@
                 <p class="text-xs uppercase text-slate-500">Items</p>
                 <h3 class="text-base font-semibold">Line items</h3>
               </div>
-              <button type="button" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
+              <button type="button" class="px-3 py-1.5 rounded-lg btn-primary btn-shimmer text-xs hover:shadow-lg hover:scale-[1.02] transition" data-add-item>+ Add Item</button>
             </div>
             <div id="poItems" class="space-y-4"></div>
           </div>
@@ -102,7 +102,7 @@
         </div>
         <div class="px-5 py-4 border-t border-slate-200 bg-gradient-to-t from-white via-white to-slate-50">
           <div class="flex justify-end">
-            <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
+            <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save PO</button>
           </div>
         </div>
       </form>
