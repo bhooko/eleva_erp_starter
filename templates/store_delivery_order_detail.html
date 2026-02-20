@@ -95,7 +95,7 @@
       {% if order.status in ['Draft', 'Created'] %}
       <form method="POST" action="{{ url_for('confirm_delivery_order', order_id=order.id) }}" onsubmit="return confirm('Confirm this Delivery Order and reserve book stock?');">
         {{ csrf_field() }}
-        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Confirm Delivery Order</button>
+        <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Confirm Delivery Order</button>
       </form>
       {% endif %}
       <a href="{{ url_for('create_delivery_challan_from_do', order_id=order.id) }}" class="px-5 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create Delivery Challan</a>

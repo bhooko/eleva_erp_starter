@@ -9,7 +9,7 @@
       <p class="text-sm text-slate-600">Historical reference only. All new POs must be created in Eleva ERP.</p>
     </div>
     {% if odoo_import_enabled %}
-    <label for="upload-po-odoo" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Odoo PO file</label>
+    <label for="upload-po-odoo" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Odoo PO file</label>
     {% else %}
     <span class="text-sm text-slate-500">Odoo PO import is disabled.</span>
     {% endif %}
@@ -43,7 +43,7 @@
           </label>
           <div class="flex items-center justify-end gap-3 pt-2">
             <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-po-odoo').checked=false;">Cancel</button>
-            <button type="submit" class="px-5 py-2 rounded-lg bg-slate-900 text-white shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Purchase Orders</button>
+            <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Upload Purchase Orders</button>
           </div>
         </form>
       </div>
@@ -75,7 +75,7 @@
       </label>
       <div class="md:col-span-5 flex justify-end gap-3">
         <a href="{{ url_for('purchase_odoo_history') }}" class="px-4 py-2 rounded-lg border">Reset</a>
-        <button type="submit" class="px-5 py-2 bg-slate-900 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Apply filters</button>
+        <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Apply filters</button>
       </div>
     </form>
 
