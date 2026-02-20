@@ -611,12 +611,15 @@
     }
 
     .clickable-text {
-      color: #e5e7eb;
+      color: rgba(var(--color-primary-rgb), 0.98);
       cursor: pointer;
+      font-weight: 600;
     }
-    .clickable-text:hover {
-      color: #ffffff;
+    .clickable-text:hover,
+    .clickable-text:focus-visible {
+      color: rgba(var(--color-primary-rgb), 0.78);
       text-decoration: underline;
+      outline: none;
     }
 
     .bg-app { background-color: var(--bg-app) !important; }
