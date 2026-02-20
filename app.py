@@ -28931,25 +28931,55 @@ def service_contract_edit(contract_id):
 def service_contract_preview(contract_id):
     _module_visibility_required("service")
     contract = ServiceContract.query.options(joinedload(ServiceContract.lift), joinedload(ServiceContract.contract_lifts)).get_or_404(contract_id)
-    template_payload = _contract_template_payload(_ensure_service_contract_templates_row())
-    placeholders = _contract_placeholder_map(contract)
-    header_html = _render_contract_html(template_payload.get("header_html"), placeholders)
-    cover_letter_html = _render_contract_html(template_payload.get("cover_letter_html"), placeholders)
-    intro_html = _render_contract_html(template_payload.get("intro_html"), placeholders)
-    spec_html = _render_contract_html(template_payload.get("spec_html"), placeholders)
-    terms_html = _render_contract_html(template_payload.get("terms_html"), placeholders)
-    footer_html = _render_contract_html(template_payload.get("footer_html"), placeholders)
+    rendered_sections = _build_service_contract_sections(contract)
     return render_template(
         "service/contract_preview.html",
         contract=contract,
-        header_html=header_html,
-        footer_html=footer_html,
-        cover_letter_html=cover_letter_html,
-        intro_html=intro_html,
-        spec_html=spec_html,
-        terms_html=terms_html,
+        header_html=rendered_sections["header_html"],
+        footer_html=rendered_sections["footer_html"],
+        cover_letter_html=rendered_sections["cover_letter_html"],
+        intro_html=rendered_sections["intro_html"],
+        spec_html=rendered_sections["specs_html"],
+        terms_html=rendered_sections["terms_html"],
         contract_type_labels=CONTRACT_TYPE_LABELS,
     )
+
+
+@app.route("/service/contracts/<int:contract_id>/print")
+@login_required
+def service_contract_print(contract_id):
+    _module_visibility_required("service")
+    contract = ServiceContract.query.options(joinedload(ServiceContract.lift), joinedload(ServiceContract.contract_lifts)).get_or_404(contract_id)
+    rendered_sections = _build_service_contract_sections(contract)
+    rendered_contract_html = "\n".join(
+        rendered_sections.get(section_key, "")
+        for section_key in (
+            "header_html",
+            "footer_html",
+            "cover_letter_html",
+            "intro_html",
+            "specs_html",
+            "terms_html",
+        )
+    )
+    return render_template(
+        "service/contract_print.html",
+        contract=contract,
+        rendered_contract_html=rendered_contract_html,
+    )
+
+
+def _build_service_contract_sections(contract):
+    template_payload = _contract_template_payload(_ensure_service_contract_templates_row())
+    placeholders = _contract_placeholder_map(contract)
+    return {
+        "header_html": _render_contract_html(template_payload.get("header_html"), placeholders),
+        "footer_html": _render_contract_html(template_payload.get("footer_html"), placeholders),
+        "cover_letter_html": _render_contract_html(template_payload.get("cover_letter_html"), placeholders),
+        "intro_html": _render_contract_html(template_payload.get("intro_html"), placeholders),
+        "specs_html": _render_contract_html(template_payload.get("spec_html"), placeholders),
+        "terms_html": _render_contract_html(template_payload.get("terms_html"), placeholders),
+    }
 
 
 @app.route("/service/contracts/<int:contract_id>/pdf")
