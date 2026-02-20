@@ -16,7 +16,7 @@
       {% endif %}
       {% if inventory_flags.get('ODOO_INVENTORY_IMPORT_ENABLED', True) %}
       <button type="button" data-modal-target="inventory-upload-modal"
-              class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
+              class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M9 3a1 1 0 012 0v6h3a1 1 0 010 2h-3v6a1 1 0 01-2 0v-6H6a1 1 0 010-2h3V3z"/></svg>
         Upload Inventory (Odoo)
       </button>
@@ -238,7 +238,7 @@
       </label>
       <div class="flex items-center justify-end gap-3">
         <button type="button" class="px-4 py-2 text-slate-600 hover:text-slate-800" data-modal-close="inventory-upload-modal">Cancel</button>
-        <button type="submit" class="px-4 py-2 bg-slate-900 text-white rounded-lg shadow hover:shadow-lg">Upload</button>
+        <button type="submit" class="px-4 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg">Upload</button>
       </div>
     </form>
   </div>

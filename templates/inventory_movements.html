@@ -11,7 +11,7 @@
     <div class="flex items-center gap-3">
       <a href="{{ url_for('store_inventory') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-sm hover:shadow-lg">← Back to Inventory</a>
       {% if can_adjust %}
-      <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl shadow hover:shadow-lg">Adjust stock</a>
+      <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg">Adjust stock</a>
       {% endif %}
     </div>
   </div>
