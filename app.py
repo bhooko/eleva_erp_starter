@@ -10045,9 +10045,9 @@ def purchase_orders():
 
             if (
                 not item_name
+                and not product_id_raw
                 and not specs
                 and not unit
-                and not quantity_raw
                 and not unit_price_raw
             ):
                 continue
@@ -10108,6 +10108,11 @@ def purchase_orders():
             currency = (row_data.get("currency") or "INR").strip() or "INR"
 
             if not item_name or quantity <= 0:
+                invalid_rows = True
+                continue
+
+            has_additional_content = bool(item_name or specs or unit or unit_price is not None)
+            if quantity > 0 and has_additional_content and not product_id:
                 invalid_rows = True
                 continue
 
@@ -10173,7 +10178,7 @@ def purchase_orders():
                 flash("Add at least one valid line item before saving.", "danger")
             else:
                 flash(
-                    "Each line item needs part name, quantity, and mapped part when specification is provided.",
+                    "Each line item must have a Part selected from Parts Master (mapped part), along with quantity.",
                     "danger",
                 )
             return redirect(url_for("purchase_orders"))

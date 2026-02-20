@@ -188,7 +188,7 @@
         </label>
         <label class="md:col-span-2 space-y-1">
           <span class="text-xs uppercase text-slate-500">Qty</span>
-          <input type="number" step="0.01" min="0" name="item_qty[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="1" />
+          <input type="number" step="0.01" min="0" name="item_qty[]" class="w-full rounded-lg border-slate-200 h-10 px-3" value="" />
         </label>
         <label class="md:col-span-2 space-y-1">
           <span class="text-xs uppercase text-slate-500">Unit</span>
@@ -687,6 +687,7 @@
       const partInput = row.querySelector('[data-part-name]');
       const productIdInput = row.querySelector('[data-product-id]');
       const unitInput = row.querySelector('[name="item_unit[]"]');
+      const qtyInput = row.querySelector('[name="item_qty[]"]');
       const specsInput = row.querySelector('[data-specs]');
       if (partInput) {
         partInput.value = part.name || '';
@@ -694,6 +695,12 @@
       }
       if (productIdInput) {
         productIdInput.value = part.id || '';
+      }
+      if (qtyInput) {
+        const currentQty = parseNumber(qtyInput.value);
+        if (!qtyInput.value.trim() || currentQty <= 0) {
+          qtyInput.value = '1';
+        }
       }
       applyAutofill(unitInput, part.unit || '');
       if (row.querySelector('[data-spec-locked]')?.value !== '1') {
@@ -918,7 +925,7 @@
       if (itemsContainer.querySelectorAll('.po-item-row').length <= 1) {
         row.querySelectorAll('input, textarea').forEach((input) => {
           if (input.type === 'number') {
-            input.value = input.name === 'item_qty[]' ? '1' : '';
+            input.value = '';
           } else if (input.name === 'item_currency[]') {
             input.value = 'INR';
           } else {
@@ -1222,14 +1229,32 @@
       if (!itemsContainer) {
         return;
       }
-      const hasBlockedLine = Array.from(itemsContainer.querySelectorAll('.po-item-row')).some((row) => {
-        const specValue = (row.querySelector('[data-specs]')?.value || '').trim();
+      const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
+      const blockedRow = rows.find((row) => {
+        const partName = (row.querySelector('[data-part-name]')?.value || '').trim();
         const productId = (row.querySelector('[data-product-id]')?.value || '').trim();
-        return Boolean(specValue) && !productId;
+        const qtyRaw = (row.querySelector('[name="item_qty[]"]')?.value || '').trim();
+        const qtyValue = parseNumber(qtyRaw);
+        const unitValue = (row.querySelector('[name="item_unit[]"]')?.value || '').trim();
+        const unitPriceRaw = (row.querySelector('[name="item_unit_price[]"]')?.value || '').trim();
+        const unitPriceValue = parseNumber(unitPriceRaw);
+        const specValue = (row.querySelector('[data-specs]')?.value || '').trim();
+        const hasMeaningfulEntry = Boolean(
+          partName
+          || (qtyRaw && qtyValue > 0)
+          || unitValue
+          || (unitPriceRaw && unitPriceValue > 0)
+          || specValue
+        );
+        return hasMeaningfulEntry && !productId;
       });
-      if (hasBlockedLine) {
+      if (blockedRow) {
         event.preventDefault();
-        alert('Cannot finalize this PO while any line has specification but Part is not selected.');
+        blockedRow.classList.add('border-rose-500', 'ring-1', 'ring-rose-200');
+        setTimeout(() => {
+          blockedRow.classList.remove('border-rose-500', 'ring-1', 'ring-rose-200');
+        }, 2000);
+        alert('Please select the Part from the dropdown (Parts Master). Free typing is not allowed.');
       }
     });
 
