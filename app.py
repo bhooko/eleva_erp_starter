@@ -15547,6 +15547,30 @@ def ensure_purchase_order_item_columns():
         cur.execute("ALTER TABLE purchase_order_item ADD COLUMN item_code TEXT;")
         added.append("item_code")
         col_names.add("item_code")
+    if "specification" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN specification TEXT;")
+        added.append("specification")
+        col_names.add("specification")
+    if "specification_locked" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN specification_locked INTEGER DEFAULT 0;")
+        added.append("specification_locked")
+        col_names.add("specification_locked")
+    if "stage" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN stage TEXT;")
+        added.append("stage")
+        col_names.add("stage")
+    if "section_title" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN section_title TEXT;")
+        added.append("section_title")
+        col_names.add("section_title")
+    if "source_bom_id" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN source_bom_id INTEGER;")
+        added.append("source_bom_id")
+        col_names.add("source_bom_id")
+    if "source_bom_line_id" not in col_names:
+        cur.execute("ALTER TABLE purchase_order_item ADD COLUMN source_bom_line_id INTEGER;")
+        added.append("source_bom_line_id")
+        col_names.add("source_bom_line_id")
     if "is_out_of_sync" not in col_names:
         cur.execute("ALTER TABLE purchase_order_item ADD COLUMN is_out_of_sync INTEGER DEFAULT 0;")
         added.append("is_out_of_sync")
@@ -15566,11 +15590,18 @@ def ensure_purchase_order_item_columns():
                 part_name TEXT NOT NULL DEFAULT '',
                 item_code TEXT,
                 description TEXT,
+                specification TEXT,
+                specification_locked INTEGER NOT NULL DEFAULT 0,
                 unit TEXT,
                 quantity_ordered REAL NOT NULL DEFAULT 1,
                 unit_price REAL,
                 currency TEXT DEFAULT 'INR',
-                total_amount REAL
+                total_amount REAL,
+                stage TEXT,
+                section_title TEXT,
+                source_bom_id INTEGER,
+                source_bom_line_id INTEGER,
+                is_out_of_sync INTEGER NOT NULL DEFAULT 0
             );
             """
         )
@@ -15582,6 +15613,17 @@ def ensure_purchase_order_item_columns():
         product_id_expr = "product_id" if "product_id" in col_names else "NULL"
         part_id_expr = "part_id" if "part_id" in col_names else "NULL"
         item_code_expr = "item_code" if "item_code" in col_names else "NULL"
+        specification_expr = "specification" if "specification" in col_names else "NULL"
+        specification_locked_expr = (
+            "COALESCE(specification_locked, 0)" if "specification_locked" in col_names else "0"
+        )
+        stage_expr = "stage" if "stage" in col_names else "NULL"
+        section_title_expr = "section_title" if "section_title" in col_names else "NULL"
+        source_bom_id_expr = "source_bom_id" if "source_bom_id" in col_names else "NULL"
+        source_bom_line_id_expr = (
+            "source_bom_line_id" if "source_bom_line_id" in col_names else "NULL"
+        )
+        is_out_of_sync_expr = "COALESCE(is_out_of_sync, 0)" if "is_out_of_sync" in col_names else "0"
         cur.execute(
             f"""
             INSERT INTO purchase_order_item_new (
@@ -15593,11 +15635,18 @@ def ensure_purchase_order_item_columns():
                 part_name,
                 item_code,
                 description,
+                specification,
+                specification_locked,
                 unit,
                 quantity_ordered,
                 unit_price,
                 currency,
-                total_amount
+                total_amount,
+                stage,
+                section_title,
+                source_bom_id,
+                source_bom_line_id,
+                is_out_of_sync
             )
             SELECT
                 id,
@@ -15608,11 +15657,18 @@ def ensure_purchase_order_item_columns():
                 {part_name_expr},
                 {item_code_expr},
                 description,
+                {specification_expr},
+                {specification_locked_expr},
                 unit,
                 quantity_ordered,
                 unit_price,
                 currency,
-                total_amount
+                total_amount,
+                {stage_expr},
+                {section_title_expr},
+                {source_bom_id_expr},
+                {source_bom_line_id_expr},
+                {is_out_of_sync_expr}
             FROM purchase_order_item;
             """
         )
