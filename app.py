@@ -10225,6 +10225,22 @@ def purchase_orders():
 @login_required
 def purchase_bom_po_lines_preview(bom_id: int):
     ensure_bootstrap()
+    vendor_id_raw = request.args.get("vendor_id") or ""
+    try:
+        vendor_id = int(vendor_id_raw)
+    except (TypeError, ValueError):
+        vendor_id = None
+
+    vendor_linked_part_ids = None
+    if vendor_id:
+        vendor_linked_part_ids = {
+            product_id
+            for (product_id,) in db.session.query(VendorProductRate.product_id)
+            .filter(VendorProductRate.vendor_id == vendor_id)
+            .distinct()
+            .all()
+        }
+
     bom = BillOfMaterials.query.get_or_404(bom_id)
     bom_items = (
         BOMItem.query.options(joinedload(BOMItem.part_class))
@@ -10237,6 +10253,11 @@ def purchase_bom_po_lines_preview(bom_id: int):
     for bom_item in bom_items:
         qty_value = float(bom_item.quantity_required or 0)
         if qty_value <= 0:
+            continue
+        if (
+            vendor_linked_part_ids is not None
+            and (not bom_item.suggested_part_id or bom_item.suggested_part_id not in vendor_linked_part_ids)
+        ):
             continue
         item_name = (
             (bom_item.part_class.name if bom_item.part_class else None)
@@ -10300,7 +10321,12 @@ def purchase_vendor_rate():
 def parts_search():
     ensure_bootstrap()
     query = (request.args.get("q") or "").strip()
+    vendor_id_raw = request.args.get("vendor_id") or ""
     limit_raw = request.args.get("limit") or "12"
+    try:
+        vendor_id = int(vendor_id_raw)
+    except (TypeError, ValueError):
+        vendor_id = None
     try:
         limit = max(1, min(int(limit_raw), 50))
     except (TypeError, ValueError):
@@ -10310,12 +10336,13 @@ def parts_search():
         return jsonify([])
 
     like = f"%{query.lower()}%"
-    parts = (
-        Product.query.filter(func.lower(Product.name).like(like))
-        .order_by(Product.name.asc())
-        .limit(limit)
-        .all()
-    )
+    parts_query = Product.query.filter(func.lower(Product.name).like(like))
+    if vendor_id:
+        parts_query = parts_query.join(
+            VendorProductRate,
+            VendorProductRate.product_id == Product.id,
+        ).filter(VendorProductRate.vendor_id == vendor_id)
+    parts = parts_query.order_by(Product.name.asc()).limit(limit).all()
 
     payload = []
     for part in parts:

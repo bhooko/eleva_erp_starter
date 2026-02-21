@@ -582,6 +582,35 @@
       syncUnmappedWarning(row);
     };
 
+    const clearPartSelectionForRow = (row) => {
+      if (!row) {
+        return;
+      }
+      const partInput = row.querySelector('[data-part-name]');
+      const productIdInput = row.querySelector('[data-product-id]');
+      const unitInput = row.querySelector('[name="item_unit[]"]');
+      const specsInput = row.querySelector('[data-specs]');
+      const unitPriceInput = row.querySelector('[name="item_unit_price[]"]');
+      if (productIdInput) {
+        productIdInput.value = '';
+      }
+      if (partInput) {
+        partInput.value = '';
+        partInput.dataset.selectedName = '';
+      }
+      if (row.querySelector('[data-spec-locked]')?.value !== '1') {
+        clearAutoField(unitInput);
+        clearAutoField(specsInput);
+      }
+      if (unitPriceInput && unitPriceInput.dataset.autofilled === '1') {
+        unitPriceInput.value = '';
+        delete unitPriceInput.dataset.autofilled;
+        delete unitPriceInput.dataset.autofilledValue;
+      }
+      syncUnmappedWarning(row);
+      updateTotals();
+    };
+
     const searchTimers = new WeakMap();
     const searchTokens = new WeakMap();
     let activeCreateRow = null;
@@ -744,7 +773,9 @@
         const token = Symbol('search');
         searchTokens.set(input, token);
         try {
-          const response = await fetch(`/api/parts/search?q=${encodeURIComponent(query)}&limit=12`, {
+          const vendorId = vendorSelect ? vendorSelect.value : '';
+          const vendorParam = vendorId ? `&vendor_id=${encodeURIComponent(vendorId)}` : '';
+          const response = await fetch(`/api/parts/search?q=${encodeURIComponent(query)}&limit=12${vendorParam}`, {
             headers: { 'Accept': 'application/json' },
           });
           if (!response.ok) {
@@ -772,7 +803,7 @@
       const unitPriceInput = row.querySelector('[name="item_unit_price[]"]');
       const currencyInput = row.querySelector('[data-currency]');
       if (!vendorId || !productIdInput || !productIdInput.value) {
-        return;
+        return { found: false };
       }
       const productId = productIdInput.value;
       try {
@@ -780,23 +811,32 @@
           headers: { 'Accept': 'application/json' },
         });
         if (!response.ok) {
-          return;
+          return { found: false };
         }
         const data = await response.json();
         if (currencyInput && data.currency) {
           currencyInput.value = data.currency;
         }
         if (!unitPriceInput) {
-          return;
+          return data;
         }
         const canAutofill = !unitPriceInput.value || unitPriceInput.dataset.autofilled === '1';
         if (data.found && canAutofill) {
           unitPriceInput.value = data.unit_price ?? '';
           unitPriceInput.dataset.autofilled = '1';
+          unitPriceInput.dataset.autofilledValue = data.unit_price ?? '';
           updateTotals();
         }
+        if (!data.found && unitPriceInput.dataset.autofilled === '1') {
+          unitPriceInput.value = '';
+          unitPriceInput.dataset.autofilled = '0';
+          delete unitPriceInput.dataset.autofilled;
+          delete unitPriceInput.dataset.autofilledValue;
+          updateTotals();
+        }
+        return data;
       } catch (error) {
-        return;
+        return { found: false };
       }
     };
 
@@ -1011,7 +1051,9 @@
     };
 
     const applyBomLinesToRows = async (bomId, mode) => {
-      const response = await fetch(`/purchase/bom/${bomId}/po-lines-preview`, {
+      const vendorId = vendorSelect ? vendorSelect.value : '';
+      const vendorParam = vendorId ? `?vendor_id=${encodeURIComponent(vendorId)}` : '';
+      const response = await fetch(`/purchase/bom/${bomId}/po-lines-preview${vendorParam}`, {
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
@@ -1201,13 +1243,24 @@
     });
 
     if (vendorSelect) {
-      vendorSelect.addEventListener('change', () => {
+      vendorSelect.addEventListener('change', async () => {
         if (!itemsContainer) {
           return;
         }
-        itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
-          fetchVendorRate(row);
-        });
+        if (!vendorSelect.value) {
+          return;
+        }
+        const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
+        for (const row of rows) {
+          const productId = row.querySelector('[data-product-id]')?.value || '';
+          if (!productId) {
+            continue;
+          }
+          const rateData = await fetchVendorRate(row);
+          if (!rateData || !rateData.found) {
+            clearPartSelectionForRow(row);
+          }
+        }
       });
     }
 
