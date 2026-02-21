@@ -454,6 +454,22 @@
       });
     };
 
+    const bindDropdownHandlers = (row) => {
+      const dropdown = row.querySelector('[data-part-dropdown]');
+      if (!dropdown) {
+        return;
+      }
+      dropdown.addEventListener('mousedown', (event) => {
+        const option = event.target.closest('[data-part-option]');
+        if (!option) {
+          return;
+        }
+        event.preventDefault();
+        selectPartForRow(row, option);
+        hideDropdown(row);
+      });
+    };
+
     const addRow = () => {
       if (!template || !itemsContainer) {
         return null;
@@ -464,6 +480,7 @@
         row.classList.remove('opacity-0', 'translate-y-2');
       });
       clearBomMetadata(row);
+      bindDropdownHandlers(row);
       updateTotals();
       updateRemoveButtons();
       return row;
@@ -666,9 +683,9 @@
         button.type = 'button';
         button.className = 'part-dropdown-item';
         button.dataset.partOption = '1';
-        button.dataset.partId = part.id;
-        button.dataset.partName = part.name;
-        button.dataset.partUnit = part.unit || '';
+        button.dataset.productId = part.id;
+        button.dataset.productName = part.name;
+        button.dataset.unit = part.unit || '';
         button.dataset.partDescription = part.description || '';
         button.dataset.partCategory = part.category || '';
         button.dataset.partSku = part.sku || '';
@@ -726,12 +743,16 @@
       const unitInput = row.querySelector('[name="item_unit[]"]');
       const qtyInput = row.querySelector('[name="item_qty[]"]');
       const specsInput = row.querySelector('[data-specs]');
+      const productId = part.dataset ? part.dataset.productId : part.id;
+      const name = part.dataset ? part.dataset.productName : part.name;
+      const unit = part.dataset ? part.dataset.unit : part.unit;
+      const description = part.dataset ? part.dataset.partDescription : part.description;
       if (partInput) {
-        partInput.value = part.name || '';
-        partInput.dataset.selectedName = part.name || '';
+        partInput.value = name || '';
+        partInput.dataset.selectedName = name || '';
       }
       if (productIdInput) {
-        productIdInput.value = part.id || '';
+        productIdInput.value = productId || '';
       }
       if (qtyInput) {
         const currentQty = parseNumber(qtyInput.value);
@@ -739,14 +760,18 @@
           qtyInput.value = '1';
         }
       }
-      applyAutofill(unitInput, part.unit || '');
+      if (unitInput && unit) {
+        unitInput.value = unit;
+      }
+      applyAutofill(unitInput, unit || '');
       if (row.querySelector('[data-spec-locked]')?.value !== '1') {
-        applyAutofill(specsInput, part.description || '');
+        applyAutofill(specsInput, description || '');
       }
       fetchVendorRate(row);
       hideDropdown(row);
       syncUnmappedWarning(row);
       ensureTrailingBlankRow();
+      updateTotals();
     };
 
     const queuePartSearch = (input) => {
@@ -923,21 +948,6 @@
     });
 
     form.addEventListener('click', (event) => {
-      const option = event.target.closest('[data-part-option]');
-      if (option) {
-        event.preventDefault();
-        const row = option.closest('.po-item-row');
-        selectPartForRow(row, {
-          id: option.dataset.partId,
-          name: option.dataset.partName,
-          unit: option.dataset.partUnit,
-          description: option.dataset.partDescription,
-          category: option.dataset.partCategory,
-          sku: option.dataset.partSku,
-        });
-        return;
-      }
-
       const createButton = event.target.closest('[data-create-part]');
       if (createButton) {
         event.preventDefault();
@@ -1007,9 +1017,8 @@
     document.addEventListener('click', (event) => {
       if (!form.contains(event.target)) {
         if (itemsContainer) {
-          itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
-            dropdown.classList.remove('is-open');
-            setTimeout(() => dropdown.classList.add('hidden'), 140);
+          itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
+            hideDropdown(row);
           });
         }
         return;
@@ -1021,9 +1030,8 @@
         return;
       }
       if (itemsContainer) {
-        itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
-          dropdown.classList.remove('is-open');
-          setTimeout(() => dropdown.classList.add('hidden'), 140);
+        itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
+          hideDropdown(row);
         });
       }
     });
@@ -1228,9 +1236,8 @@
         return;
       }
       if (itemsContainer) {
-        itemsContainer.querySelectorAll('[data-part-dropdown]').forEach((dropdown) => {
-          dropdown.classList.remove('is-open');
-          setTimeout(() => dropdown.classList.add('hidden'), 140);
+        itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
+          hideDropdown(row);
         });
       }
       if (createModal && !createModal.classList.contains('hidden')) {
