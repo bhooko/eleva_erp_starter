@@ -593,7 +593,11 @@
       const dropdown = row.querySelector('[data-part-dropdown]');
       if (dropdown) {
         dropdown.classList.remove('is-open');
-        setTimeout(() => dropdown.classList.add('hidden'), 140);
+        setTimeout(() => {
+          if (!dropdown.classList.contains('is-open')) {
+            dropdown.classList.add('hidden');
+          }
+        }, 140);
       }
     };
 
@@ -602,10 +606,14 @@
         return;
       }
       const dropdown = row.querySelector('[data-part-dropdown]');
-      if (dropdown) {
-        dropdown.classList.remove('hidden');
-        requestAnimationFrame(() => dropdown.classList.add('is-open'));
+      if (!dropdown) {
+        return;
       }
+
+      dropdown.classList.remove('hidden');
+
+      // Make it clickable immediately (avoid pointer-events:none race)
+      dropdown.classList.add('is-open');
     };
 
     const renderDropdown = (row, items, query) => {
@@ -855,10 +863,23 @@
     });
 
     form.addEventListener('focusout', (event) => {
-      if (event.target && event.target.matches('[data-part-name]')) {
-        const row = event.target.closest('.po-item-row');
-        setTimeout(() => hideDropdown(row), 150);
+      if (!event.target || !event.target.matches('[data-part-name]')) {
+        return;
       }
+      const row = event.target.closest('.po-item-row');
+      if (!row) {
+        return;
+      }
+
+      const dropdown = row.querySelector('[data-part-dropdown]');
+      const nextFocused = event.relatedTarget;
+
+      // If user is clicking/entering the dropdown, keep it open
+      if (dropdown && nextFocused && dropdown.contains(nextFocused)) {
+        return;
+      }
+
+      setTimeout(() => hideDropdown(row), 200);
     });
 
     form.addEventListener('click', (event) => {
