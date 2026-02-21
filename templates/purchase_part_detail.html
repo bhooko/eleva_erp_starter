@@ -123,11 +123,11 @@
 
     <div class="bg-slate-900/90 text-slate-50 rounded-2xl border border-slate-800 shadow p-6 space-y-4">
       <div>
-        <p class="text-xs uppercase tracking-wide text-amber-200">Primary vendor</p>
-        <p class="text-sm font-semibold text-white mt-1">{{ product.primary_vendor or 'No primary vendor selected' }}</p>
+        <p class="text-xs uppercase tracking-wide text-slate-700 font-semibold">PRIMARY VENDOR</p>
+        <p class="text-sm font-semibold text-slate-900 mt-1">{{ product.primary_vendor or 'No primary vendor selected' }}</p>
       </div>
       <div class="space-y-2">
-        <p class="text-xs uppercase tracking-wide text-amber-200">Linked vendors</p>
+        <p class="text-xs uppercase tracking-wide text-slate-700 font-semibold">LINKED VENDORS</p>
         <div class="flex flex-wrap gap-2 text-xs">
           {% set vendor_names = (product.linked_vendors or '').split(',') %}
           {% set ns = namespace(has_vendor=False) %}
@@ -135,11 +135,11 @@
             {% set trimmed = name.strip() %}
             {% if trimmed %}
               {% set ns.has_vendor = True %}
-              <span class="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-1 text-amber-100">{{ trimmed }}</span>
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-1 text-slate-900 font-semibold">{{ trimmed }}</span>
             {% endif %}
           {% endfor %}
           {% if not ns.has_vendor %}
-          <span class="text-slate-300">No linked vendors</span>
+          <span class="text-slate-800 font-semibold">No linked vendors</span>
           {% endif %}
         </div>
       </div>
