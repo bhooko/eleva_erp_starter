@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Purchase · Vendor Detail{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+<div class="px-6 py-6 space-y-6">
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Purchase</p>
@@ -44,17 +44,17 @@
 
   <div class="relative">
     <input type="checkbox" id="edit-vendor-modal" class="hidden peer">
-    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('edit-vendor-modal').checked=false;"></div>
-    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center p-4 pointer-events-none peer-checked:pointer-events-auto">
-      <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('edit-vendor-modal').checked=false;"></div>
+    <div class="fixed inset-0 hidden peer-checked:flex items-center justify-center z-50 p-4">
+      <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
         <div class="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
           <h2 class="text-lg font-semibold">Edit Vendor Details</h2>
           <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="text-slate-500 hover:text-slate-800">✕</button>
         </div>
-        <form method="post" class="flex flex-col flex-1">
+        <form method="post" class="flex flex-col">
           {{ csrf_field() }}
           <input type="hidden" name="action" value="save_vendor_profile">
-          <div class="p-6 overflow-y-auto flex-1">
+          <div class="p-5">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <input name="display_name" placeholder="Vendor display name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200">
               <input name="legal_name" placeholder="Vendor legal name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200">
@@ -75,9 +75,11 @@
               <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
             </div>
           </div>
-          <div class="border-t bg-white px-6 py-4 flex justify-end gap-3">
-            <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
-            <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save Changes</button>
+          <div class="px-5 py-4 border-t border-slate-200 bg-white">
+            <div class="flex justify-end gap-3">
+              <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
+              <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save Changes</button>
+            </div>
           </div>
         </form>
       </div>
@@ -93,8 +95,8 @@
     <div class="relative">
       <input type="checkbox" id="add-contact-modal" class="hidden peer">
       <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('add-contact-modal').checked=false;"></div>
-      <div class="fixed inset-0 hidden peer-checked:flex items-start justify-center z-50 p-4 overflow-y-auto">
-        <div class="w-full max-w-5xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col my-6 max-h-[calc(100vh-3rem)]">
+      <div class="fixed inset-0 hidden peer-checked:flex items-center justify-center z-50 p-4">
+        <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
           <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b border-slate-200">
             <div>
               <h2 class="text-lg font-semibold">Add Contact</h2>
@@ -102,11 +104,11 @@
             <button type="button" class="text-slate-500 hover:text-slate-700" onclick="document.getElementById('add-contact-modal').checked=false;">✕</button>
           </div>
 
-          <form method="post" class="flex flex-col flex-1 min-h-0">
+          <form method="post" class="flex flex-col">
             {{ csrf_field() }}
             <input type="hidden" name="action" value="add_contact">
 
-            <div class="flex-1 min-h-0 overflow-y-auto p-5">
+            <div class="p-5">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input name="name" placeholder="Name" class="rounded border-slate-200">
                 <input name="phone" placeholder="Number" class="rounded border-slate-200">
