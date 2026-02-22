@@ -119,8 +119,33 @@
   </section>
 
   <section class="bg-white rounded-2xl border p-5 space-y-3">
-    <h2 class="text-lg font-semibold">Attachments</h2>
-    <form method="post" enctype="multipart/form-data" class="flex items-center gap-2">{{ csrf_field() }}<input type="hidden" name="action" value="upload_attachment"><input type="file" name="attachment" required><button class="px-3 py-2 rounded border">Upload</button></form>
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold">Attachments</h2>
+      <label for="upload-attachment" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Attachment</label>
+    </div>
+
+    <div class="relative">
+      <input type="checkbox" id="upload-attachment" class="hidden peer">
+      <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('upload-attachment').checked=false;"></div>
+      <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+          <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+            <h2 class="text-lg font-semibold">Upload Attachment</h2>
+            <button class="text-slate-500" type="button" onclick="document.getElementById('upload-attachment').checked=false;">✕</button>
+          </div>
+          <form method="post" enctype="multipart/form-data" class="p-5 space-y-4">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="upload_attachment">
+            <input type="file" name="attachment" required>
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('upload-attachment').checked=false;">Cancel</button>
+              <button class="px-4 py-2 rounded bg-slate-900 text-white">Upload</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <ul class="text-sm space-y-1">{% for a in attachments %}<li class="flex items-center gap-2"><span>{{ a.filename_original }}</span><span class="text-slate-500">{{ a.uploaded_at.strftime('%d %b %Y') if a.uploaded_at else '' }}</span><a class="text-blue-600" href="{{ url_for('purchase_vendor_attachment_download', vendor_id=vendor.id, attachment_id=a.id) }}">Download</a><form method="post" class="inline">{{ csrf_field() }}<input type="hidden" name="action" value="delete_attachment"><input type="hidden" name="attachment_id" value="{{ a.id }}"><button class="text-rose-600">Delete</button></form></li>{% endfor %}</ul>
   </section>
 </div>
