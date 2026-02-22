@@ -2632,6 +2632,10 @@ class Vendor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vendor_code = db.Column(db.String(80), unique=True, nullable=True)
     name = db.Column(db.String(150), nullable=False)
+    display_name = db.Column(db.String(150), nullable=True)
+    legal_name = db.Column(db.String(150), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="Active")
+    type = db.Column(db.String(120), nullable=True)
     contact_person = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(120), nullable=True)
@@ -2640,11 +2644,16 @@ class Vendor(db.Model):
     country = db.Column(db.String(120), nullable=True)
     salesperson = db.Column(db.String(120), nullable=True)
     gstin = db.Column(db.String(80), nullable=True)
+    pan = db.Column(db.String(20), nullable=True)
+    payment_terms = db.Column(db.String(120), nullable=True)
+    lead_time_days = db.Column(db.Integer, nullable=True)
     address_line1 = db.Column(db.String(255), nullable=True)
     address_line2 = db.Column(db.String(255), nullable=True)
     pincode = db.Column(db.String(40), nullable=True)
     state = db.Column(db.String(120), nullable=True)
     address = db.Column(db.Text, nullable=True)
+    billing_address = db.Column(db.Text, nullable=True)
+    warehouse_address = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     last_used_at = db.Column(db.DateTime, nullable=True)
@@ -2661,8 +2670,11 @@ class VendorContact(db.Model):
     vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)
     role = db.Column(db.String(120), nullable=True)
+    designation = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(120), nullable=True)
+    whatsapp = db.Column(db.String(50), nullable=True)
+    is_primary = db.Column(db.Integer, nullable=False, default=0)
     priority = db.Column(db.Integer, nullable=True)
 
     vendor = db.relationship("Vendor")
@@ -2712,6 +2724,9 @@ class VendorProductRate(db.Model):
     unit_price = db.Column(db.Float, nullable=True)
     currency = db.Column(db.String(10), nullable=True, default="INR")
     vendor_part_name = db.Column(db.String(255), nullable=True)
+    moq = db.Column(db.Float, nullable=True)
+    lead_time_days = db.Column(db.Integer, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="Active")
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
@@ -2741,9 +2756,26 @@ class VendorProductRateHistory(db.Model):
     note = db.Column(db.Text, nullable=True)
     changed_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     changed_by = db.Column(db.String(120), nullable=True)
+    changed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
     vendor = db.relationship("Vendor")
     product = db.relationship("Product")
+    changed_by_user = db.relationship("User")
+
+
+class VendorAttachment(db.Model):
+    __tablename__ = "vendor_attachment"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    filename_original = db.Column(db.String(255), nullable=False)
+    filename_stored = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    vendor = db.relationship("Vendor")
+    uploaded_by_user = db.relationship("User")
 
 
 class PurchaseOrder(db.Model):

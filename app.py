@@ -7002,6 +7002,7 @@ from eleva_app.models import (
     VendorProductRate,
     VendorProductRateHistory,
     VendorContact,
+    VendorAttachment,
     VendorIssue,
     VendorComplaint,
     Vendor,
@@ -10689,7 +10690,10 @@ def generate_po_from_bom(bom_id):
     stage_options = _get_active_procurement_stages()
     default_stage = _get_default_procurement_stage()
     vendor_options = (
-        Vendor.query.filter(Vendor.is_active.is_(True))
+        Vendor.query.filter(
+            Vendor.is_active.is_(True),
+            func.lower(func.coalesce(Vendor.status, "Active")) != "inactive",
+        )
         .order_by(Vendor.name.asc())
         .all()
     )
@@ -10853,6 +10857,9 @@ def generate_po_from_bom(bom_id):
                 project_id_parsed = int(project_id_value) if project_id_value else None
                 stage_record = ProcurementStage.query.get(stage_id_int) if stage_id_int else None
                 vendor_record = Vendor.query.get(vendor_id_int) if vendor_id_int else None
+                if vendor_record and (vendor_record.status or "").strip().lower() == "inactive":
+                    flash("Vendor is inactive. Activate vendor to create a new PO.", "danger")
+                    return redirect(url_for("generate_po_from_bom", bom_id=bom.id, stage_id=selected_stage_id, vendor_id=selected_vendor_id, project_id=project_id_value))
 
                 base_note = (
                     f"Generated from BOM {bom.bom_name} (ID {bom.id}) – Stage {stage_record.name if stage_record else 'N/A'}"
@@ -12469,120 +12476,281 @@ def _normalize_vendor_issue_type(raw_value: str) -> str:
     return "OTHER"
 
 
-@app.route("/purchase/vendors/<int:vendor_id>", methods=["GET"])
+OPEN_PO_STATUSES = {"Draft", "Open", "Approved", "Sent", "Partially Received"}
+VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "xlsx", "docx"}
+
+
+@app.route("/purchase/vendors/<int:vendor_id>", methods=["GET", "POST"])
 @login_required
 def purchase_vendor_detail(vendor_id: int):
     ensure_bootstrap()
     vendor = Vendor.query.get_or_404(vendor_id)
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        if action == "save_vendor_profile":
+            vendor.display_name = (request.form.get("display_name") or "").strip() or None
+            vendor.legal_name = (request.form.get("legal_name") or "").strip() or None
+            vendor.status = (request.form.get("status") or "Active").strip() or "Active"
+            vendor.type = (request.form.get("vendor_type") or "").strip() or None
+            vendor.city = (request.form.get("city") or "").strip() or None
+            vendor.state = (request.form.get("state") or "").strip() or None
+            vendor.gstin = (request.form.get("gstin") or "").strip() or None
+            vendor.pan = (request.form.get("pan") or "").strip() or None
+            vendor.payment_terms = (request.form.get("payment_terms") or "").strip() or None
+            lead_time_raw = (request.form.get("lead_time_days") or "").strip()
+            vendor.lead_time_days = int(lead_time_raw) if lead_time_raw.isdigit() else None
+            vendor.billing_address = (request.form.get("billing_address") or "").strip() or None
+            vendor.warehouse_address = (request.form.get("warehouse_address") or "").strip() or None
+            vendor.notes = (request.form.get("notes") or "").strip() or None
+            vendor.name = vendor.display_name or vendor.name
+            vendor.is_active = vendor.status.lower() == "active"
+            db.session.commit()
+            flash("Vendor profile updated.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+        if action == "add_contact":
+            name = (request.form.get("name") or "").strip()
+            if not name:
+                flash("Contact name is required.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            contact = VendorContact(
+                vendor_id=vendor.id,
+                name=name,
+                phone=(request.form.get("phone") or "").strip() or None,
+                email=(request.form.get("email") or "").strip() or None,
+                whatsapp=(request.form.get("whatsapp") or "").strip() or None,
+                designation=(request.form.get("designation") or "").strip() or None,
+                role=(request.form.get("designation") or "").strip() or None,
+                is_primary=1 if request.form.get("is_primary") else 0,
+            )
+            db.session.add(contact)
+            db.session.flush()
+            if contact.is_primary:
+                VendorContact.query.filter(
+                    VendorContact.vendor_id == vendor.id,
+                    VendorContact.id != contact.id,
+                ).update({VendorContact.is_primary: 0}, synchronize_session=False)
+            db.session.commit()
+            flash("Contact added.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+        if action in {"update_contact", "delete_contact", "set_primary_contact"}:
+            contact_id = request.form.get("contact_id")
+            contact = VendorContact.query.filter_by(id=contact_id, vendor_id=vendor.id).first()
+            if not contact:
+                flash("Contact not found.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            if action == "delete_contact":
+                db.session.delete(contact)
+                db.session.commit()
+                flash("Contact deleted.", "success")
+            elif action == "set_primary_contact":
+                VendorContact.query.filter(VendorContact.vendor_id == vendor.id).update(
+                    {VendorContact.is_primary: 0}, synchronize_session=False
+                )
+                contact.is_primary = 1
+                db.session.commit()
+                flash("Primary contact updated.", "success")
+            else:
+                name = (request.form.get("name") or "").strip()
+                if not name:
+                    flash("Contact name is required.", "danger")
+                    return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+                contact.name = name
+                contact.phone = (request.form.get("phone") or "").strip() or None
+                contact.email = (request.form.get("email") or "").strip() or None
+                contact.whatsapp = (request.form.get("whatsapp") or "").strip() or None
+                contact.designation = (request.form.get("designation") or "").strip() or None
+                contact.role = contact.designation
+                if request.form.get("is_primary"):
+                    VendorContact.query.filter(
+                        VendorContact.vendor_id == vendor.id,
+                        VendorContact.id != contact.id,
+                    ).update({VendorContact.is_primary: 0}, synchronize_session=False)
+                    contact.is_primary = 1
+                db.session.commit()
+                flash("Contact updated.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+        if action in {"link_part", "update_part_link", "deactivate_part_link"}:
+            product_id_raw = request.form.get("product_id")
+            try:
+                product_id = int(product_id_raw)
+            except (TypeError, ValueError):
+                product_id = None
+            if not product_id:
+                flash("Select an Eleva part.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            link = VendorProductRate.query.filter_by(vendor_id=vendor.id, product_id=product_id).first()
+            if not link:
+                link = VendorProductRate(vendor_id=vendor.id, product_id=product_id, currency="INR")
+                db.session.add(link)
+            old_rate = link.unit_price
+            rate_raw = (request.form.get("rate") or "").strip()
+            moq_raw = (request.form.get("moq") or "").strip()
+            lead_raw = (request.form.get("lead_time_days") or "").strip()
+            link.vendor_part_name = (request.form.get("vendor_part_name") or "").strip() or None
+            link.unit_price = float(rate_raw) if rate_raw else None
+            link.moq = float(moq_raw) if moq_raw else None
+            link.lead_time_days = int(lead_raw) if lead_raw.isdigit() else None
+            if action == "deactivate_part_link":
+                link.status = "Inactive"
+            else:
+                link.status = (request.form.get("status") or "Active").strip() or "Active"
+            link.updated_by = current_user.username if current_user else None
+            link.updated_at = datetime.datetime.utcnow()
+            if old_rate != link.unit_price:
+                db.session.add(
+                    VendorProductRateHistory(
+                        vendor_id=vendor.id,
+                        product_id=product_id,
+                        old_unit_price=old_rate,
+                        new_unit_price=link.unit_price,
+                        currency=link.currency or "INR",
+                        changed_at=datetime.datetime.utcnow(),
+                        changed_by=current_user.username if current_user else None,
+                        changed_by_user_id=current_user.id if current_user else None,
+                    )
+                )
+            db.session.commit()
+            flash("Part link saved.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+        if action == "upload_attachment":
+            uploaded = request.files.get("attachment")
+            if not uploaded or not uploaded.filename:
+                flash("Choose a file to upload.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            ext = (uploaded.filename.rsplit(".", 1)[-1] if "." in uploaded.filename else "").lower()
+            if ext not in VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS:
+                flash("Invalid file type. Allowed: pdf, jpg, jpeg, png, xlsx, docx.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            original = uploaded.filename
+            stored = secure_filename(f"{uuid.uuid4().hex}_{original}")
+            rel_dir = os.path.join("vendor_attachments", str(vendor.id))
+            abs_dir = os.path.join(app.config["UPLOAD_FOLDER"], rel_dir)
+            os.makedirs(abs_dir, exist_ok=True)
+            abs_path = os.path.join(abs_dir, stored)
+            uploaded.save(abs_path)
+            record = VendorAttachment(
+                vendor_id=vendor.id,
+                filename_original=original,
+                filename_stored=stored,
+                file_path=os.path.join(rel_dir, stored),
+                uploaded_at=datetime.datetime.utcnow(),
+                uploaded_by_user_id=current_user.id if current_user else None,
+            )
+            db.session.add(record)
+            db.session.commit()
+            flash("Attachment uploaded.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+        if action == "delete_attachment":
+            attachment_id = request.form.get("attachment_id")
+            attachment = VendorAttachment.query.filter_by(id=attachment_id, vendor_id=vendor.id).first()
+            if not attachment:
+                flash("Attachment not found.", "danger")
+                return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+            abs_path = os.path.join(app.config["UPLOAD_FOLDER"], attachment.file_path)
+            if os.path.exists(abs_path):
+                os.remove(abs_path)
+            db.session.delete(attachment)
+            db.session.commit()
+            flash("Attachment deleted.", "success")
+            return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    tab = (request.args.get("tab") or "open").strip().lower()
     contacts = (
         VendorContact.query.filter_by(vendor_id=vendor.id)
-        .order_by(VendorContact.priority.asc().nullslast(), VendorContact.name.asc())
+        .order_by(VendorContact.is_primary.desc(), VendorContact.name.asc())
         .all()
     )
-    rate_rows = (
+    linked_parts = (
         VendorProductRate.query.options(joinedload(VendorProductRate.product))
         .filter_by(vendor_id=vendor.id)
         .order_by(VendorProductRate.updated_at.desc().nullslast())
         .all()
     )
-    vendor_issues = (
-        VendorIssue.query.options(
-            joinedload(VendorIssue.product),
-            joinedload(VendorIssue.purchase_order),
-            joinedload(VendorIssue.project),
-        )
-        .filter_by(vendor_id=vendor.id)
-        .order_by(VendorIssue.created_at.desc())
-        .all()
-    )
-    vendor_parts = []
-    seen_parts = set()
-    for rate in rate_rows:
-        if rate.product and rate.product.id not in seen_parts:
-            vendor_parts.append(rate.product)
-            seen_parts.add(rate.product.id)
-
     purchase_orders = (
-        PurchaseOrder.query.options(joinedload(PurchaseOrder.items))
+        PurchaseOrder.query.options(joinedload(PurchaseOrder.project), joinedload(PurchaseOrder.created_by), joinedload(PurchaseOrder.items))
         .filter_by(vendor_id=vendor.id)
         .order_by(PurchaseOrder.po_date.desc().nullslast(), PurchaseOrder.id.desc())
         .all()
     )
-    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
-    products = Product.query.order_by(Product.name.asc()).all()
-    projects = Project.query.order_by(Project.name.asc()).all()
-    closed_statuses = {"received", "closed", "completed", "done", "cancelled"}
-    open_pos = []
-    received_pos = []
-    po_rows = []
-    for po in purchase_orders:
-        status = (po.status or "").strip().lower()
-        if status in closed_statuses:
-            received_pos.append(po)
-            status_label = "Received"
-        else:
-            open_pos.append(po)
-            status_label = "Open"
-        po_rows.append(
-            {
-                "po": po,
-                "status_label": status_label,
-            }
-        )
+    attachments = (
+        VendorAttachment.query.filter_by(vendor_id=vendor.id)
+        .order_by(VendorAttachment.uploaded_at.desc())
+        .all()
+    )
 
     def _po_total(po):
         if po.grand_total_amount is not None:
             return float(po.grand_total_amount or 0)
         if po.subtotal_amount is not None:
             return float(po.subtotal_amount or 0)
-        total = 0.0
-        for item in po.items or []:
-            if item.total_amount is not None:
-                total += float(item.total_amount or 0)
-            else:
-                total += float(item.quantity_ordered or 0) * float(item.unit_price or 0)
-        return total
+        return sum(float(item.total_amount or 0) for item in (po.items or []))
 
-    today = date.today()
-    month_total = 0.0
-    ytd_total = 0.0
-    last_year_total = 0.0
     po_totals = {po.id: _po_total(po) for po in purchase_orders}
-    open_total = sum(po_totals.get(po.id, 0) for po in open_pos)
+    open_po_value = sum(
+        po_totals.get(po.id, 0)
+        for po in purchase_orders
+        if (po.status or "").strip() in OPEN_PO_STATUSES
+    )
 
-    for po in purchase_orders:
-        po_date = po.po_date or po.order_date
-        if not po_date:
-            continue
-        po_total = po_totals.get(po.id, 0)
-        if po_date.year == today.year and po_date.month == today.month:
-            month_total += po_total
-        if po_date.year == today.year and po_date <= today:
-            ytd_total += po_total
-        if po_date.year == today.year - 1:
-            last_year_total += po_total
+    if tab == "closed":
+        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() in {"closed", "completed", "received", "done"}]
+    elif tab == "cancelled":
+        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() == "cancelled"]
+    else:
+        po_history = [po for po in purchase_orders if (po.status or "").strip() in OPEN_PO_STATUSES]
 
+    products = Product.query.order_by(Product.name.asc()).all()
     return render_template(
-        "vendor_detail.html",
+        "purchase_vendor_detail.html",
         vendor=vendor,
         contacts=contacts,
-        rate_rows=rate_rows,
-        po_rows=po_rows,
-        vendor_issues=vendor_issues,
-        vendor_parts=vendor_parts,
-        purchase_orders=purchase_orders,
-        vendors=vendors,
-        products=products,
-        projects=projects,
-        issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
+        linked_parts=linked_parts,
+        purchase_orders=po_history,
         po_totals=po_totals,
-        analytics={
-            "month_total": month_total,
-            "open_total": open_total,
-            "ytd_total": ytd_total,
-            "last_year_total": last_year_total,
-        },
+        open_po_value=open_po_value,
+        products=products,
+        attachments=attachments,
+        active_tab=tab,
     )
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/parts/<int:product_id>/rate-history", methods=["GET"])
+@login_required
+def purchase_vendor_rate_history(vendor_id: int, product_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    product = Product.query.get_or_404(product_id)
+    history_rows = (
+        VendorProductRateHistory.query.filter_by(vendor_id=vendor.id, product_id=product.id)
+        .order_by(VendorProductRateHistory.changed_at.desc())
+        .all()
+    )
+    return render_template(
+        "purchase_vendor_rate_history.html",
+        vendor=vendor,
+        product=product,
+        history_rows=history_rows,
+    )
+
+
+@app.route("/purchase/vendors/<int:vendor_id>/attachments/<int:attachment_id>/download", methods=["GET"])
+@login_required
+def purchase_vendor_attachment_download(vendor_id: int, attachment_id: int):
+    ensure_bootstrap()
+    vendor = Vendor.query.get_or_404(vendor_id)
+    attachment = VendorAttachment.query.filter_by(id=attachment_id, vendor_id=vendor.id).first_or_404()
+    abs_path = os.path.join(app.config["UPLOAD_FOLDER"], attachment.file_path)
+    if not os.path.exists(abs_path):
+        flash("Attachment file not found on disk.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+    return send_file(abs_path, as_attachment=True, download_name=attachment.filename_original)
 
 
 @app.route("/purchase/vendors/<int:vendor_id>/contacts", methods=["POST"])
@@ -14200,16 +14368,25 @@ def ensure_vendor_columns():
 
     column_defs = [
         ("vendor_code", "TEXT"),
+        ("display_name", "TEXT"),
+        ("legal_name", "TEXT"),
+        ("status", "TEXT DEFAULT 'Active'"),
+        ("type", "TEXT"),
         ("activities", "TEXT"),
         ("city", "TEXT"),
         ("country", "TEXT"),
         ("salesperson", "TEXT"),
         ("gstin", "TEXT"),
+        ("pan", "TEXT"),
+        ("payment_terms", "TEXT"),
+        ("lead_time_days", "INTEGER"),
         ("address_line1", "TEXT"),
         ("address_line2", "TEXT"),
         ("pincode", "TEXT"),
         ("state", "TEXT"),
         ("address", "TEXT"),
+        ("billing_address", "TEXT"),
+        ("warehouse_address", "TEXT"),
         ("notes", "TEXT"),
         ("is_active", "INTEGER DEFAULT 1"),
         ("last_used_at", "DATETIME"),
@@ -14660,8 +14837,11 @@ def ensure_tables():
         BOMItem.__table__,
         Product.__table__,
         Vendor.__table__,
+        VendorContact.__table__,
         VendorIssue.__table__,
         VendorProductRate.__table__,
+        VendorProductRateHistory.__table__,
+        VendorAttachment.__table__,
         PurchaseOrder.__table__,
         PurchaseOrderLine.__table__,
         PurchaseOrderItem.__table__,
@@ -15784,6 +15964,9 @@ def ensure_vendor_product_rate_table():
                 unit_price REAL,
                 currency TEXT DEFAULT 'INR',
                 vendor_part_name TEXT,
+                moq REAL,
+                lead_time_days INTEGER,
+                status TEXT DEFAULT 'Active',
                 updated_by TEXT,
                 updated_at DATETIME
             );
@@ -15801,6 +15984,15 @@ def ensure_vendor_product_rate_table():
         if "updated_by" not in columns:
             cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN updated_by TEXT;")
             print("✅ Added updated_by to vendor_product_rate")
+        if "moq" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN moq REAL;")
+            print("✅ Added moq to vendor_product_rate")
+        if "lead_time_days" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN lead_time_days INTEGER;")
+            print("✅ Added lead_time_days to vendor_product_rate")
+        if "status" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN status TEXT DEFAULT 'Active';")
+            print("✅ Added status to vendor_product_rate")
         if "updated_at" not in columns:
             cur.execute("ALTER TABLE vendor_product_rate ADD COLUMN updated_at DATETIME;")
             print("✅ Added updated_at to vendor_product_rate")
@@ -15842,11 +16034,17 @@ def ensure_vendor_product_rate_history_table():
                 currency TEXT DEFAULT 'INR',
                 note TEXT,
                 changed_at DATETIME,
-                changed_by TEXT
+                changed_by TEXT,
+                changed_by_user_id INTEGER
             );
             """
         )
         print("✅ Created missing table: vendor_product_rate_history")
+    else:
+        columns = {row[1] for row in cur.execute("PRAGMA table_info(vendor_product_rate_history)")}
+        if "changed_by_user_id" not in columns:
+            cur.execute("ALTER TABLE vendor_product_rate_history ADD COLUMN changed_by_user_id INTEGER;")
+            print("✅ Added changed_by_user_id to vendor_product_rate_history")
 
     conn.commit()
     conn.close()
@@ -15871,8 +16069,11 @@ def ensure_vendor_contact_table():
                 vendor_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 role TEXT,
+                designation TEXT,
                 phone TEXT,
                 email TEXT,
+                whatsapp TEXT,
+                is_primary INTEGER DEFAULT 0,
                 priority INTEGER
             );
             """
@@ -15881,9 +16082,49 @@ def ensure_vendor_contact_table():
     else:
         cur.execute("PRAGMA table_info(vendor_contact)")
         contact_cols = [row[1] for row in cur.fetchall()]
+        if "designation" not in contact_cols:
+            cur.execute("ALTER TABLE vendor_contact ADD COLUMN designation TEXT;")
+            print("✅ Added missing column: vendor_contact.designation")
+        if "whatsapp" not in contact_cols:
+            cur.execute("ALTER TABLE vendor_contact ADD COLUMN whatsapp TEXT;")
+            print("✅ Added missing column: vendor_contact.whatsapp")
+        if "is_primary" not in contact_cols:
+            cur.execute("ALTER TABLE vendor_contact ADD COLUMN is_primary INTEGER DEFAULT 0;")
+            print("✅ Added missing column: vendor_contact.is_primary")
         if "priority" not in contact_cols:
             cur.execute("ALTER TABLE vendor_contact ADD COLUMN priority INTEGER;")
             print("✅ Added missing column: vendor_contact.priority")
+
+    conn.commit()
+    conn.close()
+
+
+def ensure_vendor_attachment_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_vendor_attachment_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='vendor_attachment';"
+    )
+    exists = cur.fetchone() is not None
+    if not exists:
+        cur.execute(
+            """
+            CREATE TABLE vendor_attachment (
+                id INTEGER PRIMARY KEY,
+                vendor_id INTEGER NOT NULL,
+                filename_original TEXT NOT NULL,
+                filename_stored TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                uploaded_at DATETIME,
+                uploaded_by_user_id INTEGER
+            );
+            """
+        )
+        print("✅ Created missing table: vendor_attachment")
 
     conn.commit()
     conn.close()
@@ -16060,6 +16301,7 @@ def bootstrap_db():
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
     ensure_vendor_contact_table()
+    ensure_vendor_attachment_table()
     ensure_vendor_issue_table()
     ensure_vendor_complaint_table()
     ensure_qc_columns()    # adds missing columns safely

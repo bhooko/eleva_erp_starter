@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Purchase · Vendor Detail{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Purchase</p>
+      <h1 class="text-2xl font-semibold">{{ vendor.display_name or vendor.name }}</h1>
+      <p class="text-sm text-slate-600">Status: <span class="font-semibold">{{ vendor.status or 'Active' }}</span></p>
+    </div>
+    <a href="{{ url_for('purchase_vendors') }}" class="px-4 py-2 rounded-xl border">← Back</a>
+  </div>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="text-lg font-semibold">Vendor Details</h2>
+    {% if (vendor.status or 'Active')|lower == 'inactive' %}
+    <p class="text-sm text-amber-700">New POs are blocked for inactive vendors.</p>
+    {% endif %}
+    <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save_vendor_profile">
+      <input name="display_name" placeholder="Vendor display name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200">
+      <input name="legal_name" placeholder="Vendor legal name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200">
+      <select name="status" class="rounded border-slate-200">
+        <option value="Active" {% if (vendor.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
+        <option value="Inactive" {% if (vendor.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+      <input name="vendor_type" placeholder="Type" value="{{ vendor.type or '' }}" class="rounded border-slate-200">
+      <input name="city" placeholder="City" value="{{ vendor.city or '' }}" class="rounded border-slate-200">
+      <input name="state" placeholder="State" value="{{ vendor.state or '' }}" class="rounded border-slate-200">
+      <input name="gstin" placeholder="GSTIN" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200">
+      <input name="pan" placeholder="PAN" value="{{ vendor.pan or '' }}" class="rounded border-slate-200">
+      <input name="payment_terms" placeholder="Payment terms" value="{{ vendor.payment_terms or '' }}" class="rounded border-slate-200">
+      <input name="lead_time_days" placeholder="Lead time (days)" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200">
+      <input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50" aria-label="Open PO value">
+      <textarea name="billing_address" rows="2" placeholder="Billing address" class="rounded border-slate-200">{{ vendor.billing_address or '' }}</textarea>
+      <textarea name="warehouse_address" rows="2" placeholder="Warehouse address" class="rounded border-slate-200">{{ vendor.warehouse_address or '' }}</textarea>
+      <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
+      <div class="md:col-span-2"><button class="px-4 py-2 rounded bg-slate-900 text-white">Save</button></div>
+    </form>
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="text-lg font-semibold">Contacts</h2>
+    <form method="post" class="grid grid-cols-1 md:grid-cols-6 gap-2">
+      {{ csrf_field() }}<input type="hidden" name="action" value="add_contact">
+      <input name="name" placeholder="Name" class="rounded border-slate-200">
+      <input name="phone" placeholder="Number" class="rounded border-slate-200">
+      <input name="email" placeholder="Email" class="rounded border-slate-200">
+      <input name="whatsapp" placeholder="WhatsApp" class="rounded border-slate-200">
+      <input name="designation" placeholder="Designation" class="rounded border-slate-200">
+      <label class="text-sm flex items-center gap-1"><input type="checkbox" name="is_primary">Primary</label>
+      <button class="px-3 py-2 rounded border">Add</button>
+    </form>
+    <table class="w-full text-sm">
+      <thead><tr class="text-left"><th>Name</th><th>Number</th><th>Email</th><th>WhatsApp</th><th>Designation</th><th>Primary</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for c in contacts %}
+        <tr class="border-t"><td>{{ c.name }}</td><td>{{ c.phone or '—' }}</td><td>{{ c.email or '—' }}</td><td>{{ c.whatsapp or '—' }}</td><td>{{ c.designation or c.role or '—' }}</td><td>{% if c.is_primary %}<span class="text-xs px-2 py-1 rounded bg-emerald-100">Primary</span>{% endif %}</td><td class="space-x-1">
+          {% if not c.is_primary %}<form method="post" class="inline">{{ csrf_field() }}<input type="hidden" name="action" value="set_primary_contact"><input type="hidden" name="contact_id" value="{{ c.id }}"><button class="text-blue-600">Set as primary</button></form>{% endif %}
+          <form method="post" class="inline">{{ csrf_field() }}<input type="hidden" name="action" value="delete_contact"><input type="hidden" name="contact_id" value="{{ c.id }}"><button class="text-rose-600">Delete</button></form>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="text-lg font-semibold">Parts linked to vendor</h2>
+    <input id="partsSearch" class="rounded border-slate-200" placeholder="Search part...">
+    <form method="post" class="grid grid-cols-1 md:grid-cols-6 gap-2">
+      {{ csrf_field() }}<input type="hidden" name="action" value="link_part">
+      <select name="product_id" class="rounded border-slate-200">{% for p in products %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+      <input name="vendor_part_name" placeholder="Vendor part name" class="rounded border-slate-200">
+      <input name="rate" placeholder="Rate" class="rounded border-slate-200">
+      <input name="moq" placeholder="MOQ" class="rounded border-slate-200">
+      <input name="lead_time_days" placeholder="Lead time" class="rounded border-slate-200">
+      <select name="status" class="rounded border-slate-200"><option>Active</option><option>Inactive</option></select>
+      <button class="px-3 py-2 rounded border">Save link</button>
+    </form>
+    <table class="w-full text-sm" id="partsTable"><thead><tr class="text-left"><th>Eleva part name</th><th>Vendor part name</th><th>Rate</th><th>MOQ</th><th>Lead time</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      {% for l in linked_parts %}
+      <tr class="border-t"><td>{{ l.product.name if l.product else '—' }}</td><td>{{ l.vendor_part_name or '—' }}</td><td>{{ l.unit_price if l.unit_price is not none else '—' }}</td><td>{{ l.moq if l.moq is not none else '—' }}</td><td>{{ l.lead_time_days or '—' }}</td><td>{{ l.status or 'Active' }}</td><td><a class="text-blue-600" href="{{ url_for('purchase_vendor_rate_history', vendor_id=vendor.id, product_id=l.product_id) }}">Rate history</a></td></tr>
+      {% endfor %}
+    </tbody></table>
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="text-lg font-semibold">Purchase Order history</h2>
+    <div class="space-x-3 text-sm"><a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id, tab='open') }}">Open</a><a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id, tab='closed') }}">Closed</a><a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id, tab='cancelled') }}">Cancelled</a></div>
+    <table class="w-full text-sm"><thead><tr class="text-left"><th>PO number</th><th>PO date</th><th>Project</th><th>Expected delivery</th><th>Status</th><th>Total value</th><th>Created by</th></tr></thead><tbody>
+      {% for po in purchase_orders %}
+      <tr class="border-t"><td><a class="text-blue-600" href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}">{{ po.po_number }}</a></td><td>{{ po.po_date or po.order_date or '—' }}</td><td>{{ po.project.name if po.project else '—' }}</td><td>{{ po.expected_delivery or po.expected_delivery_date or '—' }}</td><td>{{ po.status }}</td><td>{{ '%.2f'|format(po_totals.get(po.id, 0)) }}</td><td>{{ po.created_by.username if po.created_by else '—' }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="text-lg font-semibold">Attachments</h2>
+    <form method="post" enctype="multipart/form-data" class="flex items-center gap-2">{{ csrf_field() }}<input type="hidden" name="action" value="upload_attachment"><input type="file" name="attachment" required><button class="px-3 py-2 rounded border">Upload</button></form>
+    <ul class="text-sm space-y-1">{% for a in attachments %}<li class="flex items-center gap-2"><span>{{ a.filename_original }}</span><span class="text-slate-500">{{ a.uploaded_at.strftime('%d %b %Y') if a.uploaded_at else '' }}</span><a class="text-blue-600" href="{{ url_for('purchase_vendor_attachment_download', vendor_id=vendor.id, attachment_id=a.id) }}">Download</a><form method="post" class="inline">{{ csrf_field() }}<input type="hidden" name="action" value="delete_attachment"><input type="hidden" name="attachment_id" value="{{ a.id }}"><button class="text-rose-600">Delete</button></form></li>{% endfor %}</ul>
+  </section>
+</div>
+<script>
+  const searchInput = document.getElementById('partsSearch');
+  searchInput?.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase();
+    document.querySelectorAll('#partsTable tbody tr').forEach((tr) => {
+      tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}
