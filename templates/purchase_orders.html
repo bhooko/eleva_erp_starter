@@ -30,6 +30,7 @@
       <form method="POST" class="flex flex-col flex-1 min-h-0" id="purchase-order-form">
         {{ csrf_field() }}
         <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          <div class="hidden rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-po-form-alert></div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label class="space-y-1">
               <span class="text-sm">PO Number</span>
@@ -344,6 +345,7 @@
     const bomApplyModeInput = form.querySelector('[data-bom-apply-mode]');
     const applyBomModal = document.getElementById('apply-bom-modal');
     const applyBomError = applyBomModal ? applyBomModal.querySelector('[data-apply-bom-error]') : null;
+    const formAlert = form.querySelector('[data-po-form-alert]');
     const csrfToken = '{{ csrf_token() }}';
 
     let lastAutoExpected = '';
@@ -626,6 +628,23 @@
       }
       syncUnmappedWarning(row);
       updateTotals();
+    };
+
+    const dismissFormAlert = () => {
+      if (!formAlert) {
+        return;
+      }
+      formAlert.textContent = '';
+      formAlert.classList.add('hidden');
+    };
+
+    const showFormAlert = (message) => {
+      if (!formAlert) {
+        alert(message);
+        return;
+      }
+      formAlert.textContent = message;
+      formAlert.classList.remove('hidden');
     };
 
     const searchTimers = new WeakMap();
@@ -1250,24 +1269,20 @@
     });
 
     if (vendorSelect) {
-      vendorSelect.addEventListener('change', async () => {
+      vendorSelect.addEventListener('change', () => {
         if (!itemsContainer) {
           return;
         }
-        if (!vendorSelect.value) {
-          return;
-        }
         const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
-        for (const row of rows) {
-          const productId = row.querySelector('[data-product-id]')?.value || '';
-          if (!productId) {
-            continue;
+        rows.forEach((row) => {
+          clearPartSelectionForRow(row);
+          const warningEl = row.querySelector('[data-unmapped-warning]');
+          if (warningEl) {
+            warningEl.classList.add('hidden');
           }
-          const rateData = await fetchVendorRate(row);
-          if (!rateData || !rateData.found) {
-            clearPartSelectionForRow(row);
-          }
-        }
+          hideDropdown(row);
+        });
+        dismissFormAlert();
       });
     }
 
@@ -1310,24 +1325,19 @@
       if (!itemsContainer) {
         return;
       }
+      dismissFormAlert();
       const rows = Array.from(itemsContainer.querySelectorAll('.po-item-row'));
       const blockedRow = rows.find((row) => {
         const partName = (row.querySelector('[data-part-name]')?.value || '').trim();
         const productId = (row.querySelector('[data-product-id]')?.value || '').trim();
         const qtyRaw = (row.querySelector('[name="item_qty[]"]')?.value || '').trim();
         const qtyValue = parseNumber(qtyRaw);
-        const unitValue = (row.querySelector('[name="item_unit[]"]')?.value || '').trim();
         const unitPriceRaw = (row.querySelector('[name="item_unit_price[]"]')?.value || '').trim();
-        const unitPriceValue = parseNumber(unitPriceRaw);
-        const specValue = (row.querySelector('[data-specs]')?.value || '').trim();
-        const hasMeaningfulEntry = Boolean(
-          partName
-          || (qtyRaw && qtyValue > 0)
-          || unitValue
-          || (unitPriceRaw && unitPriceValue > 0)
-          || specValue
-        );
-        return hasMeaningfulEntry && !productId;
+        const hasMeaningfulEntry = Boolean(partName || qtyRaw || unitPriceRaw);
+        if (!hasMeaningfulEntry) {
+          return false;
+        }
+        return !productId || qtyValue <= 0;
       });
       if (blockedRow) {
         event.preventDefault();
@@ -1335,7 +1345,7 @@
         setTimeout(() => {
           blockedRow.classList.remove('border-rose-500', 'ring-1', 'ring-rose-200');
         }, 2000);
-        alert('Please select the Part from the dropdown (Parts Master). Free typing is not allowed.');
+        showFormAlert('Each entered row must map to a Part from the dropdown and have quantity greater than 0.');
       }
     });
 
