@@ -10324,6 +10324,7 @@ def parts_search():
     ensure_bootstrap()
     query = (request.args.get("q") or "").strip()
     vendor_id_raw = request.args.get("vendor_id") or ""
+    vendor_filter_requested = bool(vendor_id_raw.strip())
     limit_raw = request.args.get("limit") or "12"
     try:
         vendor_id = int(vendor_id_raw)
@@ -10337,9 +10338,12 @@ def parts_search():
     if not query:
         return jsonify([])
 
+    if vendor_filter_requested and vendor_id is None:
+        return jsonify([])
+
     like = f"%{query.lower()}%"
     parts_query = Product.query.filter(func.lower(Product.name).like(like))
-    if vendor_id:
+    if vendor_id is not None:
         parts_query = (
             parts_query.join(
                 VendorProductRate,
