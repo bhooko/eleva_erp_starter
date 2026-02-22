@@ -41,17 +41,40 @@
   </section>
 
   <section class="bg-white rounded-2xl border p-5 space-y-3">
-    <h2 class="text-lg font-semibold">Contacts</h2>
-    <form method="post" class="grid grid-cols-1 md:grid-cols-6 gap-2">
-      {{ csrf_field() }}<input type="hidden" name="action" value="add_contact">
-      <input name="name" placeholder="Name" class="rounded border-slate-200">
-      <input name="phone" placeholder="Number" class="rounded border-slate-200">
-      <input name="email" placeholder="Email" class="rounded border-slate-200">
-      <input name="whatsapp" placeholder="WhatsApp" class="rounded border-slate-200">
-      <input name="designation" placeholder="Designation" class="rounded border-slate-200">
-      <label class="text-sm flex items-center gap-1"><input type="checkbox" name="is_primary">Primary</label>
-      <button class="px-3 py-2 rounded border">Add</button>
-    </form>
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold">Contacts</h2>
+      <label for="add-contact" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Contact</label>
+    </div>
+
+    <div class="relative">
+      <input type="checkbox" id="add-contact" class="hidden peer">
+      <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('add-contact').checked=false;"></div>
+      <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+          <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+            <h2 class="text-lg font-semibold">Add Contact</h2>
+            <button class="text-slate-500" type="button" onclick="document.getElementById('add-contact').checked=false;">✕</button>
+          </div>
+          <form method="post" class="p-5 space-y-4">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="add_contact">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="name" placeholder="Name" class="rounded border-slate-200">
+              <input name="phone" placeholder="Number" class="rounded border-slate-200">
+              <input name="email" placeholder="Email" class="rounded border-slate-200">
+              <input name="whatsapp" placeholder="WhatsApp" class="rounded border-slate-200">
+              <input name="designation" placeholder="Designation" class="rounded border-slate-200 md:col-span-2">
+              <label class="text-sm flex items-center gap-1"><input type="checkbox" name="is_primary">Primary</label>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('add-contact').checked=false;">Cancel</button>
+              <button class="px-4 py-2 rounded bg-slate-900 text-white">Add</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <table class="w-full text-sm">
       <thead><tr class="text-left"><th>Name</th><th>Number</th><th>Email</th><th>WhatsApp</th><th>Designation</th><th>Primary</th><th>Actions</th></tr></thead>
       <tbody>
