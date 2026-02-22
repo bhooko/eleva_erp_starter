@@ -94,7 +94,7 @@
       <input type="checkbox" id="add-contact-modal" class="hidden peer">
       <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('add-contact-modal').checked=false;"></div>
       <div class="fixed inset-0 hidden peer-checked:flex items-center justify-center z-50 p-4">
-        <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[90vh]">
           <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b border-slate-200">
             <div>
               <h2 class="text-lg font-semibold">Add Contact</h2>
@@ -117,7 +117,7 @@
               </div>
             </div>
 
-            <div class="px-5 py-4 border-t border-slate-200 bg-gradient-to-t from-white via-white to-slate-50">
+            <div class="px-5 py-4 border-t border-slate-200 bg-white sticky bottom-0 z-10">
               <div class="flex justify-end gap-3">
                 <button type="button" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100" onclick="document.getElementById('add-contact-modal').checked=false;">Cancel</button>
                 <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save</button>
