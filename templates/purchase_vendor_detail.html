@@ -11,54 +11,98 @@
     <a href="{{ url_for('purchase_vendors') }}" class="px-4 py-2 rounded-xl border">← Back</a>
   </div>
 
-  <section class="bg-white rounded-2xl border p-5 space-y-3">
-    <h2 class="text-lg font-semibold">Vendor Details</h2>
+  <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold">Vendor Details</h2>
+      <label for="edit-vendor-modal" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.65-1.65a1.875 1.875 0 112.652 2.652l-1.65 1.65M16.862 4.487L9 12.349V15h2.651l7.861-7.863M16.862 4.487l2.652 2.652"/>
+        </svg>
+        Edit
+      </label>
+    </div>
     {% if (vendor.status or 'Active')|lower == 'inactive' %}
     <p class="text-sm text-amber-700">New POs are blocked for inactive vendors.</p>
     {% endif %}
-    <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {{ csrf_field() }}
-      <input type="hidden" name="action" value="save_vendor_profile">
-      <input name="display_name" placeholder="Vendor display name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200">
-      <input name="legal_name" placeholder="Vendor legal name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200">
-      <select name="status" class="rounded border-slate-200">
-        <option value="Active" {% if (vendor.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
-        <option value="Inactive" {% if (vendor.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
-      </select>
-      <input name="vendor_type" placeholder="Type" value="{{ vendor.type or '' }}" class="rounded border-slate-200">
-      <input name="city" placeholder="City" value="{{ vendor.city or '' }}" class="rounded border-slate-200">
-      <input name="state" placeholder="State" value="{{ vendor.state or '' }}" class="rounded border-slate-200">
-      <input name="gstin" placeholder="GSTIN" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200">
-      <input name="pan" placeholder="PAN" value="{{ vendor.pan or '' }}" class="rounded border-slate-200">
-      <input name="payment_terms" placeholder="Payment terms" value="{{ vendor.payment_terms or '' }}" class="rounded border-slate-200">
-      <input name="lead_time_days" placeholder="Lead time (days)" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200">
-      <input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50" aria-label="Open PO value">
-      <textarea name="billing_address" rows="2" placeholder="Billing address" class="rounded border-slate-200">{{ vendor.billing_address or '' }}</textarea>
-      <textarea name="warehouse_address" rows="2" placeholder="Warehouse address" class="rounded border-slate-200">{{ vendor.warehouse_address or '' }}</textarea>
-      <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
-      <div class="md:col-span-2"><button class="px-4 py-2 rounded bg-slate-900 text-white">Save</button></div>
-    </form>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+      <div><p class="text-xs uppercase text-slate-500">Vendor display name</p><p class="text-slate-700">{{ vendor.display_name or vendor.name }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Legal name</p><p class="text-slate-700">{{ vendor.legal_name or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Status</p><p class="text-slate-700">{{ vendor.status or 'Active' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Type</p><p class="text-slate-700">{{ vendor.type or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">City</p><p class="text-slate-700">{{ vendor.city or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">State</p><p class="text-slate-700">{{ vendor.state or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">GSTIN</p><p class="text-slate-700">{{ vendor.gstin or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">PAN</p><p class="text-slate-700">{{ vendor.pan or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Payment terms</p><p class="text-slate-700">{{ vendor.payment_terms or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Lead time</p><p class="text-slate-700">{{ vendor.lead_time_days or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Open PO value</p><p class="text-slate-700">{{ '%.2f'|format(open_po_value) }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Billing address</p><p class="text-slate-700">{{ vendor.billing_address or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Warehouse address</p><p class="text-slate-700">{{ vendor.warehouse_address or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Notes</p><p class="text-slate-700">{{ vendor.notes or '—' }}</p></div>
+    </div>
   </section>
+
+  <div class="relative">
+    <input type="checkbox" id="edit-vendor-modal" class="hidden peer">
+    <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('edit-vendor-modal').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center p-4 pointer-events-none peer-checked:pointer-events-auto">
+      <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
+          <h2 class="text-lg font-semibold">Edit Vendor Details</h2>
+          <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="text-slate-500 hover:text-slate-800">✕</button>
+        </div>
+        <form method="post" class="flex flex-col flex-1">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="save_vendor_profile">
+          <div class="p-6 overflow-y-auto flex-1">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="display_name" placeholder="Vendor display name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200">
+              <input name="legal_name" placeholder="Vendor legal name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200">
+              <select name="status" class="rounded border-slate-200">
+                <option value="Active" {% if (vendor.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
+                <option value="Inactive" {% if (vendor.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
+              </select>
+              <input name="vendor_type" placeholder="Type" value="{{ vendor.type or '' }}" class="rounded border-slate-200">
+              <input name="city" placeholder="City" value="{{ vendor.city or '' }}" class="rounded border-slate-200">
+              <input name="state" placeholder="State" value="{{ vendor.state or '' }}" class="rounded border-slate-200">
+              <input name="gstin" placeholder="GSTIN" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200">
+              <input name="pan" placeholder="PAN" value="{{ vendor.pan or '' }}" class="rounded border-slate-200">
+              <input name="payment_terms" placeholder="Payment terms" value="{{ vendor.payment_terms or '' }}" class="rounded border-slate-200">
+              <input name="lead_time_days" placeholder="Lead time (days)" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200">
+              <input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50" aria-label="Open PO value">
+              <textarea name="billing_address" rows="2" placeholder="Billing address" class="rounded border-slate-200">{{ vendor.billing_address or '' }}</textarea>
+              <textarea name="warehouse_address" rows="2" placeholder="Warehouse address" class="rounded border-slate-200">{{ vendor.warehouse_address or '' }}</textarea>
+              <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
+            </div>
+          </div>
+          <div class="border-t bg-white px-6 py-4 flex justify-end gap-3">
+            <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <section class="bg-white rounded-2xl border p-5 space-y-3">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Contacts</h2>
-      <label for="add-contact" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ Add Contact</label>
+      <label for="add-contact-modal" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer transition">+ Add Contact</label>
     </div>
 
     <div class="relative">
-      <input type="checkbox" id="add-contact" class="hidden peer">
-      <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('add-contact').checked=false;"></div>
-      <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
-          <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+      <input type="checkbox" id="add-contact-modal" class="hidden peer">
+      <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('add-contact-modal').checked=false;"></div>
+      <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center p-4 pointer-events-none peer-checked:pointer-events-auto">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+          <div class="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
             <h2 class="text-lg font-semibold">Add Contact</h2>
-            <button class="text-slate-500" type="button" onclick="document.getElementById('add-contact').checked=false;">✕</button>
+            <button class="text-slate-500 hover:text-slate-800" type="button" onclick="document.getElementById('add-contact-modal').checked=false;">✕</button>
           </div>
-          <form method="post" class="p-5 space-y-4">
+          <form method="post" class="flex flex-col flex-1">
             {{ csrf_field() }}
             <input type="hidden" name="action" value="add_contact">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto flex-1">
               <input name="name" placeholder="Name" class="rounded border-slate-200">
               <input name="phone" placeholder="Number" class="rounded border-slate-200">
               <input name="email" placeholder="Email" class="rounded border-slate-200">
@@ -66,9 +110,9 @@
               <input name="designation" placeholder="Designation" class="rounded border-slate-200 md:col-span-2">
               <label class="text-sm flex items-center gap-1"><input type="checkbox" name="is_primary">Primary</label>
             </div>
-            <div class="flex items-center justify-end gap-3 pt-2">
-              <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('add-contact').checked=false;">Cancel</button>
-              <button class="px-4 py-2 rounded bg-slate-900 text-white">Add</button>
+            <div class="border-t bg-white px-6 py-4 flex justify-end gap-3">
+              <button type="button" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50" onclick="document.getElementById('add-contact-modal').checked=false;">Cancel</button>
+              <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save Contact</button>
             </div>
           </form>
         </div>
