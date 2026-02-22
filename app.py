@@ -12489,7 +12489,7 @@ def _normalize_vendor_issue_type(raw_value: str) -> str:
     return "OTHER"
 
 
-OPEN_PO_STATUSES = {"Draft", "Open", "Approved", "Sent", "Partially Received"}
+OPEN_PO_STATUSES = {"draft", "open", "approved", "sent", "partially received"}
 VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "xlsx", "docx"}
 
 
@@ -12709,7 +12709,7 @@ def purchase_vendor_detail(vendor_id: int):
     open_po_value = sum(
         po_totals.get(po.id, 0)
         for po in purchase_orders
-        if (po.status or "").strip() in OPEN_PO_STATUSES
+        if (po.status or "").strip().lower() in OPEN_PO_STATUSES
     )
 
     if tab == "closed":
@@ -12717,7 +12717,7 @@ def purchase_vendor_detail(vendor_id: int):
     elif tab == "cancelled":
         po_history = [po for po in purchase_orders if (po.status or "").strip().lower() == "cancelled"]
     else:
-        po_history = [po for po in purchase_orders if (po.status or "").strip() in OPEN_PO_STATUSES]
+        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() in OPEN_PO_STATUSES]
 
     products = Product.query.order_by(Product.name.asc()).all()
     return render_template(
