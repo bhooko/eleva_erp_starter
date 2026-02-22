@@ -10233,13 +10233,20 @@ def purchase_bom_po_lines_preview(bom_id: int):
 
     vendor_linked_part_ids = None
     if vendor_id:
-        vendor_linked_part_ids = {
+        vendor_rate_part_ids = {
             product_id
             for (product_id,) in db.session.query(VendorProductRate.product_id)
             .filter(VendorProductRate.vendor_id == vendor_id)
             .distinct()
             .all()
         }
+        primary_vendor_part_ids = {
+            product_id
+            for (product_id,) in db.session.query(Product.id)
+            .filter(Product.primary_vendor_id == vendor_id)
+            .all()
+        }
+        vendor_linked_part_ids = vendor_rate_part_ids | primary_vendor_part_ids
 
     bom = BillOfMaterials.query.get_or_404(bom_id)
     bom_items = (
@@ -10338,10 +10345,19 @@ def parts_search():
     like = f"%{query.lower()}%"
     parts_query = Product.query.filter(func.lower(Product.name).like(like))
     if vendor_id:
-        parts_query = parts_query.join(
-            VendorProductRate,
-            VendorProductRate.product_id == Product.id,
-        ).filter(VendorProductRate.vendor_id == vendor_id)
+        parts_query = (
+            parts_query.outerjoin(
+                VendorProductRate,
+                VendorProductRate.product_id == Product.id,
+            )
+            .filter(
+                or_(
+                    VendorProductRate.vendor_id == vendor_id,
+                    Product.primary_vendor_id == vendor_id,
+                )
+            )
+            .distinct()
+        )
     parts = parts_query.order_by(Product.name.asc()).limit(limit).all()
 
     payload = []
