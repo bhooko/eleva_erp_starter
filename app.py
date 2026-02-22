@@ -9950,6 +9950,7 @@ def purchase_orders():
             origin="erp",
         )
         db.session.add(po)
+        vendor_id_int = None
         if vendor_id:
             try:
                 vendor_id_int = int(vendor_id)
@@ -10107,6 +10108,24 @@ def purchase_orders():
             quantity = float(row_data.get("quantity") or 0)
             unit_price = row_data.get("unit_price")
             currency = (row_data.get("currency") or "INR").strip() or "INR"
+
+            if not product_id and item_name:
+                matched_product = Product.query.filter(
+                    func.lower(Product.name) == item_name.lower()
+                ).first()
+                if matched_product:
+                    vendor_link_valid = True
+                    if vendor_id_int:
+                        vendor_link_valid = (
+                            db.session.query(VendorProductRate.id)
+                            .filter(VendorProductRate.vendor_id == vendor_id_int)
+                            .filter(VendorProductRate.product_id == matched_product.id)
+                            .filter(VendorProductRate.status == "Active")
+                            .first()
+                            is not None
+                        )
+                    if vendor_link_valid:
+                        product_id = matched_product.id
 
             if not item_name or quantity <= 0:
                 invalid_rows = True
