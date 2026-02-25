@@ -10446,7 +10446,7 @@ def parts_create():
     )
 
 
-@app.route("/purchase/orders/<int:po_id>")
+@app.route("/purchase/orders/<int:po_id>", methods=["GET", "POST"])
 @login_required
 def purchase_order_detail_view(po_id: int):
     ensure_bootstrap()
@@ -10463,13 +10463,32 @@ def purchase_order_detail_view(po_id: int):
     if not po:
         abort(404)
 
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        if action == "solve_vendor_issue":
+            issue_id = request.form.get("issue_id")
+            issue = VendorIssue.query.get(issue_id)
+
+            if issue and issue.po_id == po.id:
+                issue.status = "Solved"
+                db.session.commit()
+
+            return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
     vendor_issues = (
         VendorIssue.query.options(
             joinedload(VendorIssue.product),
             joinedload(VendorIssue.purchase_order),
         )
         .filter_by(po_id=po.id)
-        .order_by(VendorIssue.created_at.desc())
+        .order_by(
+            case(
+                (VendorIssue.status == "Solved", 1),
+                else_=0,
+            ),
+            VendorIssue.id.desc(),
+        )
         .all()
     )
     issue_products = []
