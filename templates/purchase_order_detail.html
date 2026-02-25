@@ -164,11 +164,15 @@
     </div>
   </div>
 
-  <div class="grid gap-6 lg:grid-cols-3 items-start">
-    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Vendor issues</p>
-        <h2 class="text-lg font-semibold">Issues linked to this PO</h2>
+  <div class="space-y-3">
+    <input type="checkbox" id="create-issue-modal" class="hidden peer" />
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs uppercase text-slate-500">Vendor issues</p>
+          <h2 class="text-lg font-semibold">Issues linked to this PO</h2>
+        </div>
+        <label for="create-issue-modal" class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">+ Create issue</label>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -198,46 +202,57 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-      <div>
-        <p class="text-xs uppercase text-slate-500">Log vendor issue</p>
-        <h2 class="text-lg font-semibold">Manual entry</h2>
-      </div>
-      {% if po.vendor %}
-      <form method="POST" action="{{ url_for('purchase_order_issue_create', po_id=po.id) }}" class="space-y-3">
-        {{ csrf_field() }}
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Vendor</span>
-          <input type="text" readonly value="{{ po.vendor.name }}" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Part (optional)</span>
-          <select name="product_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
-            <option value="">—</option>
-            {% for part in issue_products %}
-            <option value="{{ part.id }}">{{ part.label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Issue type</span>
-          <select name="issue_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
-            {% for issue_value, issue_label in issue_type_options %}
-            <option value="{{ issue_value }}">{{ issue_label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Description</span>
-          <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
-        </label>
-        <div class="flex justify-end">
-          <button type="submit" class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Log issue</button>
+    <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('create-issue-modal').checked=false;"></div>
+    <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center p-4">
+      <div class="w-full max-w-3xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h3 class="text-lg font-semibold">Create vendor issue</h3>
+          <label for="create-issue-modal" class="h-8 w-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer" aria-label="Close modal">✕</label>
         </div>
-      </form>
-      {% else %}
-      <p class="text-sm text-slate-500">Assign a vendor to this PO to log issues.</p>
-      {% endif %}
+        <div class="px-6 py-5">
+          {% if po.vendor %}
+          <form method="POST" action="{{ url_for('purchase_order_issue_create', po_id=po.id) }}" class="space-y-3">
+            {{ csrf_field() }}
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Vendor</span>
+              <input type="text" readonly value="{{ po.vendor.name }}" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Part (optional)</span>
+              <select name="product_id" class="w-full rounded-lg border-slate-200 px-3 py-2">
+                <option value="">—</option>
+                {% for part in issue_products %}
+                <option value="{{ part.id }}">{{ part.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Issue type</span>
+              <select name="issue_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
+                {% for issue_value, issue_label in issue_type_options %}
+                <option value="{{ issue_value }}">{{ issue_label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-xs text-slate-600">Description</span>
+              <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
+            </label>
+            <div class="flex justify-end gap-2 pt-2">
+              <label for="create-issue-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">Cancel</label>
+              <button type="submit" class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Log issue</button>
+            </div>
+          </form>
+          {% else %}
+          <div class="space-y-4">
+            <p class="text-sm text-slate-500">Assign a vendor to this PO to log issues.</p>
+            <div class="flex justify-end">
+              <label for="create-issue-modal" class="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">Cancel</label>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 </div>
