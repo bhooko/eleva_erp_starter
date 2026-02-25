@@ -159,7 +159,7 @@
           <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="1">
             <span class="inline-flex items-center gap-1">Address <span class="sort-indicator text-xs">⇅</span></span>
           </th>
-          <th class="py-3 px-4 text-center">Edit</th>
+          <th class="py-3 px-4 text-center">View</th>
         </tr>
       </thead>
       <tbody class="divide-y">
@@ -170,21 +170,17 @@
           </td>
           <td class="py-3 px-4">{{ vendor.address or '—' }}</td>
           <td class="py-3 px-4 text-center">
-            <button
-              type="button"
-              class="vendor-edit-button inline-flex items-center justify-center h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition"
-              data-id="{{ vendor.id }}"
-              data-name="{{ vendor.name|e }}"
-              data-address="{{ vendor.address|default('', true)|e }}"
-              data-contact="{{ vendor.contact_person|default('', true)|e }}"
-              data-phone="{{ vendor.phone|default('', true)|e }}"
-              data-email="{{ vendor.email|default('', true)|e }}"
-              data-notes="{{ vendor.notes|default('', true)|e }}"
-              data-edit-url="{{ url_for('purchase_vendor_edit', vendor_id=vendor.id) }}"
-              aria-label="Edit vendor"
+            <a
+              href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id) }}"
+              class="inline-flex items-center justify-center h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 transition"
+              aria-label="View vendor"
+              title="View vendor"
             >
-              ✎
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12s-3.75 6.75-9.75 6.75S2.25 12 2.25 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </a>
           </td>
         </tr>
         {% else %}
