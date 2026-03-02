@@ -11565,6 +11565,7 @@ def purchase_part_detail(product_id):
         "purchase_part_detail.html",
         product=product,
         vendors=vendors,
+        uom_options=UOM_OPTIONS,
         vendor_rates=rate_rows,
         recent_rate_history=recent_history,
         all_rate_history=history_rows,
@@ -11617,8 +11618,9 @@ def purchase_parts_update(product_id):
     product.name = name
     product.sale_price = sale_price
     product.cost = cost
-    product.uom = (request.form.get("uom") or "").strip() or None
-    product.purchase_uom = (request.form.get("purchase_uom") or "").strip() or None
+    selected_uom = (request.form.get("purchase_uom") or "").strip() or None
+    product.purchase_uom = selected_uom
+    product.uom = selected_uom
     product.qty_on_hand = qty_on_hand or 0
     product.forecast_qty = forecast_qty or 0
     product.is_favorite = request.form.get("is_favorite") == "on"
@@ -12510,6 +12512,7 @@ def _normalize_vendor_issue_type(raw_value: str) -> str:
 
 OPEN_PO_STATUSES = {"draft", "open", "approved", "sent", "partially received"}
 VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "xlsx", "docx"}
+UOM_OPTIONS = ["Nos", "Set", "Pair", "Meter", "MM", "Kg", "Litre", "Box", "Roll", "SqFt"]
 
 
 @app.route("/purchase/vendors/<int:vendor_id>", methods=["GET", "POST"])
@@ -12535,6 +12538,10 @@ def purchase_vendor_detail(vendor_id: int):
             vendor.lead_time_days = int(lead_time_raw) if lead_time_raw.isdigit() else None
             vendor.billing_address = (request.form.get("billing_address") or "").strip() or None
             vendor.warehouse_address = (request.form.get("warehouse_address") or "").strip() or None
+            vendor.bank_account_name = (request.form.get("bank_account_name") or "").strip() or None
+            vendor.bank_name = (request.form.get("bank_name") or "").strip() or None
+            vendor.bank_ifsc = (request.form.get("bank_ifsc") or "").strip().upper() or None
+            vendor.bank_address = (request.form.get("bank_address") or "").strip() or None
             vendor.notes = (request.form.get("notes") or "").strip() or None
             vendor.name = vendor.display_name or vendor.name
             vendor.is_active = vendor.status.lower() == "active"
@@ -13431,15 +13438,7 @@ def store_receive():
             PurchaseOrder.query.get(purchase_order_id) if purchase_order_id else None
         )
         receipt_number = request.form.get("receipt_number") or f"RC-{uuid.uuid4().hex[:6].upper()}"
-        received_date_raw = request.form.get("received_date")
-        try:
-            received_date = (
-                datetime.datetime.strptime(received_date_raw, "%Y-%m-%d").date()
-                if received_date_raw
-                else None
-            )
-        except ValueError:
-            received_date = None
+        received_date = datetime.date.today()
 
         receipt = InventoryReceipt(
             purchase_order_id=purchase_order_id,
@@ -13530,8 +13529,15 @@ def store_receive():
         .order_by(InventoryReceipt.id.desc())
         .all()
     )
+    default_receipt_number = f"RC-{uuid.uuid4().hex[:6].upper()}"
+    today_ymd = datetime.date.today().isoformat()
     return render_template(
-        "store_receive.html", pos=pos, selected_po=selected_po, receipts=receipts
+        "store_receive.html",
+        pos=pos,
+        selected_po=selected_po,
+        receipts=receipts,
+        default_receipt_number=default_receipt_number,
+        today_ymd=today_ymd,
     )
 
 
@@ -14419,6 +14425,10 @@ def ensure_vendor_columns():
         ("address", "TEXT"),
         ("billing_address", "TEXT"),
         ("warehouse_address", "TEXT"),
+        ("bank_account_name", "TEXT"),
+        ("bank_name", "TEXT"),
+        ("bank_ifsc", "TEXT"),
+        ("bank_address", "TEXT"),
         ("notes", "TEXT"),
         ("is_active", "INTEGER DEFAULT 1"),
         ("last_used_at", "DATETIME"),
