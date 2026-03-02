@@ -13448,11 +13448,16 @@ def store_receive():
     )
 
     if request.method == "POST":
+        action = request.form.get("action", "create_receipt")
+        if action != "create_receipt":
+            flash("Unsupported action for receipt workflow.", "warning")
+            return redirect(url_for("store_receive"))
+
         purchase_order_id = request.form.get("purchase_order_id")
         purchase_order = (
             PurchaseOrder.query.get(purchase_order_id) if purchase_order_id else None
         )
-        receipt_number = request.form.get("receipt_number") or f"RC-{uuid.uuid4().hex[:6].upper()}"
+        receipt_number = request.form.get("receipt_number") or f"GRN-{uuid.uuid4().hex[:6].upper()}"
         received_date = datetime.date.today()
 
         receipt = InventoryReceipt(
@@ -13467,7 +13472,16 @@ def store_receive():
         for key in request.form:
             if key.startswith("item_") and key.endswith("_qty"):
                 item_id = key.split("_")[1]
-                qty = float(request.form.get(key) or 0)
+                qty, qty_error = parse_int_field(request.form.get(key), "Qty received")
+                if qty_error:
+                    db.session.rollback()
+                    flash(qty_error, "danger")
+                    return redirect(url_for("store_receive"))
+                qty = qty or 0
+                if qty < 0:
+                    db.session.rollback()
+                    flash("Qty received cannot be negative.", "danger")
+                    return redirect(url_for("store_receive"))
                 status_key = f"item_{item_id}_qc"
                 notes_key = f"item_{item_id}_notes"
                 qc_status = request.form.get(status_key)
@@ -13555,7 +13569,7 @@ def store_receive():
         .order_by(InventoryReceipt.id.desc())
         .all()
     )
-    default_receipt_number = f"RC-{uuid.uuid4().hex[:6].upper()}"
+    default_receipt_number = f"GRN-{uuid.uuid4().hex[:6].upper()}"
     today_ymd = datetime.date.today().isoformat()
     return render_template(
         "store_receive.html",
@@ -13565,6 +13579,56 @@ def store_receive():
         receipts=receipts,
         default_receipt_number=default_receipt_number,
         today_ymd=today_ymd,
+    )
+
+
+@app.route("/store/receipts/<int:receipt_id>", methods=["GET", "POST"])
+@login_required
+def store_receipt_detail(receipt_id):
+    ensure_bootstrap()
+    receipt = (
+        InventoryReceipt.query.options(
+            joinedload(InventoryReceipt.purchase_order),
+            joinedload(InventoryReceipt.received_by),
+            subqueryload(InventoryReceipt.items).joinedload(InventoryReceiptItem.purchase_order_item),
+        )
+        .filter_by(id=receipt_id)
+        .first_or_404()
+    )
+
+    qc_status_options = ["OK", "NG"]
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action != "update_receipt":
+            flash("Unsupported action for receipt update.", "warning")
+            return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+        for item in receipt.items:
+            qty_value = request.form.get(f"item_{item.id}_qty_received")
+            qty_received, qty_error = parse_int_field(qty_value, "Qty received")
+            if qty_error:
+                flash(qty_error, "danger")
+                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+            qty_received = qty_received or 0
+            if qty_received < 0:
+                flash("Qty received cannot be negative.", "danger")
+                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+            item.quantity_received = qty_received
+            item.qc_status = request.form.get(f"item_{item.id}_qc_status")
+            item.qc_notes = request.form.get(f"item_{item.id}_notes")
+
+        db.session.commit()
+        flash("Receipt updated successfully.", "success")
+        return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+    receipt_items = sorted(receipt.items, key=lambda row: row.id)
+    return render_template(
+        "store_receipt_detail.html",
+        receipt=receipt,
+        receipt_items=receipt_items,
+        qc_status_options=qc_status_options,
     )
 
 

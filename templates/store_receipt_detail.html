@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Store · Goods Receipt{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-sm uppercase text-slate-500">Store</p>
+        <h1 class="text-2xl font-semibold">Goods Receipt (GRN)</h1>
+      </div>
+      <a href="{{ url_for('store_receive') }}" class="px-4 py-2 btn-secondary rounded-lg">Back</a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div>
+        <p class="text-slate-500">Goods Receipt No (GRN)</p>
+        <p class="font-semibold text-slate-800">{{ receipt.receipt_number }}</p>
+      </div>
+      <div>
+        <p class="text-slate-500">Purchase Order</p>
+        <p class="font-semibold text-slate-800">{{ receipt.purchase_order.po_number if receipt.purchase_order else '—' }}</p>
+        <p class="text-slate-500">{{ receipt.purchase_order.vendor.name if receipt.purchase_order and receipt.purchase_order.vendor else '' }}</p>
+      </div>
+      <div>
+        <p class="text-slate-500">Received date</p>
+        <p class="font-semibold text-slate-800">{{ receipt.received_date or '—' }}</p>
+      </div>
+    </div>
+
+    <form method="POST" class="space-y-4">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="update_receipt" />
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="py-2">Item</th>
+              <th class="py-2">Description</th>
+              <th class="py-2">Qty ordered</th>
+              <th class="py-2">Qty received</th>
+              <th class="py-2">QC</th>
+              <th class="py-2">Notes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for item in receipt_items %}
+            <tr>
+              <td class="py-2">{{ item.item_code }}</td>
+              <td class="py-2">{{ item.description or '—' }}</td>
+              <td class="py-2">{{ item.purchase_order_item.quantity_ordered if item.purchase_order_item else '—' }}</td>
+              <td class="py-2">
+                <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
+              </td>
+              <td class="py-2">
+                <select name="item_{{ item.id }}_qc_status" class="rounded-lg border-slate-200">
+                  {% for qc in qc_status_options %}
+                    <option value="{{ qc }}" {% if item.qc_status == qc %}selected{% endif %}>{{ qc }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="py-2">
+                <input type="text" name="item_{{ item.id }}_notes" value="{{ item.qc_notes or '' }}" class="w-full rounded-lg border-slate-200" />
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="py-3 text-slate-500">No receipt lines found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 sticky bottom-0 bg-white pt-3">
+        <a href="{{ url_for('store_receive') }}" class="px-4 py-2 btn-secondary rounded-lg">Back</a>
+        <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
