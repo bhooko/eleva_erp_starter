@@ -107,7 +107,7 @@
             <th class="py-2 px-3">Unit Price</th>
             <th class="py-2 px-3">Currency</th>
             <th class="py-2 px-3">Total</th>
-            <th class="py-2 px-3">BOM Sync</th>
+            <th class="py-2 px-3">BOM Link</th>
             <th class="py-2 px-3">Spec Change</th>
           </tr>
         </thead>
@@ -127,10 +127,10 @@
             <td class="py-2 px-3">{{ item.currency or '—' }}</td>
             <td class="py-2 px-3">{{ item.total_amount if item.total_amount is not none else '—' }}</td>
             <td class="py-2 px-3">
-              {% if item.is_out_of_sync %}
-              <span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">Out of sync</span>
+              {% if po.bom or po.bom_id %}
+              <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800">Linked</span>
               {% else %}
-              <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800">Synced</span>
+              <span class="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">No BOM link</span>
               {% endif %}
             </td>
             <td class="py-2 px-3">
