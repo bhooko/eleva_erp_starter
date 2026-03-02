@@ -2655,6 +2655,7 @@ class Vendor(db.Model):
     billing_address = db.Column(db.Text, nullable=True)
     warehouse_address = db.Column(db.Text, nullable=True)
     bank_account_name = db.Column(db.String(150), nullable=True)
+    bank_account_number = db.Column(db.String(50), nullable=True)
     bank_name = db.Column(db.String(150), nullable=True)
     bank_ifsc = db.Column(db.String(30), nullable=True)
     bank_address = db.Column(db.Text, nullable=True)
