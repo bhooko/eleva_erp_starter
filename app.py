@@ -13441,7 +13441,11 @@ def dispatch_delivery_order(order_id):
 @login_required
 def store_receive():
     ensure_bootstrap()
-    pos = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).all()
+    pos = (
+        PurchaseOrder.query.options(subqueryload(PurchaseOrder.items))
+        .order_by(PurchaseOrder.id.desc())
+        .all()
+    )
 
     if request.method == "POST":
         purchase_order_id = request.form.get("purchase_order_id")
@@ -13531,6 +13535,17 @@ def store_receive():
         return redirect(url_for("store_receive"))
 
     selected_po = pos[0] if pos else None
+    selected_po_items = []
+    if selected_po:
+        selected_po_items = [
+            {
+                "line_id": item.id,
+                "item_code": item.item_code,
+                "description": item.description,
+                "qty_ordered": item.quantity_ordered,
+            }
+            for item in selected_po.items
+        ]
     receipts = (
         InventoryReceipt.query.options(
             joinedload(InventoryReceipt.purchase_order),
@@ -13546,6 +13561,7 @@ def store_receive():
         "store_receive.html",
         pos=pos,
         selected_po=selected_po,
+        selected_po_items=selected_po_items,
         receipts=receipts,
         default_receipt_number=default_receipt_number,
         today_ymd=today_ymd,
