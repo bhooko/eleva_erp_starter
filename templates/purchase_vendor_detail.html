@@ -54,17 +54,22 @@
 
   <div class="relative">
     <input type="checkbox" id="edit-vendor-modal" class="hidden peer">
-    <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('edit-vendor-modal').checked=false;"></div>
-    <div class="fixed inset-0 hidden peer-checked:flex items-center justify-center z-50 p-4">
-      <div class="w-full max-w-4xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-        <div class="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
-          <h2 class="text-lg font-semibold">Edit Vendor Details</h2>
-          <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="text-slate-500 hover:text-slate-800">✕</button>
-        </div>
-        <form method="post" class="flex flex-col">
+    <div class="fixed inset-0 z-50 hidden peer-checked:block">
+      <label for="edit-vendor-modal" class="absolute inset-0 bg-black/30"></label>
+      <div class="absolute inset-0 overflow-y-auto">
+        <div class="min-h-full flex items-start justify-center p-4 sm:p-6">
+          <div class="w-full max-w-5xl rounded-2xl bg-white shadow-xl border border-slate-200 max-h-[90vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div class="text-xs text-slate-500">VENDOR</div>
+                <div class="text-lg font-semibold text-slate-900">Edit vendor details</div>
+              </div>
+              <label for="edit-vendor-modal" class="cursor-pointer text-slate-500 hover:text-slate-700">✕</label>
+            </div>
+            <form method="post" class="flex-1 min-h-0 flex flex-col">
           {{ csrf_field() }}
           <input type="hidden" name="action" value="save_vendor_profile">
-          <div class="p-5">
+          <div class="px-6 py-5 overflow-y-auto min-h-0">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Vendor display name</label><input name="display_name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200 w-full"></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Vendor legal name</label><input name="legal_name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200 w-full"></div>
@@ -87,13 +92,15 @@
               <div class="space-y-1 md:col-span-2"><label class="text-xs font-medium text-slate-600">Notes</label><textarea name="notes" rows="2" class="rounded border-slate-200 w-full">{{ vendor.notes or '' }}</textarea></div>
             </div>
           </div>
-          <div class="px-5 py-4 border-t border-slate-200 bg-white">
+          <div class="px-6 py-4 border-t border-slate-200 bg-white sticky bottom-0">
             <div class="flex justify-end gap-3">
-              <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl btn-secondary">Cancel</button>
-              <button type="submit" class="px-4 py-2 rounded-xl btn-primary">Save Changes</button>
+              <label for="edit-vendor-modal" class="px-4 py-2 rounded-xl btn-secondary cursor-pointer">Cancel</label>
+              <button type="submit" class="px-4 py-2 rounded-xl btn-primary">Save changes</button>
             </div>
           </div>
         </form>
+          </div>
+        </div>
       </div>
     </div>
   </div>
