@@ -129,6 +129,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
+    /* Hide number input spinners (Chrome, Safari, Edge, Opera) */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    /* Hide number input spinners (Firefox) */
+    input[type=number] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
     :root {
       color-scheme: light;
       --color-base: #F3F4F6;

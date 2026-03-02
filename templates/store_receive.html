@@ -23,6 +23,7 @@
         <button class="text-slate-500" onclick="document.getElementById('new-receipt').checked=false;">✕</button>
       </div>
       <form method="POST" class="p-5 space-y-4">
+        <input type="hidden" name="action" value="create_receipt" />
         {{ csrf_field() }}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1">
@@ -34,7 +35,7 @@
             </select>
           </label>
           <label class="space-y-1">
-            <span class="text-sm">Receipt number</span>
+            <span class="text-sm">Goods Receipt No (GRN)</span>
             <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" value="{{ default_receipt_number }}" readonly />
           </label>
           <label class="space-y-1">
@@ -63,7 +64,7 @@
                   <td class="py-2">
                     <input type="text" value="{{ row.qty_ordered }}" readonly class="w-24 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-700" />
                   </td>
-                  <td class="py-2"><input type="number" step="0.01" name="item_{{ row.line_id }}_qty" class="w-24 rounded-lg border-slate-200" value="{{ row.qty_ordered }}" /></td>
+                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.line_id }}_qty" class="w-24 rounded-lg border-slate-200" value="{{ row.qty_ordered }}" /></td>
                   <td class="py-2">
                     <select name="item_{{ row.line_id }}_qc" class="rounded-lg border-slate-200">
                       <option value="OK">OK</option>
@@ -90,7 +91,7 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
-          <th class="py-3 px-4">Receipt #</th>
+          <th class="py-3 px-4">Goods Receipt No (GRN)</th>
           <th class="py-3 px-4">PO</th>
           <th class="py-3 px-4">Received on</th>
           <th class="py-3 px-4">Items</th>
@@ -104,7 +105,7 @@
         {% set ok_items = receipt.items|selectattr('qc_status','equalto','OK')|list %}
         {% set ng_items = receipt.items|selectattr('qc_status','equalto','NG')|list %}
         <tr>
-          <td class="py-3 px-4 font-semibold text-slate-800">{{ receipt.receipt_number }}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800"><a href="{{ url_for('store_receipt_detail', receipt_id=receipt.id) }}" class="text-indigo-600 hover:underline">{{ receipt.receipt_number }}</a></td>
           <td class="py-3 px-4">{{ receipt.purchase_order.po_number if receipt.purchase_order else '—' }}</td>
           <td class="py-3 px-4">{{ receipt.received_date or '—' }}</td>
           <td class="py-3 px-4">{{ receipt.items|length }}</td>
