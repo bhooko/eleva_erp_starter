@@ -11,6 +11,22 @@
       <a href="{{ url_for('store_receive') }}" class="px-4 py-2 btn-secondary rounded-lg">Back</a>
     </div>
 
+
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+      <form method="POST" class="flex flex-wrap items-end gap-3">
+        {{ csrf_field() }}
+        <input type="hidden" name="action" value="update_grn_status" />
+        <label class="space-y-1">
+          <span class="text-xs uppercase text-slate-500">GRN Status</span>
+          <select name="status" class="rounded-lg border-slate-200 px-3 py-2">
+            <option value="Open" {% if (receipt.status or 'Open') == 'Open' %}selected{% endif %}>Open</option>
+            <option value="Closed" {% if receipt.status == 'Closed' %}selected{% endif %}>Closed</option>
+          </select>
+        </label>
+        <button type="submit" class="px-4 py-2 btn-primary rounded-lg">Update status</button>
+      </form>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
       <div>
         <p class="text-slate-500">Goods Receipt No (GRN)</p>

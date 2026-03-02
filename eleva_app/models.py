@@ -3001,6 +3001,7 @@ class InventoryReceipt(db.Model):
     receipt_number = db.Column(db.String(80), nullable=False)
     received_date = db.Column(db.Date, nullable=True)
     received_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Open")
 
     purchase_order = db.relationship("PurchaseOrder")
     received_by = db.relationship("User")
