@@ -35,11 +35,11 @@
           </label>
           <label class="space-y-1">
             <span class="text-sm">Receipt number</span>
-            <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
+            <input type="text" name="receipt_number" class="w-full rounded-lg border-slate-200" value="{{ default_receipt_number }}" readonly />
           </label>
           <label class="space-y-1">
             <span class="text-sm">Received date</span>
-            <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" />
+            <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" value="{{ today_ymd }}" readonly />
           </label>
         </div>
         <div class="overflow-x-auto">

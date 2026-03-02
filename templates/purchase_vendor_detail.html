@@ -38,6 +38,10 @@
       <div><p class="text-xs uppercase text-slate-500">Open PO value</p><p class="text-slate-700">{{ '%.2f'|format(open_po_value) }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">Billing address</p><p class="text-slate-700">{{ vendor.billing_address or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">Warehouse address</p><p class="text-slate-700">{{ vendor.warehouse_address or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Bank account name</p><p class="text-slate-700">{{ vendor.bank_account_name or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Bank name</p><p class="text-slate-700">{{ vendor.bank_name or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Bank IFSC</p><p class="text-slate-700">{{ vendor.bank_ifsc or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Bank address</p><p class="text-slate-700">{{ vendor.bank_address or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">Notes</p><p class="text-slate-700">{{ vendor.notes or '—' }}</p></div>
     </div>
   </section>
@@ -72,6 +76,10 @@
               <input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50" aria-label="Open PO value">
               <textarea name="billing_address" rows="2" placeholder="Billing address" class="rounded border-slate-200">{{ vendor.billing_address or '' }}</textarea>
               <textarea name="warehouse_address" rows="2" placeholder="Warehouse address" class="rounded border-slate-200">{{ vendor.warehouse_address or '' }}</textarea>
+              <input name="bank_account_name" placeholder="Bank account name" value="{{ vendor.bank_account_name or '' }}" class="rounded border-slate-200">
+              <input name="bank_name" placeholder="Bank name" value="{{ vendor.bank_name or '' }}" class="rounded border-slate-200">
+              <input name="bank_ifsc" placeholder="Bank IFSC" value="{{ vendor.bank_ifsc or '' }}" class="rounded border-slate-200">
+              <textarea name="bank_address" rows="2" placeholder="Bank address" class="rounded border-slate-200">{{ vendor.bank_address or '' }}</textarea>
               <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
             </div>
           </div>
@@ -158,7 +166,40 @@
     </form>
     <table class="w-full text-sm" id="partsTable"><thead><tr class="text-left"><th>Eleva part name</th><th>Vendor part name</th><th>Rate</th><th>MOQ</th><th>Lead time</th><th>Status</th><th>Actions</th></tr></thead><tbody>
       {% for l in linked_parts %}
-      <tr class="border-t"><td>{{ l.product.name if l.product else '—' }}</td><td>{{ l.vendor_part_name or '—' }}</td><td>{{ l.unit_price if l.unit_price is not none else '—' }}</td><td>{{ l.moq if l.moq is not none else '—' }}</td><td>{{ l.lead_time_days or '—' }}</td><td>{{ l.status or 'Active' }}</td><td><a class="text-blue-600" href="{{ url_for('purchase_vendor_rate_history', vendor_id=vendor.id, product_id=l.product_id) }}">Rate history</a></td></tr>
+      <tr class="border-t"><td>{{ l.product.name if l.product else '—' }}</td><td>{{ l.vendor_part_name or '—' }}</td><td>{{ l.unit_price if l.unit_price is not none else '—' }}</td><td>{{ l.moq if l.moq is not none else '—' }}</td><td>{{ l.lead_time_days or '—' }}</td><td>{{ l.status or 'Active' }}</td><td class="space-x-2"><label for="edit-part-link-{{ l.product_id }}" class="text-slate-700 cursor-pointer">Edit</label><a class="text-blue-600" href="{{ url_for('purchase_vendor_rate_history', vendor_id=vendor.id, product_id=l.product_id) }}">Rate history</a></td></tr>
+      <tr><td colspan="7" class="p-0">
+        <div class="relative">
+          <input type="checkbox" id="edit-part-link-{{ l.product_id }}" class="hidden peer">
+          <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;"></div>
+          <div class="fixed inset-0 hidden peer-checked:flex items-center justify-center z-50 p-4">
+            <div class="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-xl">
+              <div class="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
+                <h2 class="text-lg font-semibold">Edit linked part</h2>
+                <button type="button" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;" class="text-slate-500 hover:text-slate-800">✕</button>
+              </div>
+              <form method="post" class="p-5 space-y-4">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="update_part_link">
+                <input type="hidden" name="product_id" value="{{ l.product_id }}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input name="vendor_part_name" value="{{ l.vendor_part_name or '' }}" placeholder="Vendor part name" class="rounded border-slate-200">
+                  <input name="rate" value="{{ l.unit_price if l.unit_price is not none else '' }}" placeholder="Rate" class="rounded border-slate-200">
+                  <input name="moq" value="{{ l.moq if l.moq is not none else '' }}" placeholder="MOQ" class="rounded border-slate-200">
+                  <input name="lead_time_days" value="{{ l.lead_time_days or '' }}" placeholder="Lead time (days)" class="rounded border-slate-200">
+                  <select name="status" class="rounded border-slate-200">
+                    <option value="Active" {% if (l.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
+                    <option value="Inactive" {% if (l.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
+                  </select>
+                </div>
+                <div class="flex justify-end gap-3">
+                  <button type="button" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
+                  <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </td></tr>
       {% endfor %}
     </tbody></table>
   </section>
