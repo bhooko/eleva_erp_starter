@@ -7007,6 +7007,7 @@ from eleva_app.models import (
     VendorComplaint,
     Vendor,
     PurchaseOrder,
+    PurchaseOrderStatusHistory,
     PurchaseOrderItem,
     Submission,
     ClientRequirementForm,
@@ -10525,6 +10526,10 @@ def purchase_order_detail_view(po_id: int):
                 flash("Invalid PO status selected.", "warning")
                 return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
+            current_status = (po.status or "").strip()
+            if desired == current_status:
+                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
             if desired == "Closed":
                 can_close, reasons = get_po_closure_state(po)
                 if not can_close:
@@ -10534,7 +10539,23 @@ def purchase_order_detail_view(po_id: int):
                     )
                     return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
+            changed_by = None
+            if current_user.is_authenticated:
+                changed_by = (
+                    (current_user.username or "").strip()
+                    or (current_user.display_name or "").strip()
+                    or None
+                )
+
             po.status = desired
+            db.session.add(
+                PurchaseOrderStatusHistory(
+                    purchase_order_id=po.id,
+                    old_status=current_status or None,
+                    new_status=desired,
+                    changed_by=changed_by,
+                )
+            )
             db.session.commit()
             flash("PO status updated successfully.", "success")
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
@@ -10588,6 +10609,12 @@ def purchase_order_detail_view(po_id: int):
         for req in change_requests:
             po_line_request_map.setdefault(req.po_line_id, req)
 
+    po_status_history = (
+        PurchaseOrderStatusHistory.query.filter_by(purchase_order_id=po.id)
+        .order_by(PurchaseOrderStatusHistory.changed_at.desc())
+        .all()
+    )
+
     return render_template(
         "purchase_order_detail.html",
         po=po,
@@ -10596,6 +10623,7 @@ def purchase_order_detail_view(po_id: int):
         issue_products=issue_products,
         issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
         po_line_request_map=po_line_request_map,
+        po_status_history=po_status_history,
         po_has_out_of_sync_lines=any(bool(line.is_out_of_sync) for line in (po.items or [])),
         is_purchase_user=_is_purchase_user(current_user),
     )
@@ -16285,6 +16313,32 @@ def ensure_vendor_product_rate_history_table():
     conn.close()
 
 
+def ensure_po_status_history_table():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_po_status_history_table: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS purchase_order_status_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            purchase_order_id INTEGER NOT NULL,
+            old_status TEXT,
+            new_status TEXT NOT NULL,
+            changed_by TEXT,
+            changed_at DATETIME NOT NULL
+        );
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_purchase_order_status_history_purchase_order_id ON purchase_order_status_history (purchase_order_id);"
+    )
+    conn.commit()
+    conn.close()
+
+
 def ensure_vendor_contact_table():
     conn, db_path = _connect_sqlite_db()
     if not conn:
@@ -16566,6 +16620,7 @@ def bootstrap_db():
     ensure_bom_spec_change_request_table()
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
+    ensure_po_status_history_table()
     ensure_vendor_contact_table()
     ensure_vendor_attachment_table()
     ensure_vendor_issue_table()

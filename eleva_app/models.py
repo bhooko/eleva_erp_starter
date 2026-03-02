@@ -2810,6 +2810,28 @@ class PurchaseOrder(db.Model):
     stage = db.relationship("ProcurementStage")
 
 
+class PurchaseOrderStatusHistory(db.Model):
+    __tablename__ = "purchase_order_status_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_order_id = db.Column(
+        db.Integer, db.ForeignKey("purchase_order.id"), nullable=False, index=True
+    )
+    old_status = db.Column(db.String(50), nullable=True)
+    new_status = db.Column(db.String(50), nullable=False)
+    changed_by = db.Column(db.String(80), nullable=True)
+    changed_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+    purchase_order = db.relationship(
+        "PurchaseOrder",
+        backref=db.backref(
+            "status_history",
+            lazy=True,
+            order_by="desc(PurchaseOrderStatusHistory.changed_at)",
+        ),
+    )
+
+
 class PurchaseOrderLine(db.Model):
     __tablename__ = "purchase_order_line"
 
