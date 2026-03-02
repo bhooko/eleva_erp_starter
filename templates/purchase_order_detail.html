@@ -34,26 +34,21 @@
         <p class="text-base font-semibold">{{ po.project.name if po.project else 'General' }}</p>
       </div>
       <div>
-        <p class="text-xs uppercase text-slate-500">Status</p>
-        <p class="px-2 py-1 inline-block rounded-full bg-slate-100 text-slate-800">{{ po.status|title }}</p>
-      </div>
-      <div class="md:col-span-3">
-        <form method="post" class="flex flex-wrap items-end gap-3">
+        <form method="post" class="flex items-center gap-3">
           {{ csrf_field() }}
           <input type="hidden" name="action" value="update_po_status">
           <label class="space-y-1">
-            <span class="text-xs uppercase text-slate-500">PO Status</span>
-            <select name="status" class="rounded-lg border-slate-200 px-3 py-2">
-              {% set po_status_options = ['Open', 'Partially Complete', 'Closed', 'Issue'] %}
-              {% if po.status not in po_status_options %}
-              <option value="{{ po.status }}" selected hidden>Current: {{ po.status }}</option>
+            <span class="text-xs uppercase text-slate-500">Status</span>
+            <select name="status" class="rounded-lg border-slate-200 px-3 py-2" onchange="this.form.submit()">
+              <option value="Open" {{ 'selected' if po.status == 'Open' else '' }}>Open</option>
+              <option value="Partially Complete" {{ 'selected' if po.status == 'Partially Complete' else '' }}>Partially Complete</option>
+              <option value="Closed" {{ 'selected' if po.status == 'Closed' else '' }}>Closed</option>
+              <option value="Issue" {{ 'selected' if po.status == 'Issue' else '' }}>Issue</option>
+              {% if po.status and po.status not in ['Open', 'Partially Complete', 'Closed', 'Issue'] %}
+              <option value="{{ po.status }}" selected>Current: {{ po.status }}</option>
               {% endif %}
-              {% for status_option in po_status_options %}
-              <option value="{{ status_option }}" {% if po.status == status_option %}selected{% endif %}>{{ status_option }}</option>
-              {% endfor %}
             </select>
           </label>
-          <button type="submit" class="px-4 py-2 btn-primary rounded-lg">Update status</button>
         </form>
       </div>
       <div>
@@ -221,6 +216,37 @@
     </div>
     {% else %}
     <p class="text-sm text-slate-500">No GRNs linked yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="mb-2">
+      <p class="text-xs uppercase text-slate-500">Purchase</p>
+      <h2 class="text-lg font-semibold">PO Change Log</h2>
+    </div>
+    {% if po_status_history %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2 px-3">Date / Time</th>
+            <th class="py-2 px-3">User</th>
+            <th class="py-2 px-3">Change</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for entry in po_status_history %}
+          <tr>
+            <td class="py-2 px-3 text-slate-600">{{ entry.changed_at.strftime('%d %b %Y %I:%M %p') if entry.changed_at else '—' }}</td>
+            <td class="py-2 px-3 text-slate-600">{{ entry.changed_by or 'System' }}</td>
+            <td class="py-2 px-3 text-slate-700">Status: {{ entry.old_status or '—' }} → {{ entry.new_status }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No changes logged yet.</p>
     {% endif %}
   </div>
 
