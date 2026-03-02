@@ -77,6 +77,7 @@
           </label>
         </div>
 
+        {% set selected_linked_vendors = (product.linked_vendors or '').split(',') | map('trim') | reject('equalto', '') | list %}
         <div class="grid md:grid-cols-2 gap-4">
           <label class="space-y-1 block">
             <span class="text-xs text-slate-600">Primary vendor</span>
@@ -89,7 +90,12 @@
           </label>
           <label class="space-y-1 block">
             <span class="text-xs text-slate-600">Linked vendors</span>
-            <textarea name="linked_vendors" rows="2" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Comma separated list">{{ product.linked_vendors or '' }}</textarea>
+            <select name="linked_vendors" multiple size="5" class="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              {% for vendor in vendors %}
+              <option value="{{ vendor.name }}" {% if vendor.name in selected_linked_vendors %}selected{% endif %}>{{ vendor.name }}</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs text-slate-500">Hold Ctrl (Windows) or Command (Mac) to select multiple vendors.</p>
           </label>
         </div>
 

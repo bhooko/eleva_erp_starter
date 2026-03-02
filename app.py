@@ -11586,7 +11586,15 @@ def purchase_parts_update(product_id):
     product = Product.query.get_or_404(product_id)
     name = (request.form.get("name") or "").strip()
     primary_vendor = (request.form.get("primary_vendor") or "").strip() or None
-    linked_vendors = (request.form.get("linked_vendors") or "").strip() or None
+    linked_vendors_selected = [
+        (vendor_name or "").strip() for vendor_name in request.form.getlist("linked_vendors")
+    ]
+    linked_vendors = []
+    for vendor_name in linked_vendors_selected:
+        if not vendor_name or vendor_name == primary_vendor or vendor_name in linked_vendors:
+            continue
+        linked_vendors.append(vendor_name)
+    linked_vendors_value = ", ".join(linked_vendors) or None
     specifications = (request.form.get("specifications") or "").strip() or None
     notes = (request.form.get("notes") or "").strip() or None
 
@@ -11626,7 +11634,7 @@ def purchase_parts_update(product_id):
     product.is_favorite = request.form.get("is_favorite") == "on"
     product.is_active = request.form.get("is_active") == "on"
     product.primary_vendor = primary_vendor
-    product.linked_vendors = linked_vendors
+    product.linked_vendors = linked_vendors_value
     product.specifications = specifications
     product.notes = notes
 
