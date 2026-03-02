@@ -13682,6 +13682,10 @@ def store_receipt_detail(receipt_id):
                 return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
             receipt.status = new_status
+            if new_status == "Closed":
+                receipt.closed_at = date.today()
+            elif new_status == "Open":
+                receipt.closed_at = None
             if new_status == "Closed" and receipt.purchase_order_id:
                 po = PurchaseOrder.query.get(receipt.purchase_order_id)
                 if po:
@@ -16467,9 +16471,15 @@ def ensure_inventory_receipt_columns():
         return
 
     col_names = {row[1] for row in columns}
-    if "status" not in col_names:
-        cur.execute("ALTER TABLE inventory_receipt ADD COLUMN status TEXT DEFAULT 'Open';")
-        print("✅ Added column inventory_receipt.status")
+    expected_columns = (
+        ("status", "TEXT DEFAULT 'Open'"),
+        ("closed_at", "DATE"),
+    )
+    for col_name, col_type in expected_columns:
+        if col_name in col_names:
+            continue
+        cur.execute(f"ALTER TABLE inventory_receipt ADD COLUMN {col_name} {col_type};")
+        print(f"✅ Added column inventory_receipt.{col_name}")
 
     conn.commit()
     conn.close()
