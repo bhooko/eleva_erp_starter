@@ -164,6 +164,43 @@
     </div>
   </div>
 
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="mb-2">
+      <p class="text-xs uppercase text-slate-500">Store</p>
+      <h2 class="text-lg font-semibold">Linked GRNs</h2>
+    </div>
+    {% if linked_grns %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2 px-3">GRN No</th>
+            <th class="py-2 px-3">Received date</th>
+            <th class="py-2 px-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for r in linked_grns %}
+          <tr>
+            <td class="py-2 px-3 font-semibold text-slate-800">
+              <a href="{{ url_for('store_receipt_detail', receipt_id=r.id) }}" class="text-indigo-600 hover:underline">
+                {{ r.receipt_number }}
+              </a>
+            </td>
+            <td class="py-2 px-3 text-slate-600">{{ r.received_date or '—' }}</td>
+            <td class="py-2 px-3">
+              <a href="{{ url_for('store_receipt_detail', receipt_id=r.id) }}" class="text-indigo-600 hover:underline">Open</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No GRNs linked yet.</p>
+    {% endif %}
+  </div>
+
   <div class="space-y-3">
     <input type="checkbox" id="create-issue-modal" class="hidden peer" />
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">

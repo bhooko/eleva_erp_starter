@@ -10463,6 +10463,12 @@ def purchase_order_detail_view(po_id: int):
     if not po:
         abort(404)
 
+    linked_grns = (
+        InventoryReceipt.query.filter_by(purchase_order_id=po.id)
+        .order_by(InventoryReceipt.id.desc())
+        .all()
+    )
+
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
 
@@ -10518,6 +10524,7 @@ def purchase_order_detail_view(po_id: int):
     return render_template(
         "purchase_order_detail.html",
         po=po,
+        linked_grns=linked_grns,
         vendor_issues=vendor_issues,
         issue_products=issue_products,
         issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
