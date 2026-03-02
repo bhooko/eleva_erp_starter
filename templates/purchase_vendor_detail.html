@@ -42,9 +42,10 @@
         <p class="text-xs uppercase text-slate-500">Bank Details</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div><p class="text-xs uppercase text-slate-500">Account name</p><p class="text-slate-700">{{ vendor.bank_account_name or '—' }}</p></div>
+          <div><p class="text-xs uppercase text-slate-500">Account number</p><p class="text-slate-700">{{ vendor.bank_account_number or '—' }}</p></div>
           <div><p class="text-xs uppercase text-slate-500">Bank name</p><p class="text-slate-700">{{ vendor.bank_name or '—' }}</p></div>
           <div><p class="text-xs uppercase text-slate-500">IFSC</p><p class="text-slate-700">{{ vendor.bank_ifsc or '—' }}</p></div>
-          <div><p class="text-xs uppercase text-slate-500">Bank address</p><p class="text-slate-700">{{ vendor.bank_address or '—' }}</p></div>
+          <div class="md:col-span-2"><p class="text-xs uppercase text-slate-500">Bank address</p><p class="text-slate-700">{{ vendor.bank_address or '—' }}</p></div>
         </div>
       </div>
       <div><p class="text-xs uppercase text-slate-500">Notes</p><p class="text-slate-700">{{ vendor.notes or '—' }}</p></div>
@@ -65,33 +66,31 @@
           <input type="hidden" name="action" value="save_vendor_profile">
           <div class="p-5">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input name="display_name" placeholder="Vendor display name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200">
-              <input name="legal_name" placeholder="Vendor legal name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200">
-              <select name="status" class="rounded border-slate-200">
-                <option value="Active" {% if (vendor.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
-                <option value="Inactive" {% if (vendor.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
-              </select>
-              <input name="vendor_type" placeholder="Type" value="{{ vendor.type or '' }}" class="rounded border-slate-200">
-              <input name="city" placeholder="City" value="{{ vendor.city or '' }}" class="rounded border-slate-200">
-              <input name="state" placeholder="State" value="{{ vendor.state or '' }}" class="rounded border-slate-200">
-              <input name="gstin" placeholder="GSTIN" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200">
-              <input name="pan" placeholder="PAN" value="{{ vendor.pan or '' }}" class="rounded border-slate-200">
-              <input name="payment_terms" placeholder="Payment terms" value="{{ vendor.payment_terms or '' }}" class="rounded border-slate-200">
-              <input name="lead_time_days" placeholder="Lead time (days)" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200">
-              <input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50" aria-label="Open PO value">
-              <textarea name="billing_address" rows="2" placeholder="Billing address" class="rounded border-slate-200">{{ vendor.billing_address or '' }}</textarea>
-              <textarea name="warehouse_address" rows="2" placeholder="Warehouse address" class="rounded border-slate-200">{{ vendor.warehouse_address or '' }}</textarea>
-              <input name="bank_account_name" placeholder="Bank account name" value="{{ vendor.bank_account_name or '' }}" class="rounded border-slate-200">
-              <input name="bank_name" placeholder="Bank name" value="{{ vendor.bank_name or '' }}" class="rounded border-slate-200">
-              <input name="bank_ifsc" placeholder="Bank IFSC" value="{{ vendor.bank_ifsc or '' }}" class="rounded border-slate-200">
-              <textarea name="bank_address" rows="2" placeholder="Bank address" class="rounded border-slate-200">{{ vendor.bank_address or '' }}</textarea>
-              <textarea name="notes" rows="2" placeholder="Notes" class="rounded border-slate-200 md:col-span-2">{{ vendor.notes or '' }}</textarea>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Vendor display name</label><input name="display_name" value="{{ vendor.display_name or vendor.name }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Vendor legal name</label><input name="legal_name" value="{{ vendor.legal_name or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Status</label><select name="status" class="rounded border-slate-200 w-full"><option value="Active" {% if (vendor.status or 'Active') == 'Active' %}selected{% endif %}>Active</option><option value="Inactive" {% if (vendor.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option></select></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Type</label><input name="vendor_type" value="{{ vendor.type or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">City</label><input name="city" value="{{ vendor.city or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">State</label><input name="state" value="{{ vendor.state or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">GSTIN</label><input name="gstin" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">PAN</label><input name="pan" value="{{ vendor.pan or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Payment terms</label><select name="payment_terms" class="rounded border-slate-200 w-full"><option value="" {% if not vendor.payment_terms %}selected{% endif %}>Select</option><option value="7 days" {% if vendor.payment_terms == '7 days' %}selected{% endif %}>7 days</option><option value="15 days" {% if vendor.payment_terms == '15 days' %}selected{% endif %}>15 days</option><option value="21 days" {% if vendor.payment_terms == '21 days' %}selected{% endif %}>21 days</option><option value="30 days" {% if vendor.payment_terms == '30 days' %}selected{% endif %}>30 days</option><option value="45 days" {% if vendor.payment_terms == '45 days' %}selected{% endif %}>45 days</option><option value="60 days" {% if vendor.payment_terms == '60 days' %}selected{% endif %}>60 days</option></select></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Lead time (days)</label><input name="lead_time_days" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Open PO value</label><input value="{{ '%.2f'|format(open_po_value) }}" readonly class="rounded border-slate-200 bg-slate-50 w-full" aria-label="Open PO value"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Billing address</label><textarea name="billing_address" rows="2" class="rounded border-slate-200 w-full">{{ vendor.billing_address or '' }}</textarea></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Warehouse address</label><textarea name="warehouse_address" rows="2" class="rounded border-slate-200 w-full">{{ vendor.warehouse_address or '' }}</textarea></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Bank account name</label><input name="bank_account_name" value="{{ vendor.bank_account_name or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Bank account number</label><input name="bank_account_number" value="{{ vendor.bank_account_number or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Bank name</label><input name="bank_name" value="{{ vendor.bank_name or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Bank IFSC</label><input name="bank_ifsc" value="{{ vendor.bank_ifsc or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1 md:col-span-2"><label class="text-xs font-medium text-slate-600">Bank address</label><textarea name="bank_address" rows="2" class="rounded border-slate-200 w-full">{{ vendor.bank_address or '' }}</textarea></div>
+              <div class="space-y-1 md:col-span-2"><label class="text-xs font-medium text-slate-600">Notes</label><textarea name="notes" rows="2" class="rounded border-slate-200 w-full">{{ vendor.notes or '' }}</textarea></div>
             </div>
           </div>
           <div class="px-5 py-4 border-t border-slate-200 bg-white">
             <div class="flex justify-end gap-3">
-              <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
-              <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save Changes</button>
+              <button type="button" onclick="document.getElementById('edit-vendor-modal').checked=false;" class="px-4 py-2 rounded-xl btn-secondary">Cancel</button>
+              <button type="submit" class="px-4 py-2 rounded-xl btn-primary">Save Changes</button>
             </div>
           </div>
         </form>
@@ -187,18 +186,16 @@
                 <input type="hidden" name="action" value="update_part_link">
                 <input type="hidden" name="product_id" value="{{ l.product_id }}">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input name="vendor_part_name" value="{{ l.vendor_part_name or '' }}" placeholder="Vendor part name" class="rounded border-slate-200">
-                  <input name="rate" type="number" step="0.01" value="{{ l.unit_price if l.unit_price is not none else '' }}" placeholder="Rate" class="rounded border-slate-200">
-                  <input name="moq" value="{{ l.moq if l.moq is not none else '' }}" placeholder="MOQ" class="rounded border-slate-200">
-                  <input name="lead_time_days" value="{{ l.lead_time_days or '' }}" placeholder="Lead time (days)" class="rounded border-slate-200">
-                  <select name="status" class="rounded border-slate-200">
-                    <option value="Active" {% if (l.status or 'Active') == 'Active' %}selected{% endif %}>Active</option>
-                    <option value="Inactive" {% if (l.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option>
-                  </select>
+                  <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Vendor part name</label><input name="vendor_part_name" value="{{ l.vendor_part_name or '' }}" class="rounded border-slate-200 w-full"></div>
+                  <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Rate</label><input name="rate" type="number" step="0.01" value="{{ l.unit_price if l.unit_price is not none else '' }}" class="rounded border-slate-200 w-full"></div>
+                  <div class="space-y-1"><label class="text-xs font-medium text-slate-600">MOQ</label><input name="moq" value="{{ l.moq if l.moq is not none else '' }}" class="rounded border-slate-200 w-full"></div>
+                  <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Lead time (days)</label><input name="lead_time_days" value="{{ l.lead_time_days or '' }}" class="rounded border-slate-200 w-full"></div>
+                  <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Status</label><select name="status" class="rounded border-slate-200 w-full"><option value="Active" {% if (l.status or 'Active') == 'Active' %}selected{% endif %}>Active</option><option value="Inactive" {% if (l.status or '') == 'Inactive' %}selected{% endif %}>Inactive</option></select></div>
+                  <div class="space-y-1 md:col-span-2"><label class="text-xs font-medium text-slate-600">Reason / Notes for rate change</label><textarea name="rate_change_note" rows="2" class="rounded border-slate-200 w-full" placeholder="Shown in rate history"></textarea></div>
                 </div>
                 <div class="flex justify-end gap-3">
-                  <button type="button" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;" class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50">Cancel</button>
-                  <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Save</button>
+                  <button type="button" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;" class="px-4 py-2 rounded-xl btn-secondary">Cancel</button>
+                  <button type="submit" class="px-4 py-2 rounded-xl btn-primary">Save</button>
                 </div>
               </form>
             </div>

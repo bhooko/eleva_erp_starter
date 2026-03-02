@@ -12547,6 +12547,7 @@ def purchase_vendor_detail(vendor_id: int):
             vendor.billing_address = (request.form.get("billing_address") or "").strip() or None
             vendor.warehouse_address = (request.form.get("warehouse_address") or "").strip() or None
             vendor.bank_account_name = (request.form.get("bank_account_name") or "").strip() or None
+            vendor.bank_account_number = (request.form.get("bank_account_number") or "").strip() or None
             vendor.bank_name = (request.form.get("bank_name") or "").strip() or None
             vendor.bank_ifsc = (request.form.get("bank_ifsc") or "").strip().upper() or None
             vendor.bank_address = (request.form.get("bank_address") or "").strip() or None
@@ -12635,6 +12636,7 @@ def purchase_vendor_detail(vendor_id: int):
                 link = VendorProductRate(vendor_id=vendor.id, product_id=product_id, currency="INR")
                 db.session.add(link)
             old_rate = link.unit_price
+            note_raw = (request.form.get("rate_change_note") or "").strip() or None
             rate_raw = (request.form.get("rate") or "").strip()
             moq_raw = (request.form.get("moq") or "").strip()
             lead_raw = (request.form.get("lead_time_days") or "").strip()
@@ -12656,6 +12658,7 @@ def purchase_vendor_detail(vendor_id: int):
                         old_unit_price=old_rate,
                         new_unit_price=link.unit_price,
                         currency=link.currency or "INR",
+                        note=note_raw,
                         changed_at=datetime.datetime.utcnow(),
                         changed_by=current_user.username if current_user else None,
                         changed_by_user_id=current_user.id if current_user else None,
@@ -14434,6 +14437,7 @@ def ensure_vendor_columns():
         ("billing_address", "TEXT"),
         ("warehouse_address", "TEXT"),
         ("bank_account_name", "TEXT"),
+        ("bank_account_number", "TEXT"),
         ("bank_name", "TEXT"),
         ("bank_ifsc", "TEXT"),
         ("bank_address", "TEXT"),
