@@ -41,6 +41,10 @@
         <p class="text-slate-500">Received date</p>
         <p class="font-semibold text-slate-800">{{ receipt.received_date or '—' }}</p>
       </div>
+      <div>
+        <p class="text-slate-500">Closed date</p>
+        <p class="font-semibold text-slate-800">{{ receipt.closed_at if (receipt.status == 'Closed' and receipt.closed_at) else '—' }}</p>
+      </div>
     </div>
 
     <form method="POST" class="space-y-4">
