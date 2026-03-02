@@ -37,6 +37,25 @@
         <p class="text-xs uppercase text-slate-500">Status</p>
         <p class="px-2 py-1 inline-block rounded-full bg-slate-100 text-slate-800">{{ po.status|title }}</p>
       </div>
+      <div class="md:col-span-3">
+        <form method="post" class="flex flex-wrap items-end gap-3">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="update_po_status">
+          <label class="space-y-1">
+            <span class="text-xs uppercase text-slate-500">PO Status</span>
+            <select name="status" class="rounded-lg border-slate-200 px-3 py-2">
+              {% set po_status_options = ['Open', 'Partially Complete', 'Closed', 'Issue'] %}
+              {% if po.status not in po_status_options %}
+              <option value="{{ po.status }}" selected hidden>Current: {{ po.status }}</option>
+              {% endif %}
+              {% for status_option in po_status_options %}
+              <option value="{{ status_option }}" {% if po.status == status_option %}selected{% endif %}>{{ status_option }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit" class="px-4 py-2 btn-primary rounded-lg">Update status</button>
+        </form>
+      </div>
       <div>
         <p class="text-xs uppercase text-slate-500">PO Date</p>
         <p class="text-base font-semibold">{{ po.po_date or po.order_date or '—' }}</p>
@@ -176,6 +195,7 @@
           <tr class="text-left text-slate-500">
             <th class="py-2 px-3">GRN No</th>
             <th class="py-2 px-3">Received date</th>
+            <th class="py-2 px-3">Status</th>
             <th class="py-2 px-3">Actions</th>
           </tr>
         </thead>
@@ -188,6 +208,7 @@
               </a>
             </td>
             <td class="py-2 px-3 text-slate-600">{{ r.received_date or '—' }}</td>
+            <td class="py-2 px-3 text-slate-600">{{ r.status or 'Open' }}</td>
             <td class="py-2 px-3">
               <a href="{{ url_for('store_receipt_detail', receipt_id=r.id) }}" class="text-indigo-600 hover:underline">Open</a>
             </td>

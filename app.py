@@ -10446,6 +10446,52 @@ def parts_create():
     )
 
 
+def get_po_closure_state(po):
+    reasons = []
+    linked_receipts = (
+        InventoryReceipt.query.filter_by(purchase_order_id=po.id)
+        .order_by(InventoryReceipt.id.asc())
+        .all()
+    )
+
+    if not linked_receipts:
+        reasons.append("No GRNs linked to this PO.")
+    else:
+        open_receipts = [
+            receipt.receipt_number or f"GRN #{receipt.id}"
+            for receipt in linked_receipts
+            if (receipt.status or "Open") != "Closed"
+        ]
+        if open_receipts:
+            reasons.append(
+                "Open GRNs must be closed first: " + ", ".join(open_receipts)
+            )
+
+    tolerance = 1e-9
+    for item in po.items or []:
+        ordered = float(item.quantity_ordered or 0)
+        if ordered <= tolerance:
+            continue
+
+        received_closed = (
+            db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
+            .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
+            .filter(InventoryReceiptItem.purchase_order_item_id == item.id)
+            .filter(InventoryReceipt.purchase_order_id == po.id)
+            .filter(InventoryReceipt.status == "Closed")
+            .scalar()
+            or 0.0
+        )
+        pending = ordered - float(received_closed)
+        if pending > tolerance:
+            label = item.item_code or item.part_name or f"PO Item #{item.id}"
+            reasons.append(
+                f"Pending for {label}: ordered {ordered:g}, received {float(received_closed):g} (closed GRNs), pending {pending:g}"
+            )
+
+    return (len(reasons) == 0, reasons)
+
+
 @app.route("/purchase/orders/<int:po_id>", methods=["GET", "POST"])
 @login_required
 def purchase_order_detail_view(po_id: int):
@@ -10471,6 +10517,27 @@ def purchase_order_detail_view(po_id: int):
 
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
+
+        if action == "update_po_status":
+            desired = (request.form.get("status") or "").strip()
+            allowed_statuses = {"Open", "Partially Complete", "Closed", "Issue"}
+            if desired not in allowed_statuses:
+                flash("Invalid PO status selected.", "warning")
+                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+            if desired == "Closed":
+                can_close, reasons = get_po_closure_state(po)
+                if not can_close:
+                    flash(
+                        "PO cannot be closed: " + " ".join(reasons),
+                        "warning",
+                    )
+                    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+            po.status = desired
+            db.session.commit()
+            flash("PO status updated successfully.", "success")
+            return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
         if action == "solve_vendor_issue":
             issue_id = request.form.get("issue_id")
@@ -13606,28 +13673,51 @@ def store_receipt_detail(receipt_id):
     qc_status_options = ["OK", "NG"]
 
     if request.method == "POST":
-        action = request.form.get("action")
-        if action != "update_receipt":
-            flash("Unsupported action for receipt update.", "warning")
+        action = (request.form.get("action") or "").strip()
+
+        if action == "update_grn_status":
+            new_status = (request.form.get("status") or "").strip()
+            if new_status not in {"Open", "Closed"}:
+                flash("Invalid GRN status selected.", "warning")
+                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+            receipt.status = new_status
+            if new_status == "Closed" and receipt.purchase_order_id:
+                po = PurchaseOrder.query.get(receipt.purchase_order_id)
+                if po:
+                    can_close, _ = get_po_closure_state(po)
+                    if can_close:
+                        po.status = "Closed"
+                        flash(
+                            "PO auto-closed because all items are received via Closed GRNs.",
+                            "info",
+                        )
+
+            db.session.commit()
+            flash("GRN status updated successfully.", "success")
             return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
-        for item in receipt.items:
-            qty_value = request.form.get(f"item_{item.id}_qty_received")
-            qty_received, qty_error = parse_int_field(qty_value, "Qty received")
-            if qty_error:
-                flash(qty_error, "danger")
-                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
-            qty_received = qty_received or 0
-            if qty_received < 0:
-                flash("Qty received cannot be negative.", "danger")
-                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+        if action == "update_receipt":
+            for item in receipt.items:
+                qty_value = request.form.get(f"item_{item.id}_qty_received")
+                qty_received, qty_error = parse_int_field(qty_value, "Qty received")
+                if qty_error:
+                    flash(qty_error, "danger")
+                    return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+                qty_received = qty_received or 0
+                if qty_received < 0:
+                    flash("Qty received cannot be negative.", "danger")
+                    return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
-            item.quantity_received = qty_received
-            item.qc_status = request.form.get(f"item_{item.id}_qc_status")
-            item.qc_notes = request.form.get(f"item_{item.id}_notes")
+                item.quantity_received = qty_received
+                item.qc_status = request.form.get(f"item_{item.id}_qc_status")
+                item.qc_notes = request.form.get(f"item_{item.id}_notes")
 
-        db.session.commit()
-        flash("Receipt updated successfully.", "success")
+            db.session.commit()
+            flash("Receipt updated successfully.", "success")
+            return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+        flash("Unsupported action for receipt update.", "warning")
         return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
     receipt_items = sorted(receipt.items, key=lambda row: row.id)
@@ -16361,6 +16451,30 @@ def ensure_vendor_complaint_table():
     conn.close()
 
 
+
+
+def ensure_inventory_receipt_columns():
+    conn, db_path = _connect_sqlite_db()
+    if not conn:
+        print("⚠️ Skipping ensure_inventory_receipt_columns: database is not a SQLite file.")
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(inventory_receipt)")
+    columns = cur.fetchall()
+    if not columns:
+        conn.close()
+        return
+
+    col_names = {row[1] for row in columns}
+    if "status" not in col_names:
+        cur.execute("ALTER TABLE inventory_receipt ADD COLUMN status TEXT DEFAULT 'Open';")
+        print("✅ Added column inventory_receipt.status")
+
+    conn.commit()
+    conn.close()
+
+
 def ensure_procurement_stage_seed():
     defaults = [
         ("Stage 1", "STAGE_1"),
@@ -16438,6 +16552,7 @@ def bootstrap_db():
     ensure_bom_package_table()
     ensure_bom_package_backfill()
     ensure_purchase_order_item_columns()
+    ensure_inventory_receipt_columns()
     ensure_bom_spec_change_request_table()
     ensure_vendor_product_rate_table()
     ensure_vendor_product_rate_history_table()
