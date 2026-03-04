@@ -9941,7 +9941,8 @@ def purchase_orders():
             project_id=project_id,
             vendor_id=vendor_id,
             bom_id=int(bom_id_raw) if bom_id_raw else None,
-            status="draft",
+            status="Draft",
+            material_status="Pending",
             po_date=po_date,
             order_date=po_date,
             expected_delivery=expected_delivery_date,
@@ -10521,23 +10522,14 @@ def purchase_order_detail_view(po_id: int):
 
         if action == "update_po_status":
             desired = (request.form.get("status") or "").strip()
-            allowed_statuses = {"Open", "Partially Complete", "Closed", "Issue"}
+            allowed_statuses = set(PO_STATUS_OPTIONS)
             if desired not in allowed_statuses:
                 flash("Invalid PO status selected.", "warning")
                 return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
-            current_status = (po.status or "").strip()
+            current_status = _normalize_po_status(po.status)
             if desired == current_status:
                 return redirect(url_for("purchase_order_detail_view", po_id=po.id))
-
-            if desired == "Closed":
-                can_close, reasons = get_po_closure_state(po)
-                if not can_close:
-                    flash(
-                        "PO cannot be closed: " + " ".join(reasons),
-                        "warning",
-                    )
-                    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
             changed_by = None
             if current_user.is_authenticated:
@@ -10614,10 +10606,14 @@ def purchase_order_detail_view(po_id: int):
         .order_by(PurchaseOrderStatusHistory.changed_at.desc())
         .all()
     )
+    po_status_display = _normalize_po_status(po.status)
+    material_status_display = "N/A" if po_status_display == "Cancelled" else (po.material_status or "Pending")
 
     return render_template(
         "purchase_order_detail.html",
         po=po,
+        po_status_display=po_status_display,
+        material_status_display=material_status_display,
         linked_grns=linked_grns,
         vendor_issues=vendor_issues,
         issue_products=issue_products,
@@ -11008,7 +11004,8 @@ def generate_po_from_bom(bom_id):
                     vendor_id=vendor_id_int,
                     bom_id=bom.id,
                     stage_id=stage_id_int,
-                    status="draft",
+                    status="Draft",
+                    material_status="Pending",
                     po_date=date.today(),
                     order_date=date.today(),
                     expected_delivery=date.today() + datetime.timedelta(days=15),
@@ -12620,9 +12617,74 @@ def _normalize_vendor_issue_type(raw_value: str) -> str:
     return "OTHER"
 
 
-OPEN_PO_STATUSES = {"draft", "open", "approved", "sent", "partially received"}
+PO_STATUS_OPTIONS = ("Draft", "Issued", "Cancelled")
+OPEN_PO_STATUSES = {
+    "draft",
+    "issued",
+    "open",
+    "approved",
+    "sent",
+    "partially received",
+}
 VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "xlsx", "docx"}
 UOM_OPTIONS = ["Nos", "Set", "Pair", "Meter", "MM", "Kg", "Litre", "Box", "Roll", "SqFt"]
+
+
+def _normalize_po_status(raw_status):
+    cleaned = (raw_status or "").strip()
+    lowered = cleaned.lower()
+    if lowered in {"draft", "open"}:
+        return "Draft"
+    if lowered in {"issued", "issue", "approved", "sent"}:
+        return "Issued"
+    if lowered == "cancelled":
+        return "Cancelled"
+    return cleaned or "Draft"
+
+
+def compute_material_status_for_po(po):
+    if not po:
+        return "Pending"
+    if (po.status or "").strip() == "Cancelled":
+        return "N/A"
+
+    closed_receipt_ids = [
+        row[0]
+        for row in (
+            db.session.query(InventoryReceipt.id)
+            .filter(InventoryReceipt.purchase_order_id == po.id)
+            .filter(InventoryReceipt.status == "Closed")
+            .all()
+        )
+    ]
+    if not closed_receipt_ids:
+        return "Pending"
+
+    tolerance = 1e-9
+    has_any_received = False
+    all_complete = True
+    for po_item in po.items or []:
+        ordered = float(po_item.quantity_ordered or 0)
+        if ordered <= tolerance:
+            continue
+        received = (
+            db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
+            .filter(InventoryReceiptItem.purchase_order_item_id == po_item.id)
+            .filter(InventoryReceiptItem.inventory_receipt_id.in_(closed_receipt_ids))
+            .scalar()
+            or 0.0
+        )
+        received = float(received)
+        if received > tolerance:
+            has_any_received = True
+        if received + tolerance < ordered:
+            all_complete = False
+
+    if not has_any_received:
+        return "Pending"
+    if all_complete:
+        return "Complete"
+    return "Partial Receipt"
 
 
 @app.route("/purchase/vendors/<int:vendor_id>", methods=["GET", "POST"])
@@ -12852,11 +12914,21 @@ def purchase_vendor_detail(vendor_id: int):
     )
 
     if tab == "closed":
-        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() in {"closed", "completed", "received", "done"}]
+        po_history = [
+            po
+            for po in purchase_orders
+            if (po.material_status or "").strip() == "Complete"
+            or (po.status or "").strip().lower() in {"closed", "completed", "received", "done"}
+        ]
     elif tab == "cancelled":
-        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() == "cancelled"]
+        po_history = [po for po in purchase_orders if _normalize_po_status(po.status) == "Cancelled"]
     else:
-        po_history = [po for po in purchase_orders if (po.status or "").strip().lower() in OPEN_PO_STATUSES]
+        po_history = [
+            po
+            for po in purchase_orders
+            if (po.status or "").strip().lower() in OPEN_PO_STATUSES
+            and _normalize_po_status(po.status) != "Cancelled"
+        ]
 
     products = Product.query.order_by(Product.name.asc()).all()
     return render_template(
@@ -13714,16 +13786,13 @@ def store_receipt_detail(receipt_id):
                 receipt.closed_at = date.today()
             elif new_status == "Open":
                 receipt.closed_at = None
+
             if new_status == "Closed" and receipt.purchase_order_id:
                 po = PurchaseOrder.query.get(receipt.purchase_order_id)
-                if po:
-                    can_close, _ = get_po_closure_state(po)
-                    if can_close:
-                        po.status = "Closed"
-                        flash(
-                            "PO auto-closed because all items are received via Closed GRNs.",
-                            "info",
-                        )
+                if po and (po.status or "").strip() != "Cancelled":
+                    computed_status = compute_material_status_for_po(po)
+                    if computed_status != "N/A":
+                        po.material_status = computed_status
 
             db.session.commit()
             flash("GRN status updated successfully.", "success")
@@ -13744,6 +13813,13 @@ def store_receipt_detail(receipt_id):
                 item.quantity_received = qty_received
                 item.qc_status = request.form.get(f"item_{item.id}_qc_status")
                 item.qc_notes = request.form.get(f"item_{item.id}_notes")
+
+            if receipt.purchase_order_id and (receipt.status or "").strip() == "Closed":
+                po = PurchaseOrder.query.get(receipt.purchase_order_id)
+                if po and (po.status or "").strip() != "Cancelled":
+                    computed_status = compute_material_status_for_po(po)
+                    if computed_status != "N/A":
+                        po.material_status = computed_status
 
             db.session.commit()
             flash("Receipt updated successfully.", "success")
@@ -15917,6 +15993,9 @@ def ensure_bom_columns():
             "ALTER TABLE purchase_order ADD COLUMN origin TEXT DEFAULT 'erp';"
         )
         po_added.append("origin")
+    if "material_status" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN material_status TEXT DEFAULT 'Pending';")
+        po_added.append("material_status")
 
     if po_added:
         cur.execute(
@@ -15931,6 +16010,18 @@ def ensure_bom_columns():
     if "expected_delivery" in po_all_cols and "expected_delivery_date" in po_cols:
         cur.execute(
             "UPDATE purchase_order SET expected_delivery = expected_delivery_date WHERE expected_delivery IS NULL AND expected_delivery_date IS NOT NULL;"
+        )
+    if "material_status" in po_all_cols:
+        cur.execute(
+            """
+            UPDATE purchase_order
+               SET material_status = CASE
+                   WHEN trim(coalesce(status, '')) = 'Partially Complete' THEN 'Partial Receipt'
+                   WHEN trim(coalesce(status, '')) = 'Closed' THEN 'Complete'
+                   ELSE 'Pending'
+               END
+             WHERE material_status IS NULL OR trim(material_status) = '';
+            """
         )
     bom_all_cols = bom_cols.union(set(added_cols))
     if "revision_number" in bom_all_cols:
