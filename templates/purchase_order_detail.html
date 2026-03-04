@@ -38,15 +38,11 @@
           {{ csrf_field() }}
           <input type="hidden" name="action" value="update_po_status">
           <label class="space-y-1">
-            <span class="text-xs uppercase text-slate-500">Status</span>
+            <span class="text-xs uppercase text-slate-500">PO status</span>
             <select name="status" class="rounded-lg border-slate-200 px-3 py-2" onchange="this.form.submit()">
-              <option value="Open" {{ 'selected' if po.status == 'Open' else '' }}>Open</option>
-              <option value="Partially Complete" {{ 'selected' if po.status == 'Partially Complete' else '' }}>Partially Complete</option>
-              <option value="Closed" {{ 'selected' if po.status == 'Closed' else '' }}>Closed</option>
-              <option value="Issue" {{ 'selected' if po.status == 'Issue' else '' }}>Issue</option>
-              {% if po.status and po.status not in ['Open', 'Partially Complete', 'Closed', 'Issue'] %}
-              <option value="{{ po.status }}" selected>Current: {{ po.status }}</option>
-              {% endif %}
+              <option value="Draft" {{ 'selected' if po_status_display == 'Draft' else '' }}>Draft</option>
+              <option value="Issued" {{ 'selected' if po_status_display == 'Issued' else '' }}>Issued</option>
+              <option value="Cancelled" {{ 'selected' if po_status_display == 'Cancelled' else '' }}>Cancelled</option>
             </select>
           </label>
         </form>
@@ -58,6 +54,19 @@
       <div>
         <p class="text-xs uppercase text-slate-500">Expected Delivery</p>
         <p class="text-base font-semibold">{{ po.expected_delivery or po.expected_delivery_date or '—' }}</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase text-slate-500">Material status</p>
+        {% set ms = material_status_display %}
+        {% if ms == 'Complete' %}
+        <span class="inline-flex px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">Complete</span>
+        {% elif ms == 'Partial Receipt' %}
+        <span class="inline-flex px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">Partial Receipt</span>
+        {% elif ms == 'N/A' %}
+        <span class="inline-flex px-2 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-medium">N/A</span>
+        {% else %}
+        <span class="inline-flex px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">Pending</span>
+        {% endif %}
       </div>
       <div>
         <p class="text-xs uppercase text-slate-500">Notes</p>
@@ -239,7 +248,7 @@
           <tr>
             <td class="py-2 px-3 text-slate-600">{{ entry.changed_at.strftime('%d %b %Y %I:%M %p') if entry.changed_at else '—' }}</td>
             <td class="py-2 px-3 text-slate-600">{{ entry.changed_by or 'System' }}</td>
-            <td class="py-2 px-3 text-slate-700">Status: {{ entry.old_status or '—' }} → {{ entry.new_status }}</td>
+            <td class="py-2 px-3 text-slate-700">PO Status: {{ entry.old_status or '—' }} → {{ entry.new_status }}</td>
           </tr>
           {% endfor %}
         </tbody>

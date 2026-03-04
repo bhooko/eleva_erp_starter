@@ -119,7 +119,8 @@
           <th class="py-3 px-4">Vendor</th>
           <th class="py-3 px-4">Project</th>
           <th class="py-3 px-4">BOM</th>
-          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">PO Status</th>
+          <th class="py-3 px-4">Material Status</th>
           <th class="py-3 px-4">PO Date</th>
           <th class="py-3 px-4">Expected</th>
           <th class="py-3 px-4">Items</th>
@@ -138,14 +139,37 @@
           <td class="py-3 px-4 text-slate-700">
             {% if po.bom %}<div class="text-xs text-slate-500">{{ po.bom.bom_name }} (ID {{ po.bom.id }})</div>{% else %}<div class="text-xs text-slate-500">No BOM link</div>{% endif %}
           </td>
-          <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ po.status|title }}</span></td>
+          {% set po_status = (po.status or '')|trim %}
+          {% set po_status_l = po_status|lower %}
+          {% if po_status_l in ['draft', 'open'] %}
+            {% set po_status_label = 'Draft' %}
+          {% elif po_status_l in ['issued', 'issue', 'approved', 'sent'] %}
+            {% set po_status_label = 'Issued' %}
+          {% elif po_status_l == 'cancelled' %}
+            {% set po_status_label = 'Cancelled' %}
+          {% else %}
+            {% set po_status_label = po_status or 'Draft' %}
+          {% endif %}
+          <td class="py-3 px-4"><span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ po_status_label }}</span></td>
+          {% set ms = 'N/A' if po_status_label == 'Cancelled' else (po.material_status or 'Pending') %}
+          <td class="py-3 px-4">
+            {% if ms == 'Complete' %}
+            <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs">Complete</span>
+            {% elif ms == 'Partial Receipt' %}
+            <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">Partial Receipt</span>
+            {% elif ms == 'N/A' %}
+            <span class="px-2 py-1 rounded-full bg-slate-200 text-slate-700 text-xs">N/A</span>
+            {% else %}
+            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">Pending</span>
+            {% endif %}
+          </td>
           <td class="py-3 px-4">{{ po.po_date or po.order_date or '—' }}</td>
           <td class="py-3 px-4">{{ po.expected_delivery or po.expected_delivery_date or '—' }}</td>
           <td class="py-3 px-4">{{ po.items|length }} item(s)</td>
           <td class="py-3 px-4 text-slate-600">{{ po.notes or '—' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="py-4 px-4 text-slate-500">No purchase orders yet.</td></tr>
+        <tr><td colspan="11" class="py-4 px-4 text-slate-500">No purchase orders yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
