@@ -70,7 +70,7 @@
                   <td class="py-2">
                     <input type="text" value="{{ row.qty_ordered }}" readonly class="w-24 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-700" />
                   </td>
-                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.line_id }}_qty" class="w-24 rounded-lg border-slate-200" value="{{ row.qty_ordered }}" /></td>
+                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.line_id }}_qty" class="w-24 rounded-lg border-slate-200" value="0" /></td>
                   <td class="py-2">
                     <select name="item_{{ row.line_id }}_qc" class="rounded-lg border-slate-200">
                       <option value="OK">OK</option>
