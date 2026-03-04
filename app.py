@@ -12671,6 +12671,7 @@ def compute_material_status_for_po(po):
             db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
             .filter(InventoryReceiptItem.purchase_order_item_id == po_item.id)
             .filter(InventoryReceiptItem.inventory_receipt_id.in_(closed_receipt_ids))
+            .filter(InventoryReceiptItem.qc_status == "OK")
             .scalar()
             or 0.0
         )
@@ -13654,6 +13655,7 @@ def store_receive():
         db.session.add(receipt)
         db.session.flush()
 
+        saved_lines = 0
         for key in request.form:
             if key.startswith("item_") and key.endswith("_qty"):
                 item_id = key.split("_")[1]
@@ -13674,8 +13676,12 @@ def store_receive():
                     return redirect(url_for("store_receive"))
                 status_key = f"item_{item_id}_qc"
                 notes_key = f"item_{item_id}_notes"
-                qc_status = request.form.get(status_key)
-                qc_notes = request.form.get(notes_key)
+                qc_status = request.form.get(status_key) or "OK"
+                qc_notes = (request.form.get(notes_key) or "").strip()
+
+                if qty == 0:
+                    continue
+
                 poi = PurchaseOrderItem.query.get(item_id)
                 receipt_item = InventoryReceiptItem(
                     inventory_receipt_id=receipt.id,
@@ -13684,9 +13690,10 @@ def store_receive():
                     description=poi.description if poi else None,
                     quantity_received=qty,
                     qc_status=qc_status,
-                    qc_notes=qc_notes,
+                    qc_notes=qc_notes or None,
                 )
                 db.session.add(receipt_item)
+                saved_lines += 1
 
                 qc_status_normalized = (qc_status or "").strip().lower()
                 issue_type = None
@@ -13717,39 +13724,48 @@ def store_receive():
                         )
                     )
 
-                inv = InventoryItem.query.filter_by(item_code=receipt_item.item_code).first()
-                if not inv:
-                    inv = InventoryItem(
-                        item_code=receipt_item.item_code,
-                        description=receipt_item.description,
-                        unit=poi.unit if poi else None,
-                    )
-                    db.session.add(inv)
-                if qc_status == "OK":
-                    inv.current_stock = (inv.current_stock or 0) + qty
-                else:
-                    inv.quarantined_stock = (inv.quarantined_stock or 0) + qty
-                _initialize_book_stock(inv)
-                book = BookInventory.query.filter_by(item_code=receipt_item.item_code).first()
-                if book:
-                    book.quantity_received_total = (book.quantity_received_total or 0) + qty
+        if saved_lines == 0:
+            db.session.rollback()
+            flash("No pending quantities entered. Enter Qty received above 0 for at least one line.", "warning")
+            return redirect(url_for("store_receive", po_id=purchase_order.id))
 
         db.session.commit()
-        flash("Receipt captured and inventory updated.", "success")
+        flash("GRN created. Inventory will update when GRN is Closed.", "success")
         return redirect(url_for("store_receive"))
 
-    selected_po = pos[0] if pos else None
+    selected_po = None
+    selected_po_id = request.args.get("po_id", type=int)
+    if pos:
+        if selected_po_id:
+            selected_po = next((po for po in pos if po.id == selected_po_id), None)
+        if not selected_po:
+            selected_po = pos[0]
+
     selected_po_items = []
     if selected_po:
-        selected_po_items = [
-            {
-                "line_id": item.id,
-                "item_code": item.item_code,
-                "description": item.description,
-                "qty_ordered": item.quantity_ordered,
-            }
-            for item in selected_po.items
-        ]
+        for po_item in selected_po.items:
+            ordered_qty = int(po_item.quantity_ordered or 0)
+            received_closed_qty = (
+                db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
+                .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
+                .filter(InventoryReceipt.purchase_order_id == selected_po.id)
+                .filter(InventoryReceipt.status == "Closed")
+                .filter(InventoryReceiptItem.purchase_order_item_id == po_item.id)
+                .filter(InventoryReceiptItem.qc_status == "OK")
+                .scalar()
+                or 0
+            )
+            pending_qty = max(0, ordered_qty - int(received_closed_qty))
+            if pending_qty <= 0:
+                continue
+            selected_po_items.append(
+                {
+                    "poi": po_item,
+                    "ordered": ordered_qty,
+                    "pending": pending_qty,
+                }
+            )
+
     receipts = (
         InventoryReceipt.query.options(
             joinedload(InventoryReceipt.purchase_order),
@@ -13765,6 +13781,7 @@ def store_receive():
         "store_receive.html",
         pos=pos,
         selected_po=selected_po,
+        selected_po_id=selected_po.id if selected_po else None,
         selected_po_items=selected_po_items,
         receipts=receipts,
         default_receipt_number=default_receipt_number,
@@ -13800,6 +13817,34 @@ def store_receipt_detail(receipt_id):
             receipt.status = new_status
             if new_status == "Closed":
                 receipt.closed_at = date.today()
+                if receipt.inventory_posted_at is None:
+                    for item in receipt.items:
+                        qty = int(item.quantity_received or 0)
+                        if qty <= 0:
+                            continue
+
+                        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+                        if not inv:
+                            poi = item.purchase_order_item
+                            inv = InventoryItem(
+                                item_code=item.item_code,
+                                description=item.description,
+                                unit=poi.unit if poi else None,
+                            )
+                            db.session.add(inv)
+
+                        qc_status = (item.qc_status or "").strip().upper()
+                        if qc_status == "OK":
+                            inv.current_stock = (inv.current_stock or 0) + qty
+                        else:
+                            inv.quarantined_stock = (inv.quarantined_stock or 0) + qty
+                        _initialize_book_stock(inv)
+
+                        book = BookInventory.query.filter_by(item_code=item.item_code).first()
+                        if book:
+                            book.quantity_received_total = (book.quantity_received_total or 0) + qty
+
+                    receipt.inventory_posted_at = datetime.datetime.utcnow()
             elif new_status == "Open":
                 receipt.closed_at = None
 
@@ -16635,6 +16680,7 @@ def ensure_inventory_receipt_columns():
     expected_columns = (
         ("status", "TEXT DEFAULT 'Open'"),
         ("closed_at", "DATE"),
+        ("inventory_posted_at", "DATETIME"),
     )
     for col_name, col_type in expected_columns:
         if col_name in col_names:
