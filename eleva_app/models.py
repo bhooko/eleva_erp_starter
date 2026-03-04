@@ -3019,7 +3019,10 @@ class InventoryReceipt(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(
-        db.Integer, db.ForeignKey("purchase_order.id"), nullable=True
+        db.Integer,
+        db.ForeignKey("purchase_order.id"),
+        nullable=False,
+        index=True,
     )
     receipt_number = db.Column(db.String(80), nullable=False)
     received_date = db.Column(db.Date, nullable=True)

@@ -13629,9 +13629,19 @@ def store_receive():
             return redirect(url_for("store_receive"))
 
         purchase_order_id = request.form.get("purchase_order_id")
-        purchase_order = (
-            PurchaseOrder.query.get(purchase_order_id) if purchase_order_id else None
-        )
+        if not purchase_order_id:
+            flash("Purchase Order must be selected before creating a GRN.", "error")
+            return redirect(url_for("store_receive"))
+
+        purchase_order = PurchaseOrder.query.get(purchase_order_id)
+        if not purchase_order:
+            flash("Invalid Purchase Order selected.", "error")
+            return redirect(url_for("store_receive"))
+
+        if purchase_order.status != "Issued":
+            flash("GRNs can only be created for Issued Purchase Orders.", "error")
+            return redirect(url_for("store_receive"))
+
         receipt_number = request.form.get("receipt_number") or f"GRN-{uuid.uuid4().hex[:6].upper()}"
         received_date = datetime.date.today()
 
@@ -16626,6 +16636,29 @@ def ensure_inventory_receipt_columns():
             continue
         cur.execute(f"ALTER TABLE inventory_receipt ADD COLUMN {col_name} {col_type};")
         print(f"✅ Added column inventory_receipt.{col_name}")
+
+    cur.execute(
+        "SELECT COUNT(*) FROM inventory_receipt WHERE purchase_order_id IS NULL;"
+    )
+    null_purchase_order_rows = cur.fetchone()[0] or 0
+    if null_purchase_order_rows:
+        print(
+            "⚠️ Found "
+            f"{null_purchase_order_rows} inventory_receipt row(s) with NULL purchase_order_id; "
+            "these legacy rows were retained."
+        )
+
+    cur.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_inventory_receipt_require_purchase_order_id
+        BEFORE INSERT ON inventory_receipt
+        FOR EACH ROW
+        WHEN NEW.purchase_order_id IS NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'purchase_order_id is required for inventory_receipt');
+        END;
+        """
+    )
 
     conn.commit()
     conn.close()

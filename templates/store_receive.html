@@ -28,7 +28,8 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1">
             <span class="text-sm">Purchase Order</span>
-            <select name="purchase_order_id" class="w-full rounded-lg border-slate-200">
+            <select name="purchase_order_id" class="w-full rounded-lg border-slate-200" required>
+              <option value="" disabled selected>Select Purchase Order</option>
               {% for po in pos %}
                 <option value="{{ po.id }}">{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
               {% endfor %}
@@ -43,6 +44,11 @@
             <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" value="{{ today_ymd }}" readonly />
           </label>
         </div>
+        {% if not pos %}
+          <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            No Issued Purchase Orders available. Issue a PO before recording receipts.
+          </div>
+        {% endif %}
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -81,7 +87,7 @@
           </table>
         </div>
         <div class="flex justify-end">
-          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Save receipt</button>
+          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition disabled:cursor-not-allowed disabled:opacity-50" {% if not pos %}disabled{% endif %}>Save receipt</button>
         </div>
       </form>
     </div>
