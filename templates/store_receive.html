@@ -28,10 +28,10 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1">
             <span class="text-sm">Purchase Order</span>
-            <select name="purchase_order_id" class="w-full rounded-lg border-slate-200" required>
-              <option value="" disabled selected>Select Purchase Order</option>
+            <select name="purchase_order_id" class="w-full rounded-lg border-slate-200" required onchange="window.location='{{ url_for('store_receive') }}?po_id='+this.value">
+              <option value="" disabled {% if not selected_po_id %}selected{% endif %}>Select Purchase Order</option>
               {% for po in pos %}
-                <option value="{{ po.id }}">{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
+                <option value="{{ po.id }}" {% if selected_po_id == po.id %}selected{% endif %}>{{ po.po_number }} · {{ po.vendor.name if po.vendor else 'No vendor' }}</option>
               {% endfor %}
             </select>
           </label>
@@ -56,38 +56,40 @@
                 <th class="py-2">Item</th>
                 <th class="py-2">Description</th>
                 <th class="py-2">Qty ordered</th>
+                <th class="py-2">Pending qty</th>
                 <th class="py-2">Qty received</th>
                 <th class="py-2">QC</th>
                 <th class="py-2">Notes</th>
               </tr>
             </thead>
             <tbody class="divide-y">
-              {% if selected_po %}
+              {% if selected_po and selected_po_items %}
                 {% for row in selected_po_items %}
                 <tr>
-                  <td class="py-2">{{ row.item_code }}</td>
-                  <td class="py-2">{{ row.description }}</td>
+                  <td class="py-2">{{ row.poi.item_code }}</td>
+                  <td class="py-2">{{ row.poi.description }}</td>
+                  <td class="py-2">{{ row.ordered }}</td>
+                  <td class="py-2">{{ row.pending }}</td>
+                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.poi.id }}_qty" class="w-24 rounded-lg border-slate-200" value="0" /></td>
                   <td class="py-2">
-                    <input type="text" value="{{ row.qty_ordered }}" readonly class="w-24 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-700" />
-                  </td>
-                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.line_id }}_qty" class="w-24 rounded-lg border-slate-200" value="0" /></td>
-                  <td class="py-2">
-                    <select name="item_{{ row.line_id }}_qc" class="rounded-lg border-slate-200">
+                    <select name="item_{{ row.poi.id }}_qc" class="rounded-lg border-slate-200">
                       <option value="OK">OK</option>
                       <option value="NG">NG</option>
                     </select>
                   </td>
-                  <td class="py-2"><input type="text" name="item_{{ row.line_id }}_notes" class="w-full rounded-lg border-slate-200" /></td>
+                  <td class="py-2"><input type="text" name="item_{{ row.poi.id }}_notes" class="w-full rounded-lg border-slate-200" /></td>
                 </tr>
                 {% endfor %}
+              {% elif selected_po %}
+                <tr><td colspan="7" class="py-3 text-slate-500">All items for this PO are already fully received in Closed GRNs.</td></tr>
               {% else %}
-                <tr><td colspan="6" class="py-3 text-slate-500">No purchase orders available.</td></tr>
+                <tr><td colspan="7" class="py-3 text-slate-500">No purchase orders available.</td></tr>
               {% endif %}
             </tbody>
           </table>
         </div>
         <div class="flex justify-end">
-          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition disabled:cursor-not-allowed disabled:opacity-50" {% if not pos %}disabled{% endif %}>Save receipt</button>
+          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition disabled:cursor-not-allowed disabled:opacity-50" {% if not pos or not selected_po_items %}disabled{% endif %}>Save receipt</button>
         </div>
       </form>
     </div>
