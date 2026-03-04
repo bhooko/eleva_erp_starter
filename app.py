@@ -13657,7 +13657,12 @@ def store_receive():
         for key in request.form:
             if key.startswith("item_") and key.endswith("_qty"):
                 item_id = key.split("_")[1]
-                qty, qty_error = parse_int_field(request.form.get(key), "Qty received")
+                raw_qty = request.form.get(key)
+                if raw_qty is None or raw_qty.strip() == "":
+                    qty = 0
+                    qty_error = None
+                else:
+                    qty, qty_error = parse_int_field(raw_qty, "Qty received")
                 if qty_error:
                     db.session.rollback()
                     flash(qty_error, "danger")
