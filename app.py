@@ -13617,6 +13617,7 @@ def store_receive():
     ensure_bootstrap()
     pos = (
         PurchaseOrder.query.options(subqueryload(PurchaseOrder.items))
+        .filter(PurchaseOrder.status == "Issued")
         .order_by(PurchaseOrder.id.desc())
         .all()
     )
