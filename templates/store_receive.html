@@ -100,6 +100,7 @@
           <th class="py-3 px-4">Goods Receipt No (GRN)</th>
           <th class="py-3 px-4">PO</th>
           <th class="py-3 px-4">Received on</th>
+          <th class="py-3 px-4">Status</th>
           <th class="py-3 px-4">Items</th>
           <th class="py-3 px-4">QC OK</th>
           <th class="py-3 px-4">QC NG</th>
@@ -114,13 +115,19 @@
           <td class="py-3 px-4 font-semibold text-slate-800"><a href="{{ url_for('store_receipt_detail', receipt_id=receipt.id) }}" class="text-indigo-600 hover:underline">{{ receipt.receipt_number }}</a></td>
           <td class="py-3 px-4">{{ receipt.purchase_order.po_number if receipt.purchase_order else '—' }}</td>
           <td class="py-3 px-4">{{ receipt.received_date or '—' }}</td>
+          <td class="py-3 px-4">
+            {% set st = (receipt.status or 'Open') %}
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs {% if st == 'Closed' %}bg-green-100 text-green-700{% else %}bg-slate-100 text-slate-700{% endif %}">
+              {{ st }}
+            </span>
+          </td>
           <td class="py-3 px-4">{{ receipt.items|length }}</td>
           <td class="py-3 px-4 text-green-700">{{ ok_items|length }}</td>
           <td class="py-3 px-4 text-orange-700">{{ ng_items|length }}</td>
           <td class="py-3 px-4">{{ receipt.received_by.display_name if receipt.received_by else '—' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="py-4 px-4 text-slate-500">No receipts captured yet.</td></tr>
+        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No receipts captured yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
