@@ -50,6 +50,7 @@
     <form method="POST" class="space-y-4">
       {{ csrf_field() }}
       <input type="hidden" name="action" value="update_receipt" />
+      {% set is_closed = receipt.status == 'Closed' %}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -69,17 +70,29 @@
               <td class="py-2">{{ item.description or '—' }}</td>
               <td class="py-2">{{ item.purchase_order_item.quantity_ordered if item.purchase_order_item else '—' }}</td>
               <td class="py-2">
-                <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
+                {% if is_closed %}
+                  <span class="text-slate-800">{{ item.quantity_received|int }}</span>
+                {% else %}
+                  <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
+                {% endif %}
               </td>
               <td class="py-2">
-                <select name="item_{{ item.id }}_qc_status" class="rounded-lg border-slate-200">
-                  {% for qc in qc_status_options %}
-                    <option value="{{ qc }}" {% if item.qc_status == qc %}selected{% endif %}>{{ qc }}</option>
-                  {% endfor %}
-                </select>
+                {% if is_closed %}
+                  <span class="text-slate-800">{{ item.qc_status or '—' }}</span>
+                {% else %}
+                  <select name="item_{{ item.id }}_qc_status" class="rounded-lg border-slate-200">
+                    {% for qc in qc_status_options %}
+                      <option value="{{ qc }}" {% if item.qc_status == qc %}selected{% endif %}>{{ qc }}</option>
+                    {% endfor %}
+                  </select>
+                {% endif %}
               </td>
               <td class="py-2">
-                <input type="text" name="item_{{ item.id }}_notes" value="{{ item.qc_notes or '' }}" class="w-full rounded-lg border-slate-200" />
+                {% if is_closed %}
+                  <span class="text-slate-800">{{ item.qc_notes or '—' }}</span>
+                {% else %}
+                  <input type="text" name="item_{{ item.id }}_notes" value="{{ item.qc_notes or '' }}" class="w-full rounded-lg border-slate-200" />
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -91,7 +104,9 @@
 
       <div class="flex items-center justify-end gap-2 sticky bottom-0 bg-white pt-3">
         <a href="{{ url_for('store_receive') }}" class="px-4 py-2 btn-secondary rounded-lg">Back</a>
-        <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg">Save changes</button>
+        {% if not is_closed %}
+          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg">Save changes</button>
+        {% endif %}
       </div>
     </form>
   </div>
