@@ -13814,10 +13814,16 @@ def store_receipt_detail(receipt_id):
                 flash("Invalid GRN status selected.", "warning")
                 return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
-            receipt.status = new_status
             if new_status == "Closed":
-                receipt.closed_at = date.today()
-                if receipt.inventory_posted_at is None:
+                if not receipt.purchase_order_id:
+                    flash("Cannot close GRN without a linked Purchase Order.", "error")
+                    return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+                should_post_inventory = (
+                    (receipt.status or "").strip() != "Closed"
+                    or receipt.inventory_posted_at is None
+                )
+                if should_post_inventory and receipt.inventory_posted_at is None:
                     for item in receipt.items:
                         qty = int(item.quantity_received or 0)
                         if qty <= 0:
@@ -13845,21 +13851,31 @@ def store_receipt_detail(receipt_id):
                             book.quantity_received_total = (book.quantity_received_total or 0) + qty
 
                     receipt.inventory_posted_at = datetime.datetime.utcnow()
-            elif new_status == "Open":
-                receipt.closed_at = None
 
-            if new_status == "Closed" and receipt.purchase_order_id:
-                po = PurchaseOrder.query.get(receipt.purchase_order_id)
-                if po and (po.status or "").strip() != "Cancelled":
-                    computed_status = compute_material_status_for_po(po)
-                    if computed_status != "N/A":
-                        po.material_status = computed_status
+                if receipt.purchase_order_id:
+                    po = PurchaseOrder.query.get(receipt.purchase_order_id)
+                    if po and (po.status or "").strip() != "Cancelled":
+                        computed_status = compute_material_status_for_po(po)
+                        if computed_status != "N/A":
+                            po.material_status = computed_status
+
+            receipt.status = new_status
+            if new_status == "Closed" and not receipt.closed_at:
+                receipt.closed_at = date.today()
+
+            if new_status == "Open":
+                # Intentionally do not reverse inventory when reopening a closed GRN.
+                pass
 
             db.session.commit()
             flash("GRN status updated successfully.", "success")
             return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
         if action == "update_receipt":
+            if (receipt.status or "").strip() == "Closed":
+                flash("This GRN is Closed and cannot be edited.", "error")
+                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
             for item in receipt.items:
                 qty_value = request.form.get(f"item_{item.id}_qty_received")
                 qty_received, qty_error = parse_int_field(qty_value, "Qty received")
