@@ -6,7 +6,7 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Create Delivery Challan (DC)</h1>
-      <p class="text-sm text-slate-600">Issue material against Delivery Order {{ order.do_number }}.</p>
+      <p class="text-sm text-slate-600">Capture handover details and receiver acknowledgement for Delivery Order {{ order.do_number }}.</p>
     </div>
     <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="text-sm text-orange-600 hover:underline">Back to DO</a>
   </div>
@@ -21,21 +21,42 @@
         {% endif %}
       </div>
       <div>
-        <p class="text-xs text-slate-500">Receiver</p>
-        <p class="text-base font-semibold">{{ order.receiver_name }}</p>
+        <p class="text-xs text-slate-500">Delivery Order</p>
+        <p class="text-base font-semibold">{{ order.do_number }}</p>
       </div>
       <div>
-        <p class="text-xs text-slate-500">Status</p>
+        <p class="text-xs text-slate-500">DO Status</p>
         <p class="text-base font-semibold">{{ order.status }}</p>
       </div>
     </div>
 
     <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-      This DC moves physical stock out of store for this project/site. Linked Delivery Order: <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="font-semibold text-amber-900 hover:underline">{{ order.do_number }}</a>.
+      This Delivery Challan is the handover document for materials assigned in <a href="{{ url_for('delivery_order_detail', order_id=order.id) }}" class="font-semibold text-amber-900 hover:underline">{{ order.do_number }}</a>.
     </div>
 
     <form method="POST" class="space-y-4">
       {{ csrf_field() }}
+      <input type="hidden" name="action" value="create_challan" />
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="space-y-1">
+          <span class="text-sm">Receiver Name<span class="text-red-500">*</span></span>
+          <input type="text" name="receiver_name" value="{{ form_data.get('receiver_name', '') }}" class="w-full rounded-lg border-slate-200" required />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm">Receiver Contact</span>
+          <input type="text" name="receiver_contact" value="{{ form_data.get('receiver_contact', '') }}" class="w-full rounded-lg border-slate-200" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm">Handover Date & Time</span>
+          <input type="datetime-local" name="handover_at" value="{{ form_data.get('handover_at', '') }}" class="w-full rounded-lg border-slate-200" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm">Handover Remarks</span>
+          <input type="text" name="handover_remarks" value="{{ form_data.get('handover_remarks', '') }}" class="w-full rounded-lg border-slate-200" />
+        </label>
+      </div>
+
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -55,7 +76,7 @@
               <td class="py-2">{{ '%.2f'|format(ctx.delivered) }}</td>
               <td class="py-2">{{ '%.2f'|format(ctx.remaining) }}</td>
               <td class="py-2">
-                <input type="number" step="0.01" min="0" max="{{ ctx.remaining }}" name="item_{{ ctx.record.id }}_qty" value="{{ ctx.remaining }}" class="w-32 rounded-lg border-slate-200" />
+                <input type="number" step="0.01" min="0" max="{{ ctx.remaining }}" name="item_{{ ctx.record.id }}_qty" value="{{ form_data.get('item_' ~ ctx.record.id ~ '_qty', ctx.remaining) }}" class="w-32 rounded-lg border-slate-200" />
               </td>
             </tr>
             {% else %}

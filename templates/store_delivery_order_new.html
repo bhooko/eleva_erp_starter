@@ -6,7 +6,7 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Create Delivery Order</h1>
-      <p class="text-sm text-slate-600">Fill in the site details and items to generate a delivery order.</p>
+      <p class="text-sm text-slate-600">Use this to assign material for dispatch to a site. Receiver details will be captured in the Delivery Challan at handover.</p>
     </div>
     <a href="{{ url_for('store_delivery_orders') }}" class="text-sm text-orange-600 hover:underline">Back to list</a>
   </div>
@@ -14,18 +14,20 @@
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5">
     <form method="POST" class="space-y-4">
       {{ csrf_field() }}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <input type="hidden" name="action" value="create_delivery_order" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="space-y-1">
-          <span class="text-sm">Project / Site Name<span class="text-red-500">*</span></span>
-          <input type="text" name="project_or_site" value="{{ form_data.project_or_site or '' }}" class="w-full rounded-lg border-slate-200 bg-white focus:border-orange-500 focus:ring-orange-500" placeholder="Site / project" required />
+          <span class="text-sm">Project / Site<span class="text-red-500">*</span></span>
+          <select name="project_id" class="w-full rounded-lg border-slate-200 bg-white focus:border-orange-500 focus:ring-orange-500" required>
+            <option value="">Select site</option>
+            {% for project in projects %}
+              <option value="{{ project.id }}" {% if (form_data.get('project_id')|string) == (project.id|string) %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+          </select>
         </label>
         <label class="space-y-1">
-          <span class="text-sm">Receiver Name<span class="text-red-500">*</span></span>
-          <input type="text" name="receiver_name" value="{{ form_data.receiver_name or '' }}" class="w-full rounded-lg border-slate-200 bg-white focus:border-orange-500 focus:ring-orange-500" placeholder="Person receiving" required />
-        </label>
-        <label class="space-y-1">
-          <span class="text-sm">Remarks</span>
-          <input type="text" name="remarks" value="{{ form_data.remarks or '' }}" class="w-full rounded-lg border-slate-200 bg-white focus:border-orange-500 focus:ring-orange-500" placeholder="Optional notes" />
+          <span class="text-sm">Internal remarks</span>
+          <input type="text" name="remarks" value="{{ form_data.get('remarks', '') }}" class="w-full rounded-lg border-slate-200 bg-white focus:border-orange-500 focus:ring-orange-500" placeholder="Optional notes" />
         </label>
       </div>
 

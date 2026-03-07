@@ -6,85 +6,19 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Delivery Challan (DC)</h1>
-      <p class="text-sm text-slate-600">Review delivery challan history and create new DCs.</p>
+      <p class="text-sm text-slate-600">Review delivery challan history.</p>
       <div class="mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2 text-xs text-amber-800 inline-flex items-center gap-2">
         <span class="font-semibold">Note:</span> Delivery Challans move physical stock out of the store. Link them to Delivery Orders to reflect reservations accurately.
       </div>
     </div>
-    <label for="new-dispatch" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">+ New Delivery Challan</label>
+    <a href="{{ url_for('store_delivery_orders') }}" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">Go to Delivery Orders</a>
   </div>
 
-  <input type="checkbox" id="new-dispatch" class="hidden peer" />
-  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('new-dispatch').checked=false;"></div>
-  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
-      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
-        <div>
-          <p class="text-xs text-slate-500 uppercase">Delivery challan</p>
-          <h2 class="text-lg font-semibold">Create delivery challan</h2>
-        </div>
-        <button class="text-slate-500" onclick="document.getElementById('new-dispatch').checked=false;">✕</button>
-      </div>
-      <form method="POST" class="p-5 space-y-4">
-        {{ csrf_field() }}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label class="space-y-1">
-            <span class="text-sm">Challan number</span>
-            <input type="text" name="dispatch_number" class="w-full rounded-lg border-slate-200" placeholder="auto" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Project</span>
-            <select name="project_id" class="w-full rounded-lg border-slate-200">
-              {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Challan date</span>
-            <input type="date" name="dispatch_date" class="w-full rounded-lg border-slate-200" />
-          </label>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label class="space-y-1">
-            <span class="text-sm">Vehicle details</span>
-            <input type="text" name="vehicle_details" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Driver name</span>
-            <input type="text" name="driver_name" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Notes</span>
-            <input type="text" name="notes" class="w-full rounded-lg border-slate-200" />
-          </label>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <label class="space-y-1">
-            <span class="text-sm">Item code</span>
-            <select name="item_code" class="w-full rounded-lg border-slate-200" required>
-              {% for item in inventory %}<option value="{{ item.item_code }}">{{ item.item_code }} ({{ item.current_stock }})</option>{% endfor %}
-            </select>
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Description</span>
-            <input type="text" name="description" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Unit</span>
-            <input type="text" name="unit" class="w-full rounded-lg border-slate-200" />
-          </label>
-          <label class="space-y-1">
-            <span class="text-sm">Quantity</span>
-            <input type="number" step="0.01" min="0.01" name="quantity_dispatched" class="w-full rounded-lg border-slate-200" required />
-          </label>
-        </div>
-        <div class="flex justify-end">
-          <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">Create delivery challan</button>
-        </div>
-      </form>
-    </div>
+  <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+    Delivery Challan must be created from an existing Delivery Order. Direct standalone Delivery Challan creation is disabled.
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left text-slate-500">
