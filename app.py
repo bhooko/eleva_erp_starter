@@ -12107,6 +12107,127 @@ def _ensure_product_sku(product: Product) -> Optional[str]:
     return product.sku
 
 
+def _resolve_product_by_inventory_identity(*, item_code=None, description=None, product_name=None):
+    """Resolve a product using SKU first, then exact name/description fallback."""
+
+    normalized_code = clean_str(item_code)
+    if normalized_code:
+        product = Product.query.filter(func.lower(Product.sku) == normalized_code.lower()).first()
+        if product:
+            return product
+
+    for candidate in (product_name, description, item_code):
+        normalized_name = clean_str(candidate)
+        if not normalized_name:
+            continue
+        product = Product.query.filter(func.lower(Product.name) == normalized_name.lower()).first()
+        if product:
+            return product
+    return None
+
+
+def _canonical_inventory_item_code(*, item_code=None, description=None, product_name=None):
+    """Return ERP SKU for inventory posting whenever a matching product exists."""
+
+    product = _resolve_product_by_inventory_identity(
+        item_code=item_code,
+        description=description,
+        product_name=product_name,
+    )
+    if product:
+        sku = _ensure_product_sku(product)
+        if sku:
+            return sku, product
+
+    normalized_code = clean_str(item_code)
+    return (normalized_code or None), None
+
+
+def _merge_legacy_inventory_item_keys():
+    """One-time safe merge of legacy inventory rows keyed by product name/description."""
+
+    products = Product.query.filter(Product.sku.isnot(None), Product.sku != "").all()
+    merged_any = False
+
+    for product in products:
+        sku = clean_str(product.sku)
+        name = clean_str(product.name)
+        if not sku or not name:
+            continue
+
+        candidates = (
+            InventoryItem.query.filter(
+                or_(
+                    func.lower(InventoryItem.item_code) == sku.lower(),
+                    func.lower(InventoryItem.item_code) == name.lower(),
+                    func.lower(InventoryItem.description) == name.lower(),
+                )
+            )
+            .order_by(InventoryItem.id.asc())
+            .all()
+        )
+        if not candidates:
+            continue
+
+        canonical = next(
+            (row for row in candidates if clean_str(row.item_code).lower() == sku.lower()),
+            None,
+        )
+
+        if canonical is None:
+            source_row = candidates[0]
+            canonical = InventoryItem(
+                item_code=sku,
+                description=name,
+                unit=source_row.unit,
+                current_stock=0,
+                book_stock=0,
+                quarantined_stock=0,
+                location=source_row.location,
+            )
+            db.session.add(canonical)
+            db.session.flush()
+            merged_any = True
+
+        if canonical.item_code != sku:
+            canonical.item_code = sku
+            merged_any = True
+        if not canonical.description:
+            canonical.description = name
+            merged_any = True
+
+        for row in candidates:
+            if row.id == canonical.id:
+                continue
+
+            row_item_code = clean_str(row.item_code).lower()
+            row_description = clean_str(row.description).lower()
+            is_confirmed_match = (
+                row_item_code == name.lower()
+                or row_description == name.lower()
+                or row_item_code == sku.lower()
+            )
+            if not is_confirmed_match:
+                continue
+
+            canonical.current_stock = (canonical.current_stock or 0) + (row.current_stock or 0)
+            canonical.book_stock = (canonical.book_stock or 0) + (row.book_stock or 0)
+            canonical.quarantined_stock = (canonical.quarantined_stock or 0) + (
+                row.quarantined_stock or 0
+            )
+            if not canonical.location and row.location:
+                canonical.location = row.location
+            if not canonical.unit and row.unit:
+                canonical.unit = row.unit
+            if not canonical.description and row.description:
+                canonical.description = row.description
+
+            db.session.delete(row)
+            merged_any = True
+
+    return merged_any
+
+
 def _initialize_book_stock(inventory_item):
     updated = False
     physical = inventory_item.current_stock or 0
@@ -12275,9 +12396,17 @@ def _process_inventory_upload(upload, extension):
             row_errors.append(f"Row {row_index}: " + "; ".join(issues))
             continue
 
-        product_key = product.lower()
-        product_totals[product_key] = product_totals.get(product_key, 0) + quantity
-        product_records[product_key] = product_in_master
+        canonical_item_code, product_ref = _canonical_inventory_item_code(
+            item_code=product_in_master.sku,
+            description=product,
+            product_name=product,
+        )
+        if not canonical_item_code:
+            row_errors.append(f"Row {row_index}: Could not resolve ERP item code for '{product}'.")
+            continue
+
+        product_totals[canonical_item_code] = product_totals.get(canonical_item_code, 0) + quantity
+        product_records[canonical_item_code] = product_ref or product_in_master
 
         location = clean_str(row_values.get("location")) or "Main Store"
         record = InventoryStock(
@@ -12293,15 +12422,15 @@ def _process_inventory_upload(upload, extension):
         db.session.add(record)
         imported_rows += 1
 
-    for key, total_qty in product_totals.items():
-        product_ref = product_records.get(key)
+    for item_code, total_qty in product_totals.items():
+        product_ref = product_records.get(item_code)
         inventory_item = InventoryItem.query.filter(
-            func.lower(InventoryItem.item_code) == key
+            func.lower(InventoryItem.item_code) == item_code.lower()
         ).first()
         if not inventory_item:
             inventory_item = InventoryItem(
-                item_code=product_ref.name if product_ref else key,
-                description=product_ref.name if product_ref else key,
+                item_code=item_code,
+                description=product_ref.name if product_ref else item_code,
                 unit=(product_ref.uom or product_ref.purchase_uom) if product_ref else None,
             )
             db.session.add(inventory_item)
@@ -12309,7 +12438,7 @@ def _process_inventory_upload(upload, extension):
             preferred_unit = product_ref.uom or product_ref.purchase_uom
             if preferred_unit:
                 inventory_item.unit = preferred_unit
-            inventory_item.description = inventory_item.description or product_ref.name
+            inventory_item.description = product_ref.name or inventory_item.description
         inventory_item.current_stock = total_qty
         inventory_item.book_stock = total_qty
 
@@ -13423,16 +13552,23 @@ def _parse_delivery_order_items(form):
         except (TypeError, ValueError):
             quantity_value = None
 
+        product_record = None
         if not product_name:
             errors.append("Product name is required for each item.")
+        else:
+            product_record = Product.query.filter(func.lower(Product.name) == product_name.lower()).first()
+            if not product_record:
+                errors.append(f"Product '{product_name}' was not found in Parts master.")
+
         if quantity_value is None:
             errors.append("Quantity must be numeric.")
         elif quantity_value <= 0:
             errors.append("Quantity must be greater than zero.")
 
+        item_code = _ensure_product_sku(product_record) if product_record else None
         items.append(
             {
-                "item_code": product_name,
+                "item_code": item_code,
                 "product_name": product_name,
                 "quantity": quantity_value,
                 "uom": uom,
@@ -13498,18 +13634,18 @@ def create_delivery_order():
         order.do_number = f"DO-{order.id:04d}"
 
         for item in items:
-                    db.session.add(
-                        DeliveryOrderItem(
-                            delivery_order_id=order.id,
-                            item_code=item.get("item_code") or item.get("product_name"),
-                            product_name=item.get("product_name"),
-                            requested_qty=item.get("quantity") or 0,
-                            reserved_qty=0,
-                            delivered_qty_total=0,
-                            uom=item.get("uom"),
-                            remarks=item.get("remarks"),
-                        )
-                    )
+            db.session.add(
+                DeliveryOrderItem(
+                    delivery_order_id=order.id,
+                    item_code=item.get("item_code"),
+                    product_name=item.get("product_name"),
+                    requested_qty=item.get("quantity") or 0,
+                    reserved_qty=0,
+                    delivered_qty_total=0,
+                    uom=item.get("uom"),
+                    remarks=item.get("remarks"),
+                )
+            )
 
         db.session.commit()
         flash("Delivery Order created.", "success")
@@ -13664,10 +13800,26 @@ def confirm_delivery_order(order_id):
     for item in order.items:
         item.reserved_qty = item.requested_qty or 0
         item.delivered_qty_total = item.delivered_qty_total or 0
-        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+        canonical_item_code, linked_product = _canonical_inventory_item_code(
+            item_code=item.item_code,
+            product_name=item.product_name,
+        )
+        if not canonical_item_code:
+            continue
+
+        if item.item_code != canonical_item_code:
+            item.item_code = canonical_item_code
+
+        inv = InventoryItem.query.filter_by(item_code=canonical_item_code).first()
         if not inv:
-            inv = InventoryItem(item_code=item.item_code, description=item.product_name, unit=item.uom)
+            inv = InventoryItem(
+                item_code=canonical_item_code,
+                description=(linked_product.name if linked_product else item.product_name),
+                unit=item.uom,
+            )
             db.session.add(inv)
+        elif linked_product and linked_product.name:
+            inv.description = linked_product.name
         _initialize_book_stock(inv)
         available_book = inv.book_stock if inv.book_stock is not None else inv.current_stock or 0
         if item.reserved_qty > (available_book or 0):
@@ -13915,15 +14067,27 @@ def store_receipt_detail(receipt_id):
                         if qty <= 0:
                             continue
 
-                        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+                        canonical_item_code, linked_product = _canonical_inventory_item_code(
+                            item_code=item.item_code,
+                            description=item.description,
+                        )
+                        if not canonical_item_code:
+                            continue
+
+                        if item.item_code != canonical_item_code:
+                            item.item_code = canonical_item_code
+
+                        inv = InventoryItem.query.filter_by(item_code=canonical_item_code).first()
                         if not inv:
                             poi = item.purchase_order_item
                             inv = InventoryItem(
-                                item_code=item.item_code,
-                                description=item.description,
+                                item_code=canonical_item_code,
+                                description=(linked_product.name if linked_product else item.description),
                                 unit=poi.unit if poi else None,
                             )
                             db.session.add(inv)
+                        elif linked_product and linked_product.name:
+                            inv.description = linked_product.name
 
                         qc_status = (item.qc_status or "").strip().upper()
                         if qc_status == "OK":
@@ -14106,7 +14270,14 @@ def store_inventory():
     ensure_bootstrap()
     inventory_flags = _get_inventory_control()
     _sync_inventory_with_products()
-    items = InventoryItem.query.order_by(InventoryItem.item_code).all()
+    items = (
+        InventoryItem.query.join(
+            Product,
+            func.lower(Product.sku) == func.lower(InventoryItem.item_code),
+        )
+        .order_by(InventoryItem.item_code)
+        .all()
+    )
     for item in items:
         if item.book_stock is None:
             item.book_stock = item.current_stock or 0
@@ -14412,9 +14583,21 @@ def complete_dispatch(dispatch_id):
         return redirect(url_for("store_dispatch"))
 
     for item in dispatch.items:
-        inv = InventoryItem.query.filter_by(item_code=item.item_code).first()
+        canonical_item_code, linked_product = _canonical_inventory_item_code(
+            item_code=item.item_code,
+            description=item.description,
+        )
+        if not canonical_item_code:
+            continue
+
+        if item.item_code != canonical_item_code:
+            item.item_code = canonical_item_code
+
+        inv = InventoryItem.query.filter_by(item_code=canonical_item_code).first()
         if not inv:
             continue
+        if linked_product and linked_product.name:
+            inv.description = linked_product.name
         _initialize_book_stock(inv)
         inv.current_stock = (inv.current_stock or 0) - (item.qty_delivered or 0)
         if not dispatch.delivery_order_id:
@@ -16948,6 +17131,7 @@ def bootstrap_db():
     ensure_customer_columns()
     ensure_vendor_columns()
     ensure_product_columns()
+    _merge_legacy_inventory_item_keys()
     ensure_part_class_table()
     ensure_bom_template_table()
     ensure_bom_template_input_table()
