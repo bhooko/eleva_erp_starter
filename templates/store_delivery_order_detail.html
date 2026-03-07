@@ -6,22 +6,18 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Delivery Order (DO) {{ order.do_number }}</h1>
-      <p class="text-sm text-slate-600">Read-only detail of the delivery order and its stock reservations.</p>
+      <p class="text-sm text-slate-600">Internal assignment detail with stock reservation tracking.</p>
     </div>
     <a href="{{ url_for('store_delivery_orders') }}" class="text-sm text-orange-600 hover:underline">Back to list</a>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
       <p class="text-xs text-slate-500">Project / Site</p>
       <p class="text-lg font-semibold text-slate-800">{{ order.project_or_site }}</p>
       {% if order.project %}
         <a href="{{ url_for('project_detail', project_id=order.project.id) }}" class="text-xs text-orange-600 hover:underline">Open project</a>
       {% endif %}
-    </div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
-      <p class="text-xs text-slate-500">Receiver</p>
-      <p class="text-lg font-semibold text-slate-800">{{ order.receiver_name }}</p>
     </div>
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
       <p class="text-xs text-slate-500">Status</p>
@@ -52,13 +48,13 @@
         <p class="text-base font-semibold">{{ order.created_by.display_name if order.created_by else '—' }}</p>
       </div>
       <div>
-        <p class="text-xs text-slate-500">Remarks</p>
+        <p class="text-xs text-slate-500">Internal Remarks</p>
         <p class="text-base">{{ order.remarks or '—' }}</p>
       </div>
     </div>
 
     <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-      This DO reserves stock (book inventory). Physical stock reduces only when Delivery Challans (DC) are delivered.
+      This DO is an internal dispatch instruction. Capture handover details and receiver acknowledgement in the Delivery Challan.
     </div>
 
     <div class="overflow-x-auto">

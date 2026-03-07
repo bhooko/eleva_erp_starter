@@ -6,7 +6,7 @@
     <div>
       <p class="text-sm uppercase text-slate-500">Store</p>
       <h1 class="text-2xl font-semibold">Delivery Orders</h1>
-      <p class="text-sm text-slate-600">Create and track delivery orders created by Store.</p>
+      <p class="text-sm text-slate-600">Create and track internal dispatch assignments from Store.</p>
     </div>
     {% if can_create %}
     <a href="{{ url_for('create_delivery_order') }}" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition">
@@ -21,7 +21,6 @@
         <tr class="text-left text-slate-500">
           <th class="py-3 px-4">DO Number</th>
           <th class="py-3 px-4">Project / Site</th>
-          <th class="py-3 px-4">Receiver</th>
           <th class="py-3 px-4">Status</th>
           <th class="py-3 px-4">Date</th>
           <th class="py-3 px-4">Created By</th>
@@ -36,7 +35,6 @@
             </a>
           </td>
           <td class="py-3 px-4">{{ order.project_or_site }}</td>
-          <td class="py-3 px-4">{{ order.receiver_name }}</td>
           <td class="py-3 px-4">
             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {{ 'bg-emerald-100 text-emerald-700' if order.status in ['Confirmed', 'Completed'] else 'bg-amber-100 text-amber-700' if order.status == 'Partially Delivered' else 'bg-slate-100 text-slate-700' }}">
               {{ order.status or 'Draft' }}
@@ -47,7 +45,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="py-4 px-4 text-slate-500">No delivery orders captured yet.</td>
+          <td colspan="5" class="py-4 px-4 text-slate-500">No delivery orders captured yet.</td>
         </tr>
         {% endfor %}
       </tbody>

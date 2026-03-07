@@ -13589,19 +13589,33 @@ def create_delivery_order():
     _require_delivery_order_permission("create")
 
     products = Product.query.filter_by(is_active=True).order_by(Product.name).all()
+    projects = Project.query.order_by(Project.name.asc()).all()
 
     if request.method == "POST":
-        project_or_site = (request.form.get("project_or_site") or "").strip()
-        receiver_name = (request.form.get("receiver_name") or "").strip()
+        action = (request.form.get("action") or "create_delivery_order").strip().lower()
+        if action != "create_delivery_order":
+            flash("Invalid delivery order action.", "danger")
+            return redirect(url_for("create_delivery_order"))
+
+        project_id_raw = (request.form.get("project_id") or "").strip()
+        selected_project = None
+        project_id = None
+        if project_id_raw:
+            try:
+                project_id = int(project_id_raw)
+            except (TypeError, ValueError):
+                project_id = None
+            if project_id:
+                selected_project = Project.query.filter_by(id=project_id).first()
+
+        project_or_site = (selected_project.name if selected_project else "").strip()
         remarks = (request.form.get("remarks") or "").strip() or None
 
         items, item_errors = _parse_delivery_order_items(request.form)
         errors = []
 
         if not project_or_site:
-            errors.append("Project / Site Name is required.")
-        if not receiver_name:
-            errors.append("Receiver Name is required.")
+            errors.append("Project / Site is required.")
 
         errors.extend(item_errors)
 
@@ -13611,9 +13625,10 @@ def create_delivery_order():
             return render_template(
                 "store_delivery_order_new.html",
                 products=products,
+                projects=projects,
                 form_data={
+                    "project_id": project_id_raw,
                     "project_or_site": project_or_site,
-                    "receiver_name": receiver_name,
                     "remarks": remarks,
                     "items": items,
                 },
@@ -13623,8 +13638,9 @@ def create_delivery_order():
             do_number="DO-PENDING",
             date_created=datetime.datetime.utcnow(),
             created_by_user_id=current_user.id,
+            project_id=selected_project.id if selected_project else None,
             project_or_site=project_or_site,
-            receiver_name=receiver_name,
+            receiver_name="To be captured in Delivery Challan",
             remarks=remarks,
             status="Draft",
         )
@@ -13654,7 +13670,8 @@ def create_delivery_order():
     return render_template(
         "store_delivery_order_new.html",
         products=products,
-        form_data={"items": [{}]},
+        projects=projects,
+        form_data={"items": [{}], "project_id": ""},
     )
 
 
@@ -13717,6 +13734,38 @@ def create_delivery_challan_from_do(order_id):
         )
 
     if request.method == "POST":
+        action = (request.form.get("action") or "create_challan").strip().lower()
+        if action != "create_challan":
+            flash("Invalid challan action.", "danger")
+            return redirect(url_for("delivery_order_detail", order_id=order.id))
+
+        receiver_name = (request.form.get("receiver_name") or "").strip()
+        receiver_contact = (request.form.get("receiver_contact") or "").strip()
+        handover_remarks = (request.form.get("handover_remarks") or "").strip()
+        handover_at_raw = (request.form.get("handover_at") or "").strip()
+
+        handover_at = None
+        if handover_at_raw:
+            try:
+                handover_at = datetime.datetime.strptime(handover_at_raw, "%Y-%m-%dT%H:%M")
+            except ValueError:
+                flash("Handover date/time format is invalid.", "danger")
+                return render_template(
+                    "store_delivery_challan_new.html",
+                    order=order,
+                    items=items_context,
+                    form_data=request.form,
+                )
+
+        if not receiver_name:
+            flash("Receiver name is required for Delivery Challan.", "danger")
+            return render_template(
+                "store_delivery_challan_new.html",
+                order=order,
+                items=items_context,
+                form_data=request.form,
+            )
+
         selections = []
         for ctx in items_context:
             key = f"item_{ctx['record'].id}_qty"
@@ -13733,6 +13782,7 @@ def create_delivery_challan_from_do(order_id):
                         "store_delivery_challan_new.html",
                         order=order,
                         items=items_context,
+                        form_data=request.form,
                     )
                 selections.append((ctx["record"], qty_value))
 
@@ -13742,15 +13792,25 @@ def create_delivery_challan_from_do(order_id):
                 "store_delivery_challan_new.html",
                 order=order,
                 items=items_context,
+                form_data=request.form,
             )
+
+        notes_parts = [f"Receiver Name: {receiver_name}"]
+        if receiver_contact:
+            notes_parts.append(f"Receiver Contact: {receiver_contact}")
+        if handover_remarks:
+            notes_parts.append(f"Handover Remarks: {handover_remarks}")
+        challan_notes = "\n".join(notes_parts)
 
         challan = DeliveryChallan(
             dc_number="DC-PENDING",
             delivery_order_id=order.id,
             project_id=order.project_id,
-            dispatch_date=datetime.date.today(),
+            dispatch_date=(handover_at.date() if handover_at else datetime.date.today()),
             created_by_user_id=current_user.id,
             dispatched_by_user_id=current_user.id,
+            delivered_at=handover_at,
+            notes=challan_notes,
             status="Draft",
         )
         db.session.add(challan)
@@ -13780,6 +13840,7 @@ def create_delivery_challan_from_do(order_id):
         "store_delivery_challan_new.html",
         order=order,
         items=items_context,
+        form_data={},
     )
 
 
@@ -14419,71 +14480,14 @@ def inventory_snapshot():
 @login_required
 def store_dispatch():
     ensure_bootstrap()
-    projects = Project.query.order_by(Project.name).all()
-    inventory = InventoryItem.query.order_by(InventoryItem.item_code).all()
+    _require_delivery_order_permission("view")
 
     if request.method == "POST":
-        item_code = request.form.get("item_code")
-        try:
-            quantity = float(request.form.get("quantity_dispatched") or 0)
-        except (TypeError, ValueError):
-            quantity = 0
-
-        if not item_code or quantity <= 0:
-            flash(
-                "Please select an item and enter a quantity before creating a delivery challan.",
-                "warning",
-            )
-            return redirect(url_for("store_dispatch"))
-
-        inv = InventoryItem.query.filter_by(item_code=item_code).first()
-        available_qty = inv.current_stock if inv and inv.current_stock is not None else 0
-
-        if not inv:
-            flash("The selected item is not available in inventory.", "danger")
-            return redirect(url_for("store_dispatch"))
-
-        if quantity > available_qty:
-            flash("Insufficient stock available for this dispatch quantity.", "danger")
-            return redirect(url_for("store_dispatch"))
-
-        dispatch_number = request.form.get("dispatch_number") or f"DC-{uuid.uuid4().hex[:6].upper()}"
-        project_id = request.form.get("project_id") or None
-        dispatch_date_raw = request.form.get("dispatch_date")
-        try:
-            dispatch_date = datetime.datetime.strptime(dispatch_date_raw, "%Y-%m-%d").date() if dispatch_date_raw else None
-        except ValueError:
-            dispatch_date = None
-
-        dispatch = DeliveryChallan(
-            project_id=project_id,
-            dc_number=dispatch_number,
-            dispatch_date=dispatch_date,
-            dispatched_by_user_id=current_user.id,
-            created_by_user_id=current_user.id,
-            vehicle_details=request.form.get("vehicle_details"),
-            driver_name=request.form.get("driver_name"),
-            notes=request.form.get("notes"),
-            status="Draft",
-            delivered_at=None,
-            is_completed=False,
-            completed_at=None,
-        )
-        db.session.add(dispatch)
-        db.session.flush()
-
-        dispatch_item = DeliveryChallanItem(
-            delivery_challan_id=dispatch.id,
-            item_code=item_code,
-            description=request.form.get("description"),
-            unit=request.form.get("unit"),
-            qty_delivered=quantity,
-        )
-        db.session.add(dispatch_item)
-
-        db.session.commit()
-        flash("Delivery challan created in Draft. Mark as delivered when dispatched.", "success")
+        flash("Delivery Challan must be created from a Delivery Order.", "warning")
         return redirect(url_for("store_dispatch"))
+
+    projects = Project.query.order_by(Project.name).all()
+    inventory = InventoryItem.query.order_by(InventoryItem.item_code).all()
 
     dispatches = (
         DeliveryChallan.query.options(
