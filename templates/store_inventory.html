@@ -68,7 +68,7 @@
     <button type="button" data-modal-target="quarantine-modal"
             class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left focus:outline-none focus:ring-2 focus:ring-orange-500">
       <p class="text-xs uppercase text-slate-500">Quarantined</p>
-      <p class="text-2xl font-semibold text-red-600">{{ quarantined }}</p>
+      <p class="text-2xl font-semibold {{ 'text-orange-600' if quarantined > 0 else 'text-gray-700' }}">{{ quarantined }}</p>
     </button>
     <button type="button" data-modal-target="low-stock-modal"
             class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left focus:outline-none focus:ring-2 focus:ring-orange-500">
@@ -170,7 +170,7 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-lg font-semibold">ERP Inventory Baseline</h2>
@@ -183,42 +183,46 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-800/70 text-slate-200 border-b border-slate-700/60">
-        <tr class="text-left">
-          <th class="py-2 font-semibold">Item code</th>
-          <th class="py-2 font-semibold">Description</th>
-          <th class="py-2 font-semibold text-right">Physical stock</th>
-          <th class="py-2 font-semibold text-right">Book stock</th>
-          <th class="py-2 font-semibold text-right">Reserved</th>
-          <th class="py-2 font-semibold text-right">Quarantine</th>
-          <th class="py-2 font-semibold">Location</th>
-          <th class="py-2 text-right font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-800/70 text-slate-300">
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+    <div class="overflow-x-auto">
+      <table class="min-w-[1100px] w-full text-sm">
+        <thead>
+          <tr class="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+            <th class="px-3 py-2 text-left w-[220px] whitespace-nowrap">Item code</th>
+            <th class="px-3 py-2 text-left w-[320px] whitespace-nowrap">Description</th>
+            <th class="px-3 py-2 text-right w-[120px] whitespace-nowrap">Physical stock</th>
+            <th class="px-3 py-2 text-right w-[120px] whitespace-nowrap">Book stock</th>
+            <th class="px-3 py-2 text-right w-[100px] whitespace-nowrap">Reserved</th>
+            <th class="px-3 py-2 text-right w-[110px] whitespace-nowrap">Quarantine</th>
+            <th class="px-3 py-2 text-left w-[120px] whitespace-nowrap">Location</th>
+            <th class="px-3 py-2 text-right w-[140px] whitespace-nowrap">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 text-slate-700">
         {% for item in items %}
-        <tr class="{{ 'bg-slate-900/60' if loop.index0 % 2 == 0 else 'bg-slate-900/40' }} hover:bg-slate-800/70 transition-colors">
-          <td class="py-2"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="text-slate-100 font-semibold hover:underline">{{ item.item_code }}</a></td>
-          <td class="py-2">{{ item.description }}</td>
-          <td class="py-2 text-right">{{ item.current_stock }}</td>
-          <td class="py-2 text-right">{{ item.book_stock }}</td>
-          <td class="py-2 text-right">{{ (item.current_stock or 0) - (item.book_stock or 0) }}</td>
-          <td class="py-2 text-right">{{ item.quarantined_stock }}</td>
-          <td class="py-2">{{ item.location or 'Main Store' }}</td>
-          <td class="py-2 text-right space-x-2">
-            <a href="{{ url_for('inventory_item_movements', item_id=item.id) }}" class="btn-secondary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">History</a>
-            {% if can_adjust %}
-            <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="btn-primary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">Adjust</a>
-            {% endif %}
-          </td>
-        </tr>
+          <tr class="border-b hover:bg-slate-50">
+            <td class="px-3 py-2"><a href="{{ url_for('purchase_parts', item_code=item.item_code) }}" class="font-semibold text-slate-800 hover:underline">{{ item.item_code }}</a></td>
+            <td class="px-3 py-2 text-slate-700">{{ item.description }}</td>
+            <td class="px-3 py-2 text-right font-mono">{{ item.current_stock }}</td>
+            <td class="px-3 py-2 text-right font-mono">{{ item.book_stock }}</td>
+            <td class="px-3 py-2 text-right font-mono">{{ (item.current_stock or 0) - (item.book_stock or 0) }}</td>
+            <td class="px-3 py-2 text-right font-mono">{{ item.quarantined_stock }}</td>
+            <td class="px-3 py-2">{{ item.location or 'Main Store' }}</td>
+            <td class="px-3 py-2">
+              <div class="flex justify-end gap-2">
+                <a href="{{ url_for('inventory_item_movements', item_id=item.id) }}" class="btn-secondary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">History</a>
+                {% if can_adjust %}
+                <a href="{{ url_for('adjust_inventory_item', item_id=item.id) }}" class="btn-primary inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs">Adjust</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
         {% else %}
-        <tr><td colspan="8" class="py-3 text-slate-500">No inventory captured yet.</td></tr>
+          <tr><td colspan="8" class="px-3 py-3 text-slate-500">No inventory captured yet.</td></tr>
         {% endfor %}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
