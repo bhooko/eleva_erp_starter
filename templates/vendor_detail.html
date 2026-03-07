@@ -388,16 +388,34 @@
           <label class="space-y-1 block">
             <span class="text-xs text-slate-600">Status</span>
             <select name="status" class="w-full rounded-lg border-slate-200 px-3 py-2">
-              <option value="Open">Open</option>
-              <option value="In Review">In Review</option>
+              <option value="Unresolved">Unresolved</option>
               <option value="Resolved">Resolved</option>
-              <option value="Closed">Closed</option>
             </select>
           </label>
         </div>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Description</span>
           <textarea name="description" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Describe the issue"></textarea>
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Resolution type</span>
+            <select name="resolution_type" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              <option value="Replace">Replace</option>
+              <option value="Return to Vendor">Return to Vendor</option>
+              <option value="Accept Deviation">Accept Deviation</option>
+              <option value="Scrap">Scrap</option>
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Resolution date</span>
+            <input type="date" name="resolution_date" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Resolution notes (optional)</span>
+          <textarea name="resolution_notes" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
         </label>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="space-y-1 block">
@@ -459,16 +477,34 @@
           <label class="space-y-1 block">
             <span class="text-xs text-slate-600">Status</span>
             <select name="status" id="issue-status-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
-              <option value="Open">Open</option>
-              <option value="In Review">In Review</option>
+              <option value="Unresolved">Unresolved</option>
               <option value="Resolved">Resolved</option>
-              <option value="Closed">Closed</option>
             </select>
           </label>
         </div>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Description / notes</span>
           <textarea name="description" id="issue-description-field" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Resolution type</span>
+            <select name="resolution_type" id="issue-resolution-type-field" class="w-full rounded-lg border-slate-200 px-3 py-2">
+              <option value="">—</option>
+              <option value="Replace">Replace</option>
+              <option value="Return to Vendor">Return to Vendor</option>
+              <option value="Accept Deviation">Accept Deviation</option>
+              <option value="Scrap">Scrap</option>
+            </select>
+          </label>
+          <label class="space-y-1 block">
+            <span class="text-xs text-slate-600">Resolution date</span>
+            <input type="date" name="resolution_date" id="issue-resolution-date-field" class="w-full rounded-lg border-slate-200 px-3 py-2" />
+          </label>
+        </div>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Resolution notes (optional)</span>
+          <textarea name="resolution_notes" id="issue-resolution-notes-field" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
         </label>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Source</span>

@@ -10557,7 +10557,10 @@ def purchase_order_detail_view(po_id: int):
             issue = VendorIssue.query.get(issue_id)
 
             if issue and issue.po_id == po.id:
-                issue.status = "Solved"
+                issue.status = "Resolved"
+                issue.resolution_type = _normalize_vendor_issue_resolution_type(request.form.get("resolution_type")) or "Accept Deviation"
+                issue.resolution_notes = (request.form.get("resolution_notes") or "").strip() or issue.resolution_notes
+                issue.resolution_date = date.today()
                 db.session.commit()
 
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
@@ -10570,13 +10573,15 @@ def purchase_order_detail_view(po_id: int):
         .filter_by(po_id=po.id)
         .order_by(
             case(
-                (VendorIssue.status == "Solved", 1),
+                (VendorIssue.status == "Resolved", 1),
                 else_=0,
             ),
             VendorIssue.id.desc(),
         )
         .all()
     )
+    po_has_unresolved_issues = any((issue.status or "").strip() == "Unresolved" for issue in vendor_issues)
+
     issue_products = []
     seen_products = set()
     po_line_request_map = {}
@@ -10618,6 +10623,7 @@ def purchase_order_detail_view(po_id: int):
         vendor_issues=vendor_issues,
         issue_products=issue_products,
         issue_type_options=VENDOR_ISSUE_TYPE_OPTIONS,
+        po_has_unresolved_issues=po_has_unresolved_issues,
         po_line_request_map=po_line_request_map,
         po_status_history=po_status_history,
         po_has_out_of_sync_lines=any(bool(line.is_out_of_sync) for line in (po.items or [])),
@@ -10691,7 +10697,12 @@ def purchase_order_issue_create(po_id: int):
     product_id_raw = request.form.get("product_id") or None
     issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
     description = (request.form.get("description") or "").strip()
-    status = (request.form.get("status") or "").strip() or "Open"
+    status = _normalize_vendor_issue_status(request.form.get("status"), default="Unresolved")
+    resolution_type, resolution_notes, resolution_date, resolution_error = _extract_vendor_issue_resolution_fields(request.form, status)
+
+    if resolution_error:
+        flash(resolution_error, "danger")
+        return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
     if not description:
         flash("Provide a description for the vendor issue.", "danger")
@@ -10713,6 +10724,9 @@ def purchase_order_issue_create(po_id: int):
         source="MANUAL",
         description=description,
         status=status,
+        resolution_type=resolution_type,
+        resolution_notes=resolution_notes,
+        resolution_date=resolution_date,
         created_by=current_user.display_name,
     )
     db.session.add(issue)
@@ -12608,6 +12622,9 @@ VENDOR_ISSUE_TYPE_OPTIONS = [
     ("OTHER", "Other"),
 ]
 VENDOR_ISSUE_TYPE_SET = {value for value, _ in VENDOR_ISSUE_TYPE_OPTIONS}
+VENDOR_ISSUE_STATUS_OPTIONS = ("Unresolved", "Resolved")
+VENDOR_ISSUE_RESOLUTION_TYPE_OPTIONS = ("Replace", "Return to Vendor", "Accept Deviation", "Scrap")
+VENDOR_ISSUE_RESOLUTION_TYPE_SET = {value.lower(): value for value in VENDOR_ISSUE_RESOLUTION_TYPE_OPTIONS}
 
 
 def _normalize_vendor_issue_type(raw_value: str) -> str:
@@ -12615,6 +12632,45 @@ def _normalize_vendor_issue_type(raw_value: str) -> str:
     if cleaned in VENDOR_ISSUE_TYPE_SET:
         return cleaned
     return "OTHER"
+
+
+def _normalize_vendor_issue_status(raw_value: str, default: str = "Unresolved") -> str:
+    cleaned = (raw_value or "").strip()
+    lowered = cleaned.lower()
+    if lowered in {"unresolved", "open", "under review", "awaiting vendor", "in review"}:
+        return "Unresolved"
+    if lowered in {"resolved", "closed", "solved"}:
+        return "Resolved"
+    return default
+
+
+def _normalize_vendor_issue_resolution_type(raw_value: str) -> Optional[str]:
+    cleaned = (raw_value or "").strip()
+    if not cleaned:
+        return None
+    return VENDOR_ISSUE_RESOLUTION_TYPE_SET.get(cleaned.lower())
+
+
+def _extract_vendor_issue_resolution_fields(form, status: str):
+    resolution_type = _normalize_vendor_issue_resolution_type(form.get("resolution_type"))
+    resolution_notes = (form.get("resolution_notes") or "").strip() or None
+    resolution_date_raw = (form.get("resolution_date") or "").strip()
+    resolution_date = None
+
+    if resolution_date_raw:
+        try:
+            resolution_date = datetime_cls.strptime(resolution_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            resolution_date = None
+
+    if status == "Resolved":
+        if not resolution_type:
+            return None, None, None, "Resolution type is required when marking an issue as Resolved."
+        if not resolution_date:
+            resolution_date = date.today()
+        return resolution_type, resolution_notes, resolution_date, None
+
+    return None, None, None, None
 
 
 PO_STATUS_OPTIONS = ("Draft", "Issued", "Cancelled")
@@ -12888,6 +12944,19 @@ def purchase_vendor_detail(vendor_id: int):
         .order_by(VendorProductRate.updated_at.desc().nullslast())
         .all()
     )
+
+    linked_product_ids = [link.product_id for link in linked_parts if link.product_id]
+    unresolved_issue_count_by_product = {}
+    if linked_product_ids:
+        unresolved_issue_rows = (
+            db.session.query(VendorIssue.product_id, func.count(VendorIssue.id))
+            .filter(VendorIssue.vendor_id == vendor.id)
+            .filter(VendorIssue.product_id.in_(linked_product_ids))
+            .filter(VendorIssue.status == "Unresolved")
+            .group_by(VendorIssue.product_id)
+            .all()
+        )
+        unresolved_issue_count_by_product = {int(product_id): int(count or 0) for product_id, count in unresolved_issue_rows if product_id}
     purchase_orders = (
         PurchaseOrder.query.options(joinedload(PurchaseOrder.project), joinedload(PurchaseOrder.created_by), joinedload(PurchaseOrder.items))
         .filter_by(vendor_id=vendor.id)
@@ -12943,6 +13012,7 @@ def purchase_vendor_detail(vendor_id: int):
         products=products,
         attachments=attachments,
         active_tab=tab,
+        unresolved_issue_count_by_product=unresolved_issue_count_by_product,
     )
 
 
@@ -13143,7 +13213,12 @@ def purchase_vendor_issue_create(vendor_id: int):
     project_id_raw = request.form.get("project_id") or None
     issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
     description = (request.form.get("description") or "").strip()
-    status = (request.form.get("status") or "").strip() or "Open"
+    status = _normalize_vendor_issue_status(request.form.get("status"), default="Unresolved")
+    resolution_type, resolution_notes, resolution_date, resolution_error = _extract_vendor_issue_resolution_fields(request.form, status)
+
+    if resolution_error:
+        flash(resolution_error, "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
     if not description:
         flash("Provide a description for the vendor issue.", "danger")
@@ -13177,6 +13252,9 @@ def purchase_vendor_issue_create(vendor_id: int):
         source="MANUAL",
         description=description,
         status=status,
+        resolution_type=resolution_type,
+        resolution_notes=resolution_notes,
+        resolution_date=resolution_date,
         created_by=current_user.display_name,
     )
     db.session.add(issue)
@@ -13198,13 +13276,18 @@ def purchase_vendor_issue_update(vendor_id: int, issue_id: int):
     issue = VendorIssue.query.filter_by(id=issue_id, vendor_id=vendor.id).first_or_404()
     issue_type = _normalize_vendor_issue_type(request.form.get("issue_type"))
     description = (request.form.get("description") or "").strip()
-    status = (request.form.get("status") or "").strip() or issue.status
+    status = _normalize_vendor_issue_status(request.form.get("status"), default=_normalize_vendor_issue_status(issue.status, default="Unresolved"))
     product_id_raw = request.form.get("product_id") or None
     po_id_raw = request.form.get("po_id") or None
     project_id_raw = request.form.get("project_id") or None
 
     if not description:
         flash("Description is required for vendor issues.", "danger")
+        return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
+
+    resolution_type, resolution_notes, resolution_date, resolution_error = _extract_vendor_issue_resolution_fields(request.form, status)
+    if resolution_error:
+        flash(resolution_error, "danger")
         return redirect(url_for("purchase_vendor_detail", vendor_id=vendor.id))
 
     try:
@@ -13229,6 +13312,9 @@ def purchase_vendor_issue_update(vendor_id: int, issue_id: int):
     issue.issue_type = issue_type
     issue.description = description
     issue.status = status
+    issue.resolution_type = resolution_type
+    issue.resolution_notes = resolution_notes
+    issue.resolution_date = resolution_date
     issue.product_id = product.id if product else None
     issue.po_id = po.id if po else None
     issue.project_id = project.id if project else None
@@ -13719,7 +13805,7 @@ def store_receive():
                             source=source,
                             description=qc_notes
                             or f"QC status marked {qc_status} during receipt.",
-                            status="Open",
+                            status="Unresolved",
                             created_by=current_user.display_name,
                         )
                     )
@@ -16610,7 +16696,10 @@ def ensure_vendor_issue_table():
                 issue_type TEXT NOT NULL,
                 source TEXT NOT NULL,
                 description TEXT NOT NULL,
-                status TEXT DEFAULT 'Open',
+                status TEXT DEFAULT 'Unresolved',
+                resolution_type TEXT,
+                resolution_notes TEXT,
+                resolution_date DATE,
                 created_at DATETIME,
                 created_by TEXT
             );
@@ -16632,6 +16721,9 @@ def ensure_vendor_issue_table():
             ("source", "TEXT"),
             ("description", "TEXT"),
             ("status", "TEXT"),
+            ("resolution_type", "TEXT"),
+            ("resolution_notes", "TEXT"),
+            ("resolution_date", "DATE"),
             ("created_at", "DATETIME"),
             ("created_by", "TEXT"),
         ]:
@@ -16642,6 +16734,28 @@ def ensure_vendor_issue_table():
                 missing.append(column_name)
         if missing:
             print(f"✅ Added missing columns to vendor_issue: {', '.join(missing)}")
+
+    cur.execute(
+        """
+        UPDATE vendor_issue
+        SET status = 'Unresolved'
+        WHERE trim(coalesce(status, '')) = '';
+        """
+    )
+    cur.execute(
+        """
+        UPDATE vendor_issue
+        SET status = 'Unresolved'
+        WHERE lower(trim(coalesce(status, ''))) IN ('open', 'under review', 'awaiting vendor', 'in review');
+        """
+    )
+    cur.execute(
+        """
+        UPDATE vendor_issue
+        SET status = 'Resolved'
+        WHERE lower(trim(coalesce(status, ''))) IN ('closed', 'resolved', 'solved');
+        """
+    )
 
     conn.commit()
     conn.close()

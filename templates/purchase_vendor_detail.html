@@ -175,10 +175,10 @@
       <select name="status" class="rounded border-slate-200"><option>Active</option><option>Inactive</option></select>
       <button class="px-3 py-2 rounded border">Save link</button>
     </form>
-    <table class="w-full text-sm" id="partsTable"><thead><tr class="text-left"><th>Eleva part name</th><th>Vendor part name</th><th>Rate</th><th>MOQ</th><th>Lead time</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+    <table class="w-full text-sm" id="partsTable"><thead><tr class="text-left"><th>Eleva part name</th><th>Vendor part name</th><th>Rate</th><th>MOQ</th><th>Lead time</th><th>Status</th><th>Issues</th><th>Actions</th></tr></thead><tbody>
       {% for l in linked_parts %}
-      <tr class="border-t"><td>{{ l.product.name if l.product else '—' }}</td><td>{{ l.vendor_part_name or '—' }}</td><td>{{ l.unit_price if l.unit_price is not none else '—' }}</td><td>{{ l.moq if l.moq is not none else '—' }}</td><td>{{ l.lead_time_days or '—' }}</td><td>{{ l.status or 'Active' }}</td><td class="space-x-2"><label for="edit-part-link-{{ l.product_id }}" class="text-slate-700 cursor-pointer">Edit</label><a class="text-blue-600" href="{{ url_for('purchase_vendor_rate_history', vendor_id=vendor.id, product_id=l.product_id) }}">Rate history</a></td></tr>
-      <tr><td colspan="7" class="p-0">
+      <tr class="border-t"><td>{{ l.product.name if l.product else '—' }}</td><td>{{ l.vendor_part_name or '—' }}</td><td>{{ l.unit_price if l.unit_price is not none else '—' }}</td><td>{{ l.moq if l.moq is not none else '—' }}</td><td>{{ l.lead_time_days or '—' }}</td><td>{{ l.status or 'Active' }}</td><td>{% set unresolved_count = unresolved_issue_count_by_product.get(l.product_id, 0) %}{% if unresolved_count > 0 %}<span class="inline-flex px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">{{ unresolved_count }} unresolved issue{{ '' if unresolved_count == 1 else 's' }}</span>{% else %}<span class="text-xs text-slate-500">No open issues</span>{% endif %}</td><td class="space-x-2"><label for="edit-part-link-{{ l.product_id }}" class="text-slate-700 cursor-pointer">Edit</label><a class="text-blue-600" href="{{ url_for('purchase_vendor_rate_history', vendor_id=vendor.id, product_id=l.product_id) }}">Rate history</a></td></tr>
+      <tr><td colspan="8" class="p-0">
         <div class="relative">
           <input type="checkbox" id="edit-part-link-{{ l.product_id }}" class="hidden peer">
           <div class="fixed inset-0 bg-black/40 hidden peer-checked:block z-40" onclick="document.getElementById('edit-part-link-{{ l.product_id }}').checked=false;"></div>

@@ -2710,7 +2710,10 @@ class VendorIssue(db.Model):
     issue_type = db.Column(db.String(40), nullable=False)
     source = db.Column(db.String(40), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(20), nullable=False, default="Open")
+    status = db.Column(db.String(20), nullable=False, default="Unresolved")
+    resolution_type = db.Column(db.String(50), nullable=True)
+    resolution_notes = db.Column(db.Text, nullable=True)
+    resolution_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     created_by = db.Column(db.String(120), nullable=True)
 
