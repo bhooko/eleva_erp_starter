@@ -10015,6 +10015,9 @@ def purchase_orders():
             "expected_delivery_date"
         )
         notes = request.form.get("notes")
+        freight_value = _resolve_po_financial_value(request.form.get("freight_value"))
+        discount_value = _resolve_po_financial_value(request.form.get("discount_value"))
+        gst_value = _resolve_po_financial_value(request.form.get("gst_value"))
         try:
             po_date = (
                 datetime.datetime.strptime(po_date_raw, "%Y-%m-%d").date()
@@ -10049,6 +10052,9 @@ def purchase_orders():
             expected_delivery_date=expected_delivery_date,
             created_by_user_id=current_user.id,
             notes=notes,
+            freight_value=freight_value,
+            discount_value=discount_value,
+            gst_value=gst_value,
             origin="erp",
         )
         db.session.add(po)
@@ -10306,7 +10312,10 @@ def purchase_orders():
             return redirect(url_for("purchase_orders"))
 
         po.subtotal_amount = subtotal_amount
-        po.grand_total_amount = subtotal_amount
+        po.freight_value = freight_value
+        po.discount_value = discount_value
+        po.gst_value = gst_value
+        po.grand_total_amount = subtotal_amount + freight_value + gst_value - discount_value
 
         db.session.commit()
         flash("Purchase order saved.", "success")
@@ -10544,50 +10553,104 @@ def parts_create():
     )
 
 
-def get_po_closure_state(po):
-    reasons = []
-    linked_receipts = (
-        InventoryReceipt.query.filter_by(purchase_order_id=po.id)
-        .order_by(InventoryReceipt.id.asc())
-        .all()
-    )
 
-    if not linked_receipts:
-        reasons.append("No GRNs linked to this PO.")
-    else:
-        open_receipts = [
-            receipt.receipt_number or f"GRN #{receipt.id}"
-            for receipt in linked_receipts
-            if (receipt.status or "Open") != "Closed"
-        ]
-        if open_receipts:
-            reasons.append(
-                "Open GRNs must be closed first: " + ", ".join(open_receipts)
+def _resolve_po_financial_value(raw_value):
+    parsed, _ = parse_float_field(raw_value, "Value")
+    if parsed is None:
+        return 0.0
+    return max(float(parsed), 0.0)
+
+
+def _compute_po_line_receipts(po):
+    receipt_totals = {
+        int(row.purchase_order_item_id): float(row.total_qty or 0)
+        for row in (
+            db.session.query(
+                InventoryReceiptItem.purchase_order_item_id,
+                func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0).label("total_qty"),
             )
-
-    tolerance = 1e-9
-    for item in po.items or []:
-        ordered = float(item.quantity_ordered or 0)
-        if ordered <= tolerance:
-            continue
-
-        received_closed = (
-            db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
             .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
-            .filter(InventoryReceiptItem.purchase_order_item_id == item.id)
             .filter(InventoryReceipt.purchase_order_id == po.id)
             .filter(InventoryReceipt.status == "Closed")
-            .scalar()
-            or 0.0
+            .group_by(InventoryReceiptItem.purchase_order_item_id)
+            .all()
         )
-        pending = ordered - float(received_closed)
-        if pending > tolerance:
-            label = item.item_code or item.part_name or f"PO Item #{item.id}"
-            reasons.append(
-                f"Pending for {label}: ordered {ordered:g}, received {float(received_closed):g} (closed GRNs), pending {pending:g}"
-            )
+        if row.purchase_order_item_id
+    }
+
+    tolerance = 1e-9
+    rows = []
+    for idx, item in enumerate(po.items or []):
+        ordered_qty = float(item.quantity_ordered or 0)
+        received_qty = float(receipt_totals.get(item.id, 0.0))
+        pending_qty = max(ordered_qty - received_qty, 0.0)
+        is_complete = pending_qty <= tolerance
+        rows.append(
+            {
+                "item": item,
+                "ordered_qty": ordered_qty,
+                "received_qty": received_qty,
+                "pending_qty": pending_qty,
+                "is_complete": is_complete,
+                "is_incomplete": not is_complete,
+                "sort_index": idx,
+            }
+        )
+
+    rows.sort(key=lambda row: (0 if row["is_incomplete"] else 1, row["sort_index"]))
+    return rows
+
+
+def _log_po_status_change(po, old_status, new_status, changed_by=None):
+    db.session.add(
+        PurchaseOrderStatusHistory(
+            purchase_order_id=po.id,
+            old_status=old_status or None,
+            new_status=new_status,
+            changed_by=changed_by,
+        )
+    )
+
+
+def _attempt_auto_close_po(po, changed_by=None):
+    normalized = _normalize_po_status(po.status)
+    if normalized in {"Closed", "Cancelled"}:
+        return False, []
+
+    can_close, reasons = get_po_closure_state(po)
+    if not can_close:
+        return False, reasons
+
+    po.status = "Closed"
+    _log_po_status_change(po, normalized, "Closed", changed_by=changed_by)
+    return True, []
+
+def get_po_closure_state(po):
+    reasons = []
+    po_status = _normalize_po_status(po.status)
+    if po_status == "Cancelled":
+        reasons.append("PO is cancelled and cannot be closed.")
+
+    unresolved_issues = (
+        VendorIssue.query.filter_by(po_id=po.id)
+        .filter(VendorIssue.status != "Resolved")
+        .order_by(VendorIssue.id.asc())
+        .all()
+    )
+    for issue in unresolved_issues:
+        reasons.append(f"Issue #{issue.id} is still unresolved.")
+
+    for row in _compute_po_line_receipts(po):
+        if not row["is_incomplete"]:
+            continue
+        item = row["item"]
+        label = item.item_code or item.part_name or f"PO Item #{item.id}"
+        reasons.append(
+            f"Part {label} pending: ordered {row['ordered_qty']:g}, received {row['received_qty']:g}."
+        )
 
     return (len(reasons) == 0, reasons)
+
 
 
 @app.route("/purchase/orders/<int:po_id>", methods=["GET", "POST"])
@@ -10636,16 +10699,25 @@ def purchase_order_detail_view(po_id: int):
                 )
 
             po.status = desired
-            db.session.add(
-                PurchaseOrderStatusHistory(
-                    purchase_order_id=po.id,
-                    old_status=current_status or None,
-                    new_status=desired,
-                    changed_by=changed_by,
-                )
-            )
+            _log_po_status_change(po, current_status, desired, changed_by=changed_by)
             db.session.commit()
             flash("PO status updated successfully.", "success")
+            return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+        if action == "close_po":
+            can_close, reasons = get_po_closure_state(po)
+            if not can_close:
+                flash("Cannot close PO: " + " ".join(reasons), "warning")
+                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+            current_status = _normalize_po_status(po.status)
+            changed_by = None
+            if current_user.is_authenticated:
+                changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
+            po.status = "Closed"
+            _log_po_status_change(po, current_status, "Closed", changed_by=changed_by)
+            db.session.commit()
+            flash("PO closed successfully.", "success")
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
         if action == "solve_vendor_issue":
@@ -10657,6 +10729,10 @@ def purchase_order_detail_view(po_id: int):
                 issue.resolution_type = _normalize_vendor_issue_resolution_type(request.form.get("resolution_type")) or "Accept Deviation"
                 issue.resolution_notes = (request.form.get("resolution_notes") or "").strip() or issue.resolution_notes
                 issue.resolution_date = date.today()
+                changed_by = None
+                if current_user.is_authenticated:
+                    changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
+                _attempt_auto_close_po(po, changed_by=changed_by)
                 db.session.commit()
 
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
@@ -10702,6 +10778,9 @@ def purchase_order_detail_view(po_id: int):
         for req in change_requests:
             po_line_request_map.setdefault(req.po_line_id, req)
 
+    po_line_rows = _compute_po_line_receipts(po)
+    po_can_close, po_close_reasons = get_po_closure_state(po)
+
     po_status_history = (
         PurchaseOrderStatusHistory.query.filter_by(purchase_order_id=po.id)
         .order_by(PurchaseOrderStatusHistory.changed_at.desc())
@@ -10722,6 +10801,9 @@ def purchase_order_detail_view(po_id: int):
         po_has_unresolved_issues=po_has_unresolved_issues,
         po_line_request_map=po_line_request_map,
         po_status_history=po_status_history,
+        po_line_rows=po_line_rows,
+        po_can_close=po_can_close,
+        po_close_reasons=po_close_reasons,
         po_has_out_of_sync_lines=any(bool(line.is_out_of_sync) for line in (po.items or [])),
         is_purchase_user=_is_purchase_user(current_user),
     )
@@ -11194,6 +11276,9 @@ def generate_po_from_bom(bom_id):
                     flash("No line items were selected for ordering.", "danger")
                 else:
                     po.subtotal_amount = subtotal_amount
+                    po.freight_value = 0.0
+                    po.discount_value = 0.0
+                    po.gst_value = 0.0
                     po.grand_total_amount = subtotal_amount
                     if vendor_record:
                         vendor_record.last_used_at = datetime.datetime.utcnow()
@@ -12898,7 +12983,7 @@ def _extract_vendor_issue_resolution_fields(form, status: str):
     return None, None, None, None
 
 
-PO_STATUS_OPTIONS = ("Draft", "Issued", "Cancelled")
+PO_STATUS_OPTIONS = ("Draft", "Issued", "Closed", "Cancelled")
 OPEN_PO_STATUSES = {
     "draft",
     "issued",
@@ -12918,6 +13003,8 @@ def _normalize_po_status(raw_status):
         return "Draft"
     if lowered in {"issued", "issue", "approved", "sent"}:
         return "Issued"
+    if lowered in {"closed", "completed", "done", "received"}:
+        return "Closed"
     if lowered == "cancelled":
         return "Cancelled"
     return cleaned or "Draft"
@@ -13544,6 +13631,13 @@ def purchase_vendor_issue_update(vendor_id: int, issue_id: int):
     issue.po_id = po.id if po else None
     issue.project_id = project.id if project else None
     try:
+        if status == "Resolved" and issue.po_id:
+            linked_po = PurchaseOrder.query.get(issue.po_id)
+            if linked_po:
+                changed_by = None
+                if current_user.is_authenticated:
+                    changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
+                _attempt_auto_close_po(linked_po, changed_by=changed_by)
         db.session.commit()
         flash("Vendor issue updated.", "success")
     except Exception:
@@ -14278,6 +14372,10 @@ def store_receipt_detail(receipt_id):
                         computed_status = compute_material_status_for_po(po)
                         if computed_status != "N/A":
                             po.material_status = computed_status
+                        changed_by = None
+                        if current_user.is_authenticated:
+                            changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
+                        _attempt_auto_close_po(po, changed_by=changed_by)
 
             receipt.status = new_status
             if new_status == "Closed" and not receipt.closed_at:
@@ -16448,6 +16546,15 @@ def ensure_bom_columns():
     if "grand_total_amount" not in po_cols:
         cur.execute("ALTER TABLE purchase_order ADD COLUMN grand_total_amount REAL;")
         po_added.append("grand_total_amount")
+    if "freight_value" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN freight_value REAL DEFAULT 0;")
+        po_added.append("freight_value")
+    if "discount_value" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN discount_value REAL DEFAULT 0;")
+        po_added.append("discount_value")
+    if "gst_value" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN gst_value REAL DEFAULT 0;")
+        po_added.append("gst_value")
     if "origin" not in po_cols:
         cur.execute(
             "ALTER TABLE purchase_order ADD COLUMN origin TEXT DEFAULT 'erp';"
