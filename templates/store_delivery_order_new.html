@@ -35,7 +35,7 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-semibold text-slate-800">Items</p>
-            <p class="text-xs text-slate-500">Add products with quantities and UOM. Quantity must be numeric.</p>
+            <p class="text-xs text-slate-500">Add products with quantities and UOM. Quantity must be a whole number.</p>
           </div>
           <button type="button" id="add-item" class="inline-flex items-center gap-2 px-3 py-2 btn-primary btn-shimmer rounded-lg hover:shadow-lg hover:scale-[1.02] transition">+ Add Item</button>
         </div>
@@ -62,7 +62,7 @@
                     {% endfor %}
                   </select>
                 </td>
-                <td class="py-2"><input type="number" step="0.01" name="item_quantity" value="{{ item.quantity if item.quantity is not none else '' }}" class="w-28 rounded-lg border-slate-200" required /></td>
+                <td class="py-2"><input type="number" step="1" min="1" inputmode="numeric" pattern="[0-9]*" name="item_quantity" value="{{ item.quantity if item.quantity is not none else '' }}" class="w-28 rounded-lg border-slate-200" required /></td>
                 <td class="py-2"><input type="text" name="item_uom" value="{{ item.uom or '' }}" class="w-24 rounded-lg border-slate-200" /></td>
                 <td class="py-2"><input type="text" name="item_remarks" value="{{ item.remarks or '' }}" class="w-full rounded-lg border-slate-200" /></td>
                 <td class="py-2 text-right"><button type="button" class="text-slate-500 hover:text-red-600" onclick="removeRow(this)">Remove</button></td>
@@ -92,7 +92,7 @@
           {% endfor %}
         </select>
       </td>
-      <td class="py-2"><input type="number" step="0.01" name="item_quantity" class="w-28 rounded-lg border-slate-200" required /></td>
+      <td class="py-2"><input type="number" step="1" min="1" inputmode="numeric" pattern="[0-9]*" name="item_quantity" class="w-28 rounded-lg border-slate-200" required /></td>
       <td class="py-2"><input type="text" name="item_uom" class="w-24 rounded-lg border-slate-200" /></td>
       <td class="py-2"><input type="text" name="item_remarks" class="w-full rounded-lg border-slate-200" /></td>
       <td class="py-2 text-right"><button type="button" class="text-slate-500 hover:text-red-600" onclick="removeRow(this)">Remove</button></td>

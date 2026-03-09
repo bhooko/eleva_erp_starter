@@ -72,11 +72,11 @@
             {% for ctx in items %}
             <tr>
               <td class="py-2">{{ ctx.record.product_name }}</td>
-              <td class="py-2">{{ '%.2f'|format(ctx.reserved) }}</td>
-              <td class="py-2">{{ '%.2f'|format(ctx.delivered) }}</td>
-              <td class="py-2">{{ '%.2f'|format(ctx.remaining) }}</td>
+              <td class="py-2">{{ ctx.reserved|int }}</td>
+              <td class="py-2">{{ ctx.delivered|int }}</td>
+              <td class="py-2">{{ ctx.remaining|int }}</td>
               <td class="py-2">
-                <input type="number" step="0.01" min="0" max="{{ ctx.remaining }}" name="item_{{ ctx.record.id }}_qty" value="{{ form_data.get('item_' ~ ctx.record.id ~ '_qty', ctx.remaining) }}" class="w-32 rounded-lg border-slate-200" />
+                <input type="number" step="1" min="1" max="{{ ctx.remaining|int }}" inputmode="numeric" pattern="[0-9]*" name="item_{{ ctx.record.id }}_qty" value="{{ form_data.get('item_' ~ ctx.record.id ~ '_qty', ctx.remaining) }}" class="w-32 rounded-lg border-slate-200" />
               </td>
             </tr>
             {% else %}

@@ -73,9 +73,9 @@
           {% for item in order.items %}
           <tr>
             <td class="py-2">{{ item.product_name }}</td>
-            <td class="py-2">{{ '%.2f'|format(item.requested_qty or 0) }}</td>
-            <td class="py-2">{{ '%.2f'|format(item.reserved_qty or item.requested_qty or 0) }}</td>
-            <td class="py-2">{{ '%.2f'|format(item.delivered_qty_total or 0) }}</td>
+            <td class="py-2">{{ (item.requested_qty or 0)|int }}</td>
+            <td class="py-2">{{ (item.reserved_qty or item.requested_qty or 0)|int }}</td>
+            <td class="py-2">{{ (item.delivered_qty_total or 0)|int }}</td>
             <td class="py-2">{{ item.uom or '—' }}</td>
             <td class="py-2">{{ item.remarks or '—' }}</td>
           </tr>
@@ -94,7 +94,11 @@
         <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Confirm Delivery Order</button>
       </form>
       {% endif %}
+      {% if order.status in ['Confirmed', 'Partially Delivered'] %}
       <a href="{{ url_for('create_delivery_challan_from_do', order_id=order.id) }}" class="px-5 py-2 btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg hover:scale-[1.02] transition">Create Delivery Challan</a>
+      {% else %}
+      <span class="px-5 py-2 rounded-lg border border-slate-200 text-slate-500">Create Delivery Challan available after DO confirmation</span>
+      {% endif %}
     </div>
     {% endif %}
   </div>

@@ -13547,10 +13547,7 @@ def _parse_delivery_order_items(form):
         if not any([product_name, quantity_raw, uom, remark]):
             continue
 
-        try:
-            quantity_value = float(quantity_raw)
-        except (TypeError, ValueError):
-            quantity_value = None
+        quantity_value, quantity_error = parse_int_field(quantity_raw, "Quantity")
 
         product_record = None
         if not product_name:
@@ -13560,8 +13557,10 @@ def _parse_delivery_order_items(form):
             if not product_record:
                 errors.append(f"Product '{product_name}' was not found in Parts master.")
 
-        if quantity_value is None:
-            errors.append("Quantity must be numeric.")
+        if quantity_error:
+            errors.append(quantity_error)
+        elif quantity_value is None:
+            errors.append("Quantity is required for each item.")
         elif quantity_value <= 0:
             errors.append("Quantity must be greater than zero.")
 
@@ -13640,7 +13639,7 @@ def create_delivery_order():
             created_by_user_id=current_user.id,
             project_id=selected_project.id if selected_project else None,
             project_or_site=project_or_site,
-            receiver_name="To be captured in Delivery Challan",
+            receiver_name="",
             remarks=remarks,
             status="Draft",
         )
@@ -13715,8 +13714,12 @@ def create_delivery_challan_from_do(order_id):
         .first_or_404()
     )
 
-    if order.status in {"Draft", "Created"}:
-        flash("Confirm the Delivery Order before creating a Delivery Challan.", "warning")
+    allowed_statuses = {"Confirmed", "Partially Delivered"}
+    if order.status not in allowed_statuses:
+        flash(
+            "Delivery Challans can only be created for Confirmed or Partially Delivered Delivery Orders.",
+            "warning",
+        )
         return redirect(url_for("delivery_order_detail", order_id=order.id))
 
     items_context = []
@@ -13769,10 +13772,19 @@ def create_delivery_challan_from_do(order_id):
         selections = []
         for ctx in items_context:
             key = f"item_{ctx['record'].id}_qty"
-            try:
-                qty_value = float(request.form.get(key) or 0)
-            except (TypeError, ValueError):
-                qty_value = 0
+            qty_value_raw = (request.form.get(key) or "").strip()
+            if not qty_value_raw:
+                continue
+            qty_value, qty_error = parse_int_field(qty_value_raw, "Quantity to deliver")
+            if qty_error:
+                flash(f"{ctx['record'].item_code}: {qty_error}", "danger")
+                return render_template(
+                    "store_delivery_challan_new.html",
+                    order=order,
+                    items=items_context,
+                    form_data=request.form,
+                )
+            qty_value = qty_value or 0
             if qty_value > 0:
                 if qty_value > ctx["remaining"]:
                     flash(
@@ -14123,6 +14135,7 @@ def store_receipt_detail(receipt_id):
                     or receipt.inventory_posted_at is None
                 )
                 if should_post_inventory and receipt.inventory_posted_at is None:
+                    _merge_legacy_inventory_item_keys()
                     for item in receipt.items:
                         qty = int(item.quantity_received or 0)
                         if qty <= 0:
@@ -14331,6 +14344,7 @@ def store_inventory():
     ensure_bootstrap()
     inventory_flags = _get_inventory_control()
     _sync_inventory_with_products()
+    _merge_legacy_inventory_item_keys()
     items = (
         InventoryItem.query.join(
             Product,

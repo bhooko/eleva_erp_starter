@@ -3130,7 +3130,7 @@ class DeliveryOrder(db.Model):
     date_created = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     project_or_site = db.Column(db.String(255), nullable=False)
-    receiver_name = db.Column(db.String(255), nullable=False)
+    receiver_name = db.Column(db.String(255), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(40), nullable=False, default="Draft")
     dispatched_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
