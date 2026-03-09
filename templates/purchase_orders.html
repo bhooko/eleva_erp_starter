@@ -82,6 +82,21 @@
             <div id="poItems" class="space-y-4"></div>
           </div>
 
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label class="space-y-1 block">
+              <span class="text-sm">Freight</span>
+              <input type="number" step="0.01" min="0" name="freight_value" value="0" class="w-full rounded-lg border-slate-200 h-10 px-3" data-freight-value />
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-sm">Discount</span>
+              <input type="number" step="0.01" min="0" name="discount_value" value="0" class="w-full rounded-lg border-slate-200 h-10 px-3" data-discount-value />
+            </label>
+            <label class="space-y-1 block">
+              <span class="text-sm">GST</span>
+              <input type="number" step="0.01" min="0" name="gst_value" value="0" class="w-full rounded-lg border-slate-200 h-10 px-3" data-gst-value />
+            </label>
+          </div>
+
           <label class="space-y-1 block">
             <span class="text-sm">Notes</span>
             <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
@@ -91,6 +106,18 @@
               <div class="flex items-center justify-between text-slate-500">
                 <span>Subtotal</span>
                 <span class="font-semibold text-slate-900" data-subtotal>0.00</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between text-slate-500">
+                <span>+ Freight</span>
+                <span class="font-semibold text-slate-900" data-freight-display>0.00</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between text-slate-500">
+                <span>- Discount</span>
+                <span class="font-semibold text-slate-900" data-discount-display>0.00</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between text-slate-500">
+                <span>+ GST</span>
+                <span class="font-semibold text-slate-900" data-gst-display>0.00</span>
               </div>
               <div class="mt-2 flex items-center justify-between text-slate-500">
                 <span>Grand total</span>
@@ -145,6 +172,8 @@
             {% set po_status_label = 'Draft' %}
           {% elif po_status_l in ['issued', 'issue', 'approved', 'sent'] %}
             {% set po_status_label = 'Issued' %}
+          {% elif po_status_l in ['closed', 'completed', 'done', 'received'] %}
+            {% set po_status_label = 'Closed' %}
           {% elif po_status_l == 'cancelled' %}
             {% set po_status_label = 'Cancelled' %}
           {% else %}
@@ -364,6 +393,12 @@
     const grandTotalDisplay = form.querySelector('[data-grand-total]');
     const subtotalInput = form.querySelector('[name="subtotal_amount"]');
     const grandTotalInput = form.querySelector('[name="grand_total_amount"]');
+    const freightInput = form.querySelector('[data-freight-value]');
+    const discountInput = form.querySelector('[data-discount-value]');
+    const gstInput = form.querySelector('[data-gst-value]');
+    const freightDisplay = form.querySelector('[data-freight-display]');
+    const discountDisplay = form.querySelector('[data-discount-display]');
+    const gstDisplay = form.querySelector('[data-gst-display]');
     const vendorSelect = form.querySelector('[name="vendor_id"]');
     const bomSelect = form.querySelector('[data-bom-select]');
     const bomApplyModeInput = form.querySelector('[data-bom-apply-mode]');
@@ -451,18 +486,31 @@
       itemsContainer.querySelectorAll('.po-item-row').forEach((row) => {
         subtotal += updateRowTotal(row);
       });
-      const totalValue = subtotal.toFixed(2);
+      const subtotalValue = subtotal.toFixed(2);
+      const freight = parseNumber(freightInput ? freightInput.value : 0);
+      const discount = parseNumber(discountInput ? discountInput.value : 0);
+      const gst = parseNumber(gstInput ? gstInput.value : 0);
+      const grandTotal = subtotal + freight + gst - discount;
       if (subtotalDisplay) {
-        subtotalDisplay.textContent = totalValue;
+        subtotalDisplay.textContent = subtotalValue;
+      }
+      if (freightDisplay) {
+        freightDisplay.textContent = freight.toFixed(2);
+      }
+      if (discountDisplay) {
+        discountDisplay.textContent = discount.toFixed(2);
+      }
+      if (gstDisplay) {
+        gstDisplay.textContent = gst.toFixed(2);
       }
       if (grandTotalDisplay) {
-        grandTotalDisplay.textContent = totalValue;
+        grandTotalDisplay.textContent = grandTotal.toFixed(2);
       }
       if (subtotalInput) {
-        subtotalInput.value = totalValue;
+        subtotalInput.value = subtotalValue;
       }
       if (grandTotalInput) {
-        grandTotalInput.value = totalValue;
+        grandTotalInput.value = grandTotal.toFixed(2);
       }
     };
 
