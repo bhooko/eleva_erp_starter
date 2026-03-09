@@ -18,12 +18,11 @@
         <input type="hidden" name="action" value="update_grn_status" />
         <label class="space-y-1">
           <span class="text-xs uppercase text-slate-500">GRN Status</span>
-          <select name="status" class="rounded-lg border-slate-200 px-3 py-2">
+          <select name="status" class="rounded-lg border-slate-200 px-3 py-2" onchange="this.form.submit()">
             <option value="Open" {% if (receipt.status or 'Open') == 'Open' %}selected{% endif %}>Open</option>
             <option value="Closed" {% if receipt.status == 'Closed' %}selected{% endif %}>Closed</option>
           </select>
         </label>
-        <button type="submit" class="px-4 py-2 btn-primary rounded-lg">Update status</button>
       </form>
     </div>
 
