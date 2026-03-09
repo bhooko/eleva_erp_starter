@@ -9848,6 +9848,106 @@ def download_drawing_revision(revision_id: int):
     )
 
 
+def _build_purchase_bom_options(limit: int = 300):
+    """PO BOM dropdown choices: latest BOM per drawing+package, excluding empty BOMs."""
+
+    candidate_boms = (
+        BillOfMaterials.query.options(
+            joinedload(BillOfMaterials.items).joinedload(BOMItem.bom_package),
+            joinedload(BillOfMaterials.packages),
+            joinedload(BillOfMaterials.drawing_site),
+        )
+        .order_by(BillOfMaterials.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    def _latest_rank(bom):
+        return (
+            bom.revision_number or 0,
+            bom.created_at or datetime.datetime.min,
+            bom.id or 0,
+        )
+
+    latest_by_group = {}
+    for bom in candidate_boms:
+        if not bom.items:
+            continue
+
+        package_names = {
+            (item.bom_package.name or "").strip()
+            for item in bom.items
+            if item.bom_package and (item.bom_package.name or "").strip()
+        }
+        if not package_names:
+            package_names = {
+                (package.name or "").strip()
+                for package in (bom.packages or [])
+                if (package.name or "").strip()
+            }
+        package_key = " | ".join(sorted(package_names)) if package_names else "Main Lift BOM"
+
+        drawing_key = bom.drawing_site_id or f"design-task:{bom.design_task_id or 0}"
+        group_key = (drawing_key, package_key)
+        existing = latest_by_group.get(group_key)
+        if existing is None or _latest_rank(bom) > _latest_rank(existing):
+            latest_by_group[group_key] = bom
+
+    grouped_latest_boms = sorted(
+        latest_by_group.values(),
+        key=lambda bom: (
+            (
+                (bom.drawing_site.latest_drawing_number or "").strip()
+                if bom.drawing_site
+                else ""
+            ).lower(),
+            bom.created_at or datetime.datetime.min,
+            bom.id or 0,
+        ),
+        reverse=True,
+    )
+
+    options = []
+    for bom in grouped_latest_boms:
+        package_names = {
+            (item.bom_package.name or "").strip()
+            for item in bom.items
+            if item.bom_package and (item.bom_package.name or "").strip()
+        }
+        if not package_names:
+            package_names = {
+                (package.name or "").strip()
+                for package in (bom.packages or [])
+                if (package.name or "").strip()
+            }
+        package_label = " | ".join(sorted(package_names)) if package_names else "Main Lift BOM"
+
+        drawing_site = bom.drawing_site
+        drawing_label = "—"
+        if drawing_site:
+            drawing_label = (
+                (drawing_site.latest_drawing_number or "").strip()
+                or (drawing_site.project_no or "").strip()
+                or (drawing_site.lift_identifier or "").strip()
+                or (drawing_site.site_location or "").strip()
+                or f"Site {drawing_site.id}"
+            )
+
+        bom_name = (bom.bom_name or "").strip() or f"BOM ID {bom.id}"
+        date_label = bom.created_at.strftime("%d-%b-%Y") if bom.created_at else "—"
+        options.append(
+            {
+                "id": bom.id,
+                "label": (
+                    f"{bom_name} | Drawing: {drawing_label} | "
+                    f"Package: {package_label} | Date: {date_label} | ID {bom.id}"
+                ),
+            }
+        )
+
+    return options
+
+
 @app.route("/purchase/orders", methods=["GET", "POST"])
 @login_required
 def purchase_orders():
@@ -10225,11 +10325,7 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
-    bom_options = (
-        BillOfMaterials.query.order_by(BillOfMaterials.created_at.desc().nullslast())
-        .limit(200)
-        .all()
-    )
+    bom_options = _build_purchase_bom_options()
     next_po_number = _next_po_number()
 
     return render_template(
