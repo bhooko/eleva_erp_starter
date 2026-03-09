@@ -63,7 +63,7 @@
               <select name="bom_id" class="w-full rounded-lg border-slate-200 h-10 px-3" data-bom-select>
                 <option value="">—</option>
                 {% for bom in bom_options %}
-                <option value="{{ bom.id }}">{{ bom.bom_name }} (ID {{ bom.id }})</option>
+                <option value="{{ bom.id }}">{{ bom.label }}</option>
                 {% endfor %}
               </select>
               <p class="text-xs text-slate-500">Selecting a BOM opens an apply mode dialog (Replace/Add). BOM specifications are copied as read-only.</p>
