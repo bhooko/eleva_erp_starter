@@ -50,6 +50,13 @@
       {{ csrf_field() }}
       <input type="hidden" name="action" value="update_receipt" />
       {% set is_closed = receipt.status == 'Closed' %}
+      {% set is_line_locked = is_closed or receipt.inventory_posted_at %}
+
+      {% if receipt.inventory_posted_at %}
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Inventory has been posted for this GRN. Line edits are locked.
+        </div>
+      {% endif %}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -69,14 +76,14 @@
               <td class="py-2">{{ item.description or '—' }}</td>
               <td class="py-2">{{ item.purchase_order_item.quantity_ordered if item.purchase_order_item else '—' }}</td>
               <td class="py-2">
-                {% if is_closed %}
+                {% if is_line_locked %}
                   <span class="text-slate-800">{{ item.quantity_received|int }}</span>
                 {% else %}
                   <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
                 {% endif %}
               </td>
               <td class="py-2">
-                {% if is_closed %}
+                {% if is_line_locked %}
                   <span class="text-slate-800">{{ item.qc_status or '—' }}</span>
                 {% else %}
                   <select name="item_{{ item.id }}_qc_status" class="rounded-lg border-slate-200">
@@ -87,7 +94,7 @@
                 {% endif %}
               </td>
               <td class="py-2">
-                {% if is_closed %}
+                {% if is_line_locked %}
                   <span class="text-slate-800">{{ item.qc_notes or '—' }}</span>
                 {% else %}
                   <input type="text" name="item_{{ item.id }}_notes" value="{{ item.qc_notes or '' }}" class="w-full rounded-lg border-slate-200" />
@@ -103,7 +110,7 @@
 
       <div class="flex items-center justify-end gap-2 sticky bottom-0 bg-white pt-3">
         <a href="{{ url_for('store_receive') }}" class="px-4 py-2 btn-secondary rounded-lg">Back</a>
-        {% if not is_closed %}
+        {% if not is_line_locked %}
           <button type="submit" class="px-5 py-2 btn-primary btn-shimmer rounded-lg">Save changes</button>
         {% endif %}
       </div>
