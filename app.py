@@ -9858,6 +9858,224 @@ def _resolve_bom_project_id(bom):
     return None
 
 
+def _resolve_primary_vendor_for_part(part, vendor_by_name):
+    if not part:
+        return None
+    vendor_name = (part.primary_vendor or "").strip()
+    if not vendor_name:
+        return None
+    return vendor_by_name.get(vendor_name.casefold())
+
+
+def get_bom_procurement_plan(bom_id, package_id=None):
+    bom = BillOfMaterials.query.options(
+        joinedload(BillOfMaterials.project),
+        joinedload(BillOfMaterials.drawing_site).joinedload(DrawingSite.project),
+        joinedload(BillOfMaterials.packages),
+    ).get_or_404(bom_id)
+    resolved_project_id = _resolve_bom_project_id(bom)
+    packages_query = BOMPackage.query.filter(BOMPackage.bom_id == bom.id)
+    if package_id:
+        packages_query = packages_query.filter(BOMPackage.id == package_id)
+    packages = packages_query.order_by(BOMPackage.created_at.asc().nullslast(), BOMPackage.id.asc()).all()
+    package_ids = [pkg.id for pkg in packages]
+
+    bom_items_query = BOMItem.query.options(
+        joinedload(BOMItem.part_class),
+    ).filter(BOMItem.bom_id == bom.id)
+    if package_ids:
+        bom_items_query = bom_items_query.filter(BOMItem.bom_package_id.in_(package_ids))
+    bom_items = bom_items_query.order_by(BOMItem.id.asc()).all()
+
+    part_ids = sorted(
+        {
+            int(item.suggested_part_id)
+            for item in bom_items
+            if item.suggested_part_id not in (None, "")
+        }
+    )
+    part_map = {}
+    if part_ids:
+        part_map = {
+            part.id: part
+            for part in Product.query.filter(Product.id.in_(part_ids)).all()
+        }
+    vendor_by_name = {
+        (vendor.name or "").strip().casefold(): vendor
+        for vendor in Vendor.query.all()
+        if (vendor.name or "").strip()
+    }
+
+    included_statuses = {"Draft", "Issued", "Closed"}
+    po_items = []
+    if resolved_project_id and part_ids:
+        po_items = (
+            db.session.query(PurchaseOrderItem, PurchaseOrder)
+            .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+            .filter(PurchaseOrder.project_id == resolved_project_id)
+            .filter(or_(PurchaseOrderItem.part_id.in_(part_ids), PurchaseOrderItem.product_id.in_(part_ids)))
+            .all()
+        )
+
+    line_linked_qty = defaultdict(float)
+    fallback_part_qty = defaultdict(float)
+    for po_item, po in po_items:
+        if _normalize_po_status(po.status) not in included_statuses:
+            continue
+        qty_value = float(po_item.quantity_ordered or 0)
+        if qty_value <= 0:
+            continue
+        part_id = po_item.part_id or po_item.product_id
+        if not part_id:
+            continue
+        direct_line_id = po_item.source_bom_line_id or po_item.bom_item_id
+        if direct_line_id:
+            line_linked_qty[int(direct_line_id)] += qty_value
+            continue
+        if po_item.source_bom_id == bom.id or po.bom_id == bom.id:
+            fallback_part_qty[int(part_id)] += qty_value
+
+    lines_by_part = defaultdict(list)
+    for item in bom_items:
+        if item.suggested_part_id:
+            lines_by_part[int(item.suggested_part_id)].append(item)
+
+    allocated_fallback_qty = defaultdict(float)
+    for part_id, qty_pool in fallback_part_qty.items():
+        if qty_pool <= 0:
+            continue
+        for item in lines_by_part.get(part_id, []):
+            if qty_pool <= 0:
+                break
+            req = float(item.quantity_required or 0)
+            existing = line_linked_qty.get(item.id, 0.0)
+            remaining_capacity = max(0.0, req - existing)
+            if remaining_capacity <= 0:
+                continue
+            alloc = min(remaining_capacity, qty_pool)
+            if alloc > 0:
+                allocated_fallback_qty[item.id] += alloc
+                qty_pool -= alloc
+
+    package_lookup = {pkg.id: pkg for pkg in packages}
+    vendor_groups = {}
+    no_primary_vendor_lines = []
+    over_order_lines = []
+    for item in bom_items:
+        required_qty = float(item.quantity_required or 0)
+        ordered_qty = float(line_linked_qty.get(item.id, 0.0) + allocated_fallback_qty.get(item.id, 0.0))
+        remaining_qty = max(0.0, required_qty - ordered_qty)
+        part = part_map.get(item.suggested_part_id)
+        vendor = _resolve_primary_vendor_for_part(part, vendor_by_name)
+        package = package_lookup.get(item.bom_package_id)
+        line_payload = {
+            "item": item,
+            "part": part,
+            "required_qty": required_qty,
+            "ordered_qty": ordered_qty,
+            "remaining_qty": remaining_qty,
+            "uom": (item.unit or (part.purchase_uom if part else None) or (part.uom if part else None) or "").strip(),
+            "vendor": vendor,
+            "package": package,
+            "is_over_ordered": ordered_qty > required_qty,
+        }
+        if line_payload["is_over_ordered"]:
+            over_order_lines.append(line_payload)
+
+        if not vendor:
+            no_primary_vendor_lines.append(line_payload)
+            continue
+
+        group = vendor_groups.setdefault(
+            vendor.id,
+            {
+                "vendor": vendor,
+                "lines": [],
+                "required_qty_total": 0.0,
+                "ordered_qty_total": 0.0,
+                "remaining_qty_total": 0.0,
+                "parts": set(),
+                "package_ids": set(),
+                "related_pos": set(),
+            },
+        )
+        group["lines"].append(line_payload)
+        group["required_qty_total"] += required_qty
+        group["ordered_qty_total"] += ordered_qty
+        group["remaining_qty_total"] += remaining_qty
+        if part:
+            group["parts"].add(part.id)
+        if package:
+            group["package_ids"].add(package.id)
+
+    if vendor_groups and resolved_project_id:
+        po_rows = (
+            PurchaseOrder.query.filter(PurchaseOrder.project_id == resolved_project_id)
+            .filter(PurchaseOrder.vendor_id.in_(list(vendor_groups.keys())))
+            .all()
+        )
+        for po in po_rows:
+            if _normalize_po_status(po.status) == "Cancelled":
+                continue
+            if po.vendor_id in vendor_groups and (po.bom_id is None or po.bom_id == bom.id):
+                vendor_groups[po.vendor_id]["related_pos"].add(po)
+
+    vendor_group_list = []
+    for group in vendor_groups.values():
+        line_count = len(group["lines"])
+        if line_count and all(line["ordered_qty"] <= 0 for line in group["lines"]):
+            status = "Not Created"
+        elif line_count and all(line["remaining_qty"] <= 0 for line in group["lines"]):
+            status = "Created"
+        else:
+            status = "Partial"
+        group["status"] = status
+        group["parts_count"] = len(group["parts"])
+        group["related_pos"] = sorted(group["related_pos"], key=lambda po: po.id, reverse=True)
+        vendor_group_list.append(group)
+
+    vendor_group_list.sort(key=lambda g: (g["vendor"].name or "").lower())
+    vendors_created = sum(1 for group in vendor_group_list if group["status"] == "Created")
+
+    return {
+        "bom": bom,
+        "resolved_project_id": resolved_project_id,
+        "packages": packages,
+        "vendor_groups": vendor_group_list,
+        "no_primary_vendor_lines": no_primary_vendor_lines,
+        "over_order_lines": over_order_lines,
+        "summary": {
+            "vendors_required": len(vendor_group_list),
+            "vendors_created": vendors_created,
+            "vendors_pending": max(0, len(vendor_group_list) - vendors_created),
+            "total_bom_lines": len(bom_items),
+            "remaining_vendor_groups": sum(1 for group in vendor_group_list if group["remaining_qty_total"] > 0),
+            "parts_without_primary_vendor": len(no_primary_vendor_lines),
+        },
+    }
+
+
+def get_project_procurement_plan(project_id):
+    project = Project.query.get_or_404(project_id)
+    boms = BillOfMaterials.query.options(joinedload(BillOfMaterials.packages)).all()
+    project_boms = [bom for bom in boms if _resolve_bom_project_id(bom) == project.id]
+    bom_entries = []
+    for bom in sorted(project_boms, key=lambda entry: (entry.created_at or datetime.datetime.min, entry.id), reverse=True):
+        plan = get_bom_procurement_plan(bom.id)
+        summary = plan["summary"]
+        if summary["vendors_required"] == 0:
+            status = "Not Started"
+        elif summary["vendors_created"] == summary["vendors_required"]:
+            status = "Complete"
+        elif summary["vendors_created"] > 0:
+            status = "Partial"
+        else:
+            status = "Not Started"
+        bom_entries.append({"bom": bom, "plan": plan, "status": status})
+
+    return {"project": project, "bom_entries": bom_entries}
+
+
 def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None):
     """PO BOM dropdown choices: latest BOM per project+drawing+package, excluding empty BOMs."""
 
@@ -10415,6 +10633,53 @@ def purchase_orders():
         flash("Purchase order saved.", "success")
         return redirect(url_for("purchase_orders"))
 
+    prefill_vendor_id = request.args.get("prefill_vendor_id", type=int)
+    prefill_project_id = request.args.get("prefill_project_id", type=int)
+    prefill_bom_id = request.args.get("prefill_bom_id", type=int)
+    prefill_po_lines = []
+    if prefill_project_id and prefill_vendor_id and prefill_bom_id:
+        bom_plan = get_bom_procurement_plan(prefill_bom_id)
+        if bom_plan["resolved_project_id"] == prefill_project_id:
+            vendor_group = next(
+                (group for group in bom_plan["vendor_groups"] if group["vendor"].id == prefill_vendor_id),
+                None,
+            )
+            if vendor_group:
+                for line in vendor_group["lines"]:
+                    if line["remaining_qty"] <= 0:
+                        continue
+                    item = line["item"]
+                    part = line["part"]
+                    unit_price = None
+                    if part:
+                        rate = VendorProductRate.query.filter_by(
+                            vendor_id=prefill_vendor_id,
+                            product_id=part.id,
+                            status="Active",
+                        ).first()
+                        if rate and rate.unit_price is not None:
+                            unit_price = float(rate.unit_price)
+                    prefill_po_lines.append(
+                        {
+                            "part_id": part.id if part else None,
+                            "item_name": (
+                                (part.name if part else None)
+                                or (item.part_class.name if item.part_class else None)
+                                or (item.description or "").strip()
+                                or (item.item_code or "").strip()
+                                or f"BOM Line {item.id}"
+                            ),
+                            "specification": (item.specification or "").strip(),
+                            "unit": (item.unit or (part.purchase_uom if part else None) or (part.uom if part else None) or "").strip(),
+                            "qty": float(line["remaining_qty"]),
+                            "stage": (item.stage or "").strip(),
+                            "section_title": (item.section_title or "").strip(),
+                            "source_bom_id": item.bom_id,
+                            "source_bom_line_id": item.id,
+                            "unit_price": unit_price,
+                        }
+                    )
+
     pos = (
         PurchaseOrder.query.options(
             joinedload(PurchaseOrder.vendor),
@@ -10441,6 +10706,31 @@ def purchase_orders():
         bom_items=bom_items,
         bom_options=bom_options,
         next_po_number=next_po_number,
+        prefill_project_id=prefill_project_id,
+        prefill_vendor_id=prefill_vendor_id,
+        prefill_bom_id=prefill_bom_id,
+        prefill_po_lines=prefill_po_lines,
+    )
+
+
+@app.route("/bom/<int:bom_id>/procurement-plan")
+@login_required
+def bom_procurement_plan(bom_id):
+    package_id = request.args.get("package_id", type=int)
+    plan = get_bom_procurement_plan(bom_id, package_id=package_id)
+    return render_template(
+        "bom_procurement_plan.html",
+        plan=plan,
+    )
+
+
+@app.route("/projects/<int:project_id>/procurement-plan")
+@login_required
+def project_procurement_plan(project_id):
+    plan = get_project_procurement_plan(project_id)
+    return render_template(
+        "project_procurement_plan.html",
+        plan=plan,
     )
 
 
