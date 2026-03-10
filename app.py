@@ -10625,6 +10625,20 @@ def _attempt_auto_close_po(po, changed_by=None):
     _log_po_status_change(po, normalized, "Closed", changed_by=changed_by)
     return True, []
 
+
+def _close_po_with_validation(po, changed_by=None):
+    """Attempt PO closure with shared validation path used by all manual status changes."""
+
+    can_close, reasons = get_po_closure_state(po)
+    if not can_close:
+        return False, reasons
+
+    current_status = _normalize_po_status(po.status)
+    if current_status != "Closed":
+        po.status = "Closed"
+        _log_po_status_change(po, current_status, "Closed", changed_by=changed_by)
+    return True, []
+
 def get_po_closure_state(po):
     reasons = []
     po_status = _normalize_po_status(po.status)
@@ -10698,24 +10712,28 @@ def purchase_order_detail_view(po_id: int):
                     or None
                 )
 
-            po.status = desired
-            _log_po_status_change(po, current_status, desired, changed_by=changed_by)
+            if desired == "Closed":
+                closed, reasons = _close_po_with_validation(po, changed_by=changed_by)
+                if not closed:
+                    flash("Cannot close PO: " + " ".join(reasons), "warning")
+                    return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+            else:
+                po.status = desired
+                _log_po_status_change(po, current_status, desired, changed_by=changed_by)
             db.session.commit()
             flash("PO status updated successfully.", "success")
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
         if action == "close_po":
-            can_close, reasons = get_po_closure_state(po)
-            if not can_close:
-                flash("Cannot close PO: " + " ".join(reasons), "warning")
-                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
-
-            current_status = _normalize_po_status(po.status)
             changed_by = None
             if current_user.is_authenticated:
                 changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
-            po.status = "Closed"
-            _log_po_status_change(po, current_status, "Closed", changed_by=changed_by)
+
+            closed, reasons = _close_po_with_validation(po, changed_by=changed_by)
+            if not closed:
+                flash("Cannot close PO: " + " ".join(reasons), "warning")
+                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
             db.session.commit()
             flash("PO closed successfully.", "success")
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
@@ -14341,7 +14359,9 @@ def store_receipt_detail(receipt_id):
                         if item.item_code != canonical_item_code:
                             item.item_code = canonical_item_code
 
-                        inv = InventoryItem.query.filter_by(item_code=canonical_item_code).first()
+                        inv = InventoryItem.query.filter(
+                            func.lower(InventoryItem.item_code) == canonical_item_code.lower()
+                        ).first()
                         if not inv:
                             poi = item.purchase_order_item
                             inv = InventoryItem(
@@ -14360,7 +14380,9 @@ def store_receipt_detail(receipt_id):
                             inv.quarantined_stock = (inv.quarantined_stock or 0) + qty
                         _initialize_book_stock(inv)
 
-                        book = BookInventory.query.filter_by(item_code=item.item_code).first()
+                        book = BookInventory.query.filter(
+                            func.lower(BookInventory.item_code) == canonical_item_code.lower()
+                        ).first()
                         if book:
                             book.quantity_received_total = (book.quantity_received_total or 0) + qty
 
@@ -14390,6 +14412,13 @@ def store_receipt_detail(receipt_id):
             return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
         if action == "update_receipt":
+            if receipt.inventory_posted_at is not None:
+                flash(
+                    "This GRN has already posted inventory and its line items can no longer be edited.",
+                    "error",
+                )
+                return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
             if (receipt.status or "").strip() == "Closed":
                 flash("This GRN is Closed and cannot be edited.", "error")
                 return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
