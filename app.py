@@ -9917,8 +9917,21 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             .all()
         )
 
+    line_map = {item.id: item for item in bom_items}
+    line_vendor_ids = {}
+    for item in bom_items:
+        primary_vendor = _resolve_primary_vendor_for_part(part_map.get(item.suggested_part_id), vendor_by_name)
+        line_vendor_ids[item.id] = primary_vendor.id if primary_vendor else None
+
+    # Ordered-qty matching priority (strict to conservative):
+    #   1) exact BOM line linkage (source_bom_line_id / bom_item_id)
+    #   2) exact BOM linkage (source_bom_id / PO.bom_id) + same part
+    #   3) conservative legacy fallback: same project + same vendor + same part,
+    #      only for PO lines with no BOM linkage.
     line_linked_qty = defaultdict(float)
-    fallback_part_qty = defaultdict(float)
+    line_linkage_mode = defaultdict(set)
+    bom_linked_part_pools = defaultdict(float)
+    fallback_vendor_part_pools = defaultdict(float)
     for po_item, po in po_items:
         if _normalize_po_status(po.status) not in included_statuses:
             continue
@@ -9929,19 +9942,31 @@ def get_bom_procurement_plan(bom_id, package_id=None):
         if not part_id:
             continue
         direct_line_id = po_item.source_bom_line_id or po_item.bom_item_id
-        if direct_line_id:
+        if direct_line_id and int(direct_line_id) in line_map:
             line_linked_qty[int(direct_line_id)] += qty_value
+            line_linkage_mode[int(direct_line_id)].add("exact_line")
             continue
         if po_item.source_bom_id == bom.id or po.bom_id == bom.id:
-            fallback_part_qty[int(part_id)] += qty_value
+            bom_linked_part_pools[int(part_id)] += qty_value
+            continue
+
+        has_any_bom_linkage = bool(
+            po_item.source_bom_id
+            or po_item.source_bom_line_id
+            or po_item.bom_item_id
+            or po.bom_id
+        )
+        if has_any_bom_linkage:
+            continue
+        fallback_vendor_part_pools[(po.vendor_id, int(part_id))] += qty_value
 
     lines_by_part = defaultdict(list)
     for item in bom_items:
         if item.suggested_part_id:
             lines_by_part[int(item.suggested_part_id)].append(item)
 
-    allocated_fallback_qty = defaultdict(float)
-    for part_id, qty_pool in fallback_part_qty.items():
+    allocated_bom_linked_qty = defaultdict(float)
+    for part_id, qty_pool in bom_linked_part_pools.items():
         if qty_pool <= 0:
             continue
         for item in lines_by_part.get(part_id, []):
@@ -9954,8 +9979,35 @@ def get_bom_procurement_plan(bom_id, package_id=None):
                 continue
             alloc = min(remaining_capacity, qty_pool)
             if alloc > 0:
-                allocated_fallback_qty[item.id] += alloc
+                allocated_bom_linked_qty[item.id] += alloc
+                line_linkage_mode[item.id].add("exact_bom")
                 qty_pool -= alloc
+
+    allocated_fallback_qty = defaultdict(float)
+    for (vendor_id, part_id), qty_pool in fallback_vendor_part_pools.items():
+        if qty_pool <= 0:
+            continue
+        candidate_lines = [
+            item
+            for item in lines_by_part.get(part_id, [])
+            if line_vendor_ids.get(item.id) == vendor_id
+            and max(0.0, float(item.quantity_required or 0) - float(line_linked_qty.get(item.id, 0.0) + allocated_bom_linked_qty.get(item.id, 0.0))) > 0
+        ]
+        # Legacy fallback is intentionally conservative: if multiple package lines
+        # are plausible for the same vendor+part, keep the quantity pending instead
+        # of auto-closing the wrong package.
+        if len(candidate_lines) != 1:
+            continue
+        line = candidate_lines[0]
+        remaining_capacity = max(
+            0.0,
+            float(line.quantity_required or 0)
+            - float(line_linked_qty.get(line.id, 0.0) + allocated_bom_linked_qty.get(line.id, 0.0)),
+        )
+        alloc = min(remaining_capacity, qty_pool)
+        if alloc > 0:
+            allocated_fallback_qty[line.id] += alloc
+            line_linkage_mode[line.id].add("fallback_project_vendor_part")
 
     package_lookup = {pkg.id: pkg for pkg in packages}
     vendor_groups = {}
@@ -9963,7 +10015,11 @@ def get_bom_procurement_plan(bom_id, package_id=None):
     over_order_lines = []
     for item in bom_items:
         required_qty = float(item.quantity_required or 0)
-        ordered_qty = float(line_linked_qty.get(item.id, 0.0) + allocated_fallback_qty.get(item.id, 0.0))
+        ordered_qty = float(
+            line_linked_qty.get(item.id, 0.0)
+            + allocated_bom_linked_qty.get(item.id, 0.0)
+            + allocated_fallback_qty.get(item.id, 0.0)
+        )
         remaining_qty = max(0.0, required_qty - ordered_qty)
         part = part_map.get(item.suggested_part_id)
         vendor = _resolve_primary_vendor_for_part(part, vendor_by_name)
@@ -9978,6 +10034,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             "vendor": vendor,
             "package": package,
             "is_over_ordered": ordered_qty > required_qty,
+            "linkage_mode": ",".join(sorted(line_linkage_mode.get(item.id, set()))) or "none",
         }
         if line_payload["is_over_ordered"]:
             over_order_lines.append(line_payload)
@@ -10059,8 +10116,36 @@ def get_project_procurement_plan(project_id):
     project = Project.query.get_or_404(project_id)
     boms = BillOfMaterials.query.options(joinedload(BillOfMaterials.packages)).all()
     project_boms = [bom for bom in boms if _resolve_bom_project_id(bom) == project.id]
+
+    # Project overview keeps package/BOM truth by showing only latest revision
+    # per package identity, preventing older revisions from masking pending rows.
+    def _project_bom_group_key(bom):
+        package_names = sorted(
+            {
+                (package.name or "").strip().casefold()
+                for package in (bom.packages or [])
+                if (package.name or "").strip()
+            }
+        )
+        if not package_names:
+            package_names = ["main-lift-bom"]
+        return (
+            bom.design_task_id or 0,
+            bom.drawing_site_id or 0,
+            tuple(package_names),
+        )
+
+    latest_by_group = {}
+    for bom in project_boms:
+        key = _project_bom_group_key(bom)
+        rank = (bom.revision_number or 0, bom.created_at or datetime.datetime.min, bom.id or 0)
+        previous = latest_by_group.get(key)
+        if not previous or rank > previous[0]:
+            latest_by_group[key] = (rank, bom)
+
     bom_entries = []
-    for bom in sorted(project_boms, key=lambda entry: (entry.created_at or datetime.datetime.min, entry.id), reverse=True):
+    latest_boms = [entry[1] for entry in latest_by_group.values()]
+    for bom in sorted(latest_boms, key=lambda entry: (entry.created_at or datetime.datetime.min, entry.id), reverse=True):
         plan = get_bom_procurement_plan(bom.id)
         summary = plan["summary"]
         if summary["vendors_required"] == 0:
@@ -10074,6 +10159,16 @@ def get_project_procurement_plan(project_id):
         bom_entries.append({"bom": bom, "plan": plan, "status": status})
 
     return {"project": project, "bom_entries": bom_entries}
+
+
+@app.route("/purchase/procurement-plan")
+@login_required
+def purchase_procurement_plan():
+    project_id = request.args.get("project_id", type=int)
+    if project_id:
+        return redirect(url_for("project_procurement_plan", project_id=project_id))
+    projects = Project.query.order_by(Project.name.asc()).all()
+    return render_template("purchase_procurement_plan.html", projects=projects)
 
 
 def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None):
@@ -10679,6 +10774,23 @@ def purchase_orders():
                             "unit_price": unit_price,
                         }
                     )
+
+    if prefill_project_id and prefill_vendor_id and prefill_bom_id and not prefill_po_lines:
+        flash("No remaining quantities to create PO for this vendor.", "warning")
+
+    deduped_prefill_lines = []
+    seen_prefill_keys = set()
+    for row in prefill_po_lines:
+        if float(row.get("qty") or 0) <= 0:
+            continue
+        if not row.get("part_id"):
+            continue
+        row_key = (row.get("source_bom_line_id") or 0, row.get("part_id"), row.get("item_name"))
+        if row_key in seen_prefill_keys:
+            continue
+        seen_prefill_keys.add(row_key)
+        deduped_prefill_lines.append(row)
+    prefill_po_lines = deduped_prefill_lines
 
     pos = (
         PurchaseOrder.query.options(
