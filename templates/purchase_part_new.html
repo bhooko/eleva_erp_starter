@@ -14,10 +14,10 @@
     <form method="POST" class="space-y-4">
       {{ csrf_field() }}
       <div class="grid md:grid-cols-2 gap-4">
-        <label class="space-y-1 block">
-          <span class="text-xs text-slate-600">Part code (optional)</span>
-          <input name="sku" value="{{ request.form.get('sku','') }}" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
-        </label>
+        <div class="space-y-1 block">
+          <span class="text-xs text-slate-600">Part code</span>
+          <p class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">Part code will be generated automatically.</p>
+        </div>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Part name *</span>
           <input name="name" value="{{ request.form.get('name','') }}" required class="w-full rounded-lg border border-slate-200 px-3 py-2" />

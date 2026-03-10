@@ -108,12 +108,12 @@
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-3">
-    <p class="text-xs uppercase text-slate-500">Monthly trend (last 12 months)</p>
+    <p class="text-xs uppercase text-slate-500">Monthly trend (last 24 months)</p>
     <h2 class="text-lg font-semibold">Vendor rate trend</h2>
     {% if trend_chart.series|length > 0 %}
       <canvas id="partRateTrendChart" class="w-full h-64"></canvas>
     {% else %}
-      <p class="text-sm text-slate-500">Not enough rate history to display monthly trend.</p>
+      <p class="text-sm text-slate-500">No vendor rate data available yet.</p>
     {% endif %}
   </div>
 
