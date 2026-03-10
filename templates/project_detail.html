@@ -50,6 +50,14 @@
           <span class="text-xs text-slate-500">Created {{ project.created_at|format_india_datetime('%Y-%m-%d %H:%M') }}</span>
         </div>
         <p class="text-sm text-slate-400">Lift type: {{ project.lift_type or 'Not specified' }}</p>
+        <div>
+          <a
+            href="{{ url_for('project_procurement_plan', project_id=project.id) }}"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-400/50 bg-emerald-500/10 text-emerald-200 text-sm hover:bg-emerald-500/20"
+          >
+            Project Procurement Overview
+          </a>
+        </div>
       </div>
     </div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">

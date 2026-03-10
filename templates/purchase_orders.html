@@ -414,6 +414,12 @@
           projectId: (option.dataset.projectId || '').trim(),
         }))
       : [];
+    const prefillPayload = {
+      projectId: {{ prefill_project_id|tojson }},
+      vendorId: {{ prefill_vendor_id|tojson }},
+      bomId: {{ prefill_bom_id|tojson }},
+      lines: {{ prefill_po_lines|tojson }},
+    };
 
     let lastAutoExpected = '';
     let autoUpdateExpected = true;
@@ -1264,6 +1270,53 @@
         }
       });
     }
+
+    const applyPrefillFromProcurementPlan = () => {
+      if (!prefillPayload || !Array.isArray(prefillPayload.lines) || prefillPayload.lines.length === 0) {
+        return;
+      }
+      if (projectSelect && prefillPayload.projectId) {
+        projectSelect.value = String(prefillPayload.projectId);
+      }
+      if (vendorSelect && prefillPayload.vendorId) {
+        vendorSelect.value = String(prefillPayload.vendorId);
+      }
+      refreshBomOptionsByProject();
+      if (bomSelect && prefillPayload.bomId) {
+        bomSelect.value = String(prefillPayload.bomId);
+      }
+      if (itemsContainer) {
+        itemsContainer.innerHTML = '';
+      }
+      prefillPayload.lines.forEach((line) => {
+        const row = addRow();
+        if (!row) {
+          return;
+        }
+        row.querySelector('[data-part-name]').value = line.item_name || '';
+        row.querySelector('[data-part-name]').dataset.selectedName = line.item_name || '';
+        row.querySelector('[data-product-id]').value = line.part_id || '';
+        row.querySelector('[name="item_qty[]"]').value = line.qty ?? 0;
+        row.querySelector('[name="item_unit[]"]').value = line.unit || '';
+        row.querySelector('[name="item_unit_price[]"]').value = line.unit_price ?? '';
+        row.querySelector('[data-specs]').value = line.specification || '';
+        row.querySelector('[data-stage]').value = line.stage || '';
+        row.querySelector('[data-section-title]').value = line.section_title || '';
+        row.querySelector('[data-source-bom-id]').value = line.source_bom_id || '';
+        row.querySelector('[data-source-bom-line-id]').value = line.source_bom_line_id || '';
+        markSpecsReadonly(row, true);
+        updateStageSectionText(row);
+        syncUnmappedWarning(row);
+      });
+      ensureTrailingBlankRow();
+      updateTotals();
+      updateRemoveButtons();
+      if (modalToggle) {
+        modalToggle.checked = true;
+      }
+    };
+
+    applyPrefillFromProcurementPlan();
 
     if (applyBomModal) {
       applyBomModal.querySelectorAll('[data-apply-bom-cancel], [data-apply-bom-overlay]').forEach((btn) => {

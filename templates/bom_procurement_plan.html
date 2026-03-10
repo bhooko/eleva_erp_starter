@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}BOM Procurement Plan · Eleva ERP{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  {% set bom = plan.bom %}
+  {% set project = bom.project or (bom.drawing_site.project if bom.drawing_site else None) %}
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Procurement Plan</p>
+      <h1 class="text-2xl font-semibold">{{ bom.bom_name }}</h1>
+      <p class="text-sm text-slate-600">Project: {{ project.name if project else '—' }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if bom.design_task_id %}
+      <a href="{{ url_for('design_task_detail', task_id=bom.design_task_id) }}" class="px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">Back to BOM</a>
+      {% endif %}
+      <a href="{{ url_for('purchase_orders') }}" class="px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50">Open Purchase Orders</a>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-6 gap-3 text-sm">
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Vendors required</div><div class="text-xl font-semibold">{{ plan.summary.vendors_required }}</div></div>
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Vendor-wise POs created</div><div class="text-xl font-semibold text-emerald-700">{{ plan.summary.vendors_created }}</div></div>
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Vendor-wise POs pending</div><div class="text-xl font-semibold text-amber-700">{{ plan.summary.vendors_pending }}</div></div>
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Total BOM lines</div><div class="text-xl font-semibold">{{ plan.summary.total_bom_lines }}</div></div>
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Remaining vendor groups</div><div class="text-xl font-semibold">{{ plan.summary.remaining_vendor_groups }}</div></div>
+    <div class="rounded-xl border border-slate-200 bg-white p-3"><div class="text-slate-500 text-xs">Parts without primary vendor</div><div class="text-xl font-semibold text-rose-700">{{ plan.summary.parts_without_primary_vendor }}</div></div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Vendor</th><th class="py-3 px-4">Parts count</th><th class="py-3 px-4">Required qty</th><th class="py-3 px-4">Ordered qty</th><th class="py-3 px-4">Remaining qty</th><th class="py-3 px-4">Procurement status</th><th class="py-3 px-4">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for group in plan.vendor_groups %}
+        <tr>
+          <td class="py-3 px-4 font-semibold">{{ group.vendor.name }}</td>
+          <td class="py-3 px-4">{{ group.parts_count }}</td>
+          <td class="py-3 px-4">{{ '%.2f'|format(group.required_qty_total) }}</td>
+          <td class="py-3 px-4">{{ '%.2f'|format(group.ordered_qty_total) }}</td>
+          <td class="py-3 px-4">{{ '%.2f'|format(group.remaining_qty_total) }}</td>
+          <td class="py-3 px-4">
+            {% if group.status == 'Created' %}<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs">Created</span>
+            {% elif group.status == 'Partial' %}<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs">Partial</span>
+            {% else %}<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">Not Created</span>{% endif %}
+          </td>
+          <td class="py-3 px-4 space-y-2">
+            {% if group.remaining_qty_total > 0 %}
+            <a href="{{ url_for('purchase_orders', prefill_project_id=plan.resolved_project_id, prefill_vendor_id=group.vendor.id, prefill_bom_id=bom.id) }}" class="inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">Create PO</a>
+            {% else %}
+            <span class="text-xs text-slate-500">No remaining quantities to create PO for this vendor.</span>
+            {% endif %}
+            {% if group.related_pos %}
+            <div class="text-xs text-slate-600">POs:
+              {% for po in group.related_pos[:3] %}
+              <a class="underline" href="{{ url_for('purchase_order_detail_view', po_id=po.id) }}">{{ po.po_number }}</a>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="bg-slate-50/60">
+          <td colspan="7" class="px-4 py-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead><tr class="text-left text-slate-500"><th class="py-1 pr-3">Part code</th><th class="py-1 pr-3">Part name</th><th class="py-1 pr-3">Required</th><th class="py-1 pr-3">Ordered</th><th class="py-1 pr-3">Remaining</th><th class="py-1 pr-3">UOM</th><th class="py-1 pr-3">Primary vendor</th></tr></thead>
+                <tbody>
+                  {% for line in group.lines %}
+                  <tr class="border-t border-slate-200/70"><td class="py-1 pr-3">{{ line.item.item_code }}</td><td class="py-1 pr-3">{{ line.part.name if line.part else (line.item.description or '—') }}</td><td class="py-1 pr-3">{{ '%.2f'|format(line.required_qty) }}</td><td class="py-1 pr-3">{{ '%.2f'|format(line.ordered_qty) }}</td><td class="py-1 pr-3">{{ '%.2f'|format(line.remaining_qty) }}</td><td class="py-1 pr-3">{{ line.uom or '—' }}</td><td class="py-1 pr-3">{{ group.vendor.name }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="py-4 px-4 text-slate-500">No vendor-linked parts found for this BOM/package.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if plan.no_primary_vendor_lines %}
+  <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <h3 class="font-semibold text-amber-900">No primary vendor assigned</h3>
+    <p class="text-xs text-amber-800 mt-1">These parts are excluded from auto PO generation.</p>
+    <ul class="mt-2 text-sm text-amber-900 list-disc ml-5">
+      {% for line in plan.no_primary_vendor_lines %}
+      <li>{{ line.item.item_code }} — {{ line.part.name if line.part else (line.item.description or 'Unnamed part') }} (Remaining: {{ '%.2f'|format(line.remaining_qty) }})</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

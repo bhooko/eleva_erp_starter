@@ -316,6 +316,12 @@
                 >
                   Export
                 </button>
+                <a
+                  href="{{ url_for('bom_procurement_plan', bom_id=bom.id, package_id=package.id) }}"
+                  class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-white"
+                >
+                  Procurement Plan
+                </a>
                 {% if can_edit_bom and package.status != 'final' %}
                 <form method="POST">
                   {{ csrf_field() }}
