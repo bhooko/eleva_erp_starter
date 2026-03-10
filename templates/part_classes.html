@@ -69,29 +69,29 @@
   </div>
 </div>
 
-<div id="modalOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm opacity-0 pointer-events-none transition duration-200">
-  <div class="min-h-screen flex items-center justify-center p-6">
-    <div id="modalPanel" class="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950/90 shadow-2xl shadow-black/40 transform transition duration-200 scale-95 translate-y-4">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+<div id="modalOverlay" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition duration-200 overflow-y-auto">
+  <div class="min-h-screen flex items-start justify-center pt-20 px-6 pb-6">
+    <div id="modalPanel" class="w-full max-w-xl rounded-xl border border-slate-200 bg-white dark:bg-slate-900 shadow-xl transform transition duration-200 scale-95 translate-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h2 id="modalTitle" class="text-lg font-semibold text-slate-100">Edit Part Class</h2>
+          <h2 id="modalTitle" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit Part Class</h2>
           <p class="text-xs text-slate-500">Update names, descriptions, primary part suggestion, and availability.</p>
         </div>
-        <button id="closeModalBtn" class="w-9 h-9 inline-flex items-center justify-center rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition">✕</button>
+        <button id="closeModalBtn" class="w-9 h-9 inline-flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-700 transition">✕</button>
       </div>
       <div class="px-6 py-4 space-y-4">
         <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-slate-400">Class Name</label>
-          <input id="classNameInput" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Guide Rail" />
+          <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Class Name</label>
+          <input id="classNameInput" type="text" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Guide Rail" />
         </div>
         <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-slate-400">Description</label>
-          <textarea id="classDescriptionInput" rows="3" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes"></textarea>
+          <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Description</label>
+          <textarea id="classDescriptionInput" rows="3" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Optional notes"></textarea>
         </div>
         <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-slate-400">Primary Part (Suggested)</label>
-          <input id="primaryPartSearchInput" type="text" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" placeholder="Search parts" />
-          <select id="classPrimaryPartInput" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+          <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Primary Part (Suggested)</label>
+          <input id="primaryPartSearchInput" type="text" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" placeholder="Search parts" />
+          <select id="classPrimaryPartInput" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none">
             <option value="">— None —</option>
             {% for part in parts %}
               <option value="{{ part.id }}">{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
@@ -99,8 +99,8 @@
           </select>
         </div>
         <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-slate-400">Associated Sections</label>
-          <select id="classSectionsInput" multiple class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+          <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Associated Sections</label>
+          <select id="classSectionsInput" multiple class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none">
             {% for section in sections %}
               <option value="{{ section.id }}">{{ section.label }}</option>
             {% endfor %}
@@ -109,18 +109,18 @@
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
-            <label class="text-xs uppercase tracking-wide text-slate-400">Sort Order</label>
-            <input id="classSortInput" type="number" class="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" value="0" />
+            <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Sort Order</label>
+            <input id="classSortInput" type="number" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none" value="0" />
           </div>
           <div class="space-y-2">
-            <label class="text-xs uppercase tracking-wide text-slate-400">Active</label>
+            <label class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Active</label>
             <button id="classActiveToggle" type="button" class="w-full px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-200 text-sm font-semibold hover:bg-emerald-500/30 transition">Active</button>
           </div>
         </div>
-        <div id="modalError" class="hidden rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"></div>
+        <div id="modalError" class="hidden rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200"></div>
       </div>
-      <div class="px-6 py-4 border-t border-slate-800 flex justify-end gap-3">
-        <button id="cancelModalBtn" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 text-sm hover:bg-slate-700 transition">Cancel</button>
+      <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+        <button id="cancelModalBtn" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition">Cancel</button>
         <button id="saveModalBtn" class="px-4 py-2 rounded-xl bg-emerald-500/90 text-white text-sm font-semibold hover:bg-emerald-500 transition">Save</button>
       </div>
     </div>

@@ -11942,7 +11942,6 @@ def purchase_part_new():
 
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
-        sku = (request.form.get("sku") or "").strip() or None
         purchase_uom = (request.form.get("purchase_uom") or "").strip() or None
         part_class_id_raw = (request.form.get("part_class_id") or "").strip()
         primary_vendor = (request.form.get("primary_vendor") or "").strip() or None
@@ -11961,9 +11960,6 @@ def purchase_part_new():
             except ValueError:
                 errors.append("Select a valid part class.")
 
-        if sku and Product.query.filter(func.lower(Product.sku) == sku.lower()).first():
-            errors.append("Part code already exists.")
-
         if errors:
             for message in errors:
                 flash(message, "danger")
@@ -11976,7 +11972,6 @@ def purchase_part_new():
 
         product = Product(
             name=name,
-            sku=sku,
             purchase_uom=purchase_uom,
             uom=purchase_uom,
             part_class_id=part_class_id,
@@ -11987,9 +11982,7 @@ def purchase_part_new():
             is_active=True,
         )
         db.session.add(product)
-        db.session.flush()
-        if not product.sku:
-            _ensure_product_sku(product)
+        _ensure_product_sku(product)
         product.forecast_qty = _compute_product_forecast_qty(product)
         db.session.commit()
         flash("Part created.", "success")
@@ -12072,17 +12065,12 @@ def purchase_part_detail(product_id):
     monthly_vendor_rates = {}
     month_vendor_latest = {}
     month_start = date.today().replace(day=1)
-    for i in range(11, -1, -1):
-        year = month_start.year
-        month = month_start.month - i
-        while month <= 0:
-            year -= 1
-            month += 12
-        while month > 12:
-            year += 1
-            month -= 12
-        key = f"{year:04d}-{month:02d}"
-        month_labels.append(key)
+    base_month_index = (month_start.year * 12) + month_start.month - 1
+    for offset in range(23, -1, -1):
+        target_index = base_month_index - offset
+        year = target_index // 12
+        month = (target_index % 12) + 1
+        month_labels.append(f"{year:04d}-{month:02d}")
 
     for row in sorted(history_rows, key=lambda x: x.changed_at or datetime.datetime.min):
         if not row.vendor or row.new_unit_price is None or not row.changed_at:
@@ -12092,16 +12080,27 @@ def purchase_part_detail(product_id):
             continue
         month_vendor_latest[(month_key, row.vendor.name)] = float(row.new_unit_price)
 
-    vendor_series_names = sorted({vendor_name for _, vendor_name in month_vendor_latest.keys()})
+    current_month_key = month_start.strftime("%Y-%m")
+    for rate_row in rate_rows:
+        current_rate = rate_row.get("rate")
+        vendor_name = rate_row.get("vendor_name")
+        if not vendor_name or not current_rate or current_rate.unit_price is None:
+            continue
+        month_vendor_latest.setdefault(
+            (current_month_key, vendor_name),
+            float(current_rate.unit_price),
+        )
+
+    vendor_series_names = sorted(
+        {
+            vendor_name
+            for _, vendor_name in month_vendor_latest.keys()
+            if vendor_name
+        }
+    )
     for vendor_name in vendor_series_names:
-        points = []
-        has_any = False
-        for label in month_labels:
-            value = month_vendor_latest.get((label, vendor_name))
-            points.append(value if value is not None else None)
-            if value is not None:
-                has_any = True
-        if has_any:
+        points = [month_vendor_latest.get((label, vendor_name)) for label in month_labels]
+        if any(point is not None for point in points):
             monthly_vendor_rates[vendor_name] = points
 
     trend_chart = {
@@ -12542,23 +12541,30 @@ def _ensure_product_sku(product: Product) -> Optional[str]:
     sku = (product.sku or "").strip()
     if sku:
         return sku
-    if not product.id:
-        return None
-    candidate = f"ELV-{product.id:06d}"
-    existing = Product.query.filter(Product.sku == candidate, Product.id != product.id).first()
-    if existing:
-        suffix = 1
-        while True:
-            alternate = f"{candidate}-{suffix}"
-            conflict = Product.query.filter(
-                Product.sku == alternate, Product.id != product.id
-            ).first()
-            if not conflict:
-                candidate = alternate
-                break
-            suffix += 1
+    candidate = _next_generated_product_sku()
     product.sku = candidate
     return product.sku
+
+
+def _next_generated_product_sku() -> str:
+    sku_pattern = re.compile(r"^ELV-(\d{6})$")
+    max_suffix = 0
+
+    sku_rows = db.session.query(Product.sku).filter(Product.sku.like("ELV-%")).all()
+    for (raw_sku,) in sku_rows:
+        normalized_sku = (raw_sku or "").strip().upper()
+        match = sku_pattern.match(normalized_sku)
+        if not match:
+            continue
+        max_suffix = max(max_suffix, int(match.group(1)))
+
+    next_suffix = max_suffix + 1
+    while True:
+        candidate = f"ELV-{next_suffix:06d}"
+        conflict = Product.query.filter(Product.sku == candidate).first()
+        if not conflict:
+            return candidate
+        next_suffix += 1
 
 
 def _resolve_product_by_inventory_identity(*, item_code=None, description=None, product_name=None):
