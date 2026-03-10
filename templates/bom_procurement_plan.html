@@ -51,7 +51,11 @@
             {% if group.remaining_qty_total > 0 %}
             <a href="{{ url_for('purchase_orders', prefill_project_id=plan.resolved_project_id, prefill_vendor_id=group.vendor.id, prefill_bom_id=bom.id) }}" class="inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">Create PO</a>
             {% else %}
+            {% if group.related_pos %}
+            <span class="inline-flex px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs">Completed</span>
+            {% else %}
             <span class="text-xs text-slate-500">No remaining quantities to create PO for this vendor.</span>
+            {% endif %}
             {% endif %}
             {% if group.related_pos %}
             <div class="text-xs text-slate-600">POs:

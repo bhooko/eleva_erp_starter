@@ -1866,7 +1866,7 @@
           {% endif %}
 
           {% if purchase_visible %}
-          {% set purchase_endpoints = ['purchase_orders','purchase_reports','purchase_parts','purchase_vendors','purchase_procurement_stages','generate_po_from_bom','purchase_odoo_history'] %}
+          {% set purchase_endpoints = ['purchase_orders','purchase_procurement_plan','project_procurement_plan','bom_procurement_plan','purchase_reports','purchase_parts','purchase_vendors','purchase_procurement_stages','generate_po_from_bom','purchase_odoo_history'] %}
           <div class="space-y-1">
             <a href="{{ url_for('purchase_orders') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in purchase_endpoints else '' }}">
@@ -1881,6 +1881,10 @@
               <a href="{{ url_for('purchase_orders') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_orders' else '' }}">
                 <span class="label">Purchase Orders</span>
+              </a>
+              <a href="{{ url_for('purchase_procurement_plan') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['purchase_procurement_plan','project_procurement_plan','bom_procurement_plan'] else '' }}">
+                <span class="label">Procurement Plan</span>
               </a>
               <a href="{{ url_for('purchase_parts') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'purchase_parts' else '' }}">
