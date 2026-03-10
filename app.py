@@ -9848,6 +9848,16 @@ def download_drawing_revision(revision_id: int):
     )
 
 
+def _resolve_bom_project_id(bom):
+    if not bom:
+        return None
+    if bom.project_id:
+        return bom.project_id
+    if bom.drawing_site and bom.drawing_site.project_id:
+        return bom.drawing_site.project_id
+    return None
+
+
 def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None):
     """PO BOM dropdown choices: latest BOM per project+drawing+package, excluding empty BOMs."""
 
@@ -9870,12 +9880,11 @@ def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None)
         except (TypeError, ValueError):
             selected_project_id = None
 
+    def _normalize_package_label(value):
+        return (value or "").strip()
+
     def _resolved_project_id(bom):
-        if bom.project_id:
-            return bom.project_id
-        if bom.drawing_site and bom.drawing_site.project_id:
-            return bom.drawing_site.project_id
-        return None
+        return _resolve_bom_project_id(bom)
 
     def _latest_rank(bom):
         return (
@@ -9894,30 +9903,53 @@ def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None)
         if not valid_items:
             continue
 
-        package_names = {
-            (item.bom_package.name or "").strip()
-            for item in valid_items
-            if item.bom_package and (item.bom_package.name or "").strip()
+        valid_package_ids = {
+            item.bom_package_id for item in valid_items if item.bom_package_id
         }
-        if not package_names:
-            package_names = {
-                (package.name or "").strip()
-                for package in (bom.packages or [])
-                if (package.name or "").strip()
-            }
-        package_labels = sorted(package_names) if package_names else ["Main Lift BOM"]
+
+        package_entries = []
+        for package in (bom.packages or []):
+            if valid_package_ids and package.id not in valid_package_ids:
+                continue
+            package_entries.append(
+                {
+                    "id": package.id,
+                    "label": _normalize_package_label(package.name),
+                }
+            )
+
+        # Fallback only for legacy/unstructured BOM rows where a package record is unavailable.
+        if not package_entries:
+            fallback_labels = sorted(
+                {
+                    _normalize_package_label(item.bom_package.name)
+                    for item in valid_items
+                    if item.bom_package and _normalize_package_label(item.bom_package.name)
+                }
+            )
+            package_entries = [
+                {"id": None, "label": label} for label in fallback_labels
+            ]
+
+        if not package_entries:
+            package_entries = [{"id": None, "label": "Main Lift BOM"}]
+
         drawing_key = bom.drawing_site_id or f"design-task:{bom.design_task_id or 0}"
 
-        for package_label in package_labels:
+        for package_entry in package_entries:
+            package_label = package_entry["label"] or "Main Lift BOM"
             group_key = (
                 bom_project_id or 0,
                 drawing_key,
                 (bom.bom_type or "main").strip().lower(),
-                package_label.strip().lower(),
+                package_entry["id"] if package_entry["id"] is not None else package_label.strip().lower(),
             )
             existing = latest_by_group.get(group_key)
             if existing is None or _latest_rank(bom) > _latest_rank(existing["bom"]):
-                latest_by_group[group_key] = {"bom": bom, "package_label": package_label}
+                latest_by_group[group_key] = {
+                    "bom": bom,
+                    "package_label": package_label,
+                }
 
     grouped_latest_boms = sorted(
         latest_by_group.values(),
@@ -10059,6 +10091,26 @@ def purchase_orders():
             if project_id:
                 redirect_kwargs["project_id"] = project_id
             return redirect(url_for("purchase_orders", **redirect_kwargs))
+
+        project_id_int = _parse_int_value(project_id)
+        selected_bom = None
+        selected_bom_yielded_rows = False
+        if bom_id_raw:
+            selected_bom_id = _parse_int_value(bom_id_raw)
+            if not selected_bom_id:
+                flash("Selected BOM template was not found.", "danger")
+                return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
+            selected_bom = BillOfMaterials.query.options(joinedload(BillOfMaterials.drawing_site)).get(selected_bom_id)
+            if not selected_bom:
+                flash("Selected BOM template was not found.", "danger")
+                return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
+            if project_id_int is None:
+                flash("Select a project before applying a BOM.", "danger")
+                return redirect(url_for("purchase_orders"))
+            resolved_bom_project_id = _resolve_bom_project_id(selected_bom)
+            if resolved_bom_project_id != project_id_int:
+                flash("Selected BOM does not belong to the chosen project.", "danger")
+                return redirect(url_for("purchase_orders", project_id=project_id_int))
 
         po = PurchaseOrder(
             po_number=po_number,
@@ -10216,10 +10268,10 @@ def purchase_orders():
             row.get("source_bom_line_id") for row in combined_rows
         )
 
-        if bom_id_raw and bom_apply_mode in {"replace", "add"} and not has_source_bom_rows:
+        if selected_bom and bom_apply_mode in {"replace", "add"} and not has_source_bom_rows:
             bom_items = (
                 BOMItem.query.options(joinedload(BOMItem.part_class))
-                .filter(BOMItem.bom_id == int(bom_id_raw))
+                .filter(BOMItem.bom_id == selected_bom.id)
                 .order_by(BOMItem.id.asc())
                 .all()
             )
@@ -10228,10 +10280,25 @@ def purchase_orders():
                 for bom_item in bom_items
                 if (bom_item.quantity_required or 0) > 0
             ]
+            selected_bom_yielded_rows = bool(mapped_rows)
             if bom_apply_mode == "replace":
                 combined_rows = mapped_rows
             else:
                 combined_rows.extend(mapped_rows)
+
+        has_selected_bom_source_rows = bool(
+            selected_bom
+            and any(
+                _parse_int_value(row.get("source_bom_id")) == selected_bom.id
+                or (
+                    _parse_int_value(row.get("source_bom_line_id")) is not None
+                    and not _parse_int_value(row.get("source_bom_id"))
+                )
+                for row in combined_rows
+            )
+        )
+        if has_selected_bom_source_rows:
+            selected_bom_yielded_rows = True
 
         for row_data in combined_rows:
             item_name = (row_data.get("item_name") or "").strip()
@@ -10327,14 +10394,16 @@ def purchase_orders():
 
         if not has_valid_items or invalid_rows:
             db.session.rollback()
-            if not has_valid_items:
+            if selected_bom and (not has_valid_items) and (has_selected_bom_source_rows or not selected_bom_yielded_rows):
+                flash("Selected BOM has no valid line items.", "danger")
+            elif not has_valid_items:
                 flash("Add at least one valid line item before saving.", "danger")
             else:
                 flash(
                     "Each line item must have a Part selected from Parts Master (mapped part), along with quantity.",
                     "danger",
                 )
-            return redirect(url_for("purchase_orders"))
+            return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
 
         po.subtotal_amount = subtotal_amount
         po.freight_value = freight_value
@@ -10398,7 +10467,7 @@ def purchase_bom_po_lines_preview(bom_id: int):
         }
 
     bom = BillOfMaterials.query.get_or_404(bom_id)
-    resolved_bom_project_id = bom.project_id or (bom.drawing_site.project_id if bom.drawing_site else None)
+    resolved_bom_project_id = _resolve_bom_project_id(bom)
     if project_id and resolved_bom_project_id != project_id:
         return jsonify({"bom_id": bom.id, "lines": []})
     bom_items = (
