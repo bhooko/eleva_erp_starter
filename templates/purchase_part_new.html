@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Purchase · Create Part{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Inventory</p>
+      <h1 class="text-2xl font-semibold">Create Part</h1>
+    </div>
+    <a href="{{ url_for('purchase_parts') }}" class="px-4 py-2 rounded-xl border">← Back</a>
+  </div>
+
+  <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <form method="POST" class="space-y-4">
+      {{ csrf_field() }}
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Part code (optional)</span>
+          <input name="sku" value="{{ request.form.get('sku','') }}" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Part name *</span>
+          <input name="name" value="{{ request.form.get('name','') }}" required class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">UOM</span>
+          <select name="purchase_uom" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option value="">Select unit</option>
+            {% for uom in uom_options %}
+            <option value="{{ uom }}" {% if request.form.get('purchase_uom') == uom %}selected{% endif %}>{{ uom }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block">
+          <span class="text-xs text-slate-600">Part class</span>
+          <select name="part_class_id" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option value="">Select class</option>
+            {% for cls in part_classes %}
+            <option value="{{ cls.id }}" {% if request.form.get('part_class_id') == (cls.id|string) %}selected{% endif %}>{{ cls.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block md:col-span-2">
+          <span class="text-xs text-slate-600">Primary vendor</span>
+          <select name="primary_vendor" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option value="">No primary vendor</option>
+            {% for vendor in vendors %}
+            <option value="{{ vendor.name }}" {% if request.form.get('primary_vendor') == vendor.name %}selected{% endif %}>{{ vendor.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1 block md:col-span-2">
+          <span class="text-xs text-slate-600">Description / specification</span>
+          <textarea name="specifications" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2">{{ request.form.get('specifications','') }}</textarea>
+        </label>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit" class="px-5 py-2 rounded-lg btn-primary">Create part</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

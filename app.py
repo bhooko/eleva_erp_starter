@@ -11850,11 +11850,87 @@ def purchase_parts():
     ensure_bootstrap()
     records = Product.query.order_by(Product.name).all()
     vendors = Vendor.query.order_by(Vendor.name).all()
+    forecast_by_product = {product.id: _compute_product_forecast_qty(product) for product in records}
 
     return render_template(
         "purchase_parts.html",
         products=records,
         vendors=vendors,
+        forecast_by_product=forecast_by_product,
+    )
+
+
+@app.route("/purchase/parts/new", methods=["GET", "POST"])
+@login_required
+def purchase_part_new():
+    ensure_bootstrap()
+    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    part_classes = (
+        PartClass.query.filter(PartClass.active.is_(True))
+        .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
+        .all()
+    )
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        sku = (request.form.get("sku") or "").strip() or None
+        purchase_uom = (request.form.get("purchase_uom") or "").strip() or None
+        part_class_id_raw = (request.form.get("part_class_id") or "").strip()
+        primary_vendor = (request.form.get("primary_vendor") or "").strip() or None
+        specifications = (request.form.get("specifications") or "").strip() or None
+
+        errors = []
+        if not name:
+            errors.append("Part name is required.")
+        elif Product.query.filter(func.lower(Product.name) == name.lower()).first():
+            errors.append("Part name already exists.")
+
+        part_class_id = None
+        if part_class_id_raw:
+            try:
+                part_class_id = int(part_class_id_raw)
+            except ValueError:
+                errors.append("Select a valid part class.")
+
+        if sku and Product.query.filter(func.lower(Product.sku) == sku.lower()).first():
+            errors.append("Part code already exists.")
+
+        if errors:
+            for message in errors:
+                flash(message, "danger")
+            return render_template(
+                "purchase_part_new.html",
+                vendors=vendors,
+                uom_options=UOM_OPTIONS,
+                part_classes=part_classes,
+            )
+
+        product = Product(
+            name=name,
+            sku=sku,
+            purchase_uom=purchase_uom,
+            uom=purchase_uom,
+            part_class_id=part_class_id,
+            primary_vendor=primary_vendor,
+            specifications=specifications,
+            qty_on_hand=0,
+            forecast_qty=0,
+            is_active=True,
+        )
+        db.session.add(product)
+        db.session.flush()
+        if not product.sku:
+            _ensure_product_sku(product)
+        product.forecast_qty = _compute_product_forecast_qty(product)
+        db.session.commit()
+        flash("Part created.", "success")
+        return redirect(url_for("purchase_part_detail", product_id=product.id))
+
+    return render_template(
+        "purchase_part_new.html",
+        vendors=vendors,
+        uom_options=UOM_OPTIONS,
+        part_classes=part_classes,
     )
 
 
@@ -11864,6 +11940,11 @@ def purchase_part_detail(product_id):
     ensure_bootstrap()
     product = Product.query.get_or_404(product_id)
     vendors = Vendor.query.order_by(Vendor.name).all()
+    part_classes = (
+        PartClass.query.filter(PartClass.active.is_(True))
+        .order_by(PartClass.sort_order.asc(), PartClass.name.asc())
+        .all()
+    )
     vendor_names = []
     if product.primary_vendor:
         vendor_names.append(product.primary_vendor)
@@ -11898,20 +11979,81 @@ def purchase_part_detail(product_id):
             }
         )
 
+    forecast_qty = _compute_product_forecast_qty(product)
+    primary_vendor_cost = None
+    lower_price_offer = None
+    for row in rate_rows:
+        unit_price = row["rate"].unit_price if row.get("rate") else None
+        if unit_price is None:
+            continue
+        vendor_name = row["vendor_name"]
+        if vendor_name == product.primary_vendor:
+            primary_vendor_cost = float(unit_price)
+        elif primary_vendor_cost is not None and float(unit_price) < primary_vendor_cost:
+            if lower_price_offer is None or float(unit_price) < lower_price_offer["rate"]:
+                lower_price_offer = {"vendor_name": vendor_name, "rate": float(unit_price)}
+
     history_rows = (
         VendorProductRateHistory.query.filter_by(product_id=product.id)
         .order_by(VendorProductRateHistory.changed_at.desc())
         .all()
     )
+
+    month_labels = []
+    monthly_vendor_rates = {}
+    month_vendor_latest = {}
+    month_start = date.today().replace(day=1)
+    for i in range(11, -1, -1):
+        year = month_start.year
+        month = month_start.month - i
+        while month <= 0:
+            year -= 1
+            month += 12
+        while month > 12:
+            year += 1
+            month -= 12
+        key = f"{year:04d}-{month:02d}"
+        month_labels.append(key)
+
+    for row in sorted(history_rows, key=lambda x: x.changed_at or datetime.datetime.min):
+        if not row.vendor or row.new_unit_price is None or not row.changed_at:
+            continue
+        month_key = row.changed_at.strftime("%Y-%m")
+        if month_key not in month_labels:
+            continue
+        month_vendor_latest[(month_key, row.vendor.name)] = float(row.new_unit_price)
+
+    vendor_series_names = sorted({vendor_name for _, vendor_name in month_vendor_latest.keys()})
+    for vendor_name in vendor_series_names:
+        points = []
+        has_any = False
+        for label in month_labels:
+            value = month_vendor_latest.get((label, vendor_name))
+            points.append(value if value is not None else None)
+            if value is not None:
+                has_any = True
+        if has_any:
+            monthly_vendor_rates[vendor_name] = points
+
+    trend_chart = {
+        "labels": month_labels,
+        "series": [{"label": name, "data": data} for name, data in monthly_vendor_rates.items()],
+    }
+
     recent_history = history_rows[:10]
     return render_template(
         "purchase_part_detail.html",
         product=product,
         vendors=vendors,
+        part_classes=part_classes,
         uom_options=UOM_OPTIONS,
         vendor_rates=rate_rows,
         recent_rate_history=recent_history,
         all_rate_history=history_rows,
+        trend_chart=trend_chart,
+        primary_vendor_cost=primary_vendor_cost,
+        lower_price_offer=lower_price_offer,
+        computed_forecast_qty=forecast_qty,
     )
 
 
@@ -11941,20 +12083,13 @@ def purchase_parts_update(product_id):
     specifications = (request.form.get("specifications") or "").strip() or None
     notes = (request.form.get("notes") or "").strip() or None
 
-    sale_price, sale_error = parse_float_field(
-        request.form.get("sale_price"), "Sale price"
-    )
-    cost, cost_error = parse_float_field(request.form.get("cost"), "Cost")
     qty_on_hand, stock_error = parse_float_field(
         request.form.get("qty_on_hand"), "Qty on hand"
-    )
-    forecast_qty, forecast_error = parse_float_field(
-        request.form.get("forecast_qty"), "Forecast Qty"
     )
 
     errors = [
         message
-        for message in [sale_error, cost_error, stock_error, forecast_error]
+        for message in [stock_error]
         if message
     ]
 
@@ -11967,19 +12102,26 @@ def purchase_parts_update(product_id):
         return redirect(url_for("purchase_part_detail", product_id=product.id))
 
     product.name = name
-    product.sale_price = sale_price
-    product.cost = cost
     selected_uom = (request.form.get("purchase_uom") or "").strip() or None
+    part_class_id_raw = (request.form.get("part_class_id") or "").strip()
+    part_class_id = None
+    if part_class_id_raw:
+        try:
+            part_class_id = int(part_class_id_raw)
+        except ValueError:
+            flash("Invalid part class selected.", "danger")
+            return redirect(url_for("purchase_part_detail", product_id=product.id))
+    product.part_class_id = part_class_id
     product.purchase_uom = selected_uom
     product.uom = selected_uom
     product.qty_on_hand = qty_on_hand or 0
-    product.forecast_qty = forecast_qty or 0
     product.is_favorite = request.form.get("is_favorite") == "on"
     product.is_active = request.form.get("is_active") == "on"
     product.primary_vendor = primary_vendor
     product.linked_vendors = linked_vendors_value
     product.specifications = specifications
     product.notes = notes
+    product.forecast_qty = _compute_product_forecast_qty(product)
 
     try:
         db.session.commit()
@@ -12058,6 +12200,19 @@ def purchase_part_rate_update(product_id):
             changed_by=current_user.display_name,
         )
         db.session.add(history)
+
+    primary_rate = None
+    if product.primary_vendor:
+        primary_vendor = Vendor.query.filter(func.lower(Vendor.name) == product.primary_vendor.lower()).first()
+        if primary_vendor:
+            primary_rate_row = VendorProductRate.query.filter_by(
+                vendor_id=primary_vendor.id,
+                product_id=product.id,
+            ).first()
+            if primary_rate_row and primary_rate_row.unit_price is not None:
+                primary_rate = float(primary_rate_row.unit_price)
+    product.cost = primary_rate
+    product.forecast_qty = _compute_product_forecast_qty(product)
 
     try:
         db.session.commit()
@@ -13045,6 +13200,113 @@ VENDOR_ATTACHMENT_ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "xlsx", "do
 UOM_OPTIONS = ["Nos", "Set", "Pair", "Meter", "MM", "Kg", "Litre", "Box", "Roll", "SqFt"]
 
 
+def _financial_year_windows(reference_date=None):
+    today = reference_date or date.today()
+    if today.month >= 4:
+        current_start = date(today.year, 4, 1)
+    else:
+        current_start = date(today.year - 1, 4, 1)
+    current_end = date(current_start.year + 1, 4, 1)
+    previous_start = date(current_start.year - 1, 4, 1)
+    previous_end = current_start
+    return current_start, current_end, previous_start, previous_end
+
+
+def _po_financial_value(po):
+    if po.grand_total_amount is not None:
+        return float(po.grand_total_amount or 0)
+    if po.subtotal_amount is not None:
+        return float(po.subtotal_amount or 0)
+    return sum(float(item.total_amount or 0) for item in (po.items or []))
+
+
+def _vendor_fy_purchase_summary(vendor_id: int):
+    current_start, current_end, previous_start, previous_end = _financial_year_windows()
+    valid_statuses = {"issued", "closed"}
+    vendor_pos = (
+        PurchaseOrder.query.options(joinedload(PurchaseOrder.items))
+        .filter(PurchaseOrder.vendor_id == vendor_id)
+        .all()
+    )
+
+    current_total = 0.0
+    previous_total = 0.0
+    for po in vendor_pos:
+        normalized_status = _normalize_po_status(po.status).lower()
+        if normalized_status not in valid_statuses:
+            continue
+        po_date = po.po_date or po.order_date
+        if not po_date:
+            continue
+        po_total = _po_financial_value(po)
+        if current_start <= po_date < current_end:
+            current_total += po_total
+        elif previous_start <= po_date < previous_end:
+            previous_total += po_total
+
+    yoy_percent = None
+    yoy_label = "No activity"
+    yoy_tone = "neutral"
+    if previous_total > 0:
+        yoy_percent = ((current_total - previous_total) / previous_total) * 100
+        yoy_tone = "up" if yoy_percent > 0 else "down" if yoy_percent < 0 else "neutral"
+        yoy_label = f"{yoy_percent:+.1f}%"
+    elif current_total > 0:
+        yoy_label = "New this FY"
+        yoy_tone = "up"
+
+    return {
+        "current_total": current_total,
+        "previous_total": previous_total,
+        "current_start": current_start,
+        "current_end": current_end,
+        "previous_start": previous_start,
+        "previous_end": previous_end,
+        "yoy_percent": yoy_percent,
+        "yoy_label": yoy_label,
+        "yoy_tone": yoy_tone,
+    }
+
+
+def _compute_product_forecast_qty(product: Product) -> float:
+    book_qty = float(product.qty_on_hand or 0)
+    outstanding_rows = (
+        db.session.query(
+            func.coalesce(func.sum(PurchaseOrderItem.quantity_ordered), 0.0).label("ordered_qty"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (InventoryReceipt.status == "Closed", InventoryReceiptItem.quantity_received),
+                        else_=0.0,
+                    )
+                ),
+                0.0,
+            ).label("received_qty"),
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .outerjoin(
+            InventoryReceiptItem,
+            InventoryReceiptItem.purchase_order_item_id == PurchaseOrderItem.id,
+        )
+        .outerjoin(
+            InventoryReceipt,
+            InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id,
+        )
+        .filter(
+            or_(PurchaseOrderItem.product_id == product.id, PurchaseOrderItem.part_id == product.id),
+            func.lower(PurchaseOrder.status).in_(["issued", "closed"]),
+        )
+        .group_by(PurchaseOrderItem.id)
+        .all()
+    )
+    pending_qty = 0.0
+    for row in outstanding_rows:
+        ordered = float(row.ordered_qty or 0)
+        received = float(row.received_qty or 0)
+        pending_qty += max(0.0, ordered - received)
+    return book_qty + pending_qty
+
+
 def _normalize_po_status(raw_status):
     cleaned = (raw_status or "").strip()
     lowered = cleaned.lower()
@@ -13330,14 +13592,7 @@ def purchase_vendor_detail(vendor_id: int):
         .all()
     )
 
-    def _po_total(po):
-        if po.grand_total_amount is not None:
-            return float(po.grand_total_amount or 0)
-        if po.subtotal_amount is not None:
-            return float(po.subtotal_amount or 0)
-        return sum(float(item.total_amount or 0) for item in (po.items or []))
-
-    po_totals = {po.id: _po_total(po) for po in purchase_orders}
+    po_totals = {po.id: _po_financial_value(po) for po in purchase_orders}
     open_po_value = sum(
         po_totals.get(po.id, 0)
         for po in purchase_orders
@@ -13361,6 +13616,8 @@ def purchase_vendor_detail(vendor_id: int):
             and _normalize_po_status(po.status) != "Cancelled"
         ]
 
+    fy_purchase_summary = _vendor_fy_purchase_summary(vendor.id)
+
     products = Product.query.order_by(Product.name.asc()).all()
     return render_template(
         "purchase_vendor_detail.html",
@@ -13374,6 +13631,7 @@ def purchase_vendor_detail(vendor_id: int):
         attachments=attachments,
         active_tab=tab,
         unresolved_issue_count_by_product=unresolved_issue_count_by_product,
+        fy_purchase_summary=fy_purchase_summary,
     )
 
 

@@ -52,6 +52,25 @@
     </div>
   </section>
 
+  <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <p class="text-xs uppercase text-slate-500">Purchase performance</p>
+    <h2 class="text-lg font-semibold">Financial year summary</h2>
+    <div class="mt-4 grid md:grid-cols-3 gap-4 text-sm">
+      <div class="rounded-xl border border-slate-200 p-4">
+        <p class="text-xs uppercase text-slate-500">Current FY purchases</p>
+        <p class="text-lg font-semibold text-slate-800">₹{{ '%.2f'|format(fy_purchase_summary.current_total) }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 p-4">
+        <p class="text-xs uppercase text-slate-500">Previous FY purchases</p>
+        <p class="text-lg font-semibold text-slate-800">₹{{ '%.2f'|format(fy_purchase_summary.previous_total) }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 p-4">
+        <p class="text-xs uppercase text-slate-500">YoY movement</p>
+        <p class="text-lg font-semibold {{ 'text-emerald-700' if fy_purchase_summary.yoy_tone == 'up' else 'text-rose-700' if fy_purchase_summary.yoy_tone == 'down' else 'text-slate-700' }}">{{ fy_purchase_summary.yoy_label }}</p>
+      </div>
+    </div>
+  </section>
+
   <div class="relative">
     <input type="checkbox" id="edit-vendor-modal" class="hidden peer">
     <div class="fixed inset-0 z-50 hidden peer-checked:block">
