@@ -9848,19 +9848,34 @@ def download_drawing_revision(revision_id: int):
     )
 
 
-def _build_purchase_bom_options(limit: int = 300):
-    """PO BOM dropdown choices: latest BOM per drawing+package, excluding empty BOMs."""
+def _build_purchase_bom_options(limit: int = 300, project_id: int | None = None):
+    """PO BOM dropdown choices: latest BOM per project+drawing+package, excluding empty BOMs."""
 
     candidate_boms = (
         BillOfMaterials.query.options(
             joinedload(BillOfMaterials.items).joinedload(BOMItem.bom_package),
             joinedload(BillOfMaterials.packages),
             joinedload(BillOfMaterials.drawing_site),
+            joinedload(BillOfMaterials.project),
         )
         .order_by(BillOfMaterials.id.desc())
         .limit(limit)
         .all()
     )
+
+    selected_project_id = None
+    if project_id not in (None, ""):
+        try:
+            selected_project_id = int(project_id)
+        except (TypeError, ValueError):
+            selected_project_id = None
+
+    def _resolved_project_id(bom):
+        if bom.project_id:
+            return bom.project_id
+        if bom.drawing_site and bom.drawing_site.project_id:
+            return bom.drawing_site.project_id
+        return None
 
     def _latest_rank(bom):
         return (
@@ -9871,12 +9886,17 @@ def _build_purchase_bom_options(limit: int = 300):
 
     latest_by_group = {}
     for bom in candidate_boms:
-        if not bom.items:
+        bom_project_id = _resolved_project_id(bom)
+        if selected_project_id and bom_project_id != selected_project_id:
+            continue
+
+        valid_items = [item for item in (bom.items or []) if (item.quantity_required or 0) > 0]
+        if not valid_items:
             continue
 
         package_names = {
             (item.bom_package.name or "").strip()
-            for item in bom.items
+            for item in valid_items
             if item.bom_package and (item.bom_package.name or "").strip()
         }
         if not package_names:
@@ -9885,62 +9905,56 @@ def _build_purchase_bom_options(limit: int = 300):
                 for package in (bom.packages or [])
                 if (package.name or "").strip()
             }
-        package_key = " | ".join(sorted(package_names)) if package_names else "Main Lift BOM"
-
+        package_labels = sorted(package_names) if package_names else ["Main Lift BOM"]
         drawing_key = bom.drawing_site_id or f"design-task:{bom.design_task_id or 0}"
-        group_key = (drawing_key, package_key)
-        existing = latest_by_group.get(group_key)
-        if existing is None or _latest_rank(bom) > _latest_rank(existing):
-            latest_by_group[group_key] = bom
+
+        for package_label in package_labels:
+            group_key = (
+                bom_project_id or 0,
+                drawing_key,
+                (bom.bom_type or "main").strip().lower(),
+                package_label.strip().lower(),
+            )
+            existing = latest_by_group.get(group_key)
+            if existing is None or _latest_rank(bom) > _latest_rank(existing["bom"]):
+                latest_by_group[group_key] = {"bom": bom, "package_label": package_label}
 
     grouped_latest_boms = sorted(
         latest_by_group.values(),
-        key=lambda bom: (
+        key=lambda entry: (
             (
-                (bom.drawing_site.latest_drawing_number or "").strip()
-                if bom.drawing_site
+                (entry["bom"].drawing_site.latest_drawing_number or "").strip()
+                if entry["bom"].drawing_site
                 else ""
             ).lower(),
-            bom.created_at or datetime.datetime.min,
-            bom.id or 0,
+            entry["bom"].created_at or datetime.datetime.min,
+            entry["bom"].id or 0,
         ),
         reverse=True,
     )
 
     options = []
-    for bom in grouped_latest_boms:
-        package_names = {
-            (item.bom_package.name or "").strip()
-            for item in bom.items
-            if item.bom_package and (item.bom_package.name or "").strip()
-        }
-        if not package_names:
-            package_names = {
-                (package.name or "").strip()
-                for package in (bom.packages or [])
-                if (package.name or "").strip()
-            }
-        package_label = " | ".join(sorted(package_names)) if package_names else "Main Lift BOM"
+    for entry in grouped_latest_boms:
+        bom = entry["bom"]
+        package_label = entry["package_label"]
+        resolved_project_id = _resolved_project_id(bom)
 
         drawing_site = bom.drawing_site
-        drawing_label = "—"
-        if drawing_site:
-            drawing_label = (
-                (drawing_site.latest_drawing_number or "").strip()
-                or (drawing_site.project_no or "").strip()
-                or (drawing_site.lift_identifier or "").strip()
-                or (drawing_site.site_location or "").strip()
-                or f"Site {drawing_site.id}"
-            )
+        project_name = "—"
+        if bom.project and (bom.project.name or "").strip():
+            project_name = (bom.project.name or "").strip()
+        elif drawing_site and drawing_site.project and (drawing_site.project.name or "").strip():
+            project_name = (drawing_site.project.name or "").strip()
 
-        bom_name = (bom.bom_name or "").strip() or f"BOM ID {bom.id}"
+        revision_label = f"Rev {bom.revision_number}" if bom.revision_number is not None else ""
         date_label = bom.created_at.strftime("%d-%b-%Y") if bom.created_at else "—"
+        rev_or_date = f"{date_label} | {revision_label}" if revision_label else date_label
         options.append(
             {
                 "id": bom.id,
+                "project_id": resolved_project_id,
                 "label": (
-                    f"{bom_name} | Drawing: {drawing_label} | "
-                    f"Package: {package_label} | Date: {date_label} | ID {bom.id}"
+                    f"{project_name} | {package_label} | {rev_or_date} | ID {bom.id}"
                 ),
             }
         )
@@ -10038,6 +10052,13 @@ def purchase_orders():
             po_date = date.today()
         if not expected_delivery_date:
             expected_delivery_date = po_date + datetime.timedelta(days=15)
+
+        if not vendor_id:
+            flash("Vendor is required.", "danger")
+            redirect_kwargs = {}
+            if project_id:
+                redirect_kwargs["project_id"] = project_id
+            return redirect(url_for("purchase_orders", **redirect_kwargs))
 
         po = PurchaseOrder(
             po_number=po_number,
@@ -10191,7 +10212,11 @@ def purchase_orders():
                 }
             )
 
-        if bom_id_raw and bom_apply_mode in {"replace", "add"}:
+        has_source_bom_rows = any(
+            row.get("source_bom_line_id") for row in combined_rows
+        )
+
+        if bom_id_raw and bom_apply_mode in {"replace", "add"} and not has_source_bom_rows:
             bom_items = (
                 BOMItem.query.options(joinedload(BOMItem.part_class))
                 .filter(BOMItem.bom_id == int(bom_id_raw))
@@ -10334,7 +10359,8 @@ def purchase_orders():
     vendors = Vendor.query.order_by(Vendor.name).all()
     projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
-    bom_options = _build_purchase_bom_options()
+    selected_project_id = request.args.get("project_id", type=int)
+    bom_options = _build_purchase_bom_options(project_id=selected_project_id)
     next_po_number = _next_po_number()
 
     return render_template(
@@ -10342,6 +10368,7 @@ def purchase_orders():
         pos=pos,
         vendors=vendors,
         projects=projects,
+        selected_project_id=selected_project_id,
         bom_items=bom_items,
         bom_options=bom_options,
         next_po_number=next_po_number,
@@ -10357,6 +10384,7 @@ def purchase_bom_po_lines_preview(bom_id: int):
         vendor_id = int(vendor_id_raw)
     except (TypeError, ValueError):
         vendor_id = None
+    project_id = request.args.get("project_id", type=int)
 
     vendor_linked_part_ids = None
     if vendor_id:
@@ -10370,6 +10398,9 @@ def purchase_bom_po_lines_preview(bom_id: int):
         }
 
     bom = BillOfMaterials.query.get_or_404(bom_id)
+    resolved_bom_project_id = bom.project_id or (bom.drawing_site.project_id if bom.drawing_site else None)
+    if project_id and resolved_bom_project_id != project_id:
+        return jsonify({"bom_id": bom.id, "lines": []})
     bom_items = (
         BOMItem.query.options(joinedload(BOMItem.part_class))
         .filter(BOMItem.bom_id == bom.id)
