@@ -38,14 +38,14 @@
             </label>
             <label class="space-y-1">
               <span class="text-sm">Project</span>
-              <select name="project_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+              <select name="project_id" class="w-full rounded-lg border-slate-200 h-10 px-3" data-project-select>
                 <option value="">—</option>
-                {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+                {% for project in projects %}<option value="{{ project.id }}" {% if selected_project_id and selected_project_id == project.id %}selected{% endif %}>{{ project.name }}</option>{% endfor %}
               </select>
             </label>
             <label class="space-y-1">
-              <span class="text-sm">Vendor</span>
-              <select name="vendor_id" class="w-full rounded-lg border-slate-200 h-10 px-3">
+              <span class="text-sm">Vendor <span class="text-rose-600">*</span></span>
+              <select name="vendor_id" class="w-full rounded-lg border-slate-200 h-10 px-3" required>
                 <option value="">—</option>
                 {% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.name }}</option>{% endfor %}
               </select>
@@ -61,9 +61,9 @@
             <label class="space-y-1 md:col-span-3">
               <span class="text-sm">Linked BOM</span>
               <select name="bom_id" class="w-full rounded-lg border-slate-200 h-10 px-3" data-bom-select>
-                <option value="">—</option>
+                <option value="">Select project first</option>
                 {% for bom in bom_options %}
-                <option value="{{ bom.id }}">{{ bom.label }}</option>
+                <option value="{{ bom.id }}" data-project-id="{{ bom.project_id or '' }}">{{ bom.label }}</option>
                 {% endfor %}
               </select>
               <p class="text-xs text-slate-500">Selecting a BOM opens an apply mode dialog (Replace/Add). BOM specifications are copied as read-only.</p>
@@ -400,12 +400,20 @@
     const discountDisplay = form.querySelector('[data-discount-display]');
     const gstDisplay = form.querySelector('[data-gst-display]');
     const vendorSelect = form.querySelector('[name="vendor_id"]');
+    const projectSelect = form.querySelector('[data-project-select]');
     const bomSelect = form.querySelector('[data-bom-select]');
     const bomApplyModeInput = form.querySelector('[data-bom-apply-mode]');
     const applyBomModal = document.getElementById('apply-bom-modal');
     const applyBomError = applyBomModal ? applyBomModal.querySelector('[data-apply-bom-error]') : null;
     const formAlert = form.querySelector('[data-po-form-alert]');
     const csrfToken = '{{ csrf_token() }}';
+    const allBomOptions = bomSelect
+      ? Array.from(bomSelect.querySelectorAll('option[value]')).slice(1).map((option) => ({
+          value: option.value,
+          label: option.textContent,
+          projectId: (option.dataset.projectId || '').trim(),
+        }))
+      : [];
 
     let lastAutoExpected = '';
     let autoUpdateExpected = true;
@@ -717,6 +725,46 @@
       }
       formAlert.textContent = message;
       formAlert.classList.remove('hidden');
+    };
+
+    const refreshBomOptionsByProject = () => {
+      if (!bomSelect) {
+        return;
+      }
+      const projectId = projectSelect ? projectSelect.value : '';
+      const currentBomId = bomSelect.value;
+      bomSelect.innerHTML = '';
+
+      const placeholder = document.createElement('option');
+      if (!projectId) {
+        placeholder.value = '';
+        placeholder.textContent = 'Select project first';
+        bomSelect.appendChild(placeholder);
+        return;
+      }
+
+      placeholder.value = '';
+      placeholder.textContent = '—';
+      bomSelect.appendChild(placeholder);
+
+      const filtered = allBomOptions.filter((option) => option.projectId === projectId);
+      filtered.forEach((optionData) => {
+        const option = document.createElement('option');
+        option.value = optionData.value;
+        option.textContent = optionData.label;
+        option.dataset.projectId = optionData.projectId;
+        if (currentBomId && currentBomId === optionData.value) {
+          option.selected = true;
+        }
+        bomSelect.appendChild(option);
+      });
+
+      if (!filtered.length) {
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'No BOM available for selected project';
+        bomSelect.appendChild(emptyOption);
+      }
     };
 
     const searchTimers = new WeakMap();
@@ -1151,8 +1199,16 @@
 
     const applyBomLinesToRows = async (bomId, mode) => {
       const vendorId = vendorSelect ? vendorSelect.value : '';
-      const vendorParam = vendorId ? `?vendor_id=${encodeURIComponent(vendorId)}` : '';
-      const response = await fetch(`/purchase/bom/${bomId}/po-lines-preview${vendorParam}`, {
+      const projectId = projectSelect ? projectSelect.value : '';
+      const query = new URLSearchParams();
+      if (vendorId) {
+        query.set('vendor_id', vendorId);
+      }
+      if (projectId) {
+        query.set('project_id', projectId);
+      }
+      const queryText = query.toString();
+      const response = await fetch(`/purchase/bom/${bomId}/po-lines-preview${queryText ? `?${queryText}` : ''}`, {
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
@@ -1188,6 +1244,7 @@
     };
 
     if (bomSelect) {
+      refreshBomOptionsByProject();
       bomSelect.addEventListener('change', () => {
         if (!bomSelect.value) {
           if (bomApplyModeInput) {
@@ -1196,6 +1253,15 @@
           return;
         }
         openApplyBomModal(bomSelect.value);
+      });
+    }
+
+    if (projectSelect) {
+      projectSelect.addEventListener('change', () => {
+        refreshBomOptionsByProject();
+        if (bomApplyModeInput) {
+          bomApplyModeInput.value = '';
+        }
       });
     }
 
