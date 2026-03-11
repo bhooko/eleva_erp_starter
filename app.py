@@ -209,12 +209,7 @@ def _parse_bool_payload(value, *, default=False):
 
 
 def _part_class_payload(part_class):
-    primary_part_name = None
-    if getattr(part_class, "primary_part_id", None):
-        primary_part = Product.query.get(part_class.primary_part_id)
-        if primary_part:
-            primary_part_name = _product_option_label(primary_part)
-
+    effective_primary_part = _effective_primary_part_for_class(part_class)
     return {
         "id": part_class.id,
         "name": part_class.name,
@@ -222,8 +217,8 @@ def _part_class_payload(part_class):
         "is_active": bool(part_class.active),
         "sort_order": part_class.sort_order or 0,
         "associated_sections": _parse_associated_sections(part_class.associated_sections),
-        "primary_part_id": part_class.primary_part_id,
-        "primary_part_name": primary_part_name,
+        "primary_part_id": effective_primary_part.id if effective_primary_part else None,
+        "primary_part_name": _product_option_label(effective_primary_part) if effective_primary_part else None,
     }
 
 
@@ -253,6 +248,26 @@ def _product_option_label(product):
     if unit:
         return f"{product.name} ({unit})"
     return product.name
+
+
+def _latest_mapped_part_for_class(class_id):
+    if not class_id:
+        return None
+    return (
+        Product.query.filter(Product.part_class_id == class_id)
+        .order_by(Product.updated_at.desc(), Product.id.desc())
+        .first()
+    )
+
+
+def _effective_primary_part_for_class(part_class):
+    if not part_class:
+        return None
+    if getattr(part_class, "primary_part_id", None):
+        explicit_part = Product.query.get(part_class.primary_part_id)
+        if explicit_part:
+            return explicit_part
+    return _latest_mapped_part_for_class(part_class.id)
 
 
 def _parse_associated_sections(raw_value) -> List[str]:
@@ -286,6 +301,40 @@ def _part_class_name_exists(name, *, exclude_id=None):
     if exclude_id is not None:
         query = query.filter(PartClass.id != exclude_id)
     return db.session.query(query.exists()).scalar()
+
+
+def _is_primary_part_allowed_for_class(product, class_id=None):
+    if not product:
+        return False
+    if class_id is None:
+        return product.part_class_id is None
+    return product.part_class_id is None or product.part_class_id == class_id
+
+
+def _primary_part_search_query(*, class_id=None, selected_part_id=None, term=None):
+    query = Product.query
+    if class_id is None:
+        query = query.filter(Product.part_class_id.is_(None))
+    else:
+        query = query.filter(
+            or_(
+                Product.part_class_id.is_(None),
+                Product.part_class_id == class_id,
+            )
+        )
+
+    query = query.filter(
+        or_(
+            Product.is_active.is_(True),
+            Product.id == selected_part_id,
+        )
+    )
+
+    if term:
+        like = f"%{term.lower()}%"
+        query = query.filter(func.lower(Product.name).like(like))
+
+    return query.order_by(Product.name.asc(), Product.id.asc())
 
 
 def _get_sqlite_db_path() -> Optional[str]:
@@ -8800,12 +8849,14 @@ def part_classes():
         .all()
     )
     parts_lookup = {part.id: part for part in parts}
-    primary_part_labels = {
-        part_class.id: _product_option_label(parts_lookup.get(part_class.primary_part_id))
-        if part_class.primary_part_id
-        else None
-        for part_class in part_classes
-    }
+    primary_part_labels = {}
+    for part_class in part_classes:
+        label = None
+        if part_class.primary_part_id:
+            label = _product_option_label(parts_lookup.get(part_class.primary_part_id))
+        if not label:
+            label = _product_option_label(_latest_mapped_part_for_class(part_class.id)) or None
+        primary_part_labels[part_class.id] = label
     section_rows = (
         db.session.query(BomTemplateSection, BomTemplateStage, BomTemplate)
         .join(BomTemplateStage, BomTemplateSection.stage_id == BomTemplateStage.id)
@@ -8843,6 +8894,59 @@ def get_part_class(class_id):
     return jsonify(_part_class_payload(part_class))
 
 
+@app.route("/api/part_classes/<int:class_id>/primary-parts", methods=["GET"])
+@login_required
+def part_class_primary_parts(class_id):
+    _module_visibility_required("design")
+    part_class = PartClass.query.get_or_404(class_id)
+    query = (request.args.get("q") or "").strip()
+    limit_raw = request.args.get("limit") or "100"
+    try:
+        limit = max(1, min(int(limit_raw), 200))
+    except (TypeError, ValueError):
+        limit = 100
+
+    effective_primary_part = _effective_primary_part_for_class(part_class)
+    selected_part_id = effective_primary_part.id if effective_primary_part else None
+
+    parts = _primary_part_search_query(
+        class_id=part_class.id,
+        selected_part_id=selected_part_id,
+        term=query or None,
+    ).limit(limit).all()
+
+    payload = [
+        {
+            "id": part.id,
+            "label": _product_option_label(part),
+        }
+        for part in parts
+    ]
+    return jsonify(payload)
+
+
+@app.route("/api/part_classes/primary-parts", methods=["GET"])
+@login_required
+def part_class_primary_parts_for_create():
+    _module_visibility_required("design")
+    query = (request.args.get("q") or "").strip()
+    limit_raw = request.args.get("limit") or "100"
+    try:
+        limit = max(1, min(int(limit_raw), 200))
+    except (TypeError, ValueError):
+        limit = 100
+
+    parts = _primary_part_search_query(class_id=None, term=query or None).limit(limit).all()
+    payload = [
+        {
+            "id": part.id,
+            "label": _product_option_label(part),
+        }
+        for part in parts
+    ]
+    return jsonify(payload)
+
+
 @app.route("/api/part_classes/<int:class_id>/update", methods=["POST"])
 @login_required
 def update_part_class(class_id):
@@ -8871,8 +8975,13 @@ def update_part_class(class_id):
     if _part_class_name_exists(name, exclude_id=part_class.id):
         return jsonify({"error": "Part Class name must be unique."}), 400
 
-    if primary_part_id and not Product.query.get(primary_part_id):
-        return jsonify({"error": "Selected primary part was not found."}), 400
+    primary_part = None
+    if primary_part_id:
+        primary_part = Product.query.get(primary_part_id)
+        if not primary_part:
+            return jsonify({"error": "Selected primary part was not found."}), 400
+        if not _is_primary_part_allowed_for_class(primary_part, part_class.id):
+            return jsonify({"error": "Selected primary part belongs to another part class."}), 400
 
     part_class.name = name
     part_class.description = description
@@ -8903,8 +9012,12 @@ def create_part_class_api():
         return jsonify({"error": "Class name must be at least 2 characters."}), 400
     if _part_class_name_exists(name):
         return jsonify({"error": "Part Class name must be unique."}), 400
-    if primary_part_id and not Product.query.get(primary_part_id):
-        return jsonify({"error": "Selected primary part was not found."}), 400
+    if primary_part_id:
+        primary_part = Product.query.get(primary_part_id)
+        if not primary_part:
+            return jsonify({"error": "Selected primary part was not found."}), 400
+        if not _is_primary_part_allowed_for_class(primary_part, None):
+            return jsonify({"error": "Selected primary part belongs to another part class."}), 400
 
     part_class = PartClass(
         name=name,
