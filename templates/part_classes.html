@@ -99,9 +99,6 @@
           <input id="primaryPartSearchInput" type="text" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" placeholder="Search parts" />
           <select id="classPrimaryPartInput" class="w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/70 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-400 focus:outline-none">
             <option value="">— None —</option>
-            {% for part in parts %}
-              <option value="{{ part.id }}">{{ part.name }}{% if part.uom or part.purchase_uom %} ({{ part.uom or part.purchase_uom }}){% endif %}</option>
-            {% endfor %}
           </select>
         </div>
         <div class="space-y-2">
@@ -221,9 +218,8 @@
       classDescriptionInput.value = '';
       classSortInput.value = '0';
       setSectionSelections([]);
-      classPrimaryPartInput.value = '';
       primaryPartSearchInput.value = '';
-      filterPrimaryPartOptions('');
+      await loadPrimaryPartOptions({ mode: 'create' });
       setActiveButton(true);
       setModalVisibility(true);
       classNameInput.focus();
@@ -241,9 +237,13 @@
     classDescriptionInput.value = data.description || '';
     classSortInput.value = data.sort_order ?? 0;
     setSectionSelections(data.associated_sections || []);
-    classPrimaryPartInput.value = data.primary_part_id || '';
     primaryPartSearchInput.value = '';
-    filterPrimaryPartOptions('');
+    await loadPrimaryPartOptions({
+      mode: 'edit',
+      classId: id,
+      selectedPartId: data.primary_part_id || null,
+      selectedPartName: data.primary_part_name || ''
+    });
     setActiveButton(!!data.is_active);
     setModalVisibility(true);
     classNameInput.focus();
@@ -361,6 +361,47 @@
       return a.dataset.name.localeCompare(b.dataset.name);
     });
     rows.forEach((row) => classesBody.appendChild(row));
+  };
+
+  const ensurePrimaryPartOption = (id, label) => {
+    const normalizedId = id ? String(id) : '';
+    if (!normalizedId) return;
+    let option = Array.from(classPrimaryPartInput.options).find((item) => item.value === normalizedId);
+    if (!option) {
+      option = document.createElement('option');
+      option.value = normalizedId;
+      option.textContent = label || normalizedId;
+      classPrimaryPartInput.appendChild(option);
+    } else if (label) {
+      option.textContent = label;
+    }
+  };
+
+  const loadPrimaryPartOptions = async ({ mode, classId = null, selectedPartId = null, selectedPartName = '' } = {}) => {
+    const endpoint = mode === 'edit'
+      ? `/api/part_classes/${classId}/primary-parts`
+      : '/api/part_classes/primary-parts';
+
+    classPrimaryPartInput.innerHTML = '<option value="">— None —</option>';
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error('Failed to load primary parts');
+      }
+      const options = await response.json();
+      options.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = item.label;
+        classPrimaryPartInput.appendChild(option);
+      });
+    } catch (error) {
+      console.error(error);
+    }
+
+    ensurePrimaryPartOption(selectedPartId, selectedPartName);
+    classPrimaryPartInput.value = selectedPartId ? String(selectedPartId) : '';
+    filterPrimaryPartOptions(primaryPartSearchInput.value);
   };
 
 
