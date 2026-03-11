@@ -12666,15 +12666,7 @@ def purchase_parts_update(product_id):
     specifications = (request.form.get("specifications") or "").strip() or None
     notes = (request.form.get("notes") or "").strip() or None
 
-    qty_on_hand, stock_error = parse_float_field(
-        request.form.get("qty_on_hand"), "Qty on hand"
-    )
-
-    errors = [
-        message
-        for message in [stock_error]
-        if message
-    ]
+    errors = []
 
     if not name:
         errors.append("Part name is required.")
@@ -12697,7 +12689,6 @@ def purchase_parts_update(product_id):
     product.part_class_id = part_class_id
     product.purchase_uom = selected_uom
     product.uom = selected_uom
-    product.qty_on_hand = qty_on_hand or 0
     product.is_favorite = request.form.get("is_favorite") == "on"
     product.is_active = request.form.get("is_active") == "on"
     product.primary_vendor = primary_vendor

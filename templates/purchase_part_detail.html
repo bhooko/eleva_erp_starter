@@ -88,7 +88,7 @@
         </label>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Qty on hand</span>
-          <input name="qty_on_hand" type="number" step="0.01" value="{{ product.qty_on_hand or '' }}" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+          <input type="number" step="0.01" value="{{ product.qty_on_hand or 0 }}" readonly class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" />
         </label>
         <label class="space-y-1 block">
           <span class="text-xs text-slate-600">Forecast qty</span>
