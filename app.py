@@ -10000,13 +10000,20 @@ def get_bom_procurement_plan(bom_id, package_id=None):
         bom_items_query = bom_items_query.filter(BOMItem.bom_package_id.in_(package_ids))
     bom_items = bom_items_query.order_by(BOMItem.id.asc()).all()
 
-    part_ids = sorted(
-        {
-            int(item.suggested_part_id)
-            for item in bom_items
-            if item.suggested_part_id not in (None, "")
-        }
-    )
+    line_resolved_part_ids = {}
+    resolved_part_ids = set()
+    for item in bom_items:
+        if item.suggested_part_id:
+            resolved_part_id = int(item.suggested_part_id)
+        elif item.part_class and item.part_class.primary_part_id:
+            resolved_part_id = int(item.part_class.primary_part_id)
+        else:
+            resolved_part_id = None
+        line_resolved_part_ids[item.id] = resolved_part_id
+        if resolved_part_id is not None:
+            resolved_part_ids.add(resolved_part_id)
+
+    part_ids = sorted(resolved_part_ids)
     part_map = {}
     if part_ids:
         part_map = {
@@ -10033,7 +10040,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
     line_map = {item.id: item for item in bom_items}
     line_vendor_ids = {}
     for item in bom_items:
-        primary_vendor = _resolve_primary_vendor_for_part(part_map.get(item.suggested_part_id), vendor_by_name)
+        primary_vendor = _resolve_primary_vendor_for_part(part_map.get(line_resolved_part_ids.get(item.id)), vendor_by_name)
         line_vendor_ids[item.id] = primary_vendor.id if primary_vendor else None
 
     # Ordered-qty matching priority (strict to conservative):
@@ -10075,8 +10082,9 @@ def get_bom_procurement_plan(bom_id, package_id=None):
 
     lines_by_part = defaultdict(list)
     for item in bom_items:
-        if item.suggested_part_id:
-            lines_by_part[int(item.suggested_part_id)].append(item)
+        resolved_part_id = line_resolved_part_ids.get(item.id)
+        if resolved_part_id is not None:
+            lines_by_part[resolved_part_id].append(item)
 
     allocated_bom_linked_qty = defaultdict(float)
     for part_id, qty_pool in bom_linked_part_pools.items():
@@ -10134,7 +10142,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             + allocated_fallback_qty.get(item.id, 0.0)
         )
         remaining_qty = max(0.0, required_qty - ordered_qty)
-        part = part_map.get(item.suggested_part_id)
+        part = part_map.get(line_resolved_part_ids.get(item.id))
         vendor = _resolve_primary_vendor_for_part(part, vendor_by_name)
         package = package_lookup.get(item.bom_package_id)
         line_payload = {
