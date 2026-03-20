@@ -9,6 +9,7 @@ from flask import (
     session,
     send_file,
     current_app,
+    Response,
 )
 from flask_login import (
     login_user,
@@ -18,11 +19,13 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast, html
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast, html, smtplib
 from decimal import Decimal, InvalidOperation
 from datetime import datetime as datetime_cls, date
 import importlib.util
 import csv
+from email.message import EmailMessage
+from email.utils import formataddr
 from io import BytesIO, StringIO
 from collections import OrderedDict, Counter, defaultdict
 from dataclasses import dataclass, field
@@ -11336,6 +11339,229 @@ def _log_po_status_change(po, old_status, new_status, changed_by=None):
     )
 
 
+
+
+def _vendor_primary_contact(vendor):
+    if not vendor:
+        return None
+    return (
+        VendorContact.query.filter_by(vendor_id=vendor.id)
+        .order_by(VendorContact.is_primary.desc(), VendorContact.priority.asc().nullslast(), VendorContact.id.asc())
+        .first()
+    )
+
+
+def _get_vendor_primary_email(vendor):
+    if not vendor:
+        return None, None
+
+    direct_email = clean_str(getattr(vendor, "email", None))
+    if direct_email:
+        return direct_email, "vendor.email"
+
+    contact = (
+        VendorContact.query.filter(
+            VendorContact.vendor_id == vendor.id,
+            VendorContact.email.isnot(None),
+            VendorContact.email != "",
+        )
+        .order_by(VendorContact.is_primary.desc(), VendorContact.priority.asc().nullslast(), VendorContact.id.asc())
+        .first()
+    )
+    if contact and clean_str(contact.email):
+        return clean_str(contact.email), "vendor_contact.email"
+
+    return None, None
+
+
+def _pdf_escape(value):
+    return (
+        str(value or "")
+        .replace("\\", r"\\")
+        .replace("(", r"\(")
+        .replace(")", r"\)")
+    )
+
+
+def _wrap_pdf_text(value, max_chars=90):
+    cleaned = ' '.join(str(value or '').split())
+    if not cleaned:
+        return ['—']
+    words = cleaned.split(' ')
+    lines = []
+    current = ''
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or ['—']
+
+
+def _build_po_pdf_bytes(po, po_line_rows):
+    lines = []
+
+    def add_block(*entries, blank_after=False):
+        for entry in entries:
+            if isinstance(entry, (list, tuple)):
+                for line in entry:
+                    lines.extend(_wrap_pdf_text(line))
+            else:
+                lines.extend(_wrap_pdf_text(entry))
+        if blank_after:
+            lines.append('')
+
+    vendor_name = po.vendor.display_name or po.vendor.name if po.vendor else 'Not set'
+    project_name = po.project.name if po.project else 'General'
+    site_name = po.project.site_name if po.project and po.project.site_name else '—'
+    add_block('ELEVA ERP PURCHASE ORDER', blank_after=True)
+    add_block(f'PO Number: {po.po_number}')
+    add_block(f'Vendor: {vendor_name}')
+    add_block(f'Project / Site: {project_name} / {site_name}')
+    add_block(f'PO Date: {po.po_date or po.order_date or "—"}')
+    add_block(f'Expected Delivery: {po.expected_delivery or po.expected_delivery_date or "—"}')
+    add_block(f'Status: {_normalize_po_status(po.status)}')
+    if po.bom:
+        add_block(f'Generated from BOM: {po.bom.bom_name}')
+    add_block(blank_after=True)
+    add_block('LINE ITEMS')
+    for index, row in enumerate(po_line_rows, start=1):
+        item = row['item']
+        total_amount = item.total_amount if item.total_amount is not None else 0
+        add_block(
+            f"{index}. {item.part_name or item.item_code or f'Item {item.id}'}",
+            f"   Desc: {item.description or '—'}",
+            f"   Qty: {row['ordered_qty']:g} | Unit: {item.unit or '—'} | Unit Price: {item.unit_price if item.unit_price is not None else '—'} | Total: {total_amount}",
+        )
+    add_block(blank_after=True)
+    add_block(
+        f'Subtotal: {po.subtotal_amount or 0:.2f}',
+        f'Freight: {po.freight_value or 0:.2f}',
+        f'Discount: {po.discount_value or 0:.2f}',
+        f'GST: {po.gst_value or 0:.2f}',
+        f'Grand Total: {(po.grand_total_amount if po.grand_total_amount is not None else (po.subtotal_amount or 0)):.2f}',
+        blank_after=True,
+    )
+    add_block(f'Notes: {po.notes or "—"}')
+
+    page_width = 612
+    page_height = 792
+    margin_x = 48
+    top_y = 744
+    line_height = 14
+    page_lines = max(1, int((top_y - 48) // line_height))
+    chunks = [lines[i:i + page_lines] for i in range(0, len(lines), page_lines)] or [[]]
+
+    objects = []
+    page_ids = []
+    font_id = 3
+
+    for chunk in chunks:
+        text_commands = ['BT', '/F1 10 Tf', f'{margin_x} {top_y} Td']
+        first = True
+        for line in chunk:
+            escaped = _pdf_escape(line)
+            if first:
+                text_commands.append(f'({escaped}) Tj')
+                first = False
+            else:
+                text_commands.append(f'0 -{line_height} Td ({escaped}) Tj')
+        text_commands.append('ET')
+        stream = "\n".join(text_commands).encode("latin-1", "replace")
+        content_id = len(objects) + 4
+        objects.append(f"<< /Length {len(stream)} >>\nstream\n".encode('latin-1') + stream + b"\nendstream")
+        page_id = len(objects) + 4
+        page_ids.append(page_id)
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] /Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>".encode('latin-1'))
+
+    kids = ' '.join(f'{page_id} 0 R' for page_id in page_ids)
+    base_objects = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        f'<< /Type /Pages /Count {len(page_ids)} /Kids [{kids}] >>'.encode('latin-1'),
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ]
+    all_objects = base_objects + objects
+
+    buffer = BytesIO()
+    buffer.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+    offsets = [0]
+    for idx, obj in enumerate(all_objects, start=1):
+        offsets.append(buffer.tell())
+        buffer.write(f'{idx} 0 obj\n'.encode('latin-1'))
+        buffer.write(obj)
+        buffer.write(b'\nendobj\n')
+    xref_pos = buffer.tell()
+    buffer.write(f'xref\n0 {len(offsets)}\n'.encode('latin-1'))
+    buffer.write(b'0000000000 65535 f \n')
+    for off in offsets[1:]:
+        buffer.write(f'{off:010d} 00000 n \n'.encode('latin-1'))
+    buffer.write(f'trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF'.encode('latin-1'))
+    buffer.seek(0)
+    return buffer
+
+
+def _send_purchase_order_email(po, recipient_email, pdf_bytes):
+    host = (current_app.config.get('MAIL_SERVER') or os.environ.get('MAIL_SERVER') or '').strip()
+    port_raw = current_app.config.get('MAIL_PORT') or os.environ.get('MAIL_PORT') or '587'
+    username = (current_app.config.get('MAIL_USERNAME') or os.environ.get('MAIL_USERNAME') or '').strip()
+    password = (current_app.config.get('MAIL_PASSWORD') or os.environ.get('MAIL_PASSWORD') or '').strip()
+    default_sender = (current_app.config.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_DEFAULT_SENDER') or username or '').strip()
+    use_tls = str(current_app.config.get('MAIL_USE_TLS') or os.environ.get('MAIL_USE_TLS') or 'true').strip().lower() in {'1','true','yes','on'}
+    use_ssl = str(current_app.config.get('MAIL_USE_SSL') or os.environ.get('MAIL_USE_SSL') or 'false').strip().lower() in {'1','true','yes','on'}
+
+    if not host or not default_sender:
+        raise RuntimeError('Mail server is not configured. Set MAIL_SERVER and MAIL_DEFAULT_SENDER (or MAIL_USERNAME).')
+
+    try:
+        port = int(port_raw)
+    except (TypeError, ValueError):
+        port = 587
+
+    msg = EmailMessage()
+    msg['Subject'] = f'Purchase Order {po.po_number}'
+    msg['From'] = formataddr(('Eleva ERP', default_sender))
+    msg['To'] = recipient_email
+    msg.set_content(
+        '\n'.join([
+            'Dear Vendor,',
+            '',
+            f'Please find attached Purchase Order {po.po_number}.',
+            'Kindly review the PO and proceed with the supply as agreed.',
+            '',
+            'Regards,',
+            'Eleva ERP',
+        ])
+    )
+    msg.add_attachment(
+        pdf_bytes,
+        maintype='application',
+        subtype='pdf',
+        filename=f'{po.po_number}.pdf',
+    )
+
+    smtp_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+    with smtp_cls(host, port, timeout=30) as server:
+        if not use_ssl and use_tls:
+            server.starttls()
+        if username:
+            server.login(username, password)
+        server.send_message(msg)
+
+
+def _issue_po_after_send(po, changed_by=None):
+    current_status = _normalize_po_status(po.status)
+    if current_status in {'Closed', 'Cancelled'}:
+        return False
+    if current_status != 'Issued':
+        po.status = 'Issued'
+        _log_po_status_change(po, current_status, 'Issued', changed_by=changed_by)
+        return True
+    return False
+
 def _attempt_auto_close_po(po, changed_by=None):
     normalized = _normalize_po_status(po.status)
     if normalized in {"Closed", "Cancelled"}:
@@ -11479,6 +11705,30 @@ def purchase_order_detail_view(po_id: int):
 
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
+        if action == "send_po":
+            changed_by = None
+            if current_user.is_authenticated:
+                changed_by = ((current_user.username or "").strip() or (current_user.display_name or "").strip() or None)
+
+            vendor_email, _ = _get_vendor_primary_email(po.vendor)
+            if not vendor_email:
+                flash("No email in vendor profile added.", "warning")
+                flash("Download PDF copy and issue PO.", "info")
+                return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
+            try:
+                pdf_buffer = _build_po_pdf_bytes(po, _compute_po_line_receipts(po))
+                _send_purchase_order_email(po, vendor_email, pdf_buffer.getvalue())
+                _issue_po_after_send(po, changed_by=changed_by)
+                db.session.commit()
+                flash(f"Purchase Order emailed to {vendor_email}.", "success")
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.exception("Failed to send purchase order email", exc_info=exc)
+                flash(f"Could not send PO email: {exc}", "danger")
+
+            return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
     vendor_issues = (
         VendorIssue.query.options(
             joinedload(VendorIssue.product),
@@ -11530,6 +11780,8 @@ def purchase_order_detail_view(po_id: int):
     )
     po_status_display = _normalize_po_status(po.status)
     material_status_display = "N/A" if po_status_display == "Cancelled" else (po.material_status or "Pending")
+    vendor_primary_email, vendor_primary_email_source = _get_vendor_primary_email(po.vendor)
+    vendor_primary_contact = _vendor_primary_contact(po.vendor)
 
     return render_template(
         "purchase_order_detail.html",
@@ -11548,6 +11800,31 @@ def purchase_order_detail_view(po_id: int):
         po_close_reasons=po_close_reasons,
         po_has_out_of_sync_lines=any(bool(line.is_out_of_sync) for line in (po.items or [])),
         is_purchase_user=_is_purchase_user(current_user),
+        vendor_primary_email=vendor_primary_email,
+        vendor_primary_email_source=vendor_primary_email_source,
+        vendor_primary_contact=vendor_primary_contact,
+    )
+
+
+@app.route("/purchase/orders/<int:po_id>/pdf", methods=["GET"])
+@login_required
+def purchase_order_pdf(po_id: int):
+    ensure_bootstrap()
+    po = (
+        PurchaseOrder.query.options(
+            joinedload(PurchaseOrder.vendor),
+            joinedload(PurchaseOrder.project),
+            joinedload(PurchaseOrder.bom),
+            subqueryload(PurchaseOrder.items),
+        )
+        .filter(PurchaseOrder.id == po_id)
+        .first_or_404()
+    )
+    pdf_buffer = _build_po_pdf_bytes(po, _compute_po_line_receipts(po))
+    return Response(
+        pdf_buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{po.po_number}.pdf"'},
     )
 
 
@@ -14074,6 +14351,7 @@ def purchase_vendor_detail(vendor_id: int):
             vendor.city = (request.form.get("city") or "").strip() or None
             vendor.state = (request.form.get("state") or "").strip() or None
             vendor.gstin = (request.form.get("gstin") or "").strip() or None
+            vendor.email = (request.form.get("email") or "").strip() or None
             vendor.pan = (request.form.get("pan") or "").strip() or None
             vendor.payment_terms = (request.form.get("payment_terms") or "").strip() or None
             lead_time_raw = (request.form.get("lead_time_days") or "").strip()
