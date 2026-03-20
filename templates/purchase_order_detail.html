@@ -2,7 +2,7 @@
 {% block title %}Purchase Order {{ po.po_number }} · Eleva ERP{% endblock %}
 {% block content %}
 <div class="px-6 py-6 space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex items-start justify-between gap-4">
     <div>
       <p class="text-xs uppercase text-slate-500">Purchase</p>
       <h1 class="text-2xl font-semibold">Purchase Order {{ po.po_number }}</h1>
@@ -20,8 +20,27 @@
       </p>
       {% endif %}
     </div>
-    <a href="{{ url_for('purchase_orders') }}" class="px-3 py-1.5 rounded-lg border text-sm">Back to list</a>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <a href="{{ url_for('purchase_order_pdf', po_id=po.id) }}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg border text-sm text-slate-700 hover:bg-slate-50">View PDF</a>
+      <form method="post" class="inline">
+        {{ csrf_field() }}
+        <input type="hidden" name="action" value="send_po">
+        <button type="submit" class="px-3 py-1.5 rounded-lg btn-primary btn-shimmer text-sm {% if not vendor_primary_email %}opacity-60 cursor-not-allowed{% endif %}" {% if not vendor_primary_email %}title="No email in vendor profile added." disabled{% endif %}>Send PO</button>
+      </form>
+      <a href="{{ url_for('purchase_orders') }}" class="px-3 py-1.5 rounded-lg border text-sm">Back to list</a>
+    </div>
   </div>
+
+  {% if not vendor_primary_email and po.vendor %}
+  <div class="border border-amber-300 bg-amber-50 text-amber-900 rounded-2xl p-4 space-y-3">
+    <p class="font-semibold">No email in vendor profile added.</p>
+    <p class="text-sm">Download PDF copy and issue PO.</p>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('purchase_order_pdf', po_id=po.id) }}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg border border-amber-400 text-sm hover:bg-amber-100">View PDF</a>
+      <a href="{{ url_for('purchase_vendor_detail', vendor_id=po.vendor.id) }}" class="px-3 py-1.5 rounded-lg border border-amber-400 text-sm hover:bg-amber-100">View Vendor Profile</a>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
@@ -29,7 +48,8 @@
         <p class="text-xs uppercase text-slate-500">Vendor</p>
         <p class="text-base font-semibold">{{ po.vendor.name if po.vendor else 'Not set' }}</p>
         {% if po.vendor %}
-        <p class="text-slate-500">{{ po.vendor.contact_person or '' }}</p>
+        <p class="text-slate-500">{{ vendor_primary_contact.name if vendor_primary_contact else po.vendor.contact_person or '' }}</p>
+        <p class="text-xs text-slate-500">Primary email: {{ vendor_primary_email or '—' }}</p>
         {% endif %}
       </div>
       <div>

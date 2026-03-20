@@ -32,6 +32,7 @@
       <div><p class="text-xs uppercase text-slate-500">City</p><p class="text-slate-700">{{ vendor.city or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">State</p><p class="text-slate-700">{{ vendor.state or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">GSTIN</p><p class="text-slate-700">{{ vendor.gstin or '—' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Primary email for PO</p><p class="text-slate-700">{{ vendor.email or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">PAN</p><p class="text-slate-700">{{ vendor.pan or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">Payment terms</p><p class="text-slate-700">{{ vendor.payment_terms or '—' }}</p></div>
       <div><p class="text-xs uppercase text-slate-500">Lead time</p><p class="text-slate-700">{{ vendor.lead_time_days or '—' }}</p></div>
@@ -97,6 +98,7 @@
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">City</label><input name="city" value="{{ vendor.city or '' }}" class="rounded border-slate-200 w-full"></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">State</label><input name="state" value="{{ vendor.state or '' }}" class="rounded border-slate-200 w-full"></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">GSTIN</label><input name="gstin" value="{{ vendor.gstin or '' }}" class="rounded border-slate-200 w-full"></div>
+              <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Primary email for PO</label><input name="email" type="email" value="{{ vendor.email or '' }}" class="rounded border-slate-200 w-full" placeholder="vendor@example.com"></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">PAN</label><input name="pan" value="{{ vendor.pan or '' }}" class="rounded border-slate-200 w-full"></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Payment terms</label><select name="payment_terms" class="rounded border-slate-200 w-full"><option value="" {% if not vendor.payment_terms %}selected{% endif %}>Select</option><option value="7 days" {% if vendor.payment_terms == '7 days' %}selected{% endif %}>7 days</option><option value="15 days" {% if vendor.payment_terms == '15 days' %}selected{% endif %}>15 days</option><option value="21 days" {% if vendor.payment_terms == '21 days' %}selected{% endif %}>21 days</option><option value="30 days" {% if vendor.payment_terms == '30 days' %}selected{% endif %}>30 days</option><option value="45 days" {% if vendor.payment_terms == '45 days' %}selected{% endif %}>45 days</option><option value="60 days" {% if vendor.payment_terms == '60 days' %}selected{% endif %}>60 days</option></select></div>
               <div class="space-y-1"><label class="text-xs font-medium text-slate-600">Lead time (days)</label><input name="lead_time_days" value="{{ vendor.lead_time_days or '' }}" class="rounded border-slate-200 w-full"></div>
