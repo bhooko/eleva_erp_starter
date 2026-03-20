@@ -44,10 +44,12 @@
              data-sort="{{ part_class.sort_order or 0 }}"
              data-primary-part-id="{{ part_class.primary_part_id or "" }}"
              data-primary-part-name="{{ primary_part_labels.get(part_class.id) or "" }}"
+             data-effective-primary-part-id="{{ part_class.primary_part_id or '' }}"
+             data-effective-primary-part-name="{{ effective_primary_part_labels.get(part_class.id) or '' }}"
              data-sections='{{ part_class_section_map[part_class.id]|tojson }}'>
           <td class="px-4 py-2.5 font-semibold text-slate-900 dark:text-slate-100"><span class="name-text">{{ part_class.name }}</span></td>
           <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300"><span class="description-text block max-w-md truncate">{{ part_class.description or '—' }}</span></td>
-          <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300"><span class="primary-part-text">{{ primary_part_labels.get(part_class.id) or '—' }}</span></td>
+          <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300"><span class="primary-part-text">{{ effective_primary_part_labels.get(part_class.id) or '—' }}</span></td>
           <td class="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300"><span class="sort-text">{{ part_class.sort_order or 0 }}</span></td>
           <td class="px-4 py-2.5 text-center">
             <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-500/20 text-emerald-300' if part_class.active else 'bg-amber-500/20 text-amber-300' }}">
@@ -241,8 +243,8 @@
     await loadPrimaryPartOptions({
       mode: 'edit',
       classId: id,
-      selectedPartId: data.primary_part_id || null,
-      selectedPartName: data.primary_part_name || ''
+      selectedPartId: data.primary_part_id || data.effective_primary_part_id || null,
+      selectedPartName: data.primary_part_name || data.effective_primary_part_name || ''
     });
     setActiveButton(!!data.is_active);
     setModalVisibility(true);
@@ -303,10 +305,12 @@
     row.dataset.sort = data.sort_order ?? 0;
     row.dataset.primaryPartId = data.primary_part_id || '';
     row.dataset.primaryPartName = data.primary_part_name || '';
+    row.dataset.effectivePrimaryPartId = data.effective_primary_part_id || data.primary_part_id || '';
+    row.dataset.effectivePrimaryPartName = data.effective_primary_part_name || data.primary_part_name || '';
     row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.querySelector('.name-text').textContent = data.name;
     row.querySelector('.description-text').textContent = data.description || '—';
-    row.querySelector('.primary-part-text').textContent = data.primary_part_name || '—';
+    row.querySelector('.primary-part-text').textContent = data.effective_primary_part_name || data.primary_part_name || '—';
     row.querySelector('.sort-text').textContent = data.sort_order ?? 0;
 
     const badge = row.querySelector('.status-badge');
@@ -329,11 +333,13 @@
     row.dataset.sort = data.sort_order ?? 0;
     row.dataset.primaryPartId = data.primary_part_id || '';
     row.dataset.primaryPartName = data.primary_part_name || '';
+    row.dataset.effectivePrimaryPartId = data.effective_primary_part_id || data.primary_part_id || '';
+    row.dataset.effectivePrimaryPartName = data.effective_primary_part_name || data.primary_part_name || '';
     row.dataset.sections = JSON.stringify(data.associated_sections || []);
     row.innerHTML = `
       <td class="px-4 py-2.5 font-semibold text-slate-900 dark:text-slate-100"><span class="name-text">${data.name}</span></td>
       <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300"><span class="description-text block max-w-md truncate">${data.description || '—'}</span></td>
-      <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300"><span class="primary-part-text">${data.primary_part_name || '—'}</span></td>
+      <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300"><span class="primary-part-text">${data.effective_primary_part_name || data.primary_part_name || '—'}</span></td>
       <td class="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300"><span class="sort-text">${data.sort_order ?? 0}</span></td>
       <td class="px-4 py-2.5 text-center">
         <span class="status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${data.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${data.is_active ? 'Active' : 'Disabled'}</span>
@@ -490,7 +496,7 @@
       const name = row.dataset.name.toLowerCase();
       const desc = row.dataset.description.toLowerCase();
       const status = row.dataset.active === '1' ? 'active' : 'inactive';
-      const primaryPart = (row.dataset.primaryPartName || '').toLowerCase();
+      const primaryPart = (row.dataset.effectivePrimaryPartName || row.dataset.primaryPartName || '').toLowerCase();
       const matches = name.includes(query) || desc.includes(query) || status.includes(query) || primaryPart.includes(query);
       row.classList.toggle('hidden', !matches);
     });

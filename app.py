@@ -210,6 +210,9 @@ def _parse_bool_payload(value, *, default=False):
 
 def _part_class_payload(part_class):
     effective_primary_part = _effective_primary_part_for_class(part_class)
+    explicit_primary_part = None
+    if getattr(part_class, "primary_part_id", None):
+        explicit_primary_part = Product.query.get(part_class.primary_part_id)
     return {
         "id": part_class.id,
         "name": part_class.name,
@@ -217,8 +220,10 @@ def _part_class_payload(part_class):
         "is_active": bool(part_class.active),
         "sort_order": part_class.sort_order or 0,
         "associated_sections": _parse_associated_sections(part_class.associated_sections),
-        "primary_part_id": effective_primary_part.id if effective_primary_part else None,
-        "primary_part_name": _product_option_label(effective_primary_part) if effective_primary_part else None,
+        "primary_part_id": explicit_primary_part.id if explicit_primary_part else None,
+        "primary_part_name": _product_option_label(explicit_primary_part) if explicit_primary_part else None,
+        "effective_primary_part_id": effective_primary_part.id if effective_primary_part else None,
+        "effective_primary_part_name": _product_option_label(effective_primary_part) if effective_primary_part else None,
     }
 
 
@@ -8850,13 +8855,14 @@ def part_classes():
     )
     parts_lookup = {part.id: part for part in parts}
     primary_part_labels = {}
+    effective_primary_part_labels = {}
     for part_class in part_classes:
-        label = None
+        explicit_label = None
         if part_class.primary_part_id:
-            label = _product_option_label(parts_lookup.get(part_class.primary_part_id))
-        if not label:
-            label = _product_option_label(_latest_mapped_part_for_class(part_class.id)) or None
-        primary_part_labels[part_class.id] = label
+            explicit_label = _product_option_label(parts_lookup.get(part_class.primary_part_id))
+        effective_label = explicit_label or _product_option_label(_latest_mapped_part_for_class(part_class.id)) or None
+        primary_part_labels[part_class.id] = explicit_label
+        effective_primary_part_labels[part_class.id] = effective_label
     section_rows = (
         db.session.query(BomTemplateSection, BomTemplateStage, BomTemplate)
         .join(BomTemplateStage, BomTemplateSection.stage_id == BomTemplateStage.id)
@@ -8881,6 +8887,7 @@ def part_classes():
         part_classes=part_classes,
         part_class_section_map=part_class_section_map,
         primary_part_labels=primary_part_labels,
+        effective_primary_part_labels=effective_primary_part_labels,
         sections=sections,
         parts=parts,
     )
@@ -9980,6 +9987,31 @@ def _resolve_primary_vendor_for_part(part, vendor_by_name):
     return vendor_by_name.get(vendor_name.casefold())
 
 
+def _resolve_bom_item_part(item, *, part_map=None):
+    if not item:
+        return None, None, "no_part_resolved"
+
+    resolved_part_id = _parse_optional_int(getattr(item, "suggested_part_id", None))
+    resolution_reason = "suggested_part"
+    if resolved_part_id is None and getattr(item, "part_class", None) and getattr(item.part_class, "primary_part_id", None):
+        resolved_part_id = int(item.part_class.primary_part_id)
+        resolution_reason = "part_class_primary_part"
+    if resolved_part_id is None and getattr(item, "part_class", None):
+        effective_part = _effective_primary_part_for_class(item.part_class)
+        if effective_part:
+            return effective_part, effective_part.id, "part_class_effective_primary_part"
+
+    if resolved_part_id is None:
+        return None, None, "no_part_resolved"
+
+    part = part_map.get(resolved_part_id) if part_map is not None else None
+    if part is None:
+        part = Product.query.get(resolved_part_id)
+    if not part:
+        return None, None, "no_part_resolved"
+    return part, part.id, resolution_reason
+
+
 def get_bom_procurement_plan(bom_id, package_id=None):
     bom = BillOfMaterials.query.options(
         joinedload(BillOfMaterials.project),
@@ -10000,16 +10032,15 @@ def get_bom_procurement_plan(bom_id, package_id=None):
         bom_items_query = bom_items_query.filter(BOMItem.bom_package_id.in_(package_ids))
     bom_items = bom_items_query.order_by(BOMItem.id.asc()).all()
 
+    line_resolved_parts = {}
     line_resolved_part_ids = {}
+    line_resolution_reasons = {}
     resolved_part_ids = set()
     for item in bom_items:
-        if item.suggested_part_id:
-            resolved_part_id = int(item.suggested_part_id)
-        elif item.part_class and item.part_class.primary_part_id:
-            resolved_part_id = int(item.part_class.primary_part_id)
-        else:
-            resolved_part_id = None
+        part, resolved_part_id, resolution_reason = _resolve_bom_item_part(item)
+        line_resolved_parts[item.id] = part
         line_resolved_part_ids[item.id] = resolved_part_id
+        line_resolution_reasons[item.id] = resolution_reason
         if resolved_part_id is not None:
             resolved_part_ids.add(resolved_part_id)
 
@@ -10040,7 +10071,11 @@ def get_bom_procurement_plan(bom_id, package_id=None):
     line_map = {item.id: item for item in bom_items}
     line_vendor_ids = {}
     for item in bom_items:
-        primary_vendor = _resolve_primary_vendor_for_part(part_map.get(line_resolved_part_ids.get(item.id)), vendor_by_name)
+        resolved_part = line_resolved_parts.get(item.id)
+        if resolved_part is None and line_resolved_part_ids.get(item.id) is not None:
+            resolved_part = part_map.get(line_resolved_part_ids.get(item.id))
+            line_resolved_parts[item.id] = resolved_part
+        primary_vendor = _resolve_primary_vendor_for_part(resolved_part, vendor_by_name)
         line_vendor_ids[item.id] = primary_vendor.id if primary_vendor else None
 
     # Ordered-qty matching priority (strict to conservative):
@@ -10132,6 +10167,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
 
     package_lookup = {pkg.id: pkg for pkg in packages}
     vendor_groups = {}
+    unresolved_lines = []
     no_primary_vendor_lines = []
     over_order_lines = []
     for item in bom_items:
@@ -10142,12 +10178,22 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             + allocated_fallback_qty.get(item.id, 0.0)
         )
         remaining_qty = max(0.0, required_qty - ordered_qty)
-        part = part_map.get(line_resolved_part_ids.get(item.id))
+        part = line_resolved_parts.get(item.id)
+        if part is None and line_resolved_part_ids.get(item.id) is not None:
+            part = part_map.get(line_resolved_part_ids.get(item.id))
+            line_resolved_parts[item.id] = part
         vendor = _resolve_primary_vendor_for_part(part, vendor_by_name)
         package = package_lookup.get(item.bom_package_id)
+        warning_reason = None
+        if not part:
+            warning_reason = "no_part_resolved"
+        elif not vendor:
+            warning_reason = "no_primary_vendor"
         line_payload = {
             "item": item,
             "part": part,
+            "resolved_part_id": part.id if part else None,
+            "part_resolution": line_resolution_reasons.get(item.id, "no_part_resolved"),
             "required_qty": required_qty,
             "ordered_qty": ordered_qty,
             "remaining_qty": remaining_qty,
@@ -10156,10 +10202,14 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             "package": package,
             "is_over_ordered": ordered_qty > required_qty,
             "linkage_mode": ",".join(sorted(line_linkage_mode.get(item.id, set()))) or "none",
+            "warning_reason": warning_reason,
         }
         if line_payload["is_over_ordered"]:
             over_order_lines.append(line_payload)
 
+        if not part:
+            unresolved_lines.append(line_payload)
+            continue
         if not vendor:
             no_primary_vendor_lines.append(line_payload)
             continue
@@ -10220,6 +10270,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
         "resolved_project_id": resolved_project_id,
         "packages": packages,
         "vendor_groups": vendor_group_list,
+        "unresolved_lines": unresolved_lines,
         "no_primary_vendor_lines": no_primary_vendor_lines,
         "over_order_lines": over_order_lines,
         "summary": {
@@ -10229,6 +10280,7 @@ def get_bom_procurement_plan(bom_id, package_id=None):
             "total_bom_lines": len(bom_items),
             "remaining_vendor_groups": sum(1 for group in vendor_group_list if group["remaining_qty_total"] > 0),
             "parts_without_primary_vendor": len(no_primary_vendor_lines),
+            "parts_unresolved": len(unresolved_lines),
         },
     }
 
@@ -10440,9 +10492,10 @@ def purchase_orders():
             return None
 
     def _build_po_line_payload_from_bom_item(bom_item):
-        part_id = _parse_int_value(bom_item.suggested_part_id)
+        resolved_part, part_id, _ = _resolve_bom_item_part(bom_item)
         item_label = (
-            (bom_item.part_class.name if bom_item.part_class else None)
+            (resolved_part.name if resolved_part else None)
+            or (bom_item.part_class.name if bom_item.part_class else None)
             or (bom_item.description or "").strip()
             or (bom_item.item_code or "").strip()
             or f"BOM Line {bom_item.id}"
@@ -10452,7 +10505,7 @@ def purchase_orders():
             "product_id": part_id,
             "item_name": item_label,
             "specification": specification,
-            "unit": (bom_item.unit or "").strip(),
+            "unit": (bom_item.unit or (resolved_part.purchase_uom if resolved_part else None) or (resolved_part.uom if resolved_part else None) or "").strip(),
             "quantity": float(bom_item.quantity_required or 0),
             "unit_price": None,
             "currency": "INR",
@@ -11005,13 +11058,15 @@ def purchase_bom_po_lines_preview(bom_id: int):
         qty_value = float(bom_item.quantity_required or 0)
         if qty_value <= 0:
             continue
+        resolved_part, resolved_part_id, _ = _resolve_bom_item_part(bom_item)
         if (
             vendor_linked_part_ids is not None
-            and (not bom_item.suggested_part_id or bom_item.suggested_part_id not in vendor_linked_part_ids)
+            and (not resolved_part_id or resolved_part_id not in vendor_linked_part_ids)
         ):
             continue
         item_name = (
-            (bom_item.part_class.name if bom_item.part_class else None)
+            (resolved_part.name if resolved_part else None)
+            or (bom_item.part_class.name if bom_item.part_class else None)
             or (bom_item.description or "").strip()
             or (bom_item.item_code or "").strip()
             or f"BOM Line {bom_item.id}"
@@ -11020,11 +11075,11 @@ def purchase_bom_po_lines_preview(bom_id: int):
             {
                 "source_bom_id": bom.id,
                 "source_bom_line_id": bom_item.id,
-                "part_id": bom_item.suggested_part_id,
+                "part_id": resolved_part_id,
                 "item_name": item_name,
                 "specification": (bom_item.specification or "").strip(),
                 "qty": qty_value,
-                "unit": (bom_item.unit or "").strip(),
+                "unit": (bom_item.unit or (resolved_part.purchase_uom if resolved_part else None) or (resolved_part.uom if resolved_part else None) or "").strip(),
                 "stage": (bom_item.stage or "").strip(),
                 "section_title": (bom_item.section_title or "").strip(),
             }
