@@ -50,7 +50,7 @@
           </td>
           <td class="py-3 px-4 space-y-2">
             {% if group.remaining_qty_total > 0 %}
-            <a href="{{ url_for('purchase_orders', prefill_project_id=plan.resolved_project_id, prefill_vendor_id=group.vendor.id, prefill_bom_id=bom.id) }}" class="inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50">Create PO</a>
+            <button type="button" class="inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs hover:bg-slate-50" data-open-procurement-po data-po-project-id="{{ plan.resolved_project_id }}" data-po-vendor-id="{{ group.vendor.id }}" data-po-bom-id="{{ bom.id }}" data-po-prefill-lines='{{ procurement_prefill_map.get(group.vendor.id|string, [])|tojson|forceescape }}'>Create PO</button>
             {% else %}
             {% if group.related_pos %}
             <span class="inline-flex px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs">Completed</span>
@@ -111,5 +111,15 @@
     </ul>
   </div>
   {% endif %}
+
+  {% set po_modal_toggle_id = 'procurement-plan-po-modal' %}
+  {% set po_modal_form_id = 'procurement-plan-po-form' %}
+  {% set po_modal_items_id = 'procurementPlanPoItems' %}
+  {% set po_modal_template_id = 'procurementPlanPoItemTemplate' %}
+  {% set po_apply_bom_modal_id = 'procurement-plan-apply-bom-modal' %}
+  {% set po_part_create_modal_id = 'procurement-plan-part-create-modal' %}
+  {% set po_prefill_buttons_selector = '[data-open-procurement-po]' %}
+  {% set po_return_url = request.full_path[:-1] if request.query_string else request.path %}
+  {% include "_purchase_order_modal.html" with context %}
 </div>
 {% endblock %}

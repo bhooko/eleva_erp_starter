@@ -10012,6 +10012,104 @@ def _resolve_bom_item_part(item, *, part_map=None):
     return part, part.id, resolution_reason
 
 
+def _next_purchase_order_number():
+    recent_po_numbers = (
+        db.session.query(PurchaseOrder.po_number)
+        .order_by(PurchaseOrder.id.desc())
+        .limit(200)
+        .all()
+    )
+    max_number = 0
+    for (po_value,) in recent_po_numbers:
+        match = re.match(r"^PO-(\d+)$", (po_value or "").strip())
+        if not match:
+            continue
+        max_number = max(max_number, int(match.group(1)))
+    if max_number <= 0:
+        return "PO-0001"
+    return f"PO-{max_number + 1:04d}"
+
+
+def _build_procurement_prefill_po_lines(project_id, vendor_id, bom_id):
+    prefill_po_lines = []
+    if not (project_id and vendor_id and bom_id):
+        return prefill_po_lines
+
+    bom_plan = get_bom_procurement_plan(bom_id)
+    if bom_plan["resolved_project_id"] != project_id:
+        return prefill_po_lines
+
+    vendor_group = next(
+        (group for group in bom_plan["vendor_groups"] if group["vendor"].id == vendor_id),
+        None,
+    )
+    if not vendor_group:
+        return prefill_po_lines
+
+    for line in vendor_group["lines"]:
+        if line["remaining_qty"] <= 0:
+            continue
+        item = line["item"]
+        part = line["part"]
+        unit_price = None
+        if part:
+            rate = VendorProductRate.query.filter_by(
+                vendor_id=vendor_id,
+                product_id=part.id,
+                status="Active",
+            ).first()
+            if rate and rate.unit_price is not None:
+                unit_price = float(rate.unit_price)
+        prefill_po_lines.append(
+            {
+                "part_id": part.id if part else None,
+                "item_name": (
+                    (part.name if part else None)
+                    or (item.part_class.name if item.part_class else None)
+                    or (item.description or "").strip()
+                    or (item.item_code or "").strip()
+                    or f"BOM Line {item.id}"
+                ),
+                "specification": (item.specification or "").strip(),
+                "unit": (item.unit or (part.purchase_uom if part else None) or (part.uom if part else None) or "").strip(),
+                "qty": float(line["remaining_qty"]),
+                "stage": (item.stage or "").strip(),
+                "section_title": (item.section_title or "").strip(),
+                "source_bom_id": item.bom_id,
+                "source_bom_line_id": item.id,
+                "unit_price": unit_price,
+            }
+        )
+
+    deduped_prefill_lines = []
+    seen_prefill_keys = set()
+    for row in prefill_po_lines:
+        if float(row.get("qty") or 0) <= 0:
+            continue
+        if not row.get("part_id"):
+            continue
+        row_key = (row.get("source_bom_line_id") or 0, row.get("part_id"), row.get("item_name"))
+        if row_key in seen_prefill_keys:
+            continue
+        seen_prefill_keys.add(row_key)
+        deduped_prefill_lines.append(row)
+    return deduped_prefill_lines
+
+
+def _build_purchase_order_modal_context(*, selected_project_id=None, prefill_project_id=None, prefill_vendor_id=None, prefill_bom_id=None):
+    return {
+        "vendors": Vendor.query.order_by(Vendor.name).all(),
+        "projects": Project.query.order_by(Project.name).all(),
+        "selected_project_id": selected_project_id,
+        "bom_options": _build_purchase_bom_options(project_id=selected_project_id),
+        "next_po_number": _next_purchase_order_number(),
+        "prefill_project_id": prefill_project_id,
+        "prefill_vendor_id": prefill_vendor_id,
+        "prefill_bom_id": prefill_bom_id,
+        "prefill_po_lines": _build_procurement_prefill_po_lines(prefill_project_id, prefill_vendor_id, prefill_bom_id),
+    }
+
+
 def get_bom_procurement_plan(bom_id, package_id=None):
     bom = BillOfMaterials.query.options(
         joinedload(BillOfMaterials.project),
@@ -10517,27 +10615,10 @@ def purchase_orders():
             "is_bom_line": True,
         }
 
-    def _next_po_number():
-        recent_po_numbers = (
-            db.session.query(PurchaseOrder.po_number)
-            .order_by(PurchaseOrder.id.desc())
-            .limit(200)
-            .all()
-        )
-        max_number = 0
-        for (po_value,) in recent_po_numbers:
-            match = re.match(r"^PO-(\d+)$", (po_value or "").strip())
-            if not match:
-                continue
-            max_number = max(max_number, int(match.group(1)))
-        if max_number <= 0:
-            return "PO-0001"
-        return f"PO-{max_number + 1:04d}"
-
     if request.method == "POST":
         po_number_raw = (request.form.get("po_number") or "").strip()
         if (not po_number_raw) or (po_number_raw.lower() == "auto"):
-            po_number = _next_po_number()
+            po_number = _next_purchase_order_number()
         else:
             po_number = po_number_raw
         project_id = request.form.get("project_id") or None
@@ -10572,12 +10653,19 @@ def purchase_orders():
         if not expected_delivery_date:
             expected_delivery_date = po_date + datetime.timedelta(days=15)
 
-        if not vendor_id:
-            flash("Vendor is required.", "danger")
+        return_url = (request.form.get("return_url") or "").strip()
+
+        def _redirect_after_po_form_error(*, include_project=False):
+            if return_url:
+                return redirect(return_url)
             redirect_kwargs = {}
-            if project_id:
+            if include_project and project_id:
                 redirect_kwargs["project_id"] = project_id
             return redirect(url_for("purchase_orders", **redirect_kwargs))
+
+        if not vendor_id:
+            flash("Vendor is required.", "danger")
+            return _redirect_after_po_form_error(include_project=bool(project_id))
 
         project_id_int = _parse_int_value(project_id)
         selected_bom = None
@@ -10586,18 +10674,18 @@ def purchase_orders():
             selected_bom_id = _parse_int_value(bom_id_raw)
             if not selected_bom_id:
                 flash("Selected BOM template was not found.", "danger")
-                return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
+                return _redirect_after_po_form_error(include_project=bool(project_id_int))
             selected_bom = BillOfMaterials.query.options(joinedload(BillOfMaterials.drawing_site)).get(selected_bom_id)
             if not selected_bom:
                 flash("Selected BOM template was not found.", "danger")
-                return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
+                return _redirect_after_po_form_error(include_project=bool(project_id_int))
             if project_id_int is None:
                 flash("Select a project before applying a BOM.", "danger")
-                return redirect(url_for("purchase_orders"))
+                return _redirect_after_po_form_error()
             resolved_bom_project_id = _resolve_bom_project_id(selected_bom)
             if resolved_bom_project_id != project_id_int:
                 flash("Selected BOM does not belong to the chosen project.", "danger")
-                return redirect(url_for("purchase_orders", project_id=project_id_int))
+                return _redirect_after_po_form_error(include_project=True)
 
         po = PurchaseOrder(
             po_number=po_number,
@@ -10890,7 +10978,7 @@ def purchase_orders():
                     "Each line item must have a Part selected from Parts Master (mapped part), along with quantity.",
                     "danger",
                 )
-            return redirect(url_for("purchase_orders", project_id=project_id_int) if project_id_int else url_for("purchase_orders"))
+            return _redirect_after_po_form_error(include_project=bool(project_id_int))
 
         po.subtotal_amount = subtotal_amount
         po.freight_value = freight_value
@@ -10900,71 +10988,21 @@ def purchase_orders():
 
         db.session.commit()
         flash("Purchase order saved.", "success")
-        return redirect(url_for("purchase_orders"))
+        if return_url:
+            return redirect(return_url)
+        return _redirect_after_po_form_error()
 
     prefill_vendor_id = request.args.get("prefill_vendor_id", type=int)
     prefill_project_id = request.args.get("prefill_project_id", type=int)
     prefill_bom_id = request.args.get("prefill_bom_id", type=int)
-    prefill_po_lines = []
-    if prefill_project_id and prefill_vendor_id and prefill_bom_id:
-        bom_plan = get_bom_procurement_plan(prefill_bom_id)
-        if bom_plan["resolved_project_id"] == prefill_project_id:
-            vendor_group = next(
-                (group for group in bom_plan["vendor_groups"] if group["vendor"].id == prefill_vendor_id),
-                None,
-            )
-            if vendor_group:
-                for line in vendor_group["lines"]:
-                    if line["remaining_qty"] <= 0:
-                        continue
-                    item = line["item"]
-                    part = line["part"]
-                    unit_price = None
-                    if part:
-                        rate = VendorProductRate.query.filter_by(
-                            vendor_id=prefill_vendor_id,
-                            product_id=part.id,
-                            status="Active",
-                        ).first()
-                        if rate and rate.unit_price is not None:
-                            unit_price = float(rate.unit_price)
-                    prefill_po_lines.append(
-                        {
-                            "part_id": part.id if part else None,
-                            "item_name": (
-                                (part.name if part else None)
-                                or (item.part_class.name if item.part_class else None)
-                                or (item.description or "").strip()
-                                or (item.item_code or "").strip()
-                                or f"BOM Line {item.id}"
-                            ),
-                            "specification": (item.specification or "").strip(),
-                            "unit": (item.unit or (part.purchase_uom if part else None) or (part.uom if part else None) or "").strip(),
-                            "qty": float(line["remaining_qty"]),
-                            "stage": (item.stage or "").strip(),
-                            "section_title": (item.section_title or "").strip(),
-                            "source_bom_id": item.bom_id,
-                            "source_bom_line_id": item.id,
-                            "unit_price": unit_price,
-                        }
-                    )
+    prefill_po_lines = _build_procurement_prefill_po_lines(
+        prefill_project_id,
+        prefill_vendor_id,
+        prefill_bom_id,
+    )
 
     if prefill_project_id and prefill_vendor_id and prefill_bom_id and not prefill_po_lines:
         flash("No remaining quantities to create PO for this vendor.", "warning")
-
-    deduped_prefill_lines = []
-    seen_prefill_keys = set()
-    for row in prefill_po_lines:
-        if float(row.get("qty") or 0) <= 0:
-            continue
-        if not row.get("part_id"):
-            continue
-        row_key = (row.get("source_bom_line_id") or 0, row.get("part_id"), row.get("item_name"))
-        if row_key in seen_prefill_keys:
-            continue
-        seen_prefill_keys.add(row_key)
-        deduped_prefill_lines.append(row)
-    prefill_po_lines = deduped_prefill_lines
 
     pos = (
         PurchaseOrder.query.options(
@@ -10976,26 +11014,20 @@ def purchase_orders():
         .order_by(PurchaseOrder.id.desc())
         .all()
     )
-    vendors = Vendor.query.order_by(Vendor.name).all()
-    projects = Project.query.order_by(Project.name).all()
     bom_items = BOMItem.query.order_by(BOMItem.item_code).all()
     selected_project_id = request.args.get("project_id", type=int)
-    bom_options = _build_purchase_bom_options(project_id=selected_project_id)
-    next_po_number = _next_po_number()
+    modal_context = _build_purchase_order_modal_context(
+        selected_project_id=selected_project_id,
+        prefill_project_id=prefill_project_id,
+        prefill_vendor_id=prefill_vendor_id,
+        prefill_bom_id=prefill_bom_id,
+    )
 
     return render_template(
         "purchase_orders.html",
         pos=pos,
-        vendors=vendors,
-        projects=projects,
-        selected_project_id=selected_project_id,
         bom_items=bom_items,
-        bom_options=bom_options,
-        next_po_number=next_po_number,
-        prefill_project_id=prefill_project_id,
-        prefill_vendor_id=prefill_vendor_id,
-        prefill_bom_id=prefill_bom_id,
-        prefill_po_lines=prefill_po_lines,
+        **modal_context,
     )
 
 
@@ -11004,9 +11036,23 @@ def purchase_orders():
 def bom_procurement_plan(bom_id):
     package_id = request.args.get("package_id", type=int)
     plan = get_bom_procurement_plan(bom_id, package_id=package_id)
+    modal_context = _build_purchase_order_modal_context(
+        selected_project_id=plan.get("resolved_project_id"),
+    )
+    procurement_prefill_map = {
+        str(group["vendor"].id): _build_procurement_prefill_po_lines(
+            plan.get("resolved_project_id"),
+            group["vendor"].id,
+            plan["bom"].id,
+        )
+        for group in plan["vendor_groups"]
+        if group.get("vendor")
+    }
     return render_template(
         "bom_procurement_plan.html",
         plan=plan,
+        procurement_prefill_map=procurement_prefill_map,
+        **modal_context,
     )
 
 
