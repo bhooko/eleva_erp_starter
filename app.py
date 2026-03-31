@@ -11402,87 +11402,279 @@ def _wrap_pdf_text(value, max_chars=90):
     return lines or ['—']
 
 
+def _format_po_pdf_date(value):
+    if value is None:
+        return "-"
+    if isinstance(value, datetime.datetime):
+        value = value.date()
+    if isinstance(value, datetime.date):
+        return value.strftime("%d %b %Y")
+    return str(value).strip() or "-"
+
+
+def _format_po_pdf_money(value):
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    return f"{amount:,.2f}"
+
+
 def _build_po_pdf_bytes(po, po_line_rows):
-    lines = []
+    page_width = 595.0
+    page_height = 842.0
+    margin = 36.0
+    content_width = page_width - (2 * margin)
 
-    def add_block(*entries, blank_after=False):
-        for entry in entries:
-            if isinstance(entry, (list, tuple)):
-                for line in entry:
-                    lines.extend(_wrap_pdf_text(line))
+    row_height = 16.0
+    cell_pad_x = 4.0
+    cell_pad_y = 3.0
+
+    vendor_name = (po.vendor.display_name or po.vendor.name) if po.vendor else "-"
+    po_date = _format_po_pdf_date(po.po_date or po.order_date)
+    expected_delivery = _format_po_pdf_date(po.expected_delivery or po.expected_delivery_date)
+    status_text = _normalize_po_status(po.status) or "-"
+    project_name = po.project.name if po.project and po.project.name else "-"
+    site_name = po.project.site_name if po.project and po.project.site_name else None
+    bom_name = po.bom.bom_name if po.bom and po.bom.bom_name else None
+    vendor_address = po.vendor.address if po.vendor and po.vendor.address else None
+    vendor_email = po.vendor.email if po.vendor and po.vendor.email else None
+    vendor_phone = po.vendor.phone if po.vendor and po.vendor.phone else None
+    notes_text = (po.notes or "").strip()
+
+    item_columns = [
+        ("Sr No", 32.0, "center"),
+        ("Item / Part Name", 120.0, "left"),
+        ("Description", 167.0, "left"),
+        ("Qty", 45.0, "center"),
+        ("Unit", 45.0, "center"),
+        ("Unit Price", 57.0, "right"),
+        ("Line Total", 57.0, "right"),
+    ]
+
+    def wrap_for_width(value, width, char_width=5.1):
+        max_chars = max(1, int((width - (2 * cell_pad_x)) / char_width))
+        return _wrap_pdf_text(value, max_chars=max_chars)
+
+    def text_cmd(x, y, text, font="F1", size=10):
+        return f"BT /{font} {size} Tf {x:.2f} {y:.2f} Td ({_pdf_escape(text)}) Tj ET"
+
+    def line_cmd(x1, y1, x2, y2, width=0.8):
+        return f"{width:.2f} w {x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S"
+
+    pages = []
+    commands = []
+    y = page_height - margin
+
+    def finalize_page():
+        nonlocal commands
+        pages.append(commands)
+        commands = []
+
+    def ensure_space(height_needed):
+        nonlocal y
+        if y - height_needed < margin:
+            finalize_page()
+            y = page_height - margin
+            draw_page_header()
+            draw_item_table_header()
+
+    def draw_page_header():
+        nonlocal y
+        commands.append(text_cmd(margin, y - 4, "ELEVA ERP", "F2", 14))
+        commands.append(text_cmd(margin + 178, y - 4, "PURCHASE ORDER", "F2", 14))
+        y -= 22
+        left_x = margin
+        right_x = margin + (content_width / 2)
+        detail_rows = [
+            ("PO Number", po.po_number or "-"),
+            ("PO Date", po_date),
+            ("Status", status_text),
+            ("Expected Delivery", expected_delivery),
+        ]
+        table_top = y
+        table_bottom = y - (len(detail_rows) * row_height)
+        commands.append(line_cmd(left_x, table_top, right_x, table_top))
+        commands.append(line_cmd(left_x, table_bottom, right_x, table_bottom))
+        commands.append(line_cmd(left_x, table_top, left_x, table_bottom))
+        commands.append(line_cmd(right_x, table_top, right_x, table_bottom))
+        for idx, (label, value) in enumerate(detail_rows):
+            row_top = y - (idx * row_height)
+            row_bottom = row_top - row_height
+            commands.append(line_cmd(left_x, row_bottom, right_x, row_bottom))
+            commands.append(text_cmd(left_x + cell_pad_x, row_bottom + cell_pad_y, label, "F2", 9))
+            commands.append(text_cmd(left_x + 105, row_bottom + cell_pad_y, str(value), "F1", 9))
+
+        block_y = table_bottom - 10
+        commands.append(text_cmd(margin, block_y, "Vendor", "F2", 10))
+        block_y -= 12
+        vendor_lines = [vendor_name]
+        if vendor_address:
+            vendor_lines.extend(wrap_for_width(vendor_address, content_width / 2))
+        if vendor_email:
+            vendor_lines.append(f"Email: {vendor_email}")
+        if vendor_phone:
+            vendor_lines.append(f"Phone: {vendor_phone}")
+        vendor_height = (len(vendor_lines) * 12) + 8
+        project_lines = [f"Project: {project_name}"]
+        if site_name:
+            project_lines.append(f"Site: {site_name}")
+        if bom_name:
+            project_lines.append(f"Generated from BOM: {bom_name}")
+        project_height = (len(project_lines) * 12) + 8
+        block_height = max(vendor_height, project_height)
+        block_top = block_y + 8
+        block_bottom = block_top - block_height
+        mid_x = margin + (content_width / 2)
+        commands.append(line_cmd(margin, block_top, margin + content_width, block_top))
+        commands.append(line_cmd(margin, block_bottom, margin + content_width, block_bottom))
+        commands.append(line_cmd(margin, block_top, margin, block_bottom))
+        commands.append(line_cmd(mid_x, block_top, mid_x, block_bottom))
+        commands.append(line_cmd(margin + content_width, block_top, margin + content_width, block_bottom))
+        vendor_text_y = block_top - 12
+        for line in vendor_lines:
+            commands.append(text_cmd(margin + cell_pad_x, vendor_text_y, line, "F1", 9))
+            vendor_text_y -= 12
+        project_text_y = block_top - 12
+        for line in project_lines:
+            commands.append(text_cmd(mid_x + cell_pad_x, project_text_y, line, "F1", 9))
+            project_text_y -= 12
+        y = block_bottom - 14
+
+    def draw_item_table_header():
+        nonlocal y
+        header_top = y
+        header_bottom = header_top - row_height
+        x = margin
+        commands.append(line_cmd(margin, header_top, margin + content_width, header_top, 1.0))
+        commands.append(line_cmd(margin, header_bottom, margin + content_width, header_bottom, 1.0))
+        for title, width, align in item_columns:
+            commands.append(line_cmd(x, header_top, x, header_bottom, 1.0))
+            if align == "right":
+                tx = x + width - cell_pad_x - (len(title) * 5)
+            elif align == "center":
+                tx = x + (width / 2) - (len(title) * 2.4)
             else:
-                lines.extend(_wrap_pdf_text(entry))
-        if blank_after:
-            lines.append('')
+                tx = x + cell_pad_x
+            commands.append(text_cmd(tx, header_bottom + cell_pad_y, title, "F2", 9))
+            x += width
+        commands.append(line_cmd(margin + content_width, header_top, margin + content_width, header_bottom, 1.0))
+        y = header_bottom
 
-    vendor_name = po.vendor.display_name or po.vendor.name if po.vendor else 'Not set'
-    project_name = po.project.name if po.project else 'General'
-    site_name = po.project.site_name if po.project and po.project.site_name else '—'
-    add_block('ELEVA ERP PURCHASE ORDER', blank_after=True)
-    add_block(f'PO Number: {po.po_number}')
-    add_block(f'Vendor: {vendor_name}')
-    add_block(f'Project / Site: {project_name} / {site_name}')
-    add_block(f'PO Date: {po.po_date or po.order_date or "—"}')
-    add_block(f'Expected Delivery: {po.expected_delivery or po.expected_delivery_date or "—"}')
-    add_block(f'Status: {_normalize_po_status(po.status)}')
-    if po.bom:
-        add_block(f'Generated from BOM: {po.bom.bom_name}')
-    add_block(blank_after=True)
-    add_block('LINE ITEMS')
+    draw_page_header()
+    draw_item_table_header()
+
     for index, row in enumerate(po_line_rows, start=1):
-        item = row['item']
-        total_amount = item.total_amount if item.total_amount is not None else 0
-        add_block(
-            f"{index}. {item.part_name or item.item_code or f'Item {item.id}'}",
-            f"   Desc: {item.description or '—'}",
-            f"   Qty: {row['ordered_qty']:g} | Unit: {item.unit or '—'} | Unit Price: {item.unit_price if item.unit_price is not None else '—'} | Total: {total_amount}",
-        )
-    add_block(blank_after=True)
-    add_block(
-        f'Subtotal: {po.subtotal_amount or 0:.2f}',
-        f'Freight: {po.freight_value or 0:.2f}',
-        f'Discount: {po.discount_value or 0:.2f}',
-        f'GST: {po.gst_value or 0:.2f}',
-        f'Grand Total: {(po.grand_total_amount if po.grand_total_amount is not None else (po.subtotal_amount or 0)):.2f}',
-        blank_after=True,
-    )
-    add_block(f'Notes: {po.notes or "—"}')
+        item = row["item"]
+        qty = row["ordered_qty"]
+        unit_price = item.unit_price if item.unit_price is not None else 0
+        line_total = item.total_amount if item.total_amount is not None else 0
+        row_values = [
+            [str(index)],
+            wrap_for_width(item.part_name or item.item_code or f"Item {item.id}", item_columns[1][1]),
+            wrap_for_width(item.description or "-", item_columns[2][1]),
+            [f"{qty:g}"],
+            [item.unit or "-"],
+            [_format_po_pdf_money(unit_price)],
+            [_format_po_pdf_money(line_total)],
+        ]
+        max_lines = max(len(col_lines) for col_lines in row_values)
+        current_row_h = max(row_height, (max_lines * 11.5) + 5)
+        ensure_space(current_row_h + 1)
+        top = y
+        bottom = y - current_row_h
+        x = margin
+        commands.append(line_cmd(margin, top, margin + content_width, top))
+        commands.append(line_cmd(margin, bottom, margin + content_width, bottom))
+        for col_idx, (_, width, align) in enumerate(item_columns):
+            commands.append(line_cmd(x, top, x, bottom))
+            lines_for_cell = row_values[col_idx]
+            for line_idx, cell_line in enumerate(lines_for_cell):
+                text_y = top - cell_pad_y - 9 - (line_idx * 11.5)
+                if align == "right":
+                    tx = x + width - cell_pad_x - (len(cell_line) * 4.9)
+                elif align == "center":
+                    tx = x + (width / 2) - (len(cell_line) * 2.4)
+                else:
+                    tx = x + cell_pad_x
+                commands.append(text_cmd(tx, text_y, cell_line, "F1", 9))
+            x += width
+        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom))
+        y = bottom
 
-    page_width = 612
-    page_height = 792
-    margin_x = 48
-    top_y = 744
-    line_height = 14
-    page_lines = max(1, int((top_y - 48) // line_height))
-    chunks = [lines[i:i + page_lines] for i in range(0, len(lines), page_lines)] or [[]]
+    totals_rows = [
+        ("Subtotal", _format_po_pdf_money(po.subtotal_amount)),
+        ("Freight", _format_po_pdf_money(po.freight_value)),
+        ("Discount", _format_po_pdf_money(po.discount_value)),
+        ("GST", _format_po_pdf_money(po.gst_value)),
+        ("Grand Total", _format_po_pdf_money(po.grand_total_amount if po.grand_total_amount is not None else po.subtotal_amount)),
+    ]
+    totals_width = 210.0
+    totals_left = margin + content_width - totals_width
+    totals_row_h = 15.0
+    totals_height = len(totals_rows) * totals_row_h
+    ensure_space(totals_height + 32)
+    y -= 12
+    top = y
+    bottom = y - totals_height
+    commands.append(line_cmd(totals_left, top, totals_left + totals_width, top, 1.0))
+    commands.append(line_cmd(totals_left, bottom, totals_left + totals_width, bottom, 1.0))
+    commands.append(line_cmd(totals_left, top, totals_left, bottom, 1.0))
+    split_x = totals_left + 120.0
+    commands.append(line_cmd(split_x, top, split_x, bottom, 1.0))
+    commands.append(line_cmd(totals_left + totals_width, top, totals_left + totals_width, bottom, 1.0))
+    for idx, (label, value) in enumerate(totals_rows):
+        row_top = top - (idx * totals_row_h)
+        row_bottom = row_top - totals_row_h
+        commands.append(line_cmd(totals_left, row_bottom, totals_left + totals_width, row_bottom))
+        commands.append(text_cmd(totals_left + cell_pad_x, row_bottom + 3, label, "F2" if label == "Grand Total" else "F1", 9))
+        value_x = totals_left + totals_width - cell_pad_x - (len(value) * 4.9)
+        commands.append(text_cmd(value_x, row_bottom + 3, value, "F2" if label == "Grand Total" else "F1", 9))
+    y = bottom - 18
+
+    if notes_text:
+        note_lines = wrap_for_width(notes_text, content_width, char_width=5.0)
+        note_height = 20 + (len(note_lines) * 11.5)
+        ensure_space(note_height + 4)
+        top = y
+        bottom = y - note_height
+        commands.append(line_cmd(margin, top, margin + content_width, top))
+        commands.append(line_cmd(margin, bottom, margin + content_width, bottom))
+        commands.append(line_cmd(margin, top, margin, bottom))
+        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom))
+        commands.append(text_cmd(margin + cell_pad_x, top - 12, "Notes", "F2", 10))
+        line_y = top - 24
+        for line in note_lines:
+            commands.append(text_cmd(margin + cell_pad_x, line_y, line, "F1", 9))
+            line_y -= 11.5
+        y = bottom - 4
+
+    finalize_page()
 
     objects = []
     page_ids = []
-    font_id = 3
+    font_regular_id = 3
+    font_bold_id = 4
 
-    for chunk in chunks:
-        text_commands = ['BT', '/F1 10 Tf', f'{margin_x} {top_y} Td']
-        first = True
-        for line in chunk:
-            escaped = _pdf_escape(line)
-            if first:
-                text_commands.append(f'({escaped}) Tj')
-                first = False
-            else:
-                text_commands.append(f'0 -{line_height} Td ({escaped}) Tj')
-        text_commands.append('ET')
-        stream = "\n".join(text_commands).encode("latin-1", "replace")
-        content_id = len(objects) + 4
-        objects.append(f"<< /Length {len(stream)} >>\nstream\n".encode('latin-1') + stream + b"\nendstream")
-        page_id = len(objects) + 4
+    for page_commands in pages:
+        stream = "\n".join(page_commands).encode("latin-1", "replace")
+        content_id = len(objects) + 5
+        objects.append(f"<< /Length {len(stream)} >>\nstream\n".encode("latin-1") + stream + b"\nendstream")
+        page_id = len(objects) + 5
         page_ids.append(page_id)
-        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] /Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>".encode('latin-1'))
+        objects.append(
+            (
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width:.0f} {page_height:.0f}] "
+                f"/Contents {content_id} 0 R /Resources << /Font << /F1 {font_regular_id} 0 R /F2 {font_bold_id} 0 R >> >> >>"
+            ).encode("latin-1")
+        )
 
-    kids = ' '.join(f'{page_id} 0 R' for page_id in page_ids)
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
     base_objects = [
-        b'<< /Type /Catalog /Pages 2 0 R >>',
-        f'<< /Type /Pages /Count {len(page_ids)} /Kids [{kids}] >>'.encode('latin-1'),
-        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Count {len(page_ids)} /Kids [{kids}] >>".encode("latin-1"),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
     ]
     all_objects = base_objects + objects
 
