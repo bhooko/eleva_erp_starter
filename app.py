@@ -80,6 +80,7 @@ DEFAULT_MAX_UPLOAD_SIZE_MB = 45
 DEFAULT_MAX_UPLOAD_SIZE = DEFAULT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ADMIN_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "admin_settings.json")
 INVENTORY_CONTROL_PATH = os.path.join(BASE_DIR, "instance", "inventory_control.json")
+PURCHASE_SETTINGS_PATH = os.path.join(BASE_DIR, "instance", "purchase_settings.json")
 
 
 def _default_admin_settings():
@@ -135,6 +136,38 @@ def _save_inventory_control(settings):
     merged = {**_default_inventory_control(), **(settings or {})}
     os.makedirs(os.path.dirname(INVENTORY_CONTROL_PATH), exist_ok=True)
     with open(INVENTORY_CONTROL_PATH, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2)
+    return merged
+
+
+def _default_purchase_settings():
+    return {
+        "default_po_terms": "",
+    }
+
+
+def _load_purchase_settings():
+    settings = _default_purchase_settings()
+    try:
+        with open(PURCHASE_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            file_data = json.load(f)
+        if isinstance(file_data, dict):
+            settings["default_po_terms"] = clean_str(file_data.get("default_po_terms")) or ""
+    except FileNotFoundError:
+        pass
+    except (OSError, json.JSONDecodeError):
+        pass
+    return settings
+
+
+def _save_purchase_settings(settings):
+    merged = {
+        **_default_purchase_settings(),
+        **(settings or {}),
+    }
+    merged["default_po_terms"] = clean_str(merged.get("default_po_terms")) or ""
+    os.makedirs(os.path.dirname(PURCHASE_SETTINGS_PATH), exist_ok=True)
+    with open(PURCHASE_SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(merged, f, indent=2)
     return merged
 
@@ -10100,6 +10133,7 @@ def _build_procurement_prefill_po_lines(project_id, vendor_id, bom_id):
 
 
 def _build_purchase_order_modal_context(*, selected_project_id=None, prefill_project_id=None, prefill_vendor_id=None, prefill_bom_id=None):
+    purchase_settings = _load_purchase_settings()
     return {
         "vendors": Vendor.query.order_by(Vendor.name).all(),
         "projects": Project.query.order_by(Project.name).all(),
@@ -10110,6 +10144,7 @@ def _build_purchase_order_modal_context(*, selected_project_id=None, prefill_pro
         "prefill_vendor_id": prefill_vendor_id,
         "prefill_bom_id": prefill_bom_id,
         "prefill_po_lines": _build_procurement_prefill_po_lines(prefill_project_id, prefill_vendor_id, prefill_bom_id),
+        "default_po_terms": purchase_settings.get("default_po_terms") or "",
     }
 
 
@@ -10632,6 +10667,7 @@ def purchase_orders():
             "expected_delivery_date"
         )
         notes = request.form.get("notes")
+        terms_conditions = (request.form.get("terms_conditions") or "").strip() or None
         freight_value = _resolve_po_financial_value(request.form.get("freight_value"))
         discount_value = _resolve_po_financial_value(request.form.get("discount_value"))
         gst_value = _resolve_po_financial_value(request.form.get("gst_value"))
@@ -10703,6 +10739,7 @@ def purchase_orders():
             expected_delivery_date=expected_delivery_date,
             created_by_user_id=current_user.id,
             notes=notes,
+            terms_conditions=terms_conditions,
             freight_value=freight_value,
             discount_value=discount_value,
             gst_value=gst_value,
@@ -11423,12 +11460,11 @@ def _format_po_pdf_money(value):
 def _build_po_pdf_bytes(po, po_line_rows):
     page_width = 595.0
     page_height = 842.0
-    margin = 36.0
+    margin = 34.0
     content_width = page_width - (2 * margin)
 
-    row_height = 16.0
-    cell_pad_x = 4.0
-    cell_pad_y = 3.0
+    row_height = 18.0
+    cell_pad_x = 5.0
 
     vendor_name = (po.vendor.display_name or po.vendor.name) if po.vendor else "-"
     po_date = _format_po_pdf_date(po.po_date or po.order_date)
@@ -11436,30 +11472,33 @@ def _build_po_pdf_bytes(po, po_line_rows):
     status_text = _normalize_po_status(po.status) or "-"
     project_name = po.project.name if po.project and po.project.name else "-"
     site_name = po.project.site_name if po.project and po.project.site_name else None
+    project_location = po.project.site_address if po.project and po.project.site_address else None
     bom_name = po.bom.bom_name if po.bom and po.bom.bom_name else None
-    vendor_address = po.vendor.address if po.vendor and po.vendor.address else None
+    vendor_contact_person = po.vendor.contact_person if po.vendor and po.vendor.contact_person else None
+    vendor_address = (po.vendor.address or po.vendor.billing_address) if po.vendor and (po.vendor.address or po.vendor.billing_address) else None
     vendor_email = po.vendor.email if po.vendor and po.vendor.email else None
     vendor_phone = po.vendor.phone if po.vendor and po.vendor.phone else None
     notes_text = (po.notes or "").strip()
+    terms_text = (po.terms_conditions or "").strip()
 
     item_columns = [
-        ("Sr No", 32.0, "center"),
-        ("Item / Part Name", 120.0, "left"),
-        ("Description", 167.0, "left"),
-        ("Qty", 45.0, "center"),
-        ("Unit", 45.0, "center"),
-        ("Unit Price", 57.0, "right"),
-        ("Line Total", 57.0, "right"),
+        ("Sr No", 30.0, "center"),
+        ("Item / Part Name", 125.0, "left"),
+        ("Description", 154.0, "left"),
+        ("Qty", 42.0, "center"),
+        ("Unit", 42.0, "center"),
+        ("Unit Price", 66.0, "right"),
+        ("Line Total", 68.0, "right"),
     ]
 
-    def wrap_for_width(value, width, char_width=5.1):
+    def wrap_for_width(value, width, char_width=4.9):
         max_chars = max(1, int((width - (2 * cell_pad_x)) / char_width))
         return _wrap_pdf_text(value, max_chars=max_chars)
 
     def text_cmd(x, y, text, font="F1", size=10):
         return f"BT /{font} {size} Tf {x:.2f} {y:.2f} Td ({_pdf_escape(text)}) Tj ET"
 
-    def line_cmd(x1, y1, x2, y2, width=0.8):
+    def line_cmd(x1, y1, x2, y2, width=0.7):
         return f"{width:.2f} w {x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S"
 
     pages = []
@@ -11471,76 +11510,6 @@ def _build_po_pdf_bytes(po, po_line_rows):
         pages.append(commands)
         commands = []
 
-    def ensure_space(height_needed):
-        nonlocal y
-        if y - height_needed < margin:
-            finalize_page()
-            y = page_height - margin
-            draw_page_header()
-            draw_item_table_header()
-
-    def draw_page_header():
-        nonlocal y
-        commands.append(text_cmd(margin, y - 4, "ELEVA ERP", "F2", 14))
-        commands.append(text_cmd(margin + 178, y - 4, "PURCHASE ORDER", "F2", 14))
-        y -= 22
-        left_x = margin
-        right_x = margin + (content_width / 2)
-        detail_rows = [
-            ("PO Number", po.po_number or "-"),
-            ("PO Date", po_date),
-            ("Status", status_text),
-            ("Expected Delivery", expected_delivery),
-        ]
-        table_top = y
-        table_bottom = y - (len(detail_rows) * row_height)
-        commands.append(line_cmd(left_x, table_top, right_x, table_top))
-        commands.append(line_cmd(left_x, table_bottom, right_x, table_bottom))
-        commands.append(line_cmd(left_x, table_top, left_x, table_bottom))
-        commands.append(line_cmd(right_x, table_top, right_x, table_bottom))
-        for idx, (label, value) in enumerate(detail_rows):
-            row_top = y - (idx * row_height)
-            row_bottom = row_top - row_height
-            commands.append(line_cmd(left_x, row_bottom, right_x, row_bottom))
-            commands.append(text_cmd(left_x + cell_pad_x, row_bottom + cell_pad_y, label, "F2", 9))
-            commands.append(text_cmd(left_x + 105, row_bottom + cell_pad_y, str(value), "F1", 9))
-
-        block_y = table_bottom - 10
-        commands.append(text_cmd(margin, block_y, "Vendor", "F2", 10))
-        block_y -= 12
-        vendor_lines = [vendor_name]
-        if vendor_address:
-            vendor_lines.extend(wrap_for_width(vendor_address, content_width / 2))
-        if vendor_email:
-            vendor_lines.append(f"Email: {vendor_email}")
-        if vendor_phone:
-            vendor_lines.append(f"Phone: {vendor_phone}")
-        vendor_height = (len(vendor_lines) * 12) + 8
-        project_lines = [f"Project: {project_name}"]
-        if site_name:
-            project_lines.append(f"Site: {site_name}")
-        if bom_name:
-            project_lines.append(f"Generated from BOM: {bom_name}")
-        project_height = (len(project_lines) * 12) + 8
-        block_height = max(vendor_height, project_height)
-        block_top = block_y + 8
-        block_bottom = block_top - block_height
-        mid_x = margin + (content_width / 2)
-        commands.append(line_cmd(margin, block_top, margin + content_width, block_top))
-        commands.append(line_cmd(margin, block_bottom, margin + content_width, block_bottom))
-        commands.append(line_cmd(margin, block_top, margin, block_bottom))
-        commands.append(line_cmd(mid_x, block_top, mid_x, block_bottom))
-        commands.append(line_cmd(margin + content_width, block_top, margin + content_width, block_bottom))
-        vendor_text_y = block_top - 12
-        for line in vendor_lines:
-            commands.append(text_cmd(margin + cell_pad_x, vendor_text_y, line, "F1", 9))
-            vendor_text_y -= 12
-        project_text_y = block_top - 12
-        for line in project_lines:
-            commands.append(text_cmd(mid_x + cell_pad_x, project_text_y, line, "F1", 9))
-            project_text_y -= 12
-        y = block_bottom - 14
-
     def draw_item_table_header():
         nonlocal y
         header_top = y
@@ -11551,15 +11520,122 @@ def _build_po_pdf_bytes(po, po_line_rows):
         for title, width, align in item_columns:
             commands.append(line_cmd(x, header_top, x, header_bottom, 1.0))
             if align == "right":
-                tx = x + width - cell_pad_x - (len(title) * 5)
+                tx = x + width - cell_pad_x - (len(title) * 4.7)
             elif align == "center":
-                tx = x + (width / 2) - (len(title) * 2.4)
+                tx = x + (width / 2) - (len(title) * 2.3)
             else:
                 tx = x + cell_pad_x
-            commands.append(text_cmd(tx, header_bottom + cell_pad_y, title, "F2", 9))
+            commands.append(text_cmd(tx, header_bottom + 5.5, title, "F2", 9))
             x += width
         commands.append(line_cmd(margin + content_width, header_top, margin + content_width, header_bottom, 1.0))
         y = header_bottom
+
+    def draw_page_header():
+        nonlocal y
+        commands.append(text_cmd(margin, y - 2, "ELEVA ERP", "F2", 13))
+        commands.append(text_cmd(margin + content_width - 180, y - 2, "PURCHASE ORDER", "F2", 15))
+        y -= 22
+        commands.append(line_cmd(margin, y, margin + content_width, y, 1.0))
+        y -= 10
+
+        left_w = 245.0
+        right_w = content_width - left_w
+        left_x = margin
+        right_x = margin + left_w
+
+        info_rows = [
+            ("PO Number", po.po_number or "-"),
+            ("PO Date", po_date),
+            ("Status", status_text),
+            ("Expected Delivery", expected_delivery),
+        ]
+        table_top = y
+        table_bottom = y - (len(info_rows) * row_height)
+
+        commands.append(line_cmd(right_x, table_top, right_x, table_bottom, 0.8))
+        commands.append(line_cmd(left_x, table_top, left_x + left_w, table_top, 0.8))
+        commands.append(line_cmd(left_x, table_bottom, left_x + left_w, table_bottom, 0.8))
+        commands.append(line_cmd(left_x, table_top, left_x, table_bottom, 0.8))
+        commands.append(line_cmd(left_x + left_w, table_top, left_x + left_w, table_bottom, 0.8))
+        for idx, (label, value) in enumerate(info_rows):
+            r_top = table_top - (idx * row_height)
+            r_bottom = r_top - row_height
+            commands.append(line_cmd(left_x, r_bottom, left_x + left_w, r_bottom, 0.6))
+            commands.append(text_cmd(left_x + cell_pad_x, r_bottom + 6, label, "F2", 9))
+            commands.append(text_cmd(left_x + 105, r_bottom + 6, str(value), "F1", 9))
+
+        right_lines = []
+        if project_name and project_name != "-":
+            right_lines.append(f"Project: {project_name}")
+        if site_name:
+            right_lines.append(f"Site: {site_name}")
+        if project_location:
+            right_lines.extend([f"Location: {line}" for line in wrap_for_width(project_location, right_w, 5.0)])
+        if bom_name:
+            right_lines.append(f"BOM: {bom_name}")
+        right_lines.append(f"Reference: {(po.origin or 'ERP').upper()}")
+        right_top = table_top
+        right_bottom = table_bottom
+        line_y = right_top - 12
+        for text_line in right_lines[:6]:
+            commands.append(text_cmd(right_x + cell_pad_x, line_y, text_line, "F1", 9))
+            line_y -= 11
+
+        y = table_bottom - 12
+
+        vendor_lines = [vendor_name]
+        if vendor_contact_person:
+            vendor_lines.append(f"Contact: {vendor_contact_person}")
+        if vendor_address:
+            vendor_lines.extend(wrap_for_width(vendor_address, content_width / 2, 5.0))
+        if vendor_phone:
+            vendor_lines.append(f"Phone: {vendor_phone}")
+        if vendor_email:
+            vendor_lines.append(f"Email: {vendor_email}")
+
+        project_block_lines = []
+        if project_name and project_name != "-":
+            project_block_lines.append(f"Project: {project_name}")
+        if site_name:
+            project_block_lines.append(f"Site: {site_name}")
+        if bom_name:
+            project_block_lines.append(f"BOM: {bom_name}")
+        if not project_block_lines:
+            project_block_lines.append(f"Reference: {(po.origin or 'ERP').upper()}")
+
+        block_height = max(len(vendor_lines), len(project_block_lines)) * 11.5 + 16
+        block_top = y
+        block_bottom = y - block_height
+        mid_x = margin + (content_width / 2)
+
+        commands.append(line_cmd(margin, block_top, margin + content_width, block_top, 0.8))
+        commands.append(line_cmd(margin, block_bottom, margin + content_width, block_bottom, 0.8))
+        commands.append(line_cmd(margin, block_top, margin, block_bottom, 0.8))
+        commands.append(line_cmd(mid_x, block_top, mid_x, block_bottom, 0.8))
+        commands.append(line_cmd(margin + content_width, block_top, margin + content_width, block_bottom, 0.8))
+        commands.append(text_cmd(margin + cell_pad_x, block_top - 11, "Vendor", "F2", 9))
+        commands.append(text_cmd(mid_x + cell_pad_x, block_top - 11, "Project / Source", "F2", 9))
+
+        v_y = block_top - 23
+        for line in vendor_lines:
+            commands.append(text_cmd(margin + cell_pad_x, v_y, line, "F1", 9))
+            v_y -= 11.5
+
+        p_y = block_top - 23
+        for line in project_block_lines:
+            commands.append(text_cmd(mid_x + cell_pad_x, p_y, line, "F1", 9))
+            p_y -= 11.5
+
+        y = block_bottom - 14
+
+    def ensure_space(height_needed, include_table_header=True):
+        nonlocal y
+        if y - height_needed < margin:
+            finalize_page()
+            y = page_height - margin
+            draw_page_header()
+            if include_table_header:
+                draw_item_table_header()
 
     draw_page_header()
     draw_item_table_header()
@@ -11569,37 +11645,38 @@ def _build_po_pdf_bytes(po, po_line_rows):
         qty = row["ordered_qty"]
         unit_price = item.unit_price if item.unit_price is not None else 0
         line_total = item.total_amount if item.total_amount is not None else 0
+        description = item.specification or item.description or "-"
         row_values = [
             [str(index)],
             wrap_for_width(item.part_name or item.item_code or f"Item {item.id}", item_columns[1][1]),
-            wrap_for_width(item.description or "-", item_columns[2][1]),
+            wrap_for_width(description, item_columns[2][1]),
             [f"{qty:g}"],
             [item.unit or "-"],
             [_format_po_pdf_money(unit_price)],
             [_format_po_pdf_money(line_total)],
         ]
         max_lines = max(len(col_lines) for col_lines in row_values)
-        current_row_h = max(row_height, (max_lines * 11.5) + 5)
+        current_row_h = max(row_height, (max_lines * 11.2) + 7)
         ensure_space(current_row_h + 1)
         top = y
         bottom = y - current_row_h
         x = margin
-        commands.append(line_cmd(margin, top, margin + content_width, top))
-        commands.append(line_cmd(margin, bottom, margin + content_width, bottom))
+        commands.append(line_cmd(margin, top, margin + content_width, top, 0.7))
+        commands.append(line_cmd(margin, bottom, margin + content_width, bottom, 0.7))
         for col_idx, (_, width, align) in enumerate(item_columns):
-            commands.append(line_cmd(x, top, x, bottom))
+            commands.append(line_cmd(x, top, x, bottom, 0.6))
             lines_for_cell = row_values[col_idx]
             for line_idx, cell_line in enumerate(lines_for_cell):
-                text_y = top - cell_pad_y - 9 - (line_idx * 11.5)
+                text_y = top - 12 - (line_idx * 11.2)
                 if align == "right":
-                    tx = x + width - cell_pad_x - (len(cell_line) * 4.9)
+                    tx = x + width - cell_pad_x - (len(cell_line) * 4.8)
                 elif align == "center":
-                    tx = x + (width / 2) - (len(cell_line) * 2.4)
+                    tx = x + (width / 2) - (len(cell_line) * 2.3)
                 else:
                     tx = x + cell_pad_x
                 commands.append(text_cmd(tx, text_y, cell_line, "F1", 9))
             x += width
-        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom))
+        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom, 0.6))
         y = bottom
 
     totals_rows = [
@@ -11609,45 +11686,61 @@ def _build_po_pdf_bytes(po, po_line_rows):
         ("GST", _format_po_pdf_money(po.gst_value)),
         ("Grand Total", _format_po_pdf_money(po.grand_total_amount if po.grand_total_amount is not None else po.subtotal_amount)),
     ]
-    totals_width = 210.0
+    totals_width = 215.0
     totals_left = margin + content_width - totals_width
-    totals_row_h = 15.0
+    totals_row_h = 16.0
     totals_height = len(totals_rows) * totals_row_h
-    ensure_space(totals_height + 32)
-    y -= 12
+    ensure_space(totals_height + 20, include_table_header=False)
+    y -= 10
     top = y
     bottom = y - totals_height
     commands.append(line_cmd(totals_left, top, totals_left + totals_width, top, 1.0))
     commands.append(line_cmd(totals_left, bottom, totals_left + totals_width, bottom, 1.0))
     commands.append(line_cmd(totals_left, top, totals_left, bottom, 1.0))
-    split_x = totals_left + 120.0
-    commands.append(line_cmd(split_x, top, split_x, bottom, 1.0))
+    split_x = totals_left + 122.0
+    commands.append(line_cmd(split_x, top, split_x, bottom, 0.8))
     commands.append(line_cmd(totals_left + totals_width, top, totals_left + totals_width, bottom, 1.0))
     for idx, (label, value) in enumerate(totals_rows):
         row_top = top - (idx * totals_row_h)
         row_bottom = row_top - totals_row_h
-        commands.append(line_cmd(totals_left, row_bottom, totals_left + totals_width, row_bottom))
-        commands.append(text_cmd(totals_left + cell_pad_x, row_bottom + 3, label, "F2" if label == "Grand Total" else "F1", 9))
-        value_x = totals_left + totals_width - cell_pad_x - (len(value) * 4.9)
-        commands.append(text_cmd(value_x, row_bottom + 3, value, "F2" if label == "Grand Total" else "F1", 9))
-    y = bottom - 18
+        commands.append(line_cmd(totals_left, row_bottom, totals_left + totals_width, row_bottom, 0.7))
+        is_grand = label == "Grand Total"
+        commands.append(text_cmd(totals_left + cell_pad_x, row_bottom + 5.5, label, "F2" if is_grand else "F1", 9))
+        value_x = totals_left + totals_width - cell_pad_x - (len(value) * 4.8)
+        commands.append(text_cmd(value_x, row_bottom + 5.5, value, "F2" if is_grand else "F1", 9))
+    y = bottom - 14
 
-    if notes_text:
-        note_lines = wrap_for_width(notes_text, content_width, char_width=5.0)
-        note_height = 20 + (len(note_lines) * 11.5)
-        ensure_space(note_height + 4)
+    def draw_text_section(title, value):
+        nonlocal y
+        if not value:
+            return
+        normalized = []
+        clean_value = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+        for raw_line in clean_value.split("\n"):
+            wrapped = _wrap_pdf_text(raw_line, max_chars=95)
+            if wrapped == ["—"] and raw_line.strip() == "":
+                normalized.append("")
+            else:
+                normalized.extend(wrapped)
+        if not normalized:
+            return
+        section_height = 24 + (len(normalized) * 11.2)
+        ensure_space(section_height + 4, include_table_header=False)
         top = y
-        bottom = y - note_height
-        commands.append(line_cmd(margin, top, margin + content_width, top))
-        commands.append(line_cmd(margin, bottom, margin + content_width, bottom))
-        commands.append(line_cmd(margin, top, margin, bottom))
-        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom))
-        commands.append(text_cmd(margin + cell_pad_x, top - 12, "Notes", "F2", 10))
+        bottom = y - section_height
+        commands.append(line_cmd(margin, top, margin + content_width, top, 0.8))
+        commands.append(line_cmd(margin, bottom, margin + content_width, bottom, 0.8))
+        commands.append(line_cmd(margin, top, margin, bottom, 0.8))
+        commands.append(line_cmd(margin + content_width, top, margin + content_width, bottom, 0.8))
+        commands.append(text_cmd(margin + cell_pad_x, top - 12, title, "F2", 10))
         line_y = top - 24
-        for line in note_lines:
-            commands.append(text_cmd(margin + cell_pad_x, line_y, line, "F1", 9))
-            line_y -= 11.5
-        y = bottom - 4
+        for line in normalized:
+            commands.append(text_cmd(margin + cell_pad_x, line_y, line or " ", "F1", 9))
+            line_y -= 11.2
+        y = bottom - 8
+
+    draw_text_section("Notes", notes_text)
+    draw_text_section("Terms & Conditions", terms_text)
 
     finalize_page()
 
@@ -11921,6 +12014,12 @@ def purchase_order_detail_view(po_id: int):
 
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
+        if action == "update_po_terms":
+            po.terms_conditions = (request.form.get("terms_conditions") or "").strip() or None
+            db.session.commit()
+            flash("PO terms updated.", "success")
+            return redirect(url_for("purchase_order_detail_view", po_id=po.id))
+
     vendor_issues = (
         VendorIssue.query.options(
             joinedload(VendorIssue.product),
@@ -12133,9 +12232,16 @@ def purchase_order_issue_create(po_id: int):
 @login_required
 def purchase_procurement_stages():
     ensure_bootstrap()
+    purchase_settings = _load_purchase_settings()
 
     if request.method == "POST":
         action = (request.form.get("action") or "create").strip().lower()
+        if action == "save_po_terms":
+            default_po_terms = (request.form.get("default_po_terms") or "").strip()
+            _save_purchase_settings({"default_po_terms": default_po_terms})
+            flash("Purchase settings updated.", "success")
+            return redirect(url_for("purchase_procurement_stages"))
+
         name = (request.form.get("name") or "").strip()
         code = (request.form.get("code") or "").strip() or None
         sequence_raw = request.form.get("sequence") or None
@@ -12212,7 +12318,11 @@ def purchase_procurement_stages():
             ProcurementStage.sequence.asc(), ProcurementStage.name.asc()
         ).all()
     )
-    return render_template("purchase_procurement_stages.html", stages=stages)
+    return render_template(
+        "purchase_procurement_stages.html",
+        stages=stages,
+        purchase_settings=purchase_settings,
+    )
 
 
 @app.route("/purchase/bom/<int:bom_id>/generate-po", methods=["GET", "POST"])
@@ -12231,6 +12341,7 @@ def generate_po_from_bom(bom_id):
         .all()
     )
     project_options = Project.query.order_by(Project.name.asc()).all()
+    purchase_settings = _load_purchase_settings()
     related_pos = (
         PurchaseOrder.query.options(
             joinedload(PurchaseOrder.vendor), joinedload(PurchaseOrder.stage)
@@ -12246,6 +12357,11 @@ def generate_po_from_bom(bom_id):
     selected_vendor_id = request.values.get("vendor_id") or None
     project_id_value = request.values.get("project_id") or bom.project_id
     po_notes = request.values.get("po_notes") or None
+    po_terms = request.values.get("po_terms")
+    if po_terms is None:
+        po_terms = purchase_settings.get("default_po_terms") or ""
+    else:
+        po_terms = po_terms.strip()
     pending_only = request.values.get("pending_only") is not None
     allow_incomplete_spec = request.values.get("allow_incomplete_spec") is not None
     preview_items = None
@@ -12352,6 +12468,7 @@ def generate_po_from_bom(bom_id):
                 selected_vendor_id = request.form.get("vendor_id") or None
                 project_id_value = request.form.get("project_id") or bom.project_id
                 po_notes = request.form.get("po_notes") or None
+                po_terms = (request.form.get("po_terms") or "").strip()
                 pending_only = request.form.get("pending_only") is not None
                 try:
                     target_stage_id = int(selected_stage_id) if selected_stage_id else None
@@ -12377,6 +12494,7 @@ def generate_po_from_bom(bom_id):
             selected_vendor_id = request.form.get("vendor_id") or None
             project_id_value = request.form.get("project_id") or bom.project_id
             po_notes = request.form.get("po_notes") or None
+            po_terms = (request.form.get("po_terms") or "").strip()
             pending_only = request.form.get("pending_only") is not None
 
             if not selected_stage_id or not selected_vendor_id:
@@ -12415,6 +12533,7 @@ def generate_po_from_bom(bom_id):
                     expected_delivery_date=date.today() + datetime.timedelta(days=15),
                     created_by_user_id=current_user.id,
                     notes=notes_combined,
+                    terms_conditions=po_terms or None,
                     origin="erp",
                 )
                 db.session.add(po)
@@ -12511,6 +12630,7 @@ def generate_po_from_bom(bom_id):
         selected_vendor_id=str(selected_vendor_id or ""),
         project_id_value=project_id_value,
         po_notes=po_notes,
+        po_terms=po_terms or "",
         pending_only=pending_only,
         allow_incomplete_spec=allow_incomplete_spec,
         missing_spec_items=missing_spec_items_payload,
@@ -18041,6 +18161,9 @@ def ensure_bom_columns():
     if "material_status" not in po_cols:
         cur.execute("ALTER TABLE purchase_order ADD COLUMN material_status TEXT DEFAULT 'Pending';")
         po_added.append("material_status")
+    if "terms_conditions" not in po_cols:
+        cur.execute("ALTER TABLE purchase_order ADD COLUMN terms_conditions TEXT;")
+        po_added.append("terms_conditions")
 
     if po_added:
         cur.execute(

@@ -103,6 +103,18 @@
         <p class="text-xs uppercase text-slate-500">Notes</p>
         <p class="text-base text-slate-700 whitespace-pre-line">{{ po.notes or '—' }}</p>
       </div>
+      <div class="md:col-span-2">
+        <p class="text-xs uppercase text-slate-500">Terms &amp; Conditions</p>
+        <p class="text-base text-slate-700 whitespace-pre-line">{{ po.terms_conditions or '—' }}</p>
+        <form method="post" class="mt-2 space-y-2">
+          {{ csrf_field() }}
+          <input type="hidden" name="action" value="update_po_terms">
+          <textarea name="terms_conditions" rows="3" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Enter PO terms">{{ po.terms_conditions or '' }}</textarea>
+          <div class="flex justify-end">
+            <button type="submit" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-700 hover:bg-slate-50">Update Terms</button>
+          </div>
+        </form>
+      </div>
       <div>
         <p class="text-xs uppercase text-slate-500">Freight / Discount / GST</p>
         <p class="text-sm text-slate-700">Freight: {{ '%.2f'|format(po.freight_value or 0) }}</p>
