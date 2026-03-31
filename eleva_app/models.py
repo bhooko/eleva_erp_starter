@@ -3033,6 +3033,8 @@ class InventoryReceipt(db.Model):
     )
     receipt_number = db.Column(db.String(80), nullable=False)
     received_date = db.Column(db.Date, nullable=True)
+    vendor_invoice_no = db.Column(db.String(120), nullable=True)
+    invoice_date = db.Column(db.Date, nullable=True)
     received_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     status = db.Column(db.String(20), nullable=False, default="Open")
     closed_at = db.Column(db.Date, nullable=True)
@@ -3080,6 +3082,8 @@ class DeliveryChallan(db.Model):
     vehicle_details = db.Column(db.String(150), nullable=True)
     driver_name = db.Column(db.String(120), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    receiver_name = db.Column(db.String(255), nullable=True)
+    receiver_signature = db.Column(db.Text, nullable=True)
     is_completed = db.Column(db.Boolean, nullable=False, default=False)
     completed_at = db.Column(db.DateTime, nullable=True)
 

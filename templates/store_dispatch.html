@@ -57,19 +57,21 @@
             <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700' if dispatch.status == 'Delivered' else 'bg-amber-100 text-amber-700' }}">
               {{ dispatch.status or 'Draft' }}
             </span>
+            {% if dispatch.receiver_name %}
+            <div class="text-xs text-slate-500 mt-1">Receiver: {{ dispatch.receiver_name }}</div>
+            {% endif %}
           </td>
           <td class="py-3 px-4 text-right space-x-2">
             <label for="edit-dispatch-{{ dispatch.id }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border {{ 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed pointer-events-none' if dispatch.is_completed else 'border-slate-200 hover:bg-slate-50 cursor-pointer' }}">
               ✎ Edit
             </label>
-            <form method="POST" action="{{ url_for('complete_dispatch', dispatch_id=dispatch.id) }}" class="inline">
-              {{ csrf_field() }}
-              <button type="submit" class="px-3 py-1.5 rounded-lg {{ 'bg-slate-100 text-slate-400 cursor-not-allowed' if dispatch.is_completed else 'bg-emerald-500 text-white hover:bg-emerald-600' }}" {% if dispatch.is_completed %}disabled{% endif %}>Mark delivered</button>
-            </form>
+            <label for="complete-dispatch-{{ dispatch.id }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg {{ 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none' if dispatch.is_completed else 'bg-emerald-500 text-white hover:bg-emerald-600 cursor-pointer' }}">
+              Mark delivered
+            </label>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="py-4 px-4 text-slate-500">No delivery challans yet.</td></tr>
+        <tr><td colspan="10" class="py-4 px-4 text-slate-500">No delivery challans yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -152,5 +154,127 @@
     </div>
   </div>
   {% endfor %}
+  {% for dispatch in dispatches %}
+  <input type="checkbox" id="complete-dispatch-{{ dispatch.id }}" class="hidden peer" />
+  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('complete-dispatch-{{ dispatch.id }}').checked=false;"></div>
+  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
+        <div>
+          <p class="text-xs text-slate-500 uppercase">Delivery challan completion</p>
+          <h2 class="text-lg font-semibold">Receiver acknowledgement</h2>
+        </div>
+        <button class="text-slate-500" onclick="document.getElementById('complete-dispatch-{{ dispatch.id }}').checked=false;">✕</button>
+      </div>
+      <form method="POST" action="{{ url_for('complete_dispatch', dispatch_id=dispatch.id) }}" class="p-5 space-y-4" onsubmit="return setDispatchSignature('{{ dispatch.id }}')">
+        {{ csrf_field() }}
+        <label class="space-y-1 block">
+          <span class="text-sm">Receiver name <span class="text-red-500">*</span></span>
+          <input type="text" name="receiver_name" value="{{ dispatch.receiver_name or '' }}" class="w-full rounded-lg border-slate-200" required />
+        </label>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm">Receiver signature <span class="text-red-500">*</span></span>
+            <button type="button" class="text-xs text-slate-600 hover:text-slate-900 underline" onclick="clearDispatchSignature('{{ dispatch.id }}')">Clear</button>
+          </div>
+          <canvas id="signature-canvas-{{ dispatch.id }}" class="w-full h-48 border border-slate-200 rounded-lg touch-none bg-white"></canvas>
+          <input type="hidden" id="signature-data-{{ dispatch.id }}" name="receiver_signature" />
+          <p class="text-xs text-slate-500">Draw using mouse or touch.</p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button type="button" class="px-4 py-2 rounded-lg border border-slate-200" onclick="document.getElementById('complete-dispatch-{{ dispatch.id }}').checked=false;">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">Mark delivered</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
 </div>
+<script>
+  const dispatchSignatures = {};
+
+  function initDispatchSignature(dispatchId) {
+    if (dispatchSignatures[dispatchId]) return;
+    const canvas = document.getElementById(`signature-canvas-${dispatchId}`);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const state = { drawing: false, dirty: false };
+
+    const resizeCanvas = () => {
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#111827';
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const getPoint = (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const source = event.touches ? event.touches[0] : event;
+      return { x: source.clientX - rect.left, y: source.clientY - rect.top };
+    };
+    const start = (event) => {
+      event.preventDefault();
+      state.drawing = true;
+      const p = getPoint(event);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      state.dirty = true;
+    };
+    const move = (event) => {
+      if (!state.drawing) return;
+      event.preventDefault();
+      const p = getPoint(event);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    };
+    const end = (event) => {
+      if (!state.drawing) return;
+      event.preventDefault();
+      state.drawing = false;
+    };
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    canvas.addEventListener('mouseup', end);
+    canvas.addEventListener('mouseleave', end);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end, { passive: false });
+    dispatchSignatures[dispatchId] = { canvas, ctx, state };
+  }
+
+  function clearDispatchSignature(dispatchId) {
+    initDispatchSignature(dispatchId);
+    const entry = dispatchSignatures[dispatchId];
+    if (!entry) return;
+    entry.ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
+    entry.state.dirty = false;
+    document.getElementById(`signature-data-${dispatchId}`).value = '';
+  }
+
+  function setDispatchSignature(dispatchId) {
+    initDispatchSignature(dispatchId);
+    const entry = dispatchSignatures[dispatchId];
+    if (!entry || !entry.state.dirty) {
+      alert('Receiver signature is required.');
+      return false;
+    }
+    document.getElementById(`signature-data-${dispatchId}`).value = entry.canvas.toDataURL('image/png');
+    return true;
+  }
+
+  document.querySelectorAll('input[id^="complete-dispatch-"]').forEach((toggle) => {
+    toggle.addEventListener('change', () => {
+      if (!toggle.checked) return;
+      const dispatchId = toggle.id.replace('complete-dispatch-', '');
+      requestAnimationFrame(() => initDispatchSignature(dispatchId));
+    });
+  });
+</script>
 {% endblock %}
