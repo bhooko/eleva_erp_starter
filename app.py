@@ -11549,7 +11549,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
 
     def draw_page_header():
         nonlocal y
-        commands.append(text_cmd(margin, y - 2, "ELEVA ERP", "F2", 13))
+        commands.append(text_cmd(margin, y - 2, "Eleva Elevators & Escalators Pvt Ltd", "F2", 13))
         commands.append(text_cmd(margin + content_width - 180, y - 2, "PURCHASE ORDER", "F2", 15))
         y -= 22
         commands.append(line_cmd(margin, y, margin + content_width, y, 1.0))
@@ -11708,7 +11708,9 @@ def _build_po_pdf_bytes(po, po_line_rows):
             return
         normalized = []
         clean_value = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
-        max_chars = max(1, int((content_width - (2 * cell_pad_x)) / 4.9))
+        # Do not solve the width issue by enlarging the box alone. Fix the content container so the text actually occupies the full internal width.
+        # Use a realistic glyph width so wrapping uses the full inner width instead of a narrower virtual column.
+        max_chars = max(1, int((content_width - (2 * cell_pad_x)) / 4.2))
         # Do not improve readability by injecting formatting. Preserve author control exactly.
         for raw_line in clean_value.split("\n"):
             if raw_line == "":
