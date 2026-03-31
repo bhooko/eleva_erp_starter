@@ -10667,7 +10667,9 @@ def purchase_orders():
             "expected_delivery_date"
         )
         notes = request.form.get("notes")
-        terms_conditions = (request.form.get("terms_conditions") or "").strip() or None
+        terms_conditions = request.form.get("terms_conditions")
+        if terms_conditions == "":
+            terms_conditions = None
         freight_value = _resolve_po_financial_value(request.form.get("freight_value"))
         discount_value = _resolve_po_financial_value(request.form.get("discount_value"))
         gst_value = _resolve_po_financial_value(request.form.get("gst_value"))
@@ -11469,7 +11471,6 @@ def _build_po_pdf_bytes(po, po_line_rows):
     vendor_name = (po.vendor.display_name or po.vendor.name) if po.vendor else "-"
     po_date = _format_po_pdf_date(po.po_date or po.order_date)
     expected_delivery = _format_po_pdf_date(po.expected_delivery or po.expected_delivery_date)
-    status_text = _normalize_po_status(po.status) or "-"
     project_name = po.project.name if po.project and po.project.name else "-"
     site_name = po.project.site_name if po.project and po.project.site_name else None
     project_location = po.project.site_address if po.project and po.project.site_address else None
@@ -11479,7 +11480,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
     vendor_email = po.vendor.email if po.vendor and po.vendor.email else None
     vendor_phone = po.vendor.phone if po.vendor and po.vendor.phone else None
     notes_text = (po.notes or "").strip()
-    terms_text = (po.terms_conditions or "").strip()
+    terms_text = po.terms_conditions or ""
 
     item_columns = [
         ("Sr No", 30.0, "center"),
@@ -11562,7 +11563,6 @@ def _build_po_pdf_bytes(po, po_line_rows):
         info_rows = [
             ("PO Number", po.po_number or "-"),
             ("PO Date", po_date),
-            ("Status", status_text),
             ("Expected Delivery", expected_delivery),
         ]
         table_top = y
@@ -11579,14 +11579,6 @@ def _build_po_pdf_bytes(po, po_line_rows):
             commands.append(line_cmd(left_x, r_bottom, left_x + left_w, r_bottom, 0.6))
             commands.append(text_cmd(left_x + cell_pad_x, r_bottom + 6, label, "F2", 9))
             commands.append(text_cmd(left_x + 105, r_bottom + 6, str(value), "F1", 9))
-
-        right_lines = [f"Prepared: {datetime.datetime.utcnow().strftime('%d %b %Y')}"]
-        right_top = table_top
-        right_bottom = table_bottom
-        line_y = right_top - 12
-        for text_line in right_lines[:6]:
-            commands.append(text_cmd(right_x + cell_pad_x, line_y, text_line, "F1", 9))
-            line_y -= 11
 
         y = table_bottom - 10
 
@@ -11715,19 +11707,17 @@ def _build_po_pdf_bytes(po, po_line_rows):
         if not value:
             return
         normalized = []
-        is_terms = title.strip().lower().startswith("terms")
         clean_value = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+        max_chars = max(1, int((content_width - (2 * cell_pad_x)) / 4.9))
+        # Do not improve readability by injecting formatting. Preserve author control exactly.
         for raw_line in clean_value.split("\n"):
-            wrapped = _wrap_pdf_text(raw_line, max_chars=95)
-            if wrapped == ["—"] and raw_line.strip() == "":
+            if raw_line == "":
                 normalized.append("")
             else:
-                normalized.extend(wrapped)
-                if is_terms and raw_line.strip() and re.match(r"^\s*\d+[\.\)]\s+", raw_line.strip()):
-                    normalized.append("")
+                normalized.extend(_wrap_pdf_text(raw_line, max_chars=max_chars))
         if not normalized:
             return
-        line_height = 12.6 if is_terms else 11.2
+        line_height = 11.2
         section_height = 24 + (len(normalized) * line_height)
         ensure_space(section_height + 4, include_table_header=False)
         top = y
@@ -12019,7 +12009,9 @@ def purchase_order_detail_view(po_id: int):
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
 
         if action == "update_po_terms":
-            po.terms_conditions = (request.form.get("terms_conditions") or "").strip() or None
+            po.terms_conditions = request.form.get("terms_conditions")
+            if po.terms_conditions == "":
+                po.terms_conditions = None
             db.session.commit()
             flash("PO terms updated.", "success")
             return redirect(url_for("purchase_order_detail_view", po_id=po.id))
@@ -12498,7 +12490,7 @@ def generate_po_from_bom(bom_id):
             selected_vendor_id = request.form.get("vendor_id") or None
             project_id_value = request.form.get("project_id") or bom.project_id
             po_notes = request.form.get("po_notes") or None
-            po_terms = (request.form.get("po_terms") or "").strip()
+            po_terms = request.form.get("po_terms")
             pending_only = request.form.get("pending_only") is not None
 
             if not selected_stage_id or not selected_vendor_id:

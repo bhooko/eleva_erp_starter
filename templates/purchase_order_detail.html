@@ -103,9 +103,10 @@
         <p class="text-xs uppercase text-slate-500">Notes</p>
         <p class="text-base text-slate-700 whitespace-pre-line">{{ po.notes or '—' }}</p>
       </div>
-      <div class="md:col-span-2">
+      <div class="md:col-span-3">
         <p class="text-xs uppercase text-slate-500">Terms &amp; Conditions</p>
-        <p class="text-base text-slate-700 whitespace-pre-line">{{ po.terms_conditions or '—' }}</p>
+        <!-- Do not improve readability by injecting formatting. Preserve author control exactly. -->
+        <div class="w-full text-base text-slate-700 whitespace-pre-wrap break-words">{{ po.terms_conditions or '—' }}</div>
         <form method="post" class="mt-2 space-y-2">
           {{ csrf_field() }}
           <input type="hidden" name="action" value="update_po_terms">
