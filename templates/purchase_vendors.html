@@ -89,16 +89,16 @@
     </div>
   </div>
 
-  <input type="checkbox" id="edit-vendor" class="hidden peer" />
-  <div class="fixed inset-0 z-40 hidden peer-checked:block bg-slate-900/60 backdrop-blur" onclick="document.getElementById('edit-vendor').checked=false;"></div>
-  <div class="fixed inset-0 z-50 hidden peer-checked:flex items-center justify-center pointer-events-none peer-checked:pointer-events-auto">
-    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked:scale-100 scale-95">
+  <input type="checkbox" id="edit-vendor" class="hidden peer/edit-vendor" />
+  <div class="fixed inset-0 z-40 hidden peer-checked/edit-vendor:block bg-slate-900/60 backdrop-blur" data-close-edit-vendor></div>
+  <div class="fixed inset-0 z-50 hidden peer-checked/edit-vendor:flex items-center justify-center pointer-events-none peer-checked/edit-vendor:pointer-events-auto">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all peer-checked/edit-vendor:scale-100 scale-95">
       <div class="flex items-center justify-between px-5 py-4 bg-slate-50 border-b">
         <div>
           <p class="text-xs text-slate-500 uppercase">Vendor registry</p>
           <h2 class="text-lg font-semibold">Edit vendor</h2>
         </div>
-        <button class="text-slate-500" type="button" onclick="document.getElementById('edit-vendor').checked=false;">✕</button>
+        <button class="text-slate-500" type="button" data-close-edit-vendor>✕</button>
       </div>
       <form method="POST" id="editVendorForm" class="p-5 space-y-4">
         {{ csrf_field() }}
@@ -129,7 +129,7 @@
           <textarea name="notes" id="editVendorNotes" rows="2" class="w-full rounded-lg border-slate-200"></textarea>
         </label>
         <div class="flex items-center justify-end gap-3 pt-2">
-          <button type="button" class="px-4 py-2 rounded-lg border" onclick="document.getElementById('edit-vendor').checked=false;">Cancel</button>
+          <button type="button" class="px-4 py-2 rounded-lg border" data-close-edit-vendor>Cancel</button>
           <button type="submit" class="px-5 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Update Vendor</button>
         </div>
       </form>
@@ -353,6 +353,14 @@
     const editEmail = document.getElementById("editVendorEmail");
     const editAddress = document.getElementById("editVendorAddress");
     const editNotes = document.getElementById("editVendorNotes");
+
+    const closeEditModal = () => {
+      if (editToggle) editToggle.checked = false;
+    };
+
+    document.querySelectorAll("[data-close-edit-vendor]").forEach((button) => {
+      button.addEventListener("click", closeEditModal);
+    });
 
     if (editToggle && editForm && editName) {
       document.querySelectorAll(".vendor-edit-button").forEach((button) => {
