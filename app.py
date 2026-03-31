@@ -15535,15 +15535,6 @@ def create_delivery_challan_from_do(order_id):
                     form_data=request.form,
                 )
 
-        if not receiver_name:
-            flash("Receiver name is required for Delivery Challan.", "danger")
-            return render_template(
-                "store_delivery_challan_new.html",
-                order=order,
-                items=items_context,
-                form_data=request.form,
-            )
-
         selections = []
         for ctx in items_context:
             key = f"item_{ctx['record'].id}_qty"
@@ -15582,7 +15573,9 @@ def create_delivery_challan_from_do(order_id):
                 form_data=request.form,
             )
 
-        notes_parts = [f"Receiver Name: {receiver_name}"]
+        notes_parts = []
+        if receiver_name:
+            notes_parts.append(f"Receiver Name: {receiver_name}")
         if receiver_contact:
             notes_parts.append(f"Receiver Contact: {receiver_contact}")
         if handover_remarks:
@@ -15598,6 +15591,7 @@ def create_delivery_challan_from_do(order_id):
             dispatched_by_user_id=current_user.id,
             delivered_at=handover_at,
             notes=challan_notes,
+            receiver_name=receiver_name or None,
             status="Draft",
         )
         db.session.add(challan)
@@ -15698,6 +15692,31 @@ def dispatch_delivery_order(order_id):
     return redirect(url_for("delivery_order_detail", order_id=order_id))
 
 
+def _receipt_qty_already_logged(po_item_id, exclude_receipt_id=None):
+    total_query = db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0)).filter(
+        InventoryReceiptItem.purchase_order_item_id == po_item_id
+    )
+    if exclude_receipt_id:
+        total_query = total_query.filter(InventoryReceiptItem.inventory_receipt_id != exclude_receipt_id)
+    return float(total_query.scalar() or 0.0)
+
+
+def _compute_receipt_item_expected_qty(receipt_item):
+    poi = receipt_item.purchase_order_item
+    if not poi:
+        return 0.0
+    ordered_qty = float(poi.quantity_ordered or 0)
+    prior_qty = (
+        db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
+        .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
+        .filter(InventoryReceiptItem.purchase_order_item_id == poi.id)
+        .filter(InventoryReceipt.id < receipt_item.inventory_receipt_id)
+        .scalar()
+        or 0.0
+    )
+    return max(0.0, ordered_qty - float(prior_qty or 0.0))
+
+
 @app.route("/store/receive", methods=["GET", "POST"])
 @login_required
 def store_receive():
@@ -15731,11 +15750,22 @@ def store_receive():
 
         receipt_number = request.form.get("receipt_number") or f"GRN-{uuid.uuid4().hex[:6].upper()}"
         received_date = datetime.date.today()
+        vendor_invoice_no = (request.form.get("vendor_invoice_no") or "").strip() or None
+        invoice_date_raw = (request.form.get("invoice_date") or "").strip()
+        invoice_date = None
+        if invoice_date_raw:
+            try:
+                invoice_date = datetime.datetime.strptime(invoice_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invoice date format is invalid.", "danger")
+                return redirect(url_for("store_receive", po_id=purchase_order.id))
 
         receipt = InventoryReceipt(
             purchase_order_id=purchase_order_id,
             receipt_number=receipt_number,
             received_date=received_date,
+            vendor_invoice_no=vendor_invoice_no,
+            invoice_date=invoice_date,
             received_by_user_id=current_user.id,
         )
         db.session.add(receipt)
@@ -15769,6 +15799,22 @@ def store_receive():
                     continue
 
                 poi = PurchaseOrderItem.query.get(item_id)
+                if not poi:
+                    db.session.rollback()
+                    flash("Invalid PO line in GRN submission.", "danger")
+                    return redirect(url_for("store_receive", po_id=purchase_order.id))
+
+                ordered_qty = float(poi.quantity_ordered or 0)
+                already_logged = _receipt_qty_already_logged(poi.id)
+                remaining_qty = max(0.0, ordered_qty - already_logged)
+                if float(qty) > remaining_qty:
+                    db.session.rollback()
+                    flash(
+                        f"Qty received for {poi.item_code} cannot exceed remaining qty ({int(remaining_qty)}).",
+                        "danger",
+                    )
+                    return redirect(url_for("store_receive", po_id=purchase_order.id))
+
                 receipt_item = InventoryReceiptItem(
                     inventory_receipt_id=receipt.id,
                     purchase_order_item_id=item_id,
@@ -15990,6 +16036,17 @@ def store_receipt_detail(receipt_id):
                 flash("This GRN is Closed and cannot be edited.", "error")
                 return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
+            receipt.vendor_invoice_no = (request.form.get("vendor_invoice_no") or "").strip() or None
+            invoice_date_raw = (request.form.get("invoice_date") or "").strip()
+            if invoice_date_raw:
+                try:
+                    receipt.invoice_date = datetime.datetime.strptime(invoice_date_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    flash("Invoice date format is invalid.", "danger")
+                    return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+            else:
+                receipt.invoice_date = None
+
             for item in receipt.items:
                 qty_value = request.form.get(f"item_{item.id}_qty_received")
                 qty_received, qty_error = parse_int_field(qty_value, "Qty received")
@@ -16000,6 +16057,20 @@ def store_receipt_detail(receipt_id):
                 if qty_received < 0:
                     flash("Qty received cannot be negative.", "danger")
                     return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
+
+                if item.purchase_order_item_id:
+                    ordered_qty = float(item.purchase_order_item.quantity_ordered or 0) if item.purchase_order_item else 0.0
+                    already_logged = _receipt_qty_already_logged(
+                        item.purchase_order_item_id,
+                        exclude_receipt_id=receipt.id,
+                    )
+                    remaining_qty = max(0.0, ordered_qty - already_logged)
+                    if float(qty_received) > remaining_qty:
+                        flash(
+                            f"Qty received for {item.item_code} cannot exceed remaining qty ({int(remaining_qty)}).",
+                            "danger",
+                        )
+                        return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
                 item.quantity_received = qty_received
                 item.qc_status = request.form.get(f"item_{item.id}_qc_status")
@@ -16020,11 +16091,13 @@ def store_receipt_detail(receipt_id):
         return redirect(url_for("store_receipt_detail", receipt_id=receipt.id))
 
     receipt_items = sorted(receipt.items, key=lambda row: row.id)
+    expected_qty_map = {item.id: _compute_receipt_item_expected_qty(item) for item in receipt_items}
     return render_template(
         "store_receipt_detail.html",
         receipt=receipt,
         receipt_items=receipt_items,
         qc_status_options=qc_status_options,
+        expected_qty_map=expected_qty_map,
     )
 
 
@@ -16389,6 +16462,21 @@ def complete_dispatch(dispatch_id):
     if dispatch.status == "Delivered" or dispatch.is_completed:
         flash("Delivery challan already marked as delivered.", "info")
         return redirect(url_for("store_dispatch"))
+
+    receiver_name = (request.form.get("receiver_name") or "").strip()
+    receiver_signature = (request.form.get("receiver_signature") or "").strip()
+    if not receiver_name:
+        flash("Receiver name is required before marking Delivery Challan as delivered.", "danger")
+        return redirect(url_for("store_dispatch"))
+    if not receiver_signature:
+        flash("Receiver signature is required before marking Delivery Challan as delivered.", "danger")
+        return redirect(url_for("store_dispatch"))
+    if not receiver_signature.startswith("data:image/"):
+        flash("Receiver signature format is invalid. Please redraw the signature.", "danger")
+        return redirect(url_for("store_dispatch"))
+
+    dispatch.receiver_name = receiver_name
+    dispatch.receiver_signature = receiver_signature
 
     for item in dispatch.items:
         canonical_item_code, linked_product = _canonical_inventory_item_code(
@@ -17785,6 +17873,8 @@ def ensure_delivery_challan_columns():
         ("delivered_at", "DATETIME"),
         ("status", "TEXT"),
         ("created_at", "DATETIME"),
+        ("receiver_name", "TEXT"),
+        ("receiver_signature", "TEXT"),
     ]
 
     for column_name, column_type in column_defs:
@@ -18814,6 +18904,8 @@ def ensure_inventory_receipt_columns():
         ("status", "TEXT DEFAULT 'Open'"),
         ("closed_at", "DATE"),
         ("inventory_posted_at", "DATETIME"),
+        ("vendor_invoice_no", "TEXT"),
+        ("invoice_date", "DATE"),
     )
     for col_name, col_type in expected_columns:
         if col_name in col_names:

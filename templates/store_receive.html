@@ -44,6 +44,16 @@
             <input type="date" name="received_date" class="w-full rounded-lg border-slate-200" value="{{ today_ymd }}" readonly />
           </label>
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="space-y-1">
+            <span class="text-sm">Vendor Invoice No</span>
+            <input type="text" name="vendor_invoice_no" class="w-full rounded-lg border-slate-200" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm">Invoice Date</span>
+            <input type="date" name="invoice_date" class="w-full rounded-lg border-slate-200" />
+          </label>
+        </div>
         {% if not pos %}
           <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             No Issued Purchase Orders available. Issue a PO before recording receipts.
@@ -70,7 +80,7 @@
                   <td class="py-2">{{ row.poi.description }}</td>
                   <td class="py-2">{{ row.ordered }}</td>
                   <td class="py-2">{{ row.pending }}</td>
-                  <td class="py-2"><input type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.poi.id }}_qty" class="w-24 rounded-lg border-slate-200" value="0" /></td>
+                  <td class="py-2"><input type="number" step="1" min="0" max="{{ row.pending }}" inputmode="numeric" pattern="[0-9]*" name="item_{{ row.poi.id }}_qty" class="w-24 rounded-lg border-slate-200" value="0" /></td>
                   <td class="py-2">
                     <select name="item_{{ row.poi.id }}_qc" class="rounded-lg border-slate-200">
                       <option value="OK">OK</option>
@@ -104,15 +114,19 @@
           <th class="py-3 px-4">Received on</th>
           <th class="py-3 px-4">Status</th>
           <th class="py-3 px-4">Items</th>
-          <th class="py-3 px-4">QC OK</th>
-          <th class="py-3 px-4">QC NG</th>
+          <th class="py-3 px-4">Issues?</th>
           <th class="py-3 px-4">Recorded by</th>
         </tr>
       </thead>
       <tbody class="divide-y">
         {% for receipt in receipts %}
-        {% set ok_items = receipt.items|selectattr('qc_status','equalto','OK')|list %}
-        {% set ng_items = receipt.items|selectattr('qc_status','equalto','NG')|list %}
+        {% set has_ng = receipt.items|selectattr('qc_status','equalto','NG')|list|length > 0 %}
+        {% set issue_ns = namespace(has_short=false) %}
+        {% for item in receipt.items %}
+          {% if item.purchase_order_item and item.quantity_received < item.purchase_order_item.quantity_ordered %}
+            {% set issue_ns.has_short = true %}
+          {% endif %}
+        {% endfor %}
         <tr>
           <td class="py-3 px-4 font-semibold text-slate-800"><a href="{{ url_for('store_receipt_detail', receipt_id=receipt.id) }}" class="text-indigo-600 hover:underline">{{ receipt.receipt_number }}</a></td>
           <td class="py-3 px-4">{{ receipt.purchase_order.po_number if receipt.purchase_order else '—' }}</td>
@@ -124,12 +138,15 @@
             </span>
           </td>
           <td class="py-3 px-4">{{ receipt.items|length }}</td>
-          <td class="py-3 px-4 text-green-700">{{ ok_items|length }}</td>
-          <td class="py-3 px-4 text-orange-700">{{ ng_items|length }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs {{ 'bg-rose-100 text-rose-700' if (has_ng or issue_ns.has_short) else 'bg-emerald-100 text-emerald-700' }}">
+              {{ 'Yes' if (has_ng or issue_ns.has_short) else 'No' }}
+            </span>
+          </td>
           <td class="py-3 px-4">{{ receipt.received_by.display_name if receipt.received_by else '—' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="py-4 px-4 text-slate-500">No receipts captured yet.</td></tr>
+        <tr><td colspan="7" class="py-4 px-4 text-slate-500">No receipts captured yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -44,6 +44,14 @@
         <p class="text-slate-500">Closed date</p>
         <p class="font-semibold text-slate-800">{{ receipt.closed_at if (receipt.status == 'Closed' and receipt.closed_at) else '—' }}</p>
       </div>
+      <div>
+        <p class="text-slate-500">Vendor Invoice No</p>
+        <p class="font-semibold text-slate-800">{{ receipt.vendor_invoice_no or '—' }}</p>
+      </div>
+      <div>
+        <p class="text-slate-500">Invoice Date</p>
+        <p class="font-semibold text-slate-800">{{ receipt.invoice_date or '—' }}</p>
+      </div>
     </div>
 
     <form method="POST" class="space-y-4">
@@ -57,6 +65,16 @@
           Inventory has been posted for this GRN. Line edits are locked.
         </div>
       {% endif %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="space-y-1">
+          <span class="text-sm">Vendor Invoice No</span>
+          <input type="text" name="vendor_invoice_no" value="{{ receipt.vendor_invoice_no or '' }}" class="w-full rounded-lg border-slate-200" {% if is_line_locked %}readonly{% endif %} />
+        </label>
+        <label class="space-y-1">
+          <span class="text-sm">Invoice Date</span>
+          <input type="date" name="invoice_date" value="{{ receipt.invoice_date.strftime('%Y-%m-%d') if receipt.invoice_date else '' }}" class="w-full rounded-lg border-slate-200" {% if is_line_locked %}readonly{% endif %} />
+        </label>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -65,12 +83,15 @@
               <th class="py-2">Description</th>
               <th class="py-2">Qty ordered</th>
               <th class="py-2">Qty received</th>
+              <th class="py-2">Issues?</th>
               <th class="py-2">QC</th>
               <th class="py-2">Notes</th>
             </tr>
           </thead>
           <tbody class="divide-y">
             {% for item in receipt_items %}
+            {% set expected_qty = expected_qty_map.get(item.id, item.purchase_order_item.quantity_ordered if item.purchase_order_item else 0) %}
+            {% set has_issue = ((item.qc_status or '') == 'NG') or (item.quantity_received < expected_qty) %}
             <tr>
               <td class="py-2">{{ item.item_code }}</td>
               <td class="py-2">{{ item.description or '—' }}</td>
@@ -79,8 +100,13 @@
                 {% if is_line_locked %}
                   <span class="text-slate-800">{{ item.quantity_received|int }}</span>
                 {% else %}
-                  <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
+                  <input type="number" name="item_{{ item.id }}_qty_received" step="1" min="0" max="{{ expected_qty|int }}" inputmode="numeric" pattern="[0-9]*" value="{{ item.quantity_received|int }}" class="w-24 rounded-lg border-slate-200" />
                 {% endif %}
+              </td>
+              <td class="py-2">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs {{ 'bg-rose-100 text-rose-700' if has_issue else 'bg-emerald-100 text-emerald-700' }}">
+                  {{ 'Yes' if has_issue else 'No' }}
+                </span>
               </td>
               <td class="py-2">
                 {% if is_line_locked %}
@@ -102,7 +128,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="py-3 text-slate-500">No receipt lines found.</td></tr>
+            <tr><td colspan="7" class="py-3 text-slate-500">No receipt lines found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
