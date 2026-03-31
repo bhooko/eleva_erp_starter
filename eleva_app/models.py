@@ -2808,6 +2808,7 @@ class PurchaseOrder(db.Model):
     gst_value = db.Column(db.Float, nullable=True, default=0)
     grand_total_amount = db.Column(db.Float, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    terms_conditions = db.Column(db.Text, nullable=True)
     origin = db.Column(db.String(40), nullable=True, default="erp")
 
     project = db.relationship("Project")

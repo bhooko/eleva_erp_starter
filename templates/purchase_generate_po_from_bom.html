@@ -82,6 +82,10 @@
         <span class="text-sm">PO Notes (optional)</span>
         <textarea name="po_notes" rows="1" class="w-full rounded-lg border-slate-200" placeholder="Generated from BOM {{ bom.bom_name }} – Stage ...">{{ po_notes }}</textarea>
       </label>
+      <label class="space-y-1 md:col-span-2">
+        <span class="text-sm">Terms &amp; Conditions</span>
+        <textarea name="po_terms" rows="2" class="w-full rounded-lg border-slate-200" placeholder="Enter PO terms">{{ po_terms or '' }}</textarea>
+      </label>
       <label class="flex items-center gap-2">
         <input type="checkbox" name="pending_only" value="1" {% if pending_only %}checked{% endif %} class="rounded border-slate-300" />
         <span class="text-sm">Include only items not yet fully ordered</span>
@@ -156,6 +160,7 @@
       <input type="hidden" name="vendor_id" value="{{ selected_vendor_id }}" />
       <input type="hidden" name="project_id" value="{{ project_id_value or '' }}" />
       <input type="hidden" name="po_notes" value="{{ po_notes or '' }}" />
+      <input type="hidden" name="po_terms" value="{{ po_terms or '' }}" />
       {% if pending_only %}<input type="hidden" name="pending_only" value="1" />{% endif %}
             {% if missing_spec_items %}
       <label class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">

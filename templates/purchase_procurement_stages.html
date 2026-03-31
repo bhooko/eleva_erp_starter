@@ -1,13 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Procurement Stages · Eleva ERP{% endblock %}
+{% block title %}Purchase Settings · Eleva ERP{% endblock %}
 {% block content %}
 <div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
       <p class="text-sm uppercase text-slate-500">Purchase · Settings</p>
-      <h1 class="text-2xl font-semibold">Procurement Stages</h1>
-      <p class="text-sm text-slate-600">Manage stage labels used to tag BOM items and purchase orders.</p>
+      <h1 class="text-2xl font-semibold">Purchase Settings</h1>
+      <p class="text-sm text-slate-600">Manage default PO terms and procurement stage labels.</p>
     </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <h2 class="text-lg font-semibold mb-3">Purchase Settings</h2>
+    <form method="POST" class="space-y-3">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save_po_terms" />
+      <label class="space-y-1 block">
+        <span class="text-sm">Default PO Terms &amp; Conditions</span>
+        <textarea name="default_po_terms" rows="4" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Default terms to prefill on new purchase orders">{{ purchase_settings.default_po_terms if purchase_settings else '' }}</textarea>
+      </label>
+      <div class="flex justify-end">
+        <button type="submit" class="px-4 py-2 rounded-lg btn-primary btn-shimmer shadow hover:shadow-lg hover:scale-[1.02] transition">Save Purchase Settings</button>
+      </div>
+    </form>
   </div>
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">

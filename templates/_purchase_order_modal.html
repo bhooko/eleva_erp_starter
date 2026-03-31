@@ -94,6 +94,10 @@
           <span class="text-sm">Notes</span>
           <textarea name="notes" rows="2" class="w-full rounded-lg border-slate-200 px-3 py-2"></textarea>
         </label>
+        <label class="space-y-1 block">
+          <span class="text-sm">Terms &amp; Conditions</span>
+          <textarea name="terms_conditions" rows="4" class="w-full rounded-lg border-slate-200 px-3 py-2" placeholder="Enter PO terms">{{ default_po_terms or '' }}</textarea>
+        </label>
         <div class="flex justify-end">
           <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm min-w-[220px]">
             <div class="flex items-center justify-between text-slate-500">
