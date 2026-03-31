@@ -11530,6 +11530,22 @@ def _build_po_pdf_bytes(po, po_line_rows):
         commands.append(line_cmd(margin + content_width, header_top, margin + content_width, header_bottom, 1.0))
         y = header_bottom
 
+    has_project = bool(po.project_id)
+    project_source_lines = []
+    if has_project:
+        if project_name and project_name != "-":
+            project_source_lines.append(f"Project: {project_name}")
+        if site_name:
+            project_source_lines.append(f"Site: {site_name}")
+        if project_location:
+            project_source_lines.extend([f"Location: {line}" for line in wrap_for_width(project_location, content_width / 2, 5.0)])
+        if bom_name:
+            project_source_lines.append(f"BOM: {bom_name}")
+        if not project_source_lines:
+            project_source_lines.append("Project: -")
+    else:
+        project_source_lines.append("General Procurement")
+
     def draw_page_header():
         nonlocal y
         commands.append(text_cmd(margin, y - 2, "ELEVA ERP", "F2", 13))
@@ -11564,16 +11580,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
             commands.append(text_cmd(left_x + cell_pad_x, r_bottom + 6, label, "F2", 9))
             commands.append(text_cmd(left_x + 105, r_bottom + 6, str(value), "F1", 9))
 
-        right_lines = []
-        if project_name and project_name != "-":
-            right_lines.append(f"Project: {project_name}")
-        if site_name:
-            right_lines.append(f"Site: {site_name}")
-        if project_location:
-            right_lines.extend([f"Location: {line}" for line in wrap_for_width(project_location, right_w, 5.0)])
-        if bom_name:
-            right_lines.append(f"BOM: {bom_name}")
-        right_lines.append(f"Reference: {(po.origin or 'ERP').upper()}")
+        right_lines = [f"Prepared: {datetime.datetime.utcnow().strftime('%d %b %Y')}"]
         right_top = table_top
         right_bottom = table_bottom
         line_y = right_top - 12
@@ -11581,7 +11588,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
             commands.append(text_cmd(right_x + cell_pad_x, line_y, text_line, "F1", 9))
             line_y -= 11
 
-        y = table_bottom - 12
+        y = table_bottom - 10
 
         vendor_lines = [vendor_name]
         if vendor_contact_person:
@@ -11593,17 +11600,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
         if vendor_email:
             vendor_lines.append(f"Email: {vendor_email}")
 
-        project_block_lines = []
-        if project_name and project_name != "-":
-            project_block_lines.append(f"Project: {project_name}")
-        if site_name:
-            project_block_lines.append(f"Site: {site_name}")
-        if bom_name:
-            project_block_lines.append(f"BOM: {bom_name}")
-        if not project_block_lines:
-            project_block_lines.append(f"Reference: {(po.origin or 'ERP').upper()}")
-
-        block_height = max(len(vendor_lines), len(project_block_lines)) * 11.5 + 16
+        block_height = max(len(vendor_lines), len(project_source_lines)) * 12.4 + 18
         block_top = y
         block_bottom = y - block_height
         mid_x = margin + (content_width / 2)
@@ -11613,20 +11610,20 @@ def _build_po_pdf_bytes(po, po_line_rows):
         commands.append(line_cmd(margin, block_top, margin, block_bottom, 0.8))
         commands.append(line_cmd(mid_x, block_top, mid_x, block_bottom, 0.8))
         commands.append(line_cmd(margin + content_width, block_top, margin + content_width, block_bottom, 0.8))
-        commands.append(text_cmd(margin + cell_pad_x, block_top - 11, "Vendor", "F2", 9))
-        commands.append(text_cmd(mid_x + cell_pad_x, block_top - 11, "Project / Source", "F2", 9))
+        commands.append(text_cmd(margin + cell_pad_x, block_top - 11, "Vendor", "F2", 10))
+        commands.append(text_cmd(mid_x + cell_pad_x, block_top - 11, "Project / Source", "F2", 10))
 
-        v_y = block_top - 23
-        for line in vendor_lines:
-            commands.append(text_cmd(margin + cell_pad_x, v_y, line, "F1", 9))
-            v_y -= 11.5
+        v_y = block_top - 25
+        for idx, line in enumerate(vendor_lines):
+            commands.append(text_cmd(margin + cell_pad_x, v_y, line, "F2" if idx == 0 else "F1", 10 if idx == 0 else 9))
+            v_y -= 12.4
 
-        p_y = block_top - 23
-        for line in project_block_lines:
+        p_y = block_top - 25
+        for line in project_source_lines:
             commands.append(text_cmd(mid_x + cell_pad_x, p_y, line, "F1", 9))
-            p_y -= 11.5
+            p_y -= 12.4
 
-        y = block_bottom - 14
+        y = block_bottom - 10
 
     def ensure_space(height_needed, include_table_header=True):
         nonlocal y
@@ -11646,6 +11643,9 @@ def _build_po_pdf_bytes(po, po_line_rows):
         unit_price = item.unit_price if item.unit_price is not None else 0
         line_total = item.total_amount if item.total_amount is not None else 0
         description = item.specification or item.description or "-"
+        desc_clean = str(description or "").strip()
+        if len(desc_clean) <= 3:
+            description = item.part_name or item.item_code or "-"
         row_values = [
             [str(index)],
             wrap_for_width(item.part_name or item.item_code or f"Item {item.id}", item_columns[1][1]),
@@ -11690,8 +11690,8 @@ def _build_po_pdf_bytes(po, po_line_rows):
     totals_left = margin + content_width - totals_width
     totals_row_h = 16.0
     totals_height = len(totals_rows) * totals_row_h
-    ensure_space(totals_height + 20, include_table_header=False)
-    y -= 10
+    ensure_space(totals_height + 12, include_table_header=False)
+    y -= 4
     top = y
     bottom = y - totals_height
     commands.append(line_cmd(totals_left, top, totals_left + totals_width, top, 1.0))
@@ -11715,6 +11715,7 @@ def _build_po_pdf_bytes(po, po_line_rows):
         if not value:
             return
         normalized = []
+        is_terms = title.strip().lower().startswith("terms")
         clean_value = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
         for raw_line in clean_value.split("\n"):
             wrapped = _wrap_pdf_text(raw_line, max_chars=95)
@@ -11722,9 +11723,12 @@ def _build_po_pdf_bytes(po, po_line_rows):
                 normalized.append("")
             else:
                 normalized.extend(wrapped)
+                if is_terms and raw_line.strip() and re.match(r"^\s*\d+[\.\)]\s+", raw_line.strip()):
+                    normalized.append("")
         if not normalized:
             return
-        section_height = 24 + (len(normalized) * 11.2)
+        line_height = 12.6 if is_terms else 11.2
+        section_height = 24 + (len(normalized) * line_height)
         ensure_space(section_height + 4, include_table_header=False)
         top = y
         bottom = y - section_height
@@ -11736,8 +11740,8 @@ def _build_po_pdf_bytes(po, po_line_rows):
         line_y = top - 24
         for line in normalized:
             commands.append(text_cmd(margin + cell_pad_x, line_y, line or " ", "F1", 9))
-            line_y -= 11.2
-        y = bottom - 8
+            line_y -= line_height
+        y = bottom - 6
 
     draw_text_section("Notes", notes_text)
     draw_text_section("Terms & Conditions", terms_text)
