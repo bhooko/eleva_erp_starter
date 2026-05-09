@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from flask import Blueprint, request
@@ -9,8 +10,30 @@ from integrations.sarv.utils import download_call_recording
 sarv_bp = Blueprint("sarv", __name__)
 
 
-@sarv_bp.route("/sarv/webhook", methods=["POST"])
+def _normalize_recordings_payload(recordings):
+    if isinstance(recordings, list):
+        return [item for item in recordings if isinstance(item, dict)]
+    if isinstance(recordings, dict):
+        return [recordings]
+    if not isinstance(recordings, str):
+        return []
+
+    raw = recordings.strip()
+    if not raw or raw.startswith("{{%%"):
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return _normalize_recordings_payload(parsed)
+
+
+@sarv_bp.route("/sarv/webhook", methods=["GET", "POST"])
 def sarv_webhook():
+    if request.method == "GET":
+        return "GODBLESSYOU", 200
+
     data = request.get_json(silent=True) or {}
 
     call_id = data.get("callId")
@@ -65,7 +88,7 @@ def sarv_webhook():
     db.session.add(call)
     db.session.commit()
 
-    recordings = data.get("recordings") or []
+    recordings = _normalize_recordings_payload(data.get("recordings"))
     for rec in recordings:
         sarv_path = rec.get("file")
         if not sarv_path:

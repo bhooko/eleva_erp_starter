@@ -19,7 +19,7 @@ from flask_login import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast, html, smtplib
+import os, json, datetime, sqlite3, threading, re, uuid, random, string, copy, calendar, base64, shutil, time, math, ast, html, smtplib, builtins
 from decimal import Decimal, InvalidOperation
 from datetime import datetime as datetime_cls, date
 import importlib.util
@@ -38,6 +38,19 @@ from sqlalchemy.engine.url import make_url
 
 from eleva_app import create_app, csrf, db, login_manager
 from eleva_app.common_import_utils import clean_str, parse_int_field, stringify_cell
+
+
+def _safe_console_print(*args, **kwargs):
+    try:
+        builtins.print(*args, **kwargs)
+    except UnicodeEncodeError:
+        ascii_args = tuple(
+            str(arg).encode("ascii", "replace").decode("ascii") for arg in args
+        )
+        builtins.print(*ascii_args, **kwargs)
+
+
+print = _safe_console_print
 from utils.notifications import create_notification
 
 def _is_password_hashed(value: Optional[str]) -> bool:
@@ -3609,7 +3622,79 @@ def _save_customer_support_state():
 _load_customer_support_state()
 
 
+def _srt_task_db_id(task_id):
+    raw_id = str(task_id or "").strip()
+    if not raw_id.upper().startswith("SRT-"):
+        return None
+    try:
+        return int(raw_id.split("-", 1)[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_user_by_display_label(label):
+    cleaned = (label or "").strip().lower()
+    if not cleaned or cleaned == "unassigned":
+        return None
+    for user in User.query.filter(User.active.is_(True)).all():
+        if (user.display_name or "").strip().lower() == cleaned:
+            return user
+        if (user.username or "").strip().lower() == cleaned:
+            return user
+    return None
+
+
+def _srt_task_to_board_payload(srt_task):
+    owner_label = "Unassigned"
+    if srt_task.assignee:
+        owner_label = srt_task.assignee.display_name or srt_task.assignee.username or owner_label
+
+    created_at = srt_task.created_at or datetime.datetime.utcnow()
+    age_days = max((datetime.datetime.utcnow().date() - created_at.date()).days, 0)
+    task_id = f"SRT-{srt_task.id}"
+    return {
+        "id": task_id,
+        "_db_task_id": srt_task.id,
+        "site": srt_task.site_name or (srt_task.project.site_name if srt_task.project else None) or "Unassigned site",
+        "name": srt_task.summary,
+        "summary": srt_task.description or srt_task.summary,
+        "priority": srt_task.priority or "Normal",
+        "status": srt_task.status or SRT_STATUS_OPTIONS[0],
+        "due_date": srt_task.due_date,
+        "owner": owner_label,
+        "age_days": age_days,
+    }
+
+
+def _get_srt_board_tasks():
+    tasks = []
+    seen_ids = set()
+
+    db_tasks = (
+        SRTTask.query.options(joinedload(SRTTask.assignee), joinedload(SRTTask.project))
+        .order_by(SRTTask.created_at.desc().nullslast(), SRTTask.id.desc())
+        .all()
+    )
+    for srt_task in db_tasks:
+        payload = _srt_task_to_board_payload(srt_task)
+        tasks.append(payload)
+        seen_ids.add(payload["id"])
+
+    for task in SRT_SAMPLE_TASKS:
+        task_id = task.get("id")
+        if task_id in seen_ids:
+            continue
+        tasks.append(task)
+
+    return tasks
+
+
 def _get_srt_task(task_id):
+    db_id = _srt_task_db_id(task_id)
+    if db_id:
+        srt_task = db.session.get(SRTTask, db_id)
+        if srt_task:
+            return _srt_task_to_board_payload(srt_task)
     return next((task for task in SRT_SAMPLE_TASKS if task["id"] == task_id), None)
 
 
@@ -3673,14 +3758,16 @@ def _ticket_has_open_linked_tasks(ticket):
     if not ticket:
         return False
 
-    category_key = _ticket_category_key(ticket)
-    skip_opportunity_tasks = category_key == "sales-ni"
+    def _is_downstream_handoff_task(task):
+        related_type = (task.get("related_type") or "").strip().lower()
+        if related_type and related_type not in {"customer_support", "support_ticket"}:
+            return True
+        return bool(task.get("handoff_complete"))
+
     closing_statuses = {"closed", "resolved", "completed", "done", "cancelled"}
     for task in ticket.get("linked_tasks", []) or []:
-        if skip_opportunity_tasks:
-            related_type = (task.get("related_type") or "").strip().lower()
-            if related_type == "opportunity":
-                continue
+        if _is_downstream_handoff_task(task):
+            continue
 
         status = (task.get("status") or "").strip().lower()
         if status and status in closing_statuses:
@@ -4180,6 +4267,53 @@ def _derive_customer_support_call_from_ticket(ticket):
     }
 
 
+def _derive_customer_support_call_from_sarv_log(call):
+    if not call or not getattr(call, "sarv_call_id", None):
+        return None
+
+    logged_at = (
+        getattr(call, "ivr_start_time", None)
+        or getattr(call, "first_answer_time", None)
+        or getattr(call, "created_at", None)
+        or datetime.datetime.utcnow()
+    )
+    duration_seconds = (
+        getattr(call, "talk_duration", None)
+        or getattr(call, "total_duration", None)
+        or getattr(call, "ivr_duration", None)
+        or 0
+    )
+    try:
+        duration_minutes = int(math.ceil(float(duration_seconds) / 60.0))
+    except (TypeError, ValueError):
+        duration_minutes = 0
+
+    caller = (
+        getattr(call, "customer_number", None)
+        or getattr(call, "did", None)
+        or "Unknown caller"
+    )
+    handled_by = (
+        getattr(call, "agent_name", None)
+        or getattr(call, "agent_number", None)
+        or getattr(call, "agent_user_id", None)
+        or "Unassigned"
+    )
+
+    return {
+        "call_id": call.sarv_call_id,
+        "ticket_id": call.sarv_call_id,
+        "subject": f"SARV call from {caller}",
+        "category": "SARV",
+        "status": getattr(call, "call_status", None) or "Logged",
+        "channel": "SARV",
+        "caller": caller,
+        "handled_by": handled_by,
+        "duration_minutes": duration_minutes,
+        "logged_at": logged_at,
+    }
+
+
 def _customer_support_call_records():
     combined = []
     seen_ids = set()
@@ -4197,6 +4331,27 @@ def _customer_support_call_records():
 
         seen_ids.add(call_id)
         combined.append(call)
+
+    try:
+        sarv_calls = (
+            CallLog.query
+            .order_by(
+                CallLog.ivr_start_time.desc().nullslast(),
+                CallLog.created_at.desc(),
+            )
+            .limit(250)
+            .all()
+        )
+    except (NameError, SQLAlchemyError):
+        sarv_calls = []
+
+    for call in sarv_calls:
+        call_entry = _derive_customer_support_call_from_sarv_log(call)
+        if not call_entry or call_entry.get("call_id") in seen_ids:
+            continue
+
+        seen_ids.add(call_entry.get("call_id"))
+        combined.append(call_entry)
 
     for ticket in CUSTOMER_SUPPORT_TICKETS:
         call_entry = _derive_customer_support_call_from_ticket(ticket)
@@ -4567,6 +4722,7 @@ def _handle_customer_support_ticket_creation():
         entity = {
             "type": "lift",
             "label": "Lift",
+            "id": linked_lift.id,
             "name": lift_name,
             "url": url_for("service_lift_detail", lift_id=linked_lift.id),
         }
@@ -4733,6 +4889,8 @@ def _handle_customer_support_ticket_creation():
         ticket_record["due_at"] = due_at
     if remarks:
         ticket_record["remarks"] = remarks
+    if linked_lift:
+        ticket_record["linked_lift_id"] = linked_lift.id
     if amc_site_record:
         ticket_record["amc_site"] = {
             "id": amc_site_record.get("id"),
@@ -11338,6 +11496,7 @@ def _compute_po_line_receipts(po):
             .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
             .filter(InventoryReceipt.purchase_order_id == po.id)
             .filter(InventoryReceipt.status == "Closed")
+            .filter(InventoryReceiptItem.qc_status == "OK")
             .group_by(InventoryReceiptItem.purchase_order_item_id)
             .all()
         )
@@ -14553,7 +14712,13 @@ def _compute_product_forecast_qty(product: Product) -> float:
             func.coalesce(
                 func.sum(
                     case(
-                        (InventoryReceipt.status == "Closed", InventoryReceiptItem.quantity_received),
+                        (
+                            and_(
+                                InventoryReceipt.status == "Closed",
+                                InventoryReceiptItem.qc_status == "OK",
+                            ),
+                            InventoryReceiptItem.quantity_received,
+                        ),
                         else_=0.0,
                     )
                 ),
@@ -15693,8 +15858,12 @@ def dispatch_delivery_order(order_id):
 
 
 def _receipt_qty_already_logged(po_item_id, exclude_receipt_id=None):
-    total_query = db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0)).filter(
-        InventoryReceiptItem.purchase_order_item_id == po_item_id
+    total_query = (
+        db.session.query(func.coalesce(func.sum(InventoryReceiptItem.quantity_received), 0.0))
+        .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
+        .filter(InventoryReceiptItem.purchase_order_item_id == po_item_id)
+        .filter(InventoryReceipt.status == "Closed")
+        .filter(InventoryReceiptItem.qc_status == "OK")
     )
     if exclude_receipt_id:
         total_query = total_query.filter(InventoryReceiptItem.inventory_receipt_id != exclude_receipt_id)
@@ -15711,6 +15880,8 @@ def _compute_receipt_item_expected_qty(receipt_item):
         .join(InventoryReceipt, InventoryReceipt.id == InventoryReceiptItem.inventory_receipt_id)
         .filter(InventoryReceiptItem.purchase_order_item_id == poi.id)
         .filter(InventoryReceipt.id < receipt_item.inventory_receipt_id)
+        .filter(InventoryReceipt.status == "Closed")
+        .filter(InventoryReceiptItem.qc_status == "OK")
         .scalar()
         or 0.0
     )
@@ -16453,6 +16624,36 @@ def edit_dispatch(dispatch_id):
     return redirect(url_for("store_dispatch"))
 
 
+def _dispatch_stock_shortfalls(dispatch):
+    required_by_code = OrderedDict()
+
+    for item in dispatch.items:
+        canonical_item_code, _ = _canonical_inventory_item_code(
+            item_code=item.item_code,
+            description=item.description,
+        )
+        if not canonical_item_code:
+            continue
+
+        qty = float(item.qty_delivered or 0)
+        if qty <= 0:
+            continue
+        required_by_code[canonical_item_code] = required_by_code.get(canonical_item_code, 0.0) + qty
+
+    shortfalls = []
+    for item_code, required_qty in required_by_code.items():
+        inv = InventoryItem.query.filter(
+            func.lower(InventoryItem.item_code) == item_code.lower()
+        ).first()
+        available_qty = float((inv.current_stock if inv else 0) or 0)
+        if required_qty > available_qty:
+            shortfalls.append(
+                f"{item_code}: requested {required_qty:g}, available {available_qty:g}"
+            )
+
+    return shortfalls
+
+
 @app.route("/store/dispatch/<int:dispatch_id>/complete", methods=["POST"])
 @login_required
 def complete_dispatch(dispatch_id):
@@ -16475,6 +16676,15 @@ def complete_dispatch(dispatch_id):
         flash("Receiver signature format is invalid. Please redraw the signature.", "danger")
         return redirect(url_for("store_dispatch"))
 
+    stock_shortfalls = _dispatch_stock_shortfalls(dispatch)
+    if stock_shortfalls:
+        flash(
+            "Insufficient physical stock to complete dispatch: "
+            + "; ".join(stock_shortfalls),
+            "danger",
+        )
+        return redirect(url_for("store_dispatch"))
+
     dispatch.receiver_name = receiver_name
     dispatch.receiver_signature = receiver_signature
 
@@ -16489,7 +16699,9 @@ def complete_dispatch(dispatch_id):
         if item.item_code != canonical_item_code:
             item.item_code = canonical_item_code
 
-        inv = InventoryItem.query.filter_by(item_code=canonical_item_code).first()
+        inv = InventoryItem.query.filter(
+            func.lower(InventoryItem.item_code) == canonical_item_code.lower()
+        ).first()
         if not inv:
             continue
         if linked_product and linked_product.name:
@@ -24119,6 +24331,30 @@ def _build_task_overview(viewing_user: "User"):
                 .all()
             )
 
+        design_tasks = []
+        srt_tasks = []
+        if task_owner_ids:
+            design_tasks = (
+                DesignTask.query.options(
+                    joinedload(DesignTask.project),
+                    joinedload(DesignTask.assigned_to),
+                )
+                .filter(DesignTask.assigned_to_user_id.in_(task_owner_ids))
+                .filter(~func.lower(func.trim(DesignTask.status)).in_(["complete", "finalized", "closed"]))
+                .order_by(DesignTask.due_date.asc(), DesignTask.id.asc())
+                .all()
+            )
+            srt_tasks = (
+                SRTTask.query.options(
+                    joinedload(SRTTask.project),
+                    joinedload(SRTTask.assignee),
+                )
+                .filter(SRTTask.assigned_to_id.in_(task_owner_ids))
+                .filter(~func.lower(func.trim(SRTTask.status)).in_(["closed", "completed", "cancelled"]))
+                .order_by(SRTTask.due_date.asc(), SRTTask.id.asc())
+                .all()
+            )
+
         show_projects = (
             viewing_user.can_view_module("operations") if viewing_user else True
         ) or has_project_tasks
@@ -24129,6 +24365,12 @@ def _build_task_overview(viewing_user: "User"):
         show_customer_support = (
             viewing_user.can_view_module("customer_support") if viewing_user else True
         ) or bool(support_tickets)
+        show_design = (
+            viewing_user.can_view_module("design") if viewing_user else True
+        ) or bool(design_tasks)
+        show_srt = (
+            viewing_user.can_view_module("srt") if viewing_user else True
+        ) or bool(srt_tasks)
 
         if "Projects" in module_visibility_override:
             show_projects = bool(module_visibility_override["Projects"])
@@ -24138,6 +24380,10 @@ def _build_task_overview(viewing_user: "User"):
             show_sales = bool(module_visibility_override["Sales"])
         if "Customer Support" in module_visibility_override:
             show_customer_support = bool(module_visibility_override["Customer Support"])
+        if "Design" in module_visibility_override:
+            show_design = bool(module_visibility_override["Design"])
+        if "SRT" in module_visibility_override:
+            show_srt = bool(module_visibility_override["SRT"])
 
         if show_projects:
             _ensure_module(
@@ -24162,6 +24408,22 @@ def _build_task_overview(viewing_user: "User"):
                 "Customer Support",
                 "No open support tickets.",
                 "Support tickets assigned to you.",
+            )
+        if show_design:
+            _ensure_module(
+                modules_map,
+                module_order,
+                "Design",
+                "No pending design tasks.",
+                "Drawing, BOM and approval tasks assigned to you.",
+            )
+        if show_srt:
+            _ensure_module(
+                modules_map,
+                module_order,
+                "SRT",
+                "No pending SRT tasks.",
+                "Site readiness tasks assigned to you.",
             )
 
         for task in open_tasks:
@@ -24401,6 +24663,70 @@ def _build_task_overview(viewing_user: "User"):
                         "due_class": _due_badge_class(due_variant),
                         "due_variant": due_variant,
                         "url": url_for("customer_support_tasks", ticket=ticket.get("id")),
+                        "secondary_url": None,
+                        "secondary_label": None,
+                        "metadata": metadata,
+                    }
+                )
+
+        if show_design:
+            design_module = modules_map.get("Design")
+            for task in design_tasks:
+                due_label, due_display, due_variant = _describe_due_date(task.due_date, now)
+                metadata = []
+                if task.task_type:
+                    metadata.append({"label": "Type", "value": task.task_type})
+                if task.priority:
+                    metadata.append({"label": "Priority", "value": task.priority.title()})
+                if task.project_label:
+                    metadata.append({"label": "Project", "value": task.project_label})
+                if task.assigned_to and task.assigned_to.display_name:
+                    metadata.append({"label": "Assigned", "value": task.assigned_to.display_name})
+
+                design_module["items"].append(
+                    {
+                        "title": task.task_name or task.subtype or task.task_type or "Design task",
+                        "subtitle": task.project_label,
+                        "description": task.description or task.notes,
+                        "identifier": f"Design Task #{task.id}",
+                        "status": task.status or "Open",
+                        "status_class": _status_badge_class(_status_key(task.status)),
+                        "due_description": due_label,
+                        "due_display": due_display,
+                        "due_class": _due_badge_class(due_variant),
+                        "due_variant": due_variant,
+                        "url": url_for("design_task_detail", task_id=task.id),
+                        "secondary_url": None,
+                        "secondary_label": None,
+                        "metadata": metadata,
+                    }
+                )
+
+        if show_srt:
+            srt_module = modules_map.get("SRT")
+            for task in srt_tasks:
+                due_label, due_display, due_variant = _describe_due_date(task.due_date, now)
+                metadata = []
+                if task.priority:
+                    metadata.append({"label": "Priority", "value": task.priority})
+                if task.assignee and task.assignee.display_name:
+                    metadata.append({"label": "Owner", "value": task.assignee.display_name})
+                if task.project and task.project.name:
+                    metadata.append({"label": "Project", "value": task.project.name})
+
+                srt_module["items"].append(
+                    {
+                        "title": task.summary,
+                        "subtitle": task.site_name or (task.project.name if task.project else None),
+                        "description": task.description,
+                        "identifier": f"SRT-{task.id}",
+                        "status": task.status or SRT_STATUS_OPTIONS[0],
+                        "status_class": _status_badge_class(_status_key(task.status)),
+                        "due_description": due_label,
+                        "due_display": due_display,
+                        "due_class": _due_badge_class(due_variant),
+                        "due_variant": due_variant,
+                        "url": url_for("srt_overview"),
                         "secondary_url": None,
                         "secondary_label": None,
                         "metadata": metadata,
@@ -24675,6 +25001,8 @@ def _build_task_overview(viewing_user: "User"):
             module_visibility_override={
                 "Customer Support": False,
                 "Service": False,
+                "Design": False,
+                "SRT": False,
             },
             include_sales_tasks=False,
         )
@@ -28303,7 +28631,12 @@ def _create_service_visit_from_support_ticket(ticket: dict) -> None:
     - ticket["lift_id"] (or similar) links to a Lift row.
     - We do NOT commit outside this function; the caller will commit.
     """
-    lift_id = ticket.get("lift_id") or ticket.get("linked_lift_id")
+    linked_lift = ticket.get("linked_lift") or {}
+    lift_id = (
+        ticket.get("lift_id")
+        or ticket.get("linked_lift_id")
+        or (linked_lift.get("id") if isinstance(linked_lift, dict) else None)
+    )
     if not lift_id:
         return
 
@@ -31878,6 +32211,15 @@ def _contract_form_context(contract=None, lift_id=None):
     }
 
 
+def _link_contract_to_lift_amc(contract):
+    if not contract or not contract.lift_id or not contract.id:
+        return
+
+    lift = db.session.get(Lift, contract.lift_id)
+    if lift:
+        lift.amc_contract_id = str(contract.id)
+
+
 def _save_contract_from_form(contract, lift_rows=None):
     contract.contract_no = clean_str(request.form.get("contract_no"))
     contract.customer_name = clean_str(request.form.get("customer_name"))
@@ -31954,6 +32296,8 @@ def _save_contract_from_form(contract, lift_rows=None):
         if lift:
             lift.amc_start = contract.start_date
             lift.amc_end = contract.end_date
+            if contract.id:
+                lift.amc_contract_id = str(contract.id)
             if contract.frequency_per_year:
                 lift.services_per_year = contract.frequency_per_year
 
@@ -31973,6 +32317,7 @@ def service_contract_new():
             return render_template("service/contract_form.html", **_contract_form_context(contract=contract, lift_id=lift_id), is_edit=False)
         db.session.add(contract)
         db.session.flush()
+        _link_contract_to_lift_amc(contract)
         for row in lift_rows:
             db.session.add(
                 ServiceContractLift(
@@ -32304,7 +32649,7 @@ def srt_overview():
     today = datetime.date.today()
 
     tasks = []
-    for task in SRT_SAMPLE_TASKS:
+    for task in _get_srt_board_tasks():
         due_date = task.get("due_date")
         due_in = (due_date - today).days if due_date else None
         due_date_display = due_date.strftime("%d %b %Y") if due_date else ""
@@ -32493,15 +32838,35 @@ def srt_sites():
     _module_visibility_required("srt")
     selected_key = request.args.get("site")
 
+    board_tasks = _get_srt_board_tasks()
+    base_sites = [dict(site) for site in SRT_SITES]
+    known_site_names = {
+        (site.get("name") or "").strip().lower()
+        for site in base_sites
+        if (site.get("name") or "").strip()
+    }
+    for task in board_tasks:
+        site_name = (task.get("site") or "").strip()
+        if not site_name or site_name.lower() in known_site_names:
+            continue
+        base_sites.append(
+            {
+                "key": slugify(site_name),
+                "name": site_name,
+                "additional_contacts": [],
+            }
+        )
+        known_site_names.add(site_name.lower())
+
     sites = []
     site_map = {}
-    for site in sorted(SRT_SITES, key=lambda item: item["name"].lower()):
+    for site in sorted(base_sites, key=lambda item: item["name"].lower()):
         site_copy = {key: value for key, value in site.items() if key != "additional_contacts"}
         contacts = [dict(contact) for contact in site.get("additional_contacts", [])]
         site_copy["additional_contacts"] = contacts
         site_copy["tasks"] = [
             dict(task)
-            for task in SRT_SAMPLE_TASKS
+            for task in board_tasks
             if task.get("site") == site["name"]
         ]
         site_copy.setdefault("client_contact", {})
@@ -32550,25 +32915,20 @@ def srt_task_create():
         flash("Site, task name and summary are required to create a task.", "error")
         return redirect(url_for("srt_sites"))
 
-    existing_ids = {task["id"] for task in SRT_SAMPLE_TASKS}
-    task_id = f"SRT-{_random_digits(4)}"
-    while task_id in existing_ids:
-        task_id = f"SRT-{_random_digits(4)}"
-
-    SRT_SAMPLE_TASKS.insert(
-        0,
-        {
-            "id": task_id,
-            "site": site_name,
-            "name": task_name,
-            "summary": summary,
-            "priority": priority,
-            "status": SRT_STATUS_OPTIONS[0],
-            "due_date": due_date,
-            "owner": owner or "Unassigned",
-            "age_days": 0,
-        },
+    owner_user = _resolve_user_by_display_label(owner)
+    srt_task = SRTTask(
+        site_name=site_name,
+        summary=task_name,
+        description=summary,
+        priority=priority,
+        status=SRT_STATUS_OPTIONS[0],
+        due_date=due_date,
+        assigned_to_id=owner_user.id if owner_user else None,
+        created_by_id=current_user.id if current_user.is_authenticated else None,
     )
+    db.session.add(srt_task)
+    db.session.flush()
+    task_id = f"SRT-{srt_task.id}"
 
     actor_name = None
     actor_role = None
@@ -32588,6 +32948,7 @@ def srt_task_create():
         actor_role=actor_role,
     )
 
+    db.session.commit()
     flash("SRT task added to the board.", "success")
 
     redirect_to = request.form.get("redirect_to")
@@ -32782,6 +33143,17 @@ def srt_task_update(task_id):
 
     for event in events:
         _log_srt_activity(task_id, **event)
+
+    db_task_id = _srt_task_db_id(task_id)
+    if db_task_id:
+        db_task = db.session.get(SRTTask, db_task_id)
+        if db_task:
+            db_task.status = status
+            db_task.due_date = due_date
+            owner_user = _resolve_user_by_display_label(owner)
+            db_task.assigned_to_id = owner_user.id if owner_user else None
+            db_task.updated_at = datetime.datetime.utcnow()
+            db.session.commit()
 
     flash("Task updated successfully.", "success")
     return redirect(redirect_to)

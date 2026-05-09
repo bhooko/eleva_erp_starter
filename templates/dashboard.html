@@ -1,156 +1,243 @@
 {% extends "base.html" %}
 {% set view_mode = page_mode or 'dashboard' %}
 
-{% macro render_dashboard_cards(modules, empty_text) %}
-  {% set cards = namespace(count=0) %}
-  <div class="space-y-4" data-filter-scope>
-    <div class="flex flex-wrap items-center gap-2 mb-1">
-      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
-      <button
-        type="button"
-        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        data-filter-value="all"
-      >
-        All
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        data-filter-value="overdue"
-      >
-        Overdue
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        data-filter-value="today"
-      >
-        Today
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200"
-        data-filter-value="upcoming"
-      >
-        Next 7 days
-      </button>
+{% macro render_task_title(item) %}
+  <div class="text-sm font-semibold text-slate-100 leading-tight">
+    {% if item.url %}
+      <a href="{{ item.url }}" class="hover:underline">{{ item.title }}</a>
+    {% else %}
+      {{ item.title }}
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro render_table_item(item, module_name, show_module=True) %}
+  <tr class="border-b border-slate-800/70 last:border-0 hover:bg-slate-900/50 transition" data-due-variant="{{ item.due_variant or 'none' }}" data-filter-item>
+    <td class="px-3 py-3 align-top">
+      <div class="space-y-1">
+        {{ render_task_title(item) }}
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {% if item.identifier %}
+            <span class="font-mono">{{ item.identifier }}</span>
+          {% endif %}
+          {% if item.subtitle %}
+            <span>{{ item.subtitle }}</span>
+          {% endif %}
+        </div>
+        {% if item.description %}
+          <p class="text-xs text-slate-500 line-clamp-2">{{ item.description }}</p>
+        {% endif %}
+      </div>
+    </td>
+    {% if show_module %}
+      <td class="px-3 py-3 align-top">
+        <span class="inline-flex rounded-md border border-slate-800 bg-slate-950/70 px-2 py-0.5 text-xs text-slate-300">{{ module_name }}</span>
+      </td>
+    {% endif %}
+    <td class="px-3 py-3 align-top">
+      {% if item.status %}
+        <span class="inline-flex rounded-full px-2 py-0.5 text-xs {{ item.status_class }}">{{ item.status }}</span>
+      {% endif %}
+    </td>
+    <td class="px-3 py-3 align-top">
+      {% if item.due_display %}
+        <span class="inline-flex rounded-full px-2 py-0.5 text-xs {{ item.due_class }}">{{ item.due_display }}</span>
+      {% else %}
+        <span class="text-xs text-slate-500">No date</span>
+      {% endif %}
+    </td>
+    <td class="px-3 py-3 align-top text-right">
+      {% if item.secondary_url %}
+        <a href="{{ item.secondary_url }}" class="text-xs font-semibold text-emerald-300 hover:text-emerald-200">{{ item.secondary_label }}</a>
+      {% elif item.url %}
+        <a href="{{ item.url }}" class="text-xs font-semibold text-emerald-300 hover:text-emerald-200">Open</a>
+      {% endif %}
+    </td>
+  </tr>
+{% endmacro %}
+
+{% macro render_kanban_card(item, module_name, show_module=True) %}
+  <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 space-y-2 hover:border-slate-700 transition" data-due-variant="{{ item.due_variant or 'none' }}" data-filter-item>
+    <div class="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-500">
+      {% if show_module %}
+        <span>{{ module_name }}</span>
+      {% elif item.identifier %}
+        <span class="font-mono">{{ item.identifier }}</span>
+      {% else %}
+        <span>{{ item.status or 'Open' }}</span>
+      {% endif %}
+      {% if item.due_display %}
+        <span>{{ item.due_display }}</span>
+      {% endif %}
+    </div>
+    {{ render_task_title(item) }}
+    {% if item.subtitle %}
+      <div class="text-xs text-slate-500 truncate">{{ item.subtitle }}</div>
+    {% endif %}
+    <div class="flex items-center justify-between gap-2">
+      {% if item.status %}
+        <span class="inline-flex rounded-full px-2 py-0.5 text-xs {{ item.status_class }}">{{ item.status }}</span>
+      {% endif %}
+      {% if item.url %}
+        <a href="{{ item.url }}" class="text-xs font-semibold text-emerald-300 hover:text-emerald-200">Open</a>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro render_kanban_columns(modules, grouped_module=None) %}
+  <div class="grid gap-3 lg:grid-cols-4">
+    {% for variant, label in [('overdue', 'Overdue'), ('today', 'Today'), ('upcoming', 'Upcoming'), ('none', 'No date')] %}
+      <div class="min-h-24 rounded-lg border border-slate-800/80 bg-slate-950/30">
+        <div class="border-b border-slate-800/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{{ label }}</div>
+        <div class="space-y-2 p-2">
+          {% for module in modules %}
+            {% if not grouped_module or module['module'] == grouped_module %}
+              {% for item in module['items'] or [] %}
+                {% if (item.due_variant or 'none') == variant %}
+                  {{ render_kanban_card(item, module['module'], not grouped_module) }}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% macro render_dashboard_workspace(modules, empty_text) %}
+  {% set totals = namespace(count=0, variants=[]) %}
+  {% for module in modules %}
+    {% for item in module['items'] or [] %}
+      {% set totals.count = totals.count + 1 %}
+      {% set _ = totals.variants.append(item.due_variant or 'none') %}
+    {% endfor %}
+  {% endfor %}
+
+  <div class="space-y-4" data-filter-scope data-dashboard-workspace>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
+        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="all">All</button>
+        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="overdue">Overdue</button>
+        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="today">Today</button>
+        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="upcoming">Next 7 days</button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-1" aria-label="Dashboard view mode">
+          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="table">Table</button>
+          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="kanban">Kanban</button>
+        </div>
+        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-1" aria-label="Dashboard grouping mode">
+          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="module">By Module</button>
+          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="all">No Grouping</button>
+        </div>
+      </div>
     </div>
 
-    <div class="space-y-4">
-      {% for module in modules %}
-        {% set items = module['items'] or [] %}
-        {% if items %}
-          {% set cards.count = cards.count + items|length %}
-          {% set variants = namespace(values=[]) %}
-          {% for item in items %}
-            {% set _ = variants.values.append(item.due_variant or 'none') %}
-          {% endfor %}
-          <section
-            class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 space-y-3 shadow-sm"
-            data-variants="{{ variants.values | unique | join(',') }}"
-            data-filter-section
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
+    {% if totals.count == 0 %}
+      <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-6 text-sm text-slate-300">
+        {{ empty_text }}
+      </div>
+    {% else %}
+      <div class="space-y-4" data-view-pane data-view-mode="table" data-group-mode="module">
+        {% for module in modules %}
+          {% set items = module['items'] or [] %}
+          {% if items %}
+            {% set variants = namespace(values=[]) %}
+            {% for item in items %}
+              {% set _ = variants.values.append(item.due_variant or 'none') %}
+            {% endfor %}
+            <section class="rounded-xl border border-slate-800 bg-slate-950/40" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
+              <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+                <div>
                   <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
-                  {% if module.summary %}
-                    <div class="flex items-center gap-2 text-sm text-slate-400">
-                      {% if module.summary.overdue %}
-                        <span class="inline-flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-200 px-2 py-0.5 border border-rose-500/30">
-                          {{ module.summary.overdue }} overdue
-                        </span>
-                      {% endif %}
-                      {% if module.summary.today %}
-                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-200 px-2 py-0.5 border border-amber-500/30">
-                          {{ module.summary.today }} today
-                        </span>
-                      {% endif %}
-                      {% if module.summary.upcoming %}
-                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-200 px-2 py-0.5 border border-emerald-500/30">
-                          {{ module.summary.upcoming }} upcoming
-                        </span>
-                      {% endif %}
-                    </div>
+                  {% if module.description %}
+                    <p class="text-xs text-slate-500">{{ module.description }}</p>
                   {% endif %}
                 </div>
-                {% if module.description %}
-                  <p class="text-xs text-slate-400">{{ module.description }}</p>
-                {% endif %}
+                <div class="text-xs uppercase tracking-wide text-slate-500">{{ items|length }} item{{ 's' if items|length != 1 else '' }}</div>
               </div>
-              <div class="text-xs uppercase tracking-wide text-slate-400 flex items-center gap-1">
-                {{ items|length }} item{{ 's' if items|length != 1 else '' }}
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-left">
+                  <thead class="text-xs uppercase tracking-wide text-slate-500">
+                    <tr class="border-b border-slate-800">
+                      <th class="px-3 py-2 font-semibold">Work</th>
+                      <th class="px-3 py-2 font-semibold">Status</th>
+                      <th class="px-3 py-2 font-semibold">Due</th>
+                      <th class="px-3 py-2 font-semibold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in items %}
+                      {{ render_table_item(item, module['module'], False) }}
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </section>
+          {% endif %}
+        {% endfor %}
+      </div>
 
-            <div class="grid gap-2">
-              {% for item in items %}
-                <div
-                  class="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 hover:border-slate-700 hover:shadow-lg hover:shadow-black/20 transition"
-                  data-due-variant="{{ item.due_variant or 'none' }}"
-                  data-filter-item
-                >
-                  <div class="space-y-1 min-w-0">
-                    <div class="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
-                      <span class="px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700/70 text-slate-200">{{ module['module'] }}</span>
-                      {% if item.identifier %}
-                        <span class="font-mono text-slate-500">{{ item.identifier }}</span>
-                      {% endif %}
-                    </div>
-                    <div class="text-sm font-semibold text-slate-100 leading-tight">
-                      {% if item.url %}
-                        <a href="{{ item.url }}" class="hover:underline">{{ item.title }}</a>
-                      {% else %}
-                        {{ item.title }}
-                      {% endif %}
-                    </div>
-                    {% if item.subtitle %}
-                      <div class="text-xs text-slate-400">{{ item.subtitle }}</div>
-                    {% endif %}
-                    {% if item.description %}
-                      <p class="text-xs text-slate-500">{{ item.description }}</p>
-                    {% endif %}
-                    {% if item.metadata %}
-                      <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wide">
-                        {% for badge in item.metadata %}
-                          {% if badge is mapping %}
-                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
-                              {{ badge.label }}: {{ badge.value }}
-                            </span>
-                          {% else %}
-                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">{{ badge }}</span>
-                          {% endif %}
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                  </div>
-                  <div class="flex flex-col items-end gap-1 shrink-0 text-right">
-                    {% if item.due_display %}
-                      <span class="text-xs px-2 py-0.5 rounded-full {{ item.due_class }}">
-                        {{ item.due_display }}
-                      </span>
-                    {% endif %}
-                    {% if item.status %}
-                      <span class="text-xs px-2 py-0.5 rounded-full {{ item.status_class }}">{{ item.status }}</span>
-                    {% endif %}
-                    {% if item.secondary_url %}
-                      <a
-                        href="{{ item.secondary_url }}"
-                        class="mt-1 inline-flex items-center justify-center px-2.5 py-1 text-sm font-semibold rounded-lg border border-slate-700/70 bg-slate-900/60 hover:bg-slate-800/60 transition"
-                      >{{ item.secondary_label }}</a>
-                    {% endif %}
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          </section>
-        {% endif %}
-      {% endfor %}
-    </div>
+      <div class="hidden" data-view-pane data-view-mode="table" data-group-mode="all">
+        <section class="rounded-xl border border-slate-800 bg-slate-950/40" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
+          <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+            <h2 class="text-sm font-semibold text-slate-100">All Pending Work</h2>
+            <div class="text-xs uppercase tracking-wide text-slate-500">{{ totals.count }} item{{ 's' if totals.count != 1 else '' }}</div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left">
+              <thead class="text-xs uppercase tracking-wide text-slate-500">
+                <tr class="border-b border-slate-800">
+                  <th class="px-3 py-2 font-semibold">Work</th>
+                  <th class="px-3 py-2 font-semibold">Module</th>
+                  <th class="px-3 py-2 font-semibold">Status</th>
+                  <th class="px-3 py-2 font-semibold">Due</th>
+                  <th class="px-3 py-2 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for module in modules %}
+                  {% for item in module['items'] or [] %}
+                    {{ render_table_item(item, module['module'], True) }}
+                  {% endfor %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
 
-    {% if cards.count == 0 %}
-      <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
-        {{ empty_text }}
+      <div class="hidden space-y-4" data-view-pane data-view-mode="kanban" data-group-mode="module">
+        {% for module in modules %}
+          {% set items = module['items'] or [] %}
+          {% if items %}
+            {% set variants = namespace(values=[]) %}
+            {% for item in items %}
+              {% set _ = variants.values.append(item.due_variant or 'none') %}
+            {% endfor %}
+            <section class="rounded-xl border border-slate-800 bg-slate-950/30 p-3 space-y-3" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
+              <div class="flex items-center justify-between gap-3 px-1">
+                <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
+                <div class="text-xs uppercase tracking-wide text-slate-500">{{ items|length }} item{{ 's' if items|length != 1 else '' }}</div>
+              </div>
+              {{ render_kanban_columns([module], module['module']) }}
+            </section>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="hidden" data-view-pane data-view-mode="kanban" data-group-mode="all">
+        <section class="rounded-xl border border-slate-800 bg-slate-950/30 p-3 space-y-3" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
+          <div class="flex items-center justify-between gap-3 px-1">
+            <h2 class="text-sm font-semibold text-slate-100">All Pending Work</h2>
+            <div class="text-xs uppercase tracking-wide text-slate-500">{{ totals.count }} item{{ 's' if totals.count != 1 else '' }}</div>
+          </div>
+          {{ render_kanban_columns(modules) }}
+        </section>
       </div>
     {% endif %}
   </div>
@@ -253,18 +340,18 @@
   </div>
 
   <div id="dashboard-panel-my" data-tab-panel="my" role="tabpanel" aria-labelledby="dashboard-tab-my">
-    {{ render_dashboard_cards(pending_modules or [], "Nothing pending — time for a coffee? ☕") }}
+    {{ render_dashboard_workspace(pending_modules or [], "Nothing pending — time for a coffee? ☕") }}
   </div>
 
   {% if view_mode != 'projects' %}
     <div id="dashboard-panel-created" data-tab-panel="created" role="tabpanel" aria-labelledby="dashboard-tab-created" class="hidden">
-      {{ render_dashboard_cards(created_by_modules or [], "No items assigned by you are pending.") }}
+      {{ render_dashboard_workspace(created_by_modules or [], "No items assigned by you are pending.") }}
     </div>
   {% endif %}
 
   <div id="dashboard-panel-team" data-tab-panel="team" role="tabpanel" aria-labelledby="dashboard-tab-team" class="hidden">
     {% if team_members %}
-      {{ render_dashboard_cards(team_pending_modules or [], "Your team has no pending work right now. 🎉") }}
+      {{ render_dashboard_workspace(team_pending_modules or [], "Your team has no pending work right now. 🎉") }}
     {% else %}
       <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 text-sm text-slate-300">
         No team members are currently reporting to you.
@@ -343,6 +430,51 @@
             activate(button.dataset.tabTarget || 'my');
           });
         });
+      });
+
+      document.querySelectorAll('[data-dashboard-workspace]').forEach(function (workspace) {
+        const viewButtons = workspace.querySelectorAll('[data-view-mode-value]');
+        const groupButtons = workspace.querySelectorAll('[data-group-mode-value]');
+        const panes = workspace.querySelectorAll('[data-view-pane]');
+        let activeView = 'table';
+        let activeGroup = 'module';
+
+        const activeClasses = ['bg-slate-200', 'text-slate-900'];
+        const inactiveClasses = ['text-slate-400'];
+
+        function setButtonState(buttons, attr, value) {
+          buttons.forEach(function (button) {
+            const isActive = button.dataset[attr] === value;
+            button.classList.toggle(activeClasses[0], isActive);
+            button.classList.toggle(activeClasses[1], isActive);
+            button.classList.toggle(inactiveClasses[0], !isActive);
+          });
+        }
+
+        function renderWorkspace() {
+          panes.forEach(function (pane) {
+            const show = pane.dataset.viewMode === activeView && pane.dataset.groupMode === activeGroup;
+            pane.classList.toggle('hidden', !show);
+          });
+          setButtonState(viewButtons, 'viewModeValue', activeView);
+          setButtonState(groupButtons, 'groupModeValue', activeGroup);
+        }
+
+        viewButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            activeView = button.dataset.viewModeValue || 'table';
+            renderWorkspace();
+          });
+        });
+
+        groupButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            activeGroup = button.dataset.groupModeValue || 'module';
+            renderWorkspace();
+          });
+        });
+
+        renderWorkspace();
       });
 
       document.querySelectorAll('[data-filter-scope]').forEach(function (scope) {

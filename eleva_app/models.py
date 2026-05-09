@@ -1800,6 +1800,11 @@ class Lift(db.Model):
                     "slip_label": slip_label,
                     "service_type": clean_str(item.get("service_type")),
                     "details_json": clean_str(item.get("details_json") or item.get("service_details")),
+                    "source": clean_str(item.get("source")),
+                    "support_ticket_ref": clean_str(item.get("support_ticket_ref")),
+                    "complaint_summary": clean_str(item.get("complaint_summary")),
+                    "checklist": clean_str(item.get("checklist")),
+                    "created_at": clean_str(item.get("created_at")),
                 }
             )
         return schedule
@@ -1840,6 +1845,11 @@ class Lift(db.Model):
             slip_label = clean_str(item.get("slip_label"))
             service_type = clean_str(item.get("service_type"))
             details_json = clean_str(item.get("details_json") or item.get("service_details"))
+            source = clean_str(item.get("source"))
+            support_ticket_ref = clean_str(item.get("support_ticket_ref"))
+            complaint_summary = clean_str(item.get("complaint_summary"))
+            checklist = clean_str(item.get("checklist"))
+            created_at = clean_str(item.get("created_at"))
             cleaned.append(
                 {
                     "date": iso_date,
@@ -1850,6 +1860,11 @@ class Lift(db.Model):
                     "slip_label": slip_label,
                     "service_type": service_type,
                     "details_json": details_json,
+                    "source": source,
+                    "support_ticket_ref": support_ticket_ref,
+                    "complaint_summary": complaint_summary,
+                    "checklist": checklist,
+                    "created_at": created_at,
                 }
             )
         self.service_schedule_json = (
@@ -3105,7 +3120,7 @@ class DeliveryChallanItem(db.Model):
     __tablename__ = "dispatch_item"
 
     id = db.Column(db.Integer, primary_key=True)
-    delivery_challan_id = db.Column(db.Integer, db.ForeignKey("dispatch.id"), nullable=False)
+    delivery_challan_id = db.Column("dispatch_id", db.Integer, db.ForeignKey("dispatch.id"), nullable=False)
     delivery_order_item_id = db.Column(
         db.Integer, db.ForeignKey("delivery_order_item.id"), nullable=True
     )
