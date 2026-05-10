@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Store - Asset {{ 'Classes' if mode == 'classes' else 'Types' }}{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store Assets</p>
+      <h1 class="text-2xl font-semibold">Asset {{ 'Classes' if mode == 'classes' else 'Types' }}</h1>
+      <p class="text-sm text-slate-600">Maintain prefixes used for readable operational asset codes.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Assets</a>
+      <a href="{{ url_for('store_asset_types' if mode == 'classes' else 'store_asset_classes') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">{{ 'Types' if mode == 'classes' else 'Classes' }}</a>
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <h2 class="text-lg font-semibold mb-3">Add {{ 'Class' if mode == 'classes' else 'Type' }}</h2>
+    <form method="post" class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save">
+      <input name="name" required placeholder="Name" class="rounded-lg border border-slate-200 px-3 py-2">
+      {% if mode == 'types' %}
+      <select name="asset_class_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Class</option>
+        {% for asset_class in asset_classes %}
+        <option value="{{ asset_class.id }}">{{ asset_class.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      <input name="code_prefix" placeholder="Prefix e.g. HLM" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="active" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="1">Active</option>
+        <option value="0">Inactive</option>
+      </select>
+      <input name="description" placeholder="Description" class="rounded-lg border border-slate-200 px-3 py-2">
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Save</button>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Name</th>
+          {% if mode == 'types' %}<th class="py-3 px-4">Class</th>{% endif %}
+          <th class="py-3 px-4">Prefix</th>
+          <th class="py-3 px-4">Description</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">Action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for record in records %}
+        <tr>
+          <td class="py-3 px-4 font-semibold">{{ record.name }}</td>
+          {% if mode == 'types' %}<td class="py-3 px-4">{{ record.asset_class.name if record.asset_class else '-' }}</td>{% endif %}
+          <td class="py-3 px-4">{{ record.code_prefix or '-' }}</td>
+          <td class="py-3 px-4">{{ record.description or '-' }}</td>
+          <td class="py-3 px-4">{{ 'Active' if record.active else 'Inactive' }}</td>
+          <td class="py-3 px-4">
+            <form method="post">
+              {{ csrf_field() }}
+              <input type="hidden" name="action" value="toggle">
+              {% if mode == 'classes' %}
+              <input type="hidden" name="class_id" value="{{ record.id }}">
+              {% else %}
+              <input type="hidden" name="type_id" value="{{ record.id }}">
+              {% endif %}
+              <button class="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs">{{ 'Deactivate' if record.active else 'Activate' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ 6 if mode == 'types' else 5 }}" class="py-4 px-4 text-slate-500">No records configured.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

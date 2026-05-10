@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Store - Create Asset{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store Assets</p>
+      <h1 class="text-2xl font-semibold">Create Asset</h1>
+      <p class="text-sm text-slate-600">Create serialized or quantity-based operational assets.</p>
+    </div>
+    <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Back to Assets</a>
+  </div>
+
+  <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {% for principle in principles %}
+      <p>{{ principle }}</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <form method="post" class="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input name="asset_name" required placeholder="Asset name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="asset_code" maxlength="8" placeholder="Manual code, 8 chars optional" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="tracking_mode" class="rounded-lg border border-slate-200 px-3 py-2">
+        {% for value, label in tracking_modes %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="asset_class_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Asset class</option>
+        {% for record in asset_classes %}
+        <option value="{{ record.id }}">{{ record.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="new_asset_class_name" placeholder="New class name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="new_asset_class_prefix" maxlength="3" placeholder="New class prefix, 3 chars" class="rounded-lg border border-slate-200 px-3 py-2">
+      <div class="text-xs text-slate-500 flex items-center">Code format: 3 class + 2 type + 3 serial.</div>
+
+      <select name="asset_type_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Asset type</option>
+        {% for record in asset_types %}
+        <option value="{{ record.id }}">{{ record.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="new_asset_type_name" placeholder="New type name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="new_asset_type_prefix" maxlength="2" placeholder="New type prefix, 2 chars" class="rounded-lg border border-slate-200 px-3 py-2">
+      <div class="text-xs text-slate-500 flex items-center">Generated asset codes are fixed 8 characters.</div>
+
+      <input name="qty" type="number" min="1" step="1" value="1" placeholder="Qty" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="uom" value="Nos" placeholder="UOM" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="status" class="rounded-lg border border-slate-200 px-3 py-2">
+        {% for status in statuses %}
+        <option value="{{ status }}" {% if status == 'Inventory' %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+      </select>
+      <select name="condition" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Condition</option>
+        {% for condition in conditions %}
+        <option value="{{ condition }}">{{ condition }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="current_location" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Current location</option>
+        {% for location in asset_locations %}
+        <option value="{{ location.name }}">{{ location.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="new_location_name" placeholder="New location name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="current_custodian" placeholder="Current custodian" class="rounded-lg border border-slate-200 px-3 py-2">
+      <div class="text-xs text-slate-500 flex items-center">Serial number is auto-generated from asset code, max 7 characters.</div>
+
+      <input name="brand" placeholder="Brand" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="model" placeholder="Model" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="vendor" placeholder="Vendor" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="asset_value" type="number" min="0" step="0.01" placeholder="Asset value" class="rounded-lg border border-slate-200 px-3 py-2">
+
+      <input name="purchase_date" type="date" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="warranty_till" type="date" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="calibration_required" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="0">Calibration not required</option>
+        <option value="1">Calibration required</option>
+      </select>
+      <input name="last_calibration_date" type="date" placeholder="Last calibration date" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="recalibration_date" type="date" placeholder="Re-calibration date" class="rounded-lg border border-slate-200 px-3 py-2">
+
+      <textarea name="remarks" placeholder="Remarks" class="rounded-lg border border-slate-200 px-3 py-2 md:col-span-4"></textarea>
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Create Asset</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Store - Assets{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Assets</h1>
+      <p class="text-sm text-slate-600">Operational asset accountability, custody, movement and repair tracking.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('create_store_asset') }}" class="px-3 py-2 rounded-lg btn-primary btn-shimmer text-sm">+ Create Asset</a>
+      <a href="{{ url_for('store_asset_movements') }}" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm">Movements</a>
+      <a href="{{ url_for('store_asset_repairs') }}" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm">Repairs</a>
+      <a href="{{ url_for('store_settings') }}" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm">Store Settings</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+    {% for status in statuses %}
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <p class="text-xs uppercase text-slate-500">{{ status }}</p>
+      <p class="text-xl font-semibold text-slate-900">{{ status_counts.get(status, 0) }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <form method="get" class="rounded-lg border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3 text-sm">
+    <input name="q" value="{{ request.args.get('q','') }}" placeholder="Code, name, serial" class="rounded-lg border border-slate-200 px-3 py-2">
+    <select name="asset_class_id" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All classes</option>
+      {% for record in asset_classes %}
+      <option value="{{ record.id }}" {% if request.args.get('asset_class_id') == record.id|string %}selected{% endif %}>{{ record.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="asset_type_id" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All types</option>
+      {% for record in asset_types %}
+      <option value="{{ record.id }}" {% if request.args.get('asset_type_id') == record.id|string %}selected{% endif %}>{{ record.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All statuses</option>
+      {% for status in statuses %}
+      <option value="{{ status }}" {% if request.args.get('status') == status %}selected{% endif %}>{{ status }}</option>
+      {% endfor %}
+    </select>
+    <select name="tracking_mode" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All tracking</option>
+      {% for value, label in tracking_modes %}
+      <option value="{{ value }}" {% if request.args.get('tracking_mode') == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <input name="custodian" value="{{ request.args.get('custodian','') }}" placeholder="Custodian" class="rounded-lg border border-slate-200 px-3 py-2">
+    <select name="location" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All locations</option>
+      {% for location in asset_locations %}
+      <option value="{{ location.name }}" {% if request.args.get('location') == location.name %}selected{% endif %}>{{ location.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="flex gap-2">
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Filter</button>
+      <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Reset</a>
+    </div>
+  </form>
+
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Asset Code</th>
+          <th class="py-3 px-4">Name</th>
+          <th class="py-3 px-4">Class / Type</th>
+          <th class="py-3 px-4">Tracking</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">Custodian</th>
+          <th class="py-3 px-4">Location</th>
+          <th class="py-3 px-4">Qty</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for asset in assets %}
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4 font-semibold text-slate-900">
+            <a href="{{ url_for('store_asset_detail', asset_id=asset.id) }}" class="hover:text-orange-600">{{ asset.asset_code }}</a>
+          </td>
+          <td class="py-3 px-4">{{ asset.asset_name }}</td>
+          <td class="py-3 px-4">{{ asset.asset_class.name if asset.asset_class else '-' }} / {{ asset.asset_type.name if asset.asset_type else '-' }}</td>
+          <td class="py-3 px-4">{{ 'Serialized' if asset.tracking_mode == 'serialized' else 'Quantity Based' }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex rounded-full px-2 py-1 text-xs bg-slate-100 text-slate-700">{{ asset.status }}</span>
+          </td>
+          <td class="py-3 px-4">{{ asset.current_custodian or '-' }}</td>
+          <td class="py-3 px-4">{{ asset.current_location or '-' }}</td>
+          <td class="py-3 px-4">{{ asset.qty }} {{ asset.uom or '' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="py-4 px-4 text-slate-500">No assets found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

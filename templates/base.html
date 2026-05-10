@@ -1835,7 +1835,7 @@
           {% set role_key = (current_user.role or '').lower() %}
           {% set design_visible = current_user.is_admin or 'design' in role_key %}
           {% set purchase_visible = current_user.is_admin or 'purchase' in role_key %}
-          {% set store_visible = current_user.is_admin or 'store' in role_key %}
+          {% set store_visible = true %}
 
           {% if design_visible %}
           {% set design_endpoints = ['design_overview','design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit','part_classes'] %}
@@ -1916,7 +1916,7 @@
           {% endif %}
 
           {% if store_visible %}
-          {% set store_endpoints = ['store_receive','store_inventory','store_dispatch','store_delivery_orders','create_delivery_order','delivery_order_detail','inventory_item_movements','adjust_inventory_item','inventory_snapshot'] %}
+          {% set store_endpoints = ['store_receive','store_inventory','store_dispatch','store_delivery_orders','create_delivery_order','delivery_order_detail','inventory_item_movements','adjust_inventory_item','inventory_snapshot','store_assets','create_store_asset','store_asset_detail','issue_store_asset','return_store_asset','start_store_asset_repair','close_store_asset_repair','store_asset_movements','store_asset_repairs','store_settings','store_asset_classes','store_asset_types'] %}
           <div class="space-y-1">
             <a href="{{ url_for('store_inventory') }}"
                class="nav-item flex items-center gap-3 px-3 py-3 animate-slide {{ 'active' if request.endpoint in store_endpoints else '' }}">
@@ -1943,6 +1943,22 @@
               <a href="{{ url_for('store_dispatch') }}"
                  class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'store_dispatch' else '' }}">
                 <span class="label">Delivery Challan</span>
+              </a>
+              <a href="{{ url_for('store_assets') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['store_assets','store_asset_detail','issue_store_asset','return_store_asset','start_store_asset_repair','close_store_asset_repair'] else '' }}">
+                <span class="label">Assets</span>
+              </a>
+              <a href="{{ url_for('store_asset_movements') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'store_asset_movements' else '' }}">
+                <span class="label">Asset Movements</span>
+              </a>
+              <a href="{{ url_for('store_asset_repairs') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint == 'store_asset_repairs' else '' }}">
+                <span class="label">Repairs</span>
+              </a>
+              <a href="{{ url_for('store_settings') }}"
+                 class="nav-item flex items-center gap-3 px-3 py-2 text-sm animate-slide {{ 'active' if request.endpoint in ['store_settings','store_asset_classes','store_asset_types'] else '' }}">
+                <span class="label">Store Settings</span>
               </a>
             </div>
           </div>

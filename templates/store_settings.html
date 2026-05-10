@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Store - Settings{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store</p>
+      <h1 class="text-2xl font-semibold">Store Settings</h1>
+      <p class="text-sm text-slate-600">Operational settings for Store assets.</p>
+    </div>
+    <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Back to Assets</a>
+  </div>
+
+  <div class="border-b border-slate-200">
+    <button class="px-4 py-2 text-sm font-semibold border-b-2 border-purple-600 text-purple-700">Asset Settings</button>
+  </div>
+
+  <details open class="rounded-lg border border-slate-200 bg-white p-4">
+    <summary class="cursor-pointer text-lg font-semibold">Asset Classes</summary>
+    <form method="post" class="mt-4 grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save_asset_class">
+      <input name="name" required placeholder="Class name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="code_prefix" maxlength="3" placeholder="3 char prefix" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="active" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="1">Active</option>
+        <option value="0">Inactive</option>
+      </select>
+      <input name="description" placeholder="Description" class="rounded-lg border border-slate-200 px-3 py-2">
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Save Class</button>
+    </form>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Name</th>
+            <th class="py-2">Prefix</th>
+            <th class="py-2">Description</th>
+            <th class="py-2">Status</th>
+            <th class="py-2">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for record in asset_classes %}
+          <tr>
+            <td class="py-2 font-semibold">{{ record.name }}</td>
+            <td class="py-2">{{ record.code_prefix or '-' }}</td>
+            <td class="py-2">{{ record.description or '-' }}</td>
+            <td class="py-2">{{ 'Active' if record.active else 'Inactive' }}</td>
+            <td class="py-2">
+              <form method="post">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="toggle_asset_class">
+                <input type="hidden" name="class_id" value="{{ record.id }}">
+                <button class="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs">{{ 'Deactivate' if record.active else 'Activate' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-3 text-slate-500">No asset classes configured.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="rounded-lg border border-slate-200 bg-white p-4">
+    <summary class="cursor-pointer text-lg font-semibold">Asset Types</summary>
+    <form method="post" class="mt-4 grid grid-cols-1 md:grid-cols-6 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save_asset_type">
+      <input name="name" required placeholder="Type name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="asset_class_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Class</option>
+        {% for asset_class in asset_classes %}
+        <option value="{{ asset_class.id }}">{{ asset_class.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="code_prefix" maxlength="2" placeholder="2 char prefix" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="active" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="1">Active</option>
+        <option value="0">Inactive</option>
+      </select>
+      <input name="description" placeholder="Description" class="rounded-lg border border-slate-200 px-3 py-2">
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Save Type</button>
+    </form>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Name</th>
+            <th class="py-2">Class</th>
+            <th class="py-2">Prefix</th>
+            <th class="py-2">Description</th>
+            <th class="py-2">Status</th>
+            <th class="py-2">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for record in asset_types %}
+          <tr>
+            <td class="py-2 font-semibold">{{ record.name }}</td>
+            <td class="py-2">{{ record.asset_class.name if record.asset_class else '-' }}</td>
+            <td class="py-2">{{ record.code_prefix or '-' }}</td>
+            <td class="py-2">{{ record.description or '-' }}</td>
+            <td class="py-2">{{ 'Active' if record.active else 'Inactive' }}</td>
+            <td class="py-2">
+              <form method="post">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="toggle_asset_type">
+                <input type="hidden" name="type_id" value="{{ record.id }}">
+                <button class="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs">{{ 'Deactivate' if record.active else 'Activate' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-3 text-slate-500">No asset types configured.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="rounded-lg border border-slate-200 bg-white p-4">
+    <summary class="cursor-pointer text-lg font-semibold">Location Settings</summary>
+    <form method="post" class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="save_asset_location">
+      <input name="name" required placeholder="Location name" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="active" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="1">Active</option>
+        <option value="0">Inactive</option>
+      </select>
+      <input name="description" placeholder="Description" class="rounded-lg border border-slate-200 px-3 py-2">
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Save Location</button>
+    </form>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Name</th>
+            <th class="py-2">Description</th>
+            <th class="py-2">Status</th>
+            <th class="py-2">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for location in asset_locations %}
+          <tr>
+            <td class="py-2 font-semibold">{{ location.name }}</td>
+            <td class="py-2">{{ location.description or '-' }}</td>
+            <td class="py-2">{{ 'Active' if location.active else 'Inactive' }}</td>
+            <td class="py-2">
+              <form method="post">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="toggle_asset_location">
+                <input type="hidden" name="location_id" value="{{ location.id }}">
+                <button class="px-3 py-1 rounded-lg border border-slate-200 bg-white text-xs">{{ 'Deactivate' if location.active else 'Activate' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-3 text-slate-500">No locations configured.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{% endblock %}

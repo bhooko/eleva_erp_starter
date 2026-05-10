@@ -7607,6 +7607,12 @@ from eleva_app.models import (
     Notification,
     DeliveryChallan,
     DeliveryChallanItem,
+    AssetClass,
+    AssetLocation,
+    AssetMovement,
+    AssetRepair,
+    AssetType,
+    OperationalAsset,
     InventoryItem,
     InventoryStock,
     StockAdjustment,
@@ -15832,6 +15838,1370 @@ def purchase_vendor_edit(vendor_id: int):
     return redirect(url_for("purchase_vendors"))
 
 
+ASSET_TRACKING_MODES = [
+    ("serialized", "Serialized"),
+    ("quantity", "Quantity Based"),
+]
+ASSET_STATUSES = [
+    "Inventory",
+    "Issued",
+    "Reserved",
+    "In Repair",
+    "Breakdown",
+    "Lost",
+    "Decommissioned",
+]
+ASSET_RETURN_STATUSES = ["Inventory", "In Repair", "Breakdown", "Lost", "Decommissioned"]
+ASSET_CONDITIONS = ["Good", "Minor Damage", "Needs Repair", "Needs Calibration", "Non Functional"]
+ASSET_MOVEMENT_TYPES = [
+    "Issue",
+    "Return",
+    "Transfer",
+    "Repair Send",
+    "Repair Return",
+    "Breakdown",
+    "Decommission",
+    "Manual Update",
+]
+ASSET_OPERATING_PRINCIPLES = [
+    "Status must always be treated as authoritative persisted state.",
+    "Movement history is append-only and must not be overwritten.",
+    "Do not treat reusable operational assets as normal inventory stock.",
+    "Serialization is driven by accountability requirements, not asset value.",
+    "Prefer operational traceability over accounting abstraction.",
+]
+ASSET_DEFAULT_LOCATION = "Warehouse - Goa"
+ASSET_OBSOLETE_DEFAULT_LOCATIONS = ["Main Store", "Warehouse", "Workshop"]
+ASSET_CLASS_PREFIX_LENGTH = 3
+ASSET_TYPE_PREFIX_LENGTH = 2
+ASSET_SERIAL_LENGTH = 3
+ASSET_CODE_LENGTH = ASSET_CLASS_PREFIX_LENGTH + ASSET_TYPE_PREFIX_LENGTH + ASSET_SERIAL_LENGTH
+
+
+def _require_asset_permission(action: str = "view"):
+    return
+
+
+def _asset_actor_id():
+    try:
+        if current_user and current_user.is_authenticated:
+            return current_user.id
+    except Exception:
+        return None
+    return None
+
+
+def _normalize_asset_tracking_mode(value):
+    normalized = (value or "serialized").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"quantity", "quantity_based", "qty", "qty_based"}:
+        return "quantity"
+    return "serialized"
+
+
+def _normalize_asset_status(value, *, allowed=None, default="Inventory"):
+    allowed_statuses = allowed or ASSET_STATUSES
+    text = (value or default or "").strip()
+    for status in allowed_statuses:
+        if text.lower() == status.lower():
+            return status
+    raise ValueError(f"Invalid asset status: {text or value}")
+
+
+def _normalize_asset_condition(value):
+    text = (value or "").strip()
+    if not text:
+        return None
+    for condition in ASSET_CONDITIONS:
+        if text.lower() == condition.lower():
+            return condition
+    raise ValueError(f"Invalid asset condition: {text}")
+
+
+def _asset_prefix_text(*candidates):
+    for candidate in candidates:
+        text = (candidate or "").strip().upper()
+        if not text:
+            continue
+        text = re.sub(r"[^A-Z0-9]", "", text)
+        if text:
+            return text
+    return "AST"
+
+
+def _asset_class_prefix(value=None, fallback_name=None):
+    prefix = _asset_prefix_text(value)
+    if not value:
+        prefix = _asset_prefix_text(fallback_name)
+    if len(prefix) != ASSET_CLASS_PREFIX_LENGTH:
+        raise ValueError("Asset class prefix must be exactly 3 characters.")
+    return prefix
+
+
+def _asset_type_prefix(value=None, fallback_name=None):
+    prefix = _asset_prefix_text(value)
+    if not value:
+        prefix = _asset_prefix_text(fallback_name)
+    if len(prefix) != ASSET_TYPE_PREFIX_LENGTH:
+        raise ValueError("Asset type prefix must be exactly 2 characters.")
+    return prefix
+
+
+def _asset_code_base(asset_class, asset_type):
+    if not asset_class:
+        raise ValueError("Asset class is required for asset code generation.")
+    if not asset_type:
+        raise ValueError("Asset type is required for asset code generation.")
+    class_prefix = _asset_class_prefix(asset_class.code_prefix, asset_class.name)
+    type_prefix = _asset_type_prefix(asset_type.code_prefix, asset_type.name)
+    return f"{class_prefix}{type_prefix}"
+
+
+def _asset_serial_from_code(asset_code):
+    code = re.sub(r"[^A-Za-z0-9]", "", asset_code or "").upper()
+    return code[-ASSET_SERIAL_LENGTH:] if len(code) >= ASSET_SERIAL_LENGTH else code
+
+
+def _normalize_asset_code(asset_code, base_prefix=None):
+    code = re.sub(r"[^A-Za-z0-9]", "", asset_code or "").upper()
+    if len(code) != ASSET_CODE_LENGTH:
+        raise ValueError("Asset code must be exactly 8 characters.")
+    if base_prefix and not code.startswith(base_prefix):
+        raise ValueError(f"Asset code must start with {base_prefix}.")
+    if not code[-ASSET_SERIAL_LENGTH:].isdigit():
+        raise ValueError("Asset code must end with a 3 digit serial number.")
+    return code
+
+
+def _coerce_asset_class_prefix(value=None, fallback_name=None):
+    prefix = _asset_prefix_text(value, fallback_name)
+    if len(prefix) < ASSET_CLASS_PREFIX_LENGTH:
+        prefix = prefix.ljust(ASSET_CLASS_PREFIX_LENGTH, "X")
+    return prefix[:ASSET_CLASS_PREFIX_LENGTH]
+
+
+def _coerce_asset_type_prefix(value=None, fallback_name=None):
+    prefix = _asset_prefix_text(value, fallback_name)
+    if len(prefix) < ASSET_TYPE_PREFIX_LENGTH:
+        prefix = prefix.ljust(ASSET_TYPE_PREFIX_LENGTH, "X")
+    return prefix[:ASSET_TYPE_PREFIX_LENGTH]
+
+
+def _asset_sequence_from_code(asset_code):
+    code = re.sub(r"[^A-Za-z0-9]", "", asset_code or "").upper()
+    match = re.search(r"(\d+)$", code)
+    if not match:
+        return None
+    return int(match.group(1)[-ASSET_SERIAL_LENGTH:])
+
+
+def _asset_code_exists(asset_code, exclude_asset_id=None):
+    query = OperationalAsset.query.filter(
+        func.lower(OperationalAsset.asset_code) == asset_code.lower()
+    )
+    if exclude_asset_id:
+        query = query.filter(OperationalAsset.id != exclude_asset_id)
+    return db.session.query(query.exists()).scalar()
+
+
+def _available_asset_code(base_prefix, preferred_sequence=None, exclude_asset_id=None):
+    existing_codes = {
+        code
+        for (code,) in db.session.query(OperationalAsset.asset_code).all()
+        if code
+    }
+    if exclude_asset_id:
+        current = OperationalAsset.query.filter_by(id=exclude_asset_id).first()
+        if current and current.asset_code in existing_codes:
+            existing_codes.remove(current.asset_code)
+    candidate = preferred_sequence or 1
+    while candidate < 10**ASSET_SERIAL_LENGTH:
+        code = f"{base_prefix}{candidate:0{ASSET_SERIAL_LENGTH}d}"
+        if code not in existing_codes:
+            return code
+        candidate += 1
+    raise ValueError(f"No asset code serial numbers left for prefix {base_prefix}.")
+
+
+def _next_asset_code(base_prefix):
+    base_prefix = _normalize_asset_code(f"{base_prefix}{'0' * ASSET_SERIAL_LENGTH}")[: ASSET_CLASS_PREFIX_LENGTH + ASSET_TYPE_PREFIX_LENGTH]
+    pattern = re.compile(rf"^{re.escape(base_prefix)}(\d{{{ASSET_SERIAL_LENGTH}}})$", re.IGNORECASE)
+    max_number = 0
+    rows = (
+        db.session.query(OperationalAsset.asset_code)
+        .filter(OperationalAsset.asset_code.ilike(f"{base_prefix}%"))
+        .all()
+    )
+    for (code,) in rows:
+        match = pattern.match(code or "")
+        if match:
+            max_number = max(max_number, int(match.group(1)))
+
+    candidate = max_number + 1
+    while True:
+        if candidate >= 10**ASSET_SERIAL_LENGTH:
+            raise ValueError(f"No asset code serial numbers left for prefix {base_prefix}.")
+        asset_code = f"{base_prefix}{candidate:0{ASSET_SERIAL_LENGTH}d}"
+        if not _asset_code_exists(asset_code):
+            return asset_code
+        candidate += 1
+
+
+def _parse_asset_float(raw_value, label, *, default=None):
+    if raw_value in (None, ""):
+        return default, None
+    parsed, error = parse_float_field(raw_value, label)
+    if parsed is None and error:
+        return None, error
+    return parsed, None
+
+
+def _parse_asset_datetime(raw_value, *, default_now=True):
+    raw_value = (raw_value or "").strip()
+    if not raw_value:
+        return datetime.datetime.utcnow() if default_now else None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            parsed = datetime.datetime.strptime(raw_value, fmt)
+            if fmt == "%Y-%m-%d":
+                return datetime.datetime.combine(parsed.date(), datetime.time.min)
+            return parsed
+        except ValueError:
+            continue
+    return datetime.datetime.utcnow() if default_now else None
+
+
+def _get_or_create_asset_class(name, prefix=None, description=None):
+    name = (name or "").strip()
+    if not name:
+        return None
+    asset_class = AssetClass.query.filter(func.lower(AssetClass.name) == name.lower()).first()
+    if asset_class:
+        return asset_class
+    asset_class = AssetClass(
+        name=name,
+        code_prefix=_asset_class_prefix(prefix, name),
+        description=(description or "").strip() or None,
+        active=True,
+    )
+    db.session.add(asset_class)
+    db.session.flush()
+    return asset_class
+
+
+def _get_or_create_asset_type(name, asset_class=None, prefix=None, description=None):
+    name = (name or "").strip()
+    if not name:
+        return None
+    asset_type = AssetType.query.filter(func.lower(AssetType.name) == name.lower()).first()
+    if asset_type:
+        if asset_class and not asset_type.asset_class_id:
+            asset_type.asset_class_id = asset_class.id
+        return asset_type
+    asset_type = AssetType(
+        name=name,
+        asset_class_id=getattr(asset_class, "id", None),
+        code_prefix=_asset_type_prefix(prefix, name),
+        description=(description or "").strip() or None,
+        active=True,
+    )
+    db.session.add(asset_type)
+    db.session.flush()
+    return asset_type
+
+
+def _get_or_create_asset_location(name, description=None):
+    name = (name or "").strip()
+    if not name:
+        return None
+    location = AssetLocation.query.filter(func.lower(AssetLocation.name) == name.lower()).first()
+    if location:
+        return location
+    location = AssetLocation(
+        name=name,
+        description=(description or "").strip() or None,
+        active=True,
+    )
+    db.session.add(location)
+    db.session.flush()
+    return location
+
+
+def _record_asset_creation_movement(asset, *, quantity=None, condition=None, remarks=None):
+    movement = AssetMovement(
+        asset_id=asset.id,
+        movement_type="Manual Update",
+        previous_status=None,
+        new_status=asset.status,
+        previous_location=None,
+        new_location=asset.current_location,
+        previous_custodian=None,
+        new_custodian=asset.current_custodian,
+        quantity=quantity,
+        condition=condition,
+        remarks=remarks,
+        reference_type="Asset Create",
+        reference_id=str(asset.id),
+        created_by_user_id=_asset_actor_id(),
+        movement_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(movement)
+    return movement
+
+
+def _create_asset_movement(
+    asset,
+    movement_type,
+    *,
+    new_status=None,
+    new_location=None,
+    new_custodian=None,
+    issued_by=None,
+    issued_to=None,
+    quantity=None,
+    condition=None,
+    expected_return_date=None,
+    movement_at=None,
+    remarks=None,
+    reference_type=None,
+    reference_id=None,
+):
+    if movement_type not in ASSET_MOVEMENT_TYPES:
+        raise ValueError(f"Invalid asset movement type: {movement_type}")
+
+    previous_status = asset.status
+    previous_location = asset.current_location
+    previous_custodian = asset.current_custodian
+    normalized_status = _normalize_asset_status(new_status) if new_status else asset.status
+    normalized_condition = _normalize_asset_condition(condition) if condition else asset.condition
+
+    movement = AssetMovement(
+        asset_id=asset.id,
+        movement_type=movement_type,
+        previous_status=previous_status,
+        new_status=normalized_status,
+        previous_location=previous_location,
+        new_location=new_location if new_location is not None else asset.current_location,
+        previous_custodian=previous_custodian,
+        new_custodian=new_custodian if new_custodian is not None else asset.current_custodian,
+        issued_by=issued_by,
+        issued_to=issued_to,
+        quantity=quantity,
+        condition=normalized_condition,
+        expected_return_date=expected_return_date,
+        movement_at=movement_at or datetime.datetime.utcnow(),
+        remarks=remarks,
+        reference_type=reference_type,
+        reference_id=str(reference_id) if reference_id is not None else None,
+        created_by_user_id=_asset_actor_id(),
+    )
+    db.session.add(movement)
+
+    asset.status = normalized_status
+    if new_location is not None:
+        asset.current_location = new_location
+    if new_custodian is not None:
+        asset.current_custodian = new_custodian
+    if condition:
+        asset.condition = normalized_condition
+    asset.updated_at = datetime.datetime.utcnow()
+    return movement
+
+
+def _create_operational_assets(
+    *,
+    asset_name,
+    asset_class=None,
+    asset_type=None,
+    tracking_mode="serialized",
+    qty=1,
+    uom=None,
+    manual_code=None,
+    code_prefix=None,
+    status="Inventory",
+    current_location=None,
+    current_custodian=None,
+    brand=None,
+    model=None,
+    serial_number=None,
+    purchase_date=None,
+    vendor=None,
+    warranty_till=None,
+    asset_value=None,
+    calibration_required=False,
+    last_calibration_date=None,
+    recalibration_date=None,
+    condition=None,
+    remarks=None,
+    active=True,
+):
+    asset_name = (asset_name or "").strip()
+    if not asset_name:
+        raise ValueError("Asset name is required.")
+
+    tracking_mode = _normalize_asset_tracking_mode(tracking_mode)
+    status = _normalize_asset_status(status)
+    condition = _normalize_asset_condition(condition) if condition else None
+    try:
+        qty_value = float(qty or 1)
+    except (TypeError, ValueError):
+        raise ValueError("Qty must be numeric.")
+    if qty_value <= 0:
+        raise ValueError("Qty must be greater than zero.")
+    if not calibration_required:
+        last_calibration_date = None
+        recalibration_date = None
+
+    base_prefix = _asset_code_base(asset_class, asset_type)
+    created_assets = []
+
+    if tracking_mode == "serialized":
+        serial_count = int(qty_value)
+        if serial_count != qty_value:
+            raise ValueError("Serialized asset quantity must be a whole number.")
+        if manual_code and serial_count > 1:
+            raise ValueError("Manual asset code can be used only when creating one serialized asset.")
+        for idx in range(serial_count):
+            asset_code = (
+                _normalize_asset_code(manual_code, base_prefix)
+                if manual_code
+                else _next_asset_code(base_prefix)
+            )
+            if _asset_code_exists(asset_code):
+                raise ValueError(f"Asset code already exists: {asset_code}")
+            asset = OperationalAsset(
+                asset_code=asset_code,
+                asset_name=asset_name,
+                asset_class_id=getattr(asset_class, "id", None),
+                asset_type_id=getattr(asset_type, "id", None),
+                tracking_mode="serialized",
+                status=status,
+                current_location=current_location,
+                current_custodian=current_custodian,
+                qty=1,
+                uom=uom,
+                brand=brand,
+                model=model,
+                serial_number=_asset_serial_from_code(asset_code),
+                purchase_date=purchase_date,
+                vendor=vendor,
+                warranty_till=warranty_till,
+                asset_value=asset_value,
+                calibration_required=bool(calibration_required),
+                last_calibration_date=last_calibration_date,
+                recalibration_date=recalibration_date,
+                condition=condition,
+                remarks=remarks,
+                active=active,
+                attachments_json="[]",
+                created_by_user_id=_asset_actor_id(),
+            )
+            db.session.add(asset)
+            db.session.flush()
+            _record_asset_creation_movement(
+                asset,
+                quantity=1,
+                condition=condition,
+                remarks=remarks or f"Created serialized asset {idx + 1} of {serial_count}.",
+            )
+            created_assets.append(asset)
+    else:
+        asset_code = (
+            _normalize_asset_code(manual_code, base_prefix)
+            if manual_code
+            else _next_asset_code(base_prefix)
+        )
+        if _asset_code_exists(asset_code):
+            raise ValueError(f"Asset code already exists: {asset_code}")
+        asset = OperationalAsset(
+            asset_code=asset_code,
+            asset_name=asset_name,
+            asset_class_id=getattr(asset_class, "id", None),
+            asset_type_id=getattr(asset_type, "id", None),
+            tracking_mode="quantity",
+            status=status,
+            current_location=current_location,
+            current_custodian=current_custodian,
+            qty=qty_value,
+            uom=uom,
+            brand=brand,
+            model=model,
+            serial_number=_asset_serial_from_code(asset_code),
+            purchase_date=purchase_date,
+            vendor=vendor,
+            warranty_till=warranty_till,
+            asset_value=asset_value,
+            calibration_required=bool(calibration_required),
+            last_calibration_date=last_calibration_date,
+            recalibration_date=recalibration_date,
+            condition=condition,
+            remarks=remarks,
+            active=active,
+            attachments_json="[]",
+            created_by_user_id=_asset_actor_id(),
+        )
+        db.session.add(asset)
+        db.session.flush()
+        _record_asset_creation_movement(
+            asset,
+            quantity=qty_value,
+            condition=condition,
+            remarks=remarks or "Created quantity-based asset.",
+        )
+        created_assets.append(asset)
+
+    return created_assets
+
+
+def _issue_asset(
+    asset,
+    *,
+    issued_by,
+    issued_to,
+    location,
+    condition=None,
+    quantity=1,
+    expected_return_date=None,
+    movement_at=None,
+    remarks=None,
+):
+    if asset.status in {"In Repair", "Breakdown", "Lost", "Decommissioned"}:
+        raise ValueError(f"Asset cannot be issued while status is {asset.status}.")
+    if not issued_to:
+        raise ValueError("Issued to is required.")
+    quantity = float(quantity or 1)
+    if quantity <= 0:
+        raise ValueError("Issue quantity must be greater than zero.")
+    if asset.tracking_mode == "serialized" and quantity != 1:
+        raise ValueError("Serialized assets must be issued one asset at a time.")
+    if asset.tracking_mode == "quantity" and quantity > (asset.qty or 0):
+        raise ValueError("Issue quantity cannot exceed asset master quantity.")
+    return _create_asset_movement(
+        asset,
+        "Issue",
+        new_status="Issued",
+        new_location=location,
+        new_custodian=issued_to,
+        issued_by=issued_by,
+        issued_to=issued_to,
+        quantity=quantity,
+        condition=condition,
+        expected_return_date=expected_return_date,
+        movement_at=movement_at,
+        remarks=remarks,
+    )
+
+
+def _return_asset(
+    asset,
+    *,
+    received_by,
+    outcome_status,
+    location,
+    condition=None,
+    quantity=1,
+    movement_at=None,
+    remarks=None,
+):
+    outcome_status = _normalize_asset_status(
+        outcome_status, allowed=ASSET_RETURN_STATUSES
+    )
+    quantity = float(quantity or 1)
+    if quantity <= 0:
+        raise ValueError("Return quantity must be greater than zero.")
+    if asset.tracking_mode == "serialized" and quantity != 1:
+        raise ValueError("Serialized assets must be returned one asset at a time.")
+    movement_type = "Return"
+    if outcome_status == "Breakdown":
+        movement_type = "Breakdown"
+    elif outcome_status == "Decommissioned":
+        movement_type = "Decommission"
+    return _create_asset_movement(
+        asset,
+        movement_type,
+        new_status=outcome_status,
+        new_location=location,
+        new_custodian=received_by,
+        issued_by=received_by,
+        quantity=quantity,
+        condition=condition,
+        movement_at=movement_at,
+        remarks=remarks,
+    )
+
+
+def _start_asset_repair(
+    asset,
+    *,
+    sent_by,
+    vendor_repair_agency,
+    problem_description,
+    estimated_cost=None,
+    sent_date=None,
+    remarks=None,
+):
+    if not problem_description:
+        raise ValueError("Problem description is required.")
+    repair = AssetRepair(
+        asset_id=asset.id,
+        sent_date=sent_date or datetime.datetime.utcnow(),
+        sent_by=sent_by,
+        vendor_repair_agency=vendor_repair_agency,
+        problem_description=problem_description,
+        estimated_cost=estimated_cost,
+        repair_status="Open",
+        remarks=remarks,
+        created_by_user_id=_asset_actor_id(),
+    )
+    db.session.add(repair)
+    db.session.flush()
+    _create_asset_movement(
+        asset,
+        "Repair Send",
+        new_status="In Repair",
+        new_location=vendor_repair_agency or asset.current_location,
+        new_custodian=vendor_repair_agency or sent_by,
+        issued_by=sent_by,
+        quantity=1 if asset.tracking_mode == "serialized" else None,
+        movement_at=repair.sent_date,
+        remarks=problem_description,
+        reference_type="AssetRepair",
+        reference_id=repair.id,
+    )
+    return repair
+
+
+def _close_asset_repair(
+    repair,
+    *,
+    close_status,
+    actual_cost=None,
+    condition=None,
+    return_date=None,
+    location=None,
+    custodian=None,
+    remarks=None,
+):
+    if repair.repair_status == "Closed":
+        raise ValueError("Repair is already closed.")
+    close_status = _normalize_asset_status(
+        close_status, allowed=["Inventory", "Breakdown", "Decommissioned"]
+    )
+    repair.actual_cost = actual_cost
+    repair.return_date = return_date or datetime.datetime.utcnow()
+    repair.repair_status = "Closed"
+    repair.condition_on_close = _normalize_asset_condition(condition) if condition else None
+    repair.close_status = close_status
+    repair.remarks = remarks if remarks is not None else repair.remarks
+    repair.closed_by_user_id = _asset_actor_id()
+    repair.updated_at = datetime.datetime.utcnow()
+
+    asset = repair.asset
+    if close_status == "Inventory":
+        location = location or ASSET_DEFAULT_LOCATION
+        custodian = custodian or "Stores"
+    _create_asset_movement(
+        asset,
+        "Repair Return",
+        new_status=close_status,
+        new_location=location if location is not None else asset.current_location,
+        new_custodian=custodian if custodian is not None else asset.current_custodian,
+        quantity=1 if asset.tracking_mode == "serialized" else None,
+        condition=condition,
+        movement_at=repair.return_date,
+        remarks=remarks,
+        reference_type="AssetRepair",
+        reference_id=repair.id,
+    )
+    return repair
+
+
+def _asset_form_context(**extra):
+    context = {
+        "asset_classes": AssetClass.query.order_by(AssetClass.name.asc()).all(),
+        "asset_types": AssetType.query.options(joinedload(AssetType.asset_class)).order_by(AssetType.name.asc()).all(),
+        "asset_locations": AssetLocation.query.filter_by(active=True).order_by(AssetLocation.name.asc()).all(),
+        "statuses": ASSET_STATUSES,
+        "return_statuses": ASSET_RETURN_STATUSES,
+        "tracking_modes": ASSET_TRACKING_MODES,
+        "conditions": ASSET_CONDITIONS,
+        "principles": ASSET_OPERATING_PRINCIPLES,
+    }
+    context.update(extra)
+    return context
+
+
+def _resolve_asset_class_and_type_from_form(form):
+    asset_class = None
+    asset_type = None
+    class_id = (form.get("asset_class_id") or "").strip()
+    type_id = (form.get("asset_type_id") or "").strip()
+    new_class_name = (form.get("new_asset_class_name") or "").strip()
+    new_type_name = (form.get("new_asset_type_name") or "").strip()
+
+    if new_class_name:
+        asset_class = _get_or_create_asset_class(
+            new_class_name,
+            prefix=form.get("new_asset_class_prefix") or form.get("code_prefix"),
+        )
+    elif class_id:
+        asset_class = AssetClass.query.filter_by(id=class_id).first()
+
+    if new_type_name:
+        asset_type = _get_or_create_asset_type(
+            new_type_name,
+            asset_class=asset_class,
+            prefix=form.get("new_asset_type_prefix") or form.get("code_prefix"),
+        )
+    elif type_id:
+        asset_type = AssetType.query.filter_by(id=type_id).first()
+        if asset_type and not asset_class:
+            asset_class = asset_type.asset_class
+
+    return asset_class, asset_type
+
+
+def _resolve_asset_location_from_form(form, field_name="current_location"):
+    new_location_name = (form.get("new_location_name") or "").strip()
+    if new_location_name:
+        location = _get_or_create_asset_location(new_location_name)
+        return location.name
+    return (form.get(field_name) or "").strip() or None
+
+
+def _create_assets_from_asset_form(form):
+    errors = []
+    try:
+        asset_class, asset_type = _resolve_asset_class_and_type_from_form(form)
+        current_location = _resolve_asset_location_from_form(form)
+    except ValueError as exc:
+        return None, [str(exc)]
+
+    qty, qty_error = _parse_asset_float(form.get("qty"), "Qty", default=1)
+    asset_value, value_error = _parse_asset_float(form.get("asset_value"), "Asset value")
+    purchase_date, purchase_error = parse_date_field(form.get("purchase_date"), "Purchase date")
+    warranty_till, warranty_error = parse_date_field(form.get("warranty_till"), "Warranty till")
+    last_calibration_date, last_calibration_error = parse_date_field(
+        form.get("last_calibration_date"), "Last calibration date"
+    )
+    recalibration_date, recalibration_error = parse_date_field(
+        form.get("recalibration_date"), "Re-calibration date"
+    )
+    errors.extend(
+        error
+        for error in [
+            qty_error,
+            value_error,
+            purchase_error,
+            warranty_error,
+            last_calibration_error,
+            recalibration_error,
+        ]
+        if error
+    )
+    if errors:
+        return None, errors
+
+    calibration_required = form.get("calibration_required") == "1"
+    if not calibration_required:
+        last_calibration_date = None
+        recalibration_date = None
+
+    try:
+        assets = _create_operational_assets(
+            asset_name=form.get("asset_name"),
+            asset_class=asset_class,
+            asset_type=asset_type,
+            tracking_mode=form.get("tracking_mode"),
+            qty=qty,
+            uom=(form.get("uom") or "").strip() or None,
+            manual_code=(form.get("asset_code") or "").strip() or None,
+            code_prefix=(form.get("code_prefix") or "").strip() or None,
+            status=form.get("status") or "Inventory",
+            current_location=current_location,
+            current_custodian=(form.get("current_custodian") or "").strip() or None,
+            brand=(form.get("brand") or "").strip() or None,
+            model=(form.get("model") or "").strip() or None,
+            purchase_date=purchase_date,
+            vendor=(form.get("vendor") or "").strip() or None,
+            warranty_till=warranty_till,
+            asset_value=asset_value,
+            calibration_required=calibration_required,
+            last_calibration_date=last_calibration_date,
+            recalibration_date=recalibration_date,
+            condition=form.get("condition"),
+            remarks=(form.get("remarks") or "").strip() or None,
+            active=True,
+        )
+        return assets, []
+    except ValueError as exc:
+        return None, [str(exc)]
+
+
+@app.route("/store/assets")
+@login_required
+def store_assets():
+    ensure_bootstrap()
+    _require_asset_permission("view")
+    asset_classes = AssetClass.query.order_by(AssetClass.name.asc()).all()
+    asset_types = AssetType.query.order_by(AssetType.name.asc()).all()
+
+    query = OperationalAsset.query.options(
+        joinedload(OperationalAsset.asset_class),
+        joinedload(OperationalAsset.asset_type),
+    )
+    search = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status") or "").strip()
+    tracking_filter = (request.args.get("tracking_mode") or "").strip()
+    class_filter = (request.args.get("asset_class_id") or "").strip()
+    type_filter = (request.args.get("asset_type_id") or "").strip()
+    custodian_filter = (request.args.get("custodian") or "").strip()
+    location_filter = (request.args.get("location") or "").strip()
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                OperationalAsset.asset_code.ilike(like),
+                OperationalAsset.asset_name.ilike(like),
+                OperationalAsset.brand.ilike(like),
+                OperationalAsset.model.ilike(like),
+                OperationalAsset.serial_number.ilike(like),
+            )
+        )
+    if status_filter:
+        query = query.filter(OperationalAsset.status == status_filter)
+    if tracking_filter:
+        query = query.filter(
+            OperationalAsset.tracking_mode == _normalize_asset_tracking_mode(tracking_filter)
+        )
+    if class_filter:
+        query = query.filter(OperationalAsset.asset_class_id == class_filter)
+    if type_filter:
+        query = query.filter(OperationalAsset.asset_type_id == type_filter)
+    if custodian_filter:
+        query = query.filter(OperationalAsset.current_custodian.ilike(f"%{custodian_filter}%"))
+    if location_filter:
+        query = query.filter(OperationalAsset.current_location.ilike(f"%{location_filter}%"))
+
+    assets = query.order_by(OperationalAsset.asset_code.asc()).all()
+    status_counts = {
+        status: OperationalAsset.query.filter_by(status=status).count()
+        for status in ASSET_STATUSES
+    }
+    return render_template(
+        "store_assets.html",
+        assets=assets,
+        asset_classes=asset_classes,
+        asset_types=asset_types,
+        asset_locations=AssetLocation.query.filter_by(active=True).order_by(AssetLocation.name.asc()).all(),
+        statuses=ASSET_STATUSES,
+        return_statuses=ASSET_RETURN_STATUSES,
+        tracking_modes=ASSET_TRACKING_MODES,
+        conditions=ASSET_CONDITIONS,
+        status_counts=status_counts,
+    )
+
+
+@app.route("/store/assets/new", methods=["GET", "POST"])
+@login_required
+def create_store_asset():
+    ensure_bootstrap()
+    _require_asset_permission("create")
+    if request.method == "POST":
+        assets, errors = _create_assets_from_asset_form(request.form)
+        if errors:
+            db.session.rollback()
+            for error in errors:
+                flash(error, "danger")
+            return redirect(url_for("create_store_asset"))
+        try:
+            db.session.commit()
+            if len(assets) == 1:
+                flash(f"Asset {assets[0].asset_code} created.", "success")
+                return redirect(url_for("store_asset_detail", asset_id=assets[0].id))
+            flash(f"{len(assets)} serialized assets created.", "success")
+            return redirect(url_for("store_assets"))
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Failed to create operational asset")
+            flash("Could not create asset. Please check the details and try again.", "danger")
+            return redirect(url_for("create_store_asset"))
+
+    return render_template(
+        "store_asset_form.html",
+        **_asset_form_context(),
+    )
+
+
+@app.route("/store/assets/<int:asset_id>", methods=["GET", "POST"])
+@login_required
+def store_asset_detail(asset_id):
+    ensure_bootstrap()
+    _require_asset_permission("view")
+    asset = OperationalAsset.query.options(
+        joinedload(OperationalAsset.asset_class),
+        joinedload(OperationalAsset.asset_type),
+    ).filter_by(id=asset_id).first_or_404()
+
+    if request.method == "POST":
+        _require_asset_permission("update")
+        action = (request.form.get("action") or "manual_update").strip()
+        if action != "manual_update":
+            flash("Invalid asset update action.", "danger")
+            return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+        errors = []
+        selected_asset_class = (
+            AssetClass.query.filter_by(id=request.form.get("asset_class_id")).first()
+            if request.form.get("asset_class_id")
+            else None
+        )
+        selected_asset_type = (
+            AssetType.query.filter_by(id=request.form.get("asset_type_id")).first()
+            if request.form.get("asset_type_id")
+            else None
+        )
+        try:
+            base_prefix = _asset_code_base(selected_asset_class, selected_asset_type)
+            new_code = _normalize_asset_code(request.form.get("asset_code"), base_prefix)
+        except ValueError as exc:
+            errors.append(str(exc))
+            new_code = asset.asset_code
+        if new_code != asset.asset_code and _asset_code_exists(new_code, exclude_asset_id=asset.id):
+            errors.append(f"Asset code already exists: {new_code}")
+
+        qty, qty_error = _parse_asset_float(request.form.get("qty"), "Qty", default=asset.qty)
+        asset_value, value_error = _parse_asset_float(
+            request.form.get("asset_value"), "Asset value", default=asset.asset_value
+        )
+        purchase_date, purchase_error = parse_date_field(
+            request.form.get("purchase_date"), "Purchase date"
+        )
+        warranty_till, warranty_error = parse_date_field(
+            request.form.get("warranty_till"), "Warranty till"
+        )
+        last_calibration_date, last_calibration_error = parse_date_field(
+            request.form.get("last_calibration_date"), "Last calibration date"
+        )
+        recalibration_date, recalibration_error = parse_date_field(
+            request.form.get("recalibration_date"), "Re-calibration date"
+        )
+        errors.extend(
+            error
+            for error in [
+                qty_error,
+                value_error,
+                purchase_error,
+                warranty_error,
+                last_calibration_error,
+                recalibration_error,
+            ]
+            if error
+        )
+
+        try:
+            tracking_mode = _normalize_asset_tracking_mode(request.form.get("tracking_mode"))
+            new_status = _normalize_asset_status(request.form.get("status"))
+            new_condition = _normalize_asset_condition(request.form.get("condition"))
+        except ValueError as exc:
+            errors.append(str(exc))
+            tracking_mode = asset.tracking_mode
+            new_status = asset.status
+            new_condition = asset.condition
+
+        if tracking_mode == "serialized":
+            qty = 1
+        elif qty is None or qty <= 0:
+            errors.append("Qty must be greater than zero.")
+
+        if errors:
+            for error in errors:
+                flash(error, "danger")
+            return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+        old_state = (asset.status, asset.current_location, asset.current_custodian, asset.condition)
+        new_location = _resolve_asset_location_from_form(request.form)
+        new_custodian = (request.form.get("current_custodian") or "").strip() or None
+
+        asset.asset_code = new_code
+        asset.asset_name = (request.form.get("asset_name") or asset.asset_name).strip()
+        asset.asset_class_id = selected_asset_class.id if selected_asset_class else None
+        asset.asset_type_id = selected_asset_type.id if selected_asset_type else None
+        asset.tracking_mode = tracking_mode
+        asset.qty = qty
+        asset.uom = (request.form.get("uom") or "").strip() or None
+        asset.brand = (request.form.get("brand") or "").strip() or None
+        asset.model = (request.form.get("model") or "").strip() or None
+        asset.serial_number = _asset_serial_from_code(new_code)
+        asset.purchase_date = purchase_date
+        asset.vendor = (request.form.get("vendor") or "").strip() or None
+        asset.warranty_till = warranty_till
+        asset.asset_value = asset_value
+        asset.calibration_required = request.form.get("calibration_required") == "1"
+        asset.last_calibration_date = last_calibration_date if asset.calibration_required else None
+        asset.recalibration_date = recalibration_date if asset.calibration_required else None
+        asset.remarks = (request.form.get("remarks") or "").strip() or None
+        asset.active = request.form.get("active") == "1"
+
+        new_state = (new_status, new_location, new_custodian, new_condition)
+        if new_state != old_state:
+            _create_asset_movement(
+                asset,
+                "Manual Update",
+                new_status=new_status,
+                new_location=new_location,
+                new_custodian=new_custodian,
+                quantity=asset.qty,
+                condition=new_condition,
+                remarks=(request.form.get("movement_remarks") or "Manual asset update").strip(),
+            )
+        else:
+            asset.updated_at = datetime.datetime.utcnow()
+        db.session.commit()
+        flash("Asset updated.", "success")
+        return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+    movements = (
+        AssetMovement.query.filter_by(asset_id=asset.id)
+        .order_by(AssetMovement.movement_at.desc(), AssetMovement.id.desc())
+        .all()
+    )
+    repairs = (
+        AssetRepair.query.filter_by(asset_id=asset.id)
+        .order_by(AssetRepair.created_at.desc())
+        .all()
+    )
+    return render_template(
+        "store_asset_detail.html",
+        asset=asset,
+        asset_classes=AssetClass.query.order_by(AssetClass.name.asc()).all(),
+        asset_types=AssetType.query.order_by(AssetType.name.asc()).all(),
+        movements=movements,
+        repairs=repairs,
+        asset_locations=AssetLocation.query.filter_by(active=True).order_by(AssetLocation.name.asc()).all(),
+        statuses=ASSET_STATUSES,
+        return_statuses=ASSET_RETURN_STATUSES,
+        tracking_modes=ASSET_TRACKING_MODES,
+        conditions=ASSET_CONDITIONS,
+        principles=ASSET_OPERATING_PRINCIPLES,
+        edit_mode=request.args.get("edit") == "1",
+        issue_default_by=(
+            current_user.display_name
+            if "warehouse" in (asset.current_location or "").strip().lower()
+            else ""
+        ),
+    )
+
+
+@app.route("/store/assets/<int:asset_id>/issue", methods=["POST"])
+@login_required
+def issue_store_asset(asset_id):
+    ensure_bootstrap()
+    _require_asset_permission("issue")
+    asset = OperationalAsset.query.filter_by(id=asset_id).first_or_404()
+    expected_return_date, date_error = parse_date_field(
+        request.form.get("expected_return_date"), "Expected return date"
+    )
+    quantity, quantity_error = _parse_asset_float(
+        request.form.get("quantity"), "Issue quantity", default=1
+    )
+    if date_error or quantity_error:
+        flash(date_error or quantity_error, "danger")
+        return redirect(url_for("store_asset_detail", asset_id=asset.id))
+    try:
+        _issue_asset(
+            asset,
+            issued_by=(request.form.get("issued_by") or "").strip() or "Stores",
+            issued_to=(request.form.get("issued_to") or "").strip(),
+            location=(request.form.get("location") or "").strip() or asset.current_location,
+            condition=request.form.get("condition"),
+            quantity=quantity,
+            expected_return_date=expected_return_date,
+            movement_at=_parse_asset_datetime(request.form.get("issue_at")),
+            remarks=(request.form.get("remarks") or "").strip() or None,
+        )
+        db.session.commit()
+        flash("Asset issued with movement history.", "success")
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+
+@app.route("/store/assets/<int:asset_id>/return", methods=["POST"])
+@login_required
+def return_store_asset(asset_id):
+    ensure_bootstrap()
+    _require_asset_permission("return")
+    asset = OperationalAsset.query.filter_by(id=asset_id).first_or_404()
+    quantity, quantity_error = _parse_asset_float(
+        request.form.get("quantity"), "Return quantity", default=1
+    )
+    if quantity_error:
+        flash(quantity_error, "danger")
+        return redirect(url_for("store_asset_detail", asset_id=asset.id))
+    try:
+        _return_asset(
+            asset,
+            received_by=(request.form.get("received_by") or "").strip() or "Stores",
+            outcome_status=request.form.get("outcome_status") or "Inventory",
+            location=(request.form.get("location") or "").strip() or ASSET_DEFAULT_LOCATION,
+            condition=request.form.get("condition"),
+            quantity=quantity,
+            movement_at=_parse_asset_datetime(request.form.get("return_at")),
+            remarks=(request.form.get("remarks") or "").strip() or None,
+        )
+        db.session.commit()
+        flash("Asset return recorded.", "success")
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+
+@app.route("/store/assets/<int:asset_id>/repair/start", methods=["POST"])
+@login_required
+def start_store_asset_repair(asset_id):
+    ensure_bootstrap()
+    _require_asset_permission("repair")
+    asset = OperationalAsset.query.filter_by(id=asset_id).first_or_404()
+    estimated_cost, cost_error = _parse_asset_float(
+        request.form.get("estimated_cost"), "Estimated cost"
+    )
+    if cost_error:
+        flash(cost_error, "danger")
+        return redirect(url_for("store_asset_detail", asset_id=asset.id))
+    try:
+        repair = _start_asset_repair(
+            asset,
+            sent_by=(request.form.get("sent_by") or "").strip() or "Stores",
+            vendor_repair_agency=(request.form.get("vendor_repair_agency") or "").strip() or None,
+            problem_description=(request.form.get("problem_description") or "").strip(),
+            estimated_cost=estimated_cost,
+            sent_date=_parse_asset_datetime(request.form.get("sent_date")),
+            remarks=(request.form.get("remarks") or "").strip() or None,
+        )
+        db.session.commit()
+        flash(f"Repair #{repair.id} opened and asset marked In Repair.", "success")
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("store_asset_detail", asset_id=asset.id))
+
+
+@app.route("/store/assets/repairs/<int:repair_id>/close", methods=["POST"])
+@login_required
+def close_store_asset_repair(repair_id):
+    ensure_bootstrap()
+    _require_asset_permission("close_repair")
+    repair = AssetRepair.query.options(joinedload(AssetRepair.asset)).filter_by(id=repair_id).first_or_404()
+    actual_cost, cost_error = _parse_asset_float(request.form.get("actual_cost"), "Actual cost")
+    if cost_error:
+        flash(cost_error, "danger")
+        return redirect(url_for("store_asset_detail", asset_id=repair.asset_id))
+    try:
+        _close_asset_repair(
+            repair,
+            close_status=request.form.get("close_status") or "Inventory",
+            actual_cost=actual_cost,
+            condition=request.form.get("condition"),
+            return_date=_parse_asset_datetime(request.form.get("return_date")),
+            location=(request.form.get("location") or "").strip() or None,
+            custodian=(request.form.get("custodian") or "").strip() or None,
+            remarks=(request.form.get("remarks") or "").strip() or None,
+        )
+        db.session.commit()
+        flash("Repair closed and movement history recorded.", "success")
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("store_asset_detail", asset_id=repair.asset_id))
+
+
+@app.route("/store/assets/movements")
+@login_required
+def store_asset_movements():
+    ensure_bootstrap()
+    _require_asset_permission("view")
+    query = AssetMovement.query.options(joinedload(AssetMovement.asset))
+    search = (request.args.get("q") or "").strip()
+    movement_type = (request.args.get("movement_type") or "").strip()
+    status = (request.args.get("status") or "").strip()
+    if search:
+        like = f"%{search}%"
+        query = query.join(OperationalAsset).filter(
+            or_(
+                OperationalAsset.asset_code.ilike(like),
+                OperationalAsset.asset_name.ilike(like),
+                AssetMovement.issued_to.ilike(like),
+                AssetMovement.new_custodian.ilike(like),
+                AssetMovement.new_location.ilike(like),
+            )
+        )
+    if movement_type:
+        query = query.filter(AssetMovement.movement_type == movement_type)
+    if status:
+        query = query.filter(AssetMovement.new_status == status)
+    movements = query.order_by(AssetMovement.movement_at.desc(), AssetMovement.id.desc()).limit(500).all()
+    return render_template(
+        "store_asset_movements.html",
+        movements=movements,
+        movement_types=ASSET_MOVEMENT_TYPES,
+        statuses=ASSET_STATUSES,
+    )
+
+
+@app.route("/store/assets/repairs")
+@login_required
+def store_asset_repairs():
+    ensure_bootstrap()
+    _require_asset_permission("view")
+    query = AssetRepair.query.options(joinedload(AssetRepair.asset))
+    status = (request.args.get("repair_status") or "").strip()
+    search = (request.args.get("q") or "").strip()
+    if status:
+        query = query.filter(AssetRepair.repair_status == status)
+    if search:
+        like = f"%{search}%"
+        query = query.join(OperationalAsset).filter(
+            or_(
+                OperationalAsset.asset_code.ilike(like),
+                OperationalAsset.asset_name.ilike(like),
+                AssetRepair.vendor_repair_agency.ilike(like),
+            )
+        )
+    repairs = query.order_by(AssetRepair.created_at.desc()).limit(500).all()
+    return render_template(
+        "store_asset_repairs.html",
+        repairs=repairs,
+        statuses=["Open", "Closed"],
+        close_statuses=["Inventory", "Breakdown", "Decommissioned"],
+        conditions=ASSET_CONDITIONS,
+    )
+
+
+@app.route("/store/settings", methods=["GET", "POST"])
+@login_required
+def store_settings():
+    ensure_bootstrap()
+    _require_asset_permission("settings")
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        if action in {"save_asset_class", "toggle_asset_class"}:
+            class_id = request.form.get("class_id")
+            asset_class = AssetClass.query.filter_by(id=class_id).first() if class_id else AssetClass()
+            if action == "toggle_asset_class" and asset_class.id:
+                asset_class.active = not asset_class.active
+            else:
+                name = (request.form.get("name") or "").strip()
+                if not name:
+                    flash("Asset class name is required.", "danger")
+                    return redirect(url_for("store_settings"))
+                existing = AssetClass.query.filter(func.lower(AssetClass.name) == name.lower())
+                if asset_class.id:
+                    existing = existing.filter(AssetClass.id != asset_class.id)
+                if db.session.query(existing.exists()).scalar():
+                    flash("Asset class already exists.", "danger")
+                    return redirect(url_for("store_settings"))
+                try:
+                    prefix = _asset_class_prefix(request.form.get("code_prefix"), name)
+                except ValueError as exc:
+                    flash(str(exc), "danger")
+                    return redirect(url_for("store_settings"))
+                asset_class.name = name
+                asset_class.code_prefix = prefix
+                asset_class.description = (request.form.get("description") or "").strip() or None
+                asset_class.active = request.form.get("active") == "1"
+                db.session.add(asset_class)
+            db.session.commit()
+            flash("Asset class saved.", "success")
+            return redirect(url_for("store_settings"))
+
+        if action in {"save_asset_type", "toggle_asset_type"}:
+            type_id = request.form.get("type_id")
+            asset_type = AssetType.query.filter_by(id=type_id).first() if type_id else AssetType()
+            if action == "toggle_asset_type" and asset_type.id:
+                asset_type.active = not asset_type.active
+            else:
+                name = (request.form.get("name") or "").strip()
+                if not name:
+                    flash("Asset type name is required.", "danger")
+                    return redirect(url_for("store_settings"))
+                existing = AssetType.query.filter(func.lower(AssetType.name) == name.lower())
+                if asset_type.id:
+                    existing = existing.filter(AssetType.id != asset_type.id)
+                if db.session.query(existing.exists()).scalar():
+                    flash("Asset type already exists.", "danger")
+                    return redirect(url_for("store_settings"))
+                class_id = request.form.get("asset_class_id")
+                try:
+                    prefix = _asset_type_prefix(request.form.get("code_prefix"), name)
+                except ValueError as exc:
+                    flash(str(exc), "danger")
+                    return redirect(url_for("store_settings"))
+                asset_type.name = name
+                asset_type.asset_class_id = int(class_id) if class_id else None
+                asset_type.code_prefix = prefix
+                asset_type.description = (request.form.get("description") or "").strip() or None
+                asset_type.active = request.form.get("active") == "1"
+                db.session.add(asset_type)
+            db.session.commit()
+            flash("Asset type saved.", "success")
+            return redirect(url_for("store_settings"))
+
+        if action in {"save_asset_location", "toggle_asset_location"}:
+            location_id = request.form.get("location_id")
+            location = AssetLocation.query.filter_by(id=location_id).first() if location_id else AssetLocation()
+            if action == "toggle_asset_location" and location.id:
+                location.active = not location.active
+            else:
+                name = (request.form.get("name") or "").strip()
+                if not name:
+                    flash("Location name is required.", "danger")
+                    return redirect(url_for("store_settings"))
+                existing = AssetLocation.query.filter(func.lower(AssetLocation.name) == name.lower())
+                if location.id:
+                    existing = existing.filter(AssetLocation.id != location.id)
+                if db.session.query(existing.exists()).scalar():
+                    flash("Location already exists.", "danger")
+                    return redirect(url_for("store_settings"))
+                location.name = name
+                location.description = (request.form.get("description") or "").strip() or None
+                location.active = request.form.get("active") == "1"
+                db.session.add(location)
+            db.session.commit()
+            flash("Location saved.", "success")
+            return redirect(url_for("store_settings"))
+
+        flash("Invalid Store settings action.", "danger")
+        return redirect(url_for("store_settings"))
+
+    return render_template(
+        "store_settings.html",
+        asset_classes=AssetClass.query.order_by(AssetClass.name.asc()).all(),
+        asset_types=AssetType.query.options(joinedload(AssetType.asset_class)).order_by(AssetType.name.asc()).all(),
+        asset_locations=AssetLocation.query.order_by(AssetLocation.name.asc()).all(),
+    )
+
+
+@app.route("/store/assets/classes", methods=["GET", "POST"])
+@login_required
+def store_asset_classes():
+    ensure_bootstrap()
+    _require_asset_permission("settings")
+    return redirect(url_for("store_settings"))
+
+
+@app.route("/store/assets/types", methods=["GET", "POST"])
+@login_required
+def store_asset_types():
+    ensure_bootstrap()
+    _require_asset_permission("settings")
+    return redirect(url_for("store_settings"))
+
+
 @app.route("/store/delivery-orders")
 @login_required
 def store_delivery_orders():
@@ -18034,6 +19404,12 @@ def ensure_tables():
         InventoryItem.__table__,
         InventoryStock.__table__,
         StockAdjustment.__table__,
+        AssetClass.__table__,
+        AssetType.__table__,
+        AssetLocation.__table__,
+        OperationalAsset.__table__,
+        AssetMovement.__table__,
+        AssetRepair.__table__,
         InventoryReceipt.__table__,
         InventoryReceiptItem.__table__,
         DeliveryChallan.__table__,
@@ -18422,6 +19798,213 @@ def ensure_inventory_item_columns():
         print(f"✅ Auto-added in inventory_item: {', '.join(added)}")
     else:
         print("✔️ inventory_item OK")
+
+
+def ensure_asset_tables():
+    _ensure_sqlite_table(
+        "asset_class",
+        AssetClass.__table__,
+        [
+            ("name", "TEXT"),
+            ("code_prefix", "TEXT"),
+            ("description", "TEXT"),
+            ("active", "INTEGER DEFAULT 1"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+    _ensure_sqlite_table(
+        "asset_type",
+        AssetType.__table__,
+        [
+            ("name", "TEXT"),
+            ("asset_class_id", "INTEGER"),
+            ("code_prefix", "TEXT"),
+            ("description", "TEXT"),
+            ("active", "INTEGER DEFAULT 1"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+    _ensure_sqlite_table(
+        "asset_location",
+        AssetLocation.__table__,
+        [
+            ("name", "TEXT"),
+            ("description", "TEXT"),
+            ("active", "INTEGER DEFAULT 1"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+    _ensure_sqlite_table(
+        "operational_asset",
+        OperationalAsset.__table__,
+        [
+            ("asset_code", "TEXT"),
+            ("asset_name", "TEXT"),
+            ("asset_class_id", "INTEGER"),
+            ("asset_type_id", "INTEGER"),
+            ("tracking_mode", "TEXT DEFAULT 'serialized'"),
+            ("status", "TEXT DEFAULT 'Inventory'"),
+            ("current_location", "TEXT"),
+            ("current_custodian", "TEXT"),
+            ("qty", "REAL DEFAULT 1"),
+            ("uom", "TEXT"),
+            ("brand", "TEXT"),
+            ("model", "TEXT"),
+            ("serial_number", "TEXT"),
+            ("purchase_date", "DATE"),
+            ("vendor", "TEXT"),
+            ("warranty_till", "DATE"),
+            ("asset_value", "REAL"),
+            ("calibration_required", "INTEGER DEFAULT 0"),
+            ("last_calibration_date", "DATE"),
+            ("recalibration_date", "DATE"),
+            ("condition", "TEXT"),
+            ("remarks", "TEXT"),
+            ("active", "INTEGER DEFAULT 1"),
+            ("photo_path", "TEXT"),
+            ("attachments_json", "TEXT"),
+            ("created_by_user_id", "INTEGER"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+    _ensure_sqlite_table(
+        "asset_movement",
+        AssetMovement.__table__,
+        [
+            ("asset_id", "INTEGER"),
+            ("movement_type", "TEXT"),
+            ("previous_status", "TEXT"),
+            ("new_status", "TEXT"),
+            ("previous_location", "TEXT"),
+            ("new_location", "TEXT"),
+            ("previous_custodian", "TEXT"),
+            ("new_custodian", "TEXT"),
+            ("issued_by", "TEXT"),
+            ("issued_to", "TEXT"),
+            ("quantity", "REAL"),
+            ("condition", "TEXT"),
+            ("expected_return_date", "DATE"),
+            ("movement_at", "DATETIME"),
+            ("remarks", "TEXT"),
+            ("reference_type", "TEXT"),
+            ("reference_id", "TEXT"),
+            ("created_by_user_id", "INTEGER"),
+            ("created_at", "DATETIME"),
+        ],
+    )
+    _ensure_sqlite_table(
+        "asset_repair",
+        AssetRepair.__table__,
+        [
+            ("asset_id", "INTEGER"),
+            ("sent_date", "DATETIME"),
+            ("sent_by", "TEXT"),
+            ("vendor_repair_agency", "TEXT"),
+            ("problem_description", "TEXT"),
+            ("estimated_cost", "REAL"),
+            ("actual_cost", "REAL"),
+            ("return_date", "DATETIME"),
+            ("repair_status", "TEXT DEFAULT 'Open'"),
+            ("condition_on_close", "TEXT"),
+            ("close_status", "TEXT"),
+            ("remarks", "TEXT"),
+            ("created_by_user_id", "INTEGER"),
+            ("closed_by_user_id", "INTEGER"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
+    default_location = AssetLocation.query.filter(
+        func.lower(AssetLocation.name) == ASSET_DEFAULT_LOCATION.lower()
+    ).first()
+    if not default_location:
+        default_location = AssetLocation(name=ASSET_DEFAULT_LOCATION, active=True)
+        db.session.add(default_location)
+        db.session.flush()
+    else:
+        default_location.active = True
+
+    AssetLocation.query.filter(
+        AssetLocation.name.in_(ASSET_OBSOLETE_DEFAULT_LOCATIONS)
+    ).delete(synchronize_session=False)
+
+    assets_to_relocate = OperationalAsset.query.filter(
+        OperationalAsset.current_location.in_(ASSET_OBSOLETE_DEFAULT_LOCATIONS)
+    ).all()
+    for asset in assets_to_relocate:
+        _create_asset_movement(
+            asset,
+            "Manual Update",
+            new_status=asset.status,
+            new_location=ASSET_DEFAULT_LOCATION,
+            new_custodian=asset.current_custodian,
+            quantity=asset.qty,
+            condition=asset.condition,
+            remarks="Location settings consolidated to Warehouse - Goa.",
+        )
+    safety_helmet = AssetType.query.filter(func.lower(AssetType.name) == "safety helmet").first()
+    if safety_helmet:
+        safety_helmet.code_prefix = "HL"
+        if safety_helmet.asset_class:
+            safety_helmet.asset_class.code_prefix = _coerce_asset_class_prefix(
+                safety_helmet.asset_class.code_prefix,
+                safety_helmet.asset_class.name,
+            )
+            if safety_helmet.asset_class.name == "Personal Protection Equipment":
+                safety_helmet.asset_class.code_prefix = "PPE"
+
+    for asset_class in AssetClass.query.all():
+        if asset_class.name == "Personal Protection Equipment":
+            asset_class.code_prefix = "PPE"
+        else:
+            asset_class.code_prefix = _coerce_asset_class_prefix(
+                asset_class.code_prefix,
+                asset_class.name,
+            )
+
+    for asset_type in AssetType.query.all():
+        if asset_type.name == "Safety Helmet":
+            asset_type.code_prefix = "HL"
+        else:
+            asset_type.code_prefix = _coerce_asset_type_prefix(
+                asset_type.code_prefix,
+                asset_type.name,
+            )
+
+    db.session.flush()
+    for asset in OperationalAsset.query.options(
+        joinedload(OperationalAsset.asset_class),
+        joinedload(OperationalAsset.asset_type),
+    ).order_by(OperationalAsset.id.asc()).all():
+        if not asset.asset_class or not asset.asset_type:
+            continue
+        try:
+            base_prefix = _asset_code_base(asset.asset_class, asset.asset_type)
+        except ValueError:
+            continue
+        current_code = re.sub(r"[^A-Za-z0-9]", "", asset.asset_code or "").upper()
+        is_current_format = (
+            len(current_code) == ASSET_CODE_LENGTH
+            and current_code.startswith(base_prefix)
+            and current_code[-ASSET_SERIAL_LENGTH:].isdigit()
+        )
+        if is_current_format:
+            if asset.asset_code != current_code:
+                asset.asset_code = current_code
+            asset.serial_number = _asset_serial_from_code(current_code)
+            continue
+        preferred_sequence = _asset_sequence_from_code(asset.asset_code)
+        asset.asset_code = _available_asset_code(
+            base_prefix,
+            preferred_sequence=preferred_sequence,
+            exclude_asset_id=asset.id,
+        )
+        asset.serial_number = _asset_serial_from_code(asset.asset_code)
+    db.session.commit()
 
 
 def ensure_delivery_order_columns():
@@ -19634,6 +21217,7 @@ def migrate_plaintext_passwords():
 def bootstrap_db():
     ensure_tables()
     ensure_inventory_item_columns()
+    ensure_asset_tables()
     ensure_user_columns()
     ensure_project_comment_table()
     ensure_project_columns()

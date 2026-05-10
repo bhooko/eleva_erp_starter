@@ -3086,6 +3086,146 @@ class StockAdjustment(db.Model):
     created_by = db.relationship("User")
 
 
+class AssetClass(db.Model):
+    __tablename__ = "asset_class"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    code_prefix = db.Column(db.String(20), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class AssetType(db.Model):
+    __tablename__ = "asset_type"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    asset_class_id = db.Column(db.Integer, db.ForeignKey("asset_class.id"), nullable=True)
+    code_prefix = db.Column(db.String(20), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    asset_class = db.relationship("AssetClass", backref="asset_types")
+
+
+class AssetLocation(db.Model):
+    __tablename__ = "asset_location"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class OperationalAsset(db.Model):
+    __tablename__ = "operational_asset"
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_code = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    asset_name = db.Column(db.String(255), nullable=False)
+    asset_class_id = db.Column(db.Integer, db.ForeignKey("asset_class.id"), nullable=True)
+    asset_type_id = db.Column(db.Integer, db.ForeignKey("asset_type.id"), nullable=True)
+    tracking_mode = db.Column(db.String(30), nullable=False, default="serialized")
+    status = db.Column(db.String(40), nullable=False, default="Inventory", index=True)
+    current_location = db.Column(db.String(255), nullable=True, index=True)
+    current_custodian = db.Column(db.String(255), nullable=True, index=True)
+    qty = db.Column(db.Float, nullable=False, default=1)
+    uom = db.Column(db.String(40), nullable=True)
+    brand = db.Column(db.String(120), nullable=True)
+    model = db.Column(db.String(120), nullable=True)
+    serial_number = db.Column(db.String(120), nullable=True)
+    purchase_date = db.Column(db.Date, nullable=True)
+    vendor = db.Column(db.String(255), nullable=True)
+    warranty_till = db.Column(db.Date, nullable=True)
+    asset_value = db.Column(db.Float, nullable=True)
+    calibration_required = db.Column(db.Boolean, default=False)
+    last_calibration_date = db.Column(db.Date, nullable=True)
+    recalibration_date = db.Column(db.Date, nullable=True)
+    condition = db.Column(db.String(40), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    active = db.Column(db.Boolean, default=True)
+    photo_path = db.Column(db.Text, nullable=True)
+    attachments_json = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    asset_class = db.relationship("AssetClass")
+    asset_type = db.relationship("AssetType")
+    created_by = db.relationship("User")
+
+
+class AssetMovement(db.Model):
+    __tablename__ = "asset_movement"
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("operational_asset.id"), nullable=False, index=True)
+    movement_type = db.Column(db.String(40), nullable=False, index=True)
+    previous_status = db.Column(db.String(40), nullable=True)
+    new_status = db.Column(db.String(40), nullable=True)
+    previous_location = db.Column(db.String(255), nullable=True)
+    new_location = db.Column(db.String(255), nullable=True)
+    previous_custodian = db.Column(db.String(255), nullable=True)
+    new_custodian = db.Column(db.String(255), nullable=True)
+    issued_by = db.Column(db.String(255), nullable=True)
+    issued_to = db.Column(db.String(255), nullable=True)
+    quantity = db.Column(db.Float, nullable=True)
+    condition = db.Column(db.String(40), nullable=True)
+    expected_return_date = db.Column(db.Date, nullable=True)
+    movement_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, index=True)
+    remarks = db.Column(db.Text, nullable=True)
+    reference_type = db.Column(db.String(80), nullable=True)
+    reference_id = db.Column(db.String(80), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    asset = db.relationship("OperationalAsset", backref="movements")
+    created_by = db.relationship("User")
+
+
+class AssetRepair(db.Model):
+    __tablename__ = "asset_repair"
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("operational_asset.id"), nullable=False, index=True)
+    sent_date = db.Column(db.DateTime, nullable=True)
+    sent_by = db.Column(db.String(255), nullable=True)
+    vendor_repair_agency = db.Column(db.String(255), nullable=True)
+    problem_description = db.Column(db.Text, nullable=False)
+    estimated_cost = db.Column(db.Float, nullable=True)
+    actual_cost = db.Column(db.Float, nullable=True)
+    return_date = db.Column(db.DateTime, nullable=True)
+    repair_status = db.Column(db.String(40), nullable=False, default="Open", index=True)
+    condition_on_close = db.Column(db.String(40), nullable=True)
+    close_status = db.Column(db.String(40), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    closed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    asset = db.relationship("OperationalAsset", backref="repairs")
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id])
+    closed_by = db.relationship("User", foreign_keys=[closed_by_user_id])
+
+
 class InventoryReceipt(db.Model):
     __tablename__ = "inventory_receipt"
 

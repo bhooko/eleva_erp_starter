@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Asset - {{ asset.asset_code }}{% endblock %}
+{% macro condition_badge(condition) -%}
+  {% set c = condition or '-' %}
+  {% set badge = 'bg-slate-100 text-slate-700 border-slate-200' %}
+  {% if c == 'Good' %}{% set badge = 'bg-emerald-50 text-emerald-700 border-emerald-200' %}{% endif %}
+  {% if c == 'Minor Damage' %}{% set badge = 'bg-amber-50 text-amber-700 border-amber-200' %}{% endif %}
+  {% if c == 'Needs Repair' %}{% set badge = 'bg-orange-50 text-orange-700 border-orange-200' %}{% endif %}
+  {% if c == 'Needs Calibration' %}{% set badge = 'bg-sky-50 text-sky-700 border-sky-200' %}{% endif %}
+  {% if c == 'Non Functional' %}{% set badge = 'bg-rose-50 text-rose-700 border-rose-200' %}{% endif %}
+  <span class="inline-flex rounded-full border px-2 py-1 text-xs font-semibold {{ badge }}">{{ c }}</span>
+{%- endmacro %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store Asset</p>
+      <h1 class="text-2xl font-semibold">{{ asset.asset_code }} - {{ asset.asset_name }}</h1>
+      <p class="text-sm text-slate-600">{{ asset.status }} | {{ asset.current_custodian or 'No custodian' }} | {{ asset.current_location or 'No location' }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Back to Assets</a>
+      {% if edit_mode %}
+      <a href="{{ url_for('store_asset_detail', asset_id=asset.id) }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Cancel Edit</a>
+      {% else %}
+      <a href="{{ url_for('store_asset_detail', asset_id=asset.id, edit=1) }}" class="px-3 py-2 rounded-lg btn-primary btn-shimmer text-sm" title="Edit asset master">&#9998;</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <p class="text-xs uppercase text-slate-500">Status</p>
+      <p class="text-xl font-semibold">{{ asset.status }}</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <p class="text-xs uppercase text-slate-500">Custodian</p>
+      <p class="text-xl font-semibold">{{ asset.current_custodian or '-' }}</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <p class="text-xs uppercase text-slate-500">Location</p>
+      <p class="text-xl font-semibold">{{ asset.current_location or '-' }}</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <p class="text-xs uppercase text-slate-500">Condition</p>
+      <p class="mt-1">{{ condition_badge(asset.condition) }}</p>
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-semibold">Asset Master</h2>
+      {% if not edit_mode %}
+      <a href="{{ url_for('store_asset_detail', asset_id=asset.id, edit=1) }}" class="px-3 py-1 rounded-lg border border-slate-200 bg-white text-sm" title="Edit asset master">&#9998;</a>
+      {% endif %}
+    </div>
+
+    {% if edit_mode %}
+    <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+      {{ csrf_field() }}
+      <input type="hidden" name="action" value="manual_update">
+      <input name="asset_code" value="{{ asset.asset_code }}" maxlength="8" required class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="asset_name" value="{{ asset.asset_name }}" required class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="tracking_mode" class="rounded-lg border border-slate-200 px-3 py-2">
+        {% for value, label in tracking_modes %}
+        <option value="{{ value }}" {% if asset.tracking_mode == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="asset_class_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Asset class</option>
+        {% for record in asset_classes %}
+        <option value="{{ record.id }}" {% if asset.asset_class_id == record.id %}selected{% endif %}>{{ record.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="asset_type_id" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Asset type</option>
+        {% for record in asset_types %}
+        <option value="{{ record.id }}" {% if asset.asset_type_id == record.id %}selected{% endif %}>{{ record.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" class="rounded-lg border border-slate-200 px-3 py-2">
+        {% for status in statuses %}
+        <option value="{{ status }}" {% if asset.status == status %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+      </select>
+      <select name="current_location" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Current location</option>
+        {% for location in asset_locations %}
+        <option value="{{ location.name }}" {% if asset.current_location == location.name %}selected{% endif %}>{{ location.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="new_location_name" placeholder="New location" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="current_custodian" value="{{ asset.current_custodian or '' }}" placeholder="Current custodian" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="condition" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="">Condition</option>
+        {% for condition in conditions %}
+        <option value="{{ condition }}" {% if asset.condition == condition %}selected{% endif %}>{{ condition }}</option>
+        {% endfor %}
+      </select>
+      <input name="qty" type="number" min="1" step="0.01" value="{{ asset.qty }}" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="uom" value="{{ asset.uom or '' }}" placeholder="UOM" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="brand" value="{{ asset.brand or '' }}" placeholder="Brand" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="model" value="{{ asset.model or '' }}" placeholder="Model" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input value="{{ asset.serial_number or '' }}" readonly title="Auto-generated from asset code" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <input name="vendor" value="{{ asset.vendor or '' }}" placeholder="Vendor" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="purchase_date" type="date" value="{{ asset.purchase_date.isoformat() if asset.purchase_date else '' }}" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="warranty_till" type="date" value="{{ asset.warranty_till.isoformat() if asset.warranty_till else '' }}" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="asset_value" type="number" min="0" step="0.01" value="{{ asset.asset_value or '' }}" placeholder="Asset value" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="calibration_required" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="0" {% if not asset.calibration_required %}selected{% endif %}>Calibration not required</option>
+        <option value="1" {% if asset.calibration_required %}selected{% endif %}>Calibration required</option>
+      </select>
+      <input name="last_calibration_date" type="date" value="{{ asset.last_calibration_date.isoformat() if asset.last_calibration_date else '' }}" class="rounded-lg border border-slate-200 px-3 py-2">
+      <input name="recalibration_date" type="date" value="{{ asset.recalibration_date.isoformat() if asset.recalibration_date else '' }}" class="rounded-lg border border-slate-200 px-3 py-2">
+      <select name="active" class="rounded-lg border border-slate-200 px-3 py-2">
+        <option value="1" {% if asset.active %}selected{% endif %}>Active</option>
+        <option value="0" {% if not asset.active %}selected{% endif %}>Inactive</option>
+      </select>
+      <input name="movement_remarks" placeholder="Movement remarks if state changed" class="rounded-lg border border-slate-200 px-3 py-2 md:col-span-2">
+      <textarea name="remarks" placeholder="Remarks" class="rounded-lg border border-slate-200 px-3 py-2 md:col-span-3">{{ asset.remarks or '' }}</textarea>
+      <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Save Asset</button>
+    </form>
+    {% else %}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+      <div><p class="text-xs uppercase text-slate-500">Class</p><p class="font-semibold">{{ asset.asset_class.name if asset.asset_class else '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Type</p><p class="font-semibold">{{ asset.asset_type.name if asset.asset_type else '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Tracking</p><p class="font-semibold">{{ 'Serialized' if asset.tracking_mode == 'serialized' else 'Quantity Based' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Qty</p><p class="font-semibold">{{ asset.qty }} {{ asset.uom or '' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Brand</p><p class="font-semibold">{{ asset.brand or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Model</p><p class="font-semibold">{{ asset.model or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Serial No.</p><p class="font-semibold">{{ asset.serial_number or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Vendor</p><p class="font-semibold">{{ asset.vendor or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Purchase Date</p><p class="font-semibold">{{ asset.purchase_date or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Warranty Till</p><p class="font-semibold">{{ asset.warranty_till or '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Asset Value</p><p class="font-semibold">{{ asset.asset_value if asset.asset_value is not none else '-' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Active</p><p class="font-semibold">{{ 'Yes' if asset.active else 'No' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Calibration Required</p><p class="font-semibold">{{ 'Yes' if asset.calibration_required else 'No' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Last Calibration</p><p class="font-semibold">{{ asset.last_calibration_date if asset.calibration_required else 'NA' }}</p></div>
+      <div><p class="text-xs uppercase text-slate-500">Re-calibration</p><p class="font-semibold">{{ asset.recalibration_date if asset.calibration_required else 'NA' }}</p></div>
+      <div class="md:col-span-4"><p class="text-xs uppercase text-slate-500">Remarks</p><p class="font-semibold">{{ asset.remarks or '-' }}</p></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+    <details class="rounded-lg border border-slate-200 bg-white p-4">
+      <summary class="cursor-pointer text-lg font-semibold">Issue</summary>
+      <form method="post" action="{{ url_for('issue_store_asset', asset_id=asset.id) }}" class="mt-4 space-y-3 text-sm">
+        {{ csrf_field() }}
+        <input name="issued_by" value="{{ issue_default_by }}" placeholder="Issued by" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="issued_to" required placeholder="Issued to" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <select name="location" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+          <option value="">Issue location</option>
+          {% for location in asset_locations %}
+          <option value="{{ location.name }}">{{ location.name }}</option>
+          {% endfor %}
+        </select>
+        <input name="quantity" type="number" min="1" step="0.01" value="1" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="issue_at" type="datetime-local" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="expected_return_date" type="date" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <select name="condition" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+          <option value="">Condition while issuing</option>
+          {% for condition in conditions %}
+          <option value="{{ condition }}">{{ condition }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="remarks" placeholder="Remarks" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
+        <button class="w-full px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Issue Asset</button>
+      </form>
+    </details>
+
+    <details class="rounded-lg border border-slate-200 bg-white p-4">
+      <summary class="cursor-pointer text-lg font-semibold">Return</summary>
+      <form method="post" action="{{ url_for('return_store_asset', asset_id=asset.id) }}" class="mt-4 space-y-3 text-sm">
+        {{ csrf_field() }}
+        <input name="received_by" placeholder="Received by" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <select name="location" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+          {% for location in asset_locations %}
+          <option value="{{ location.name }}" {% if location.name == 'Warehouse - Goa' %}selected{% endif %}>{{ location.name }}</option>
+          {% endfor %}
+        </select>
+        <input name="quantity" type="number" min="1" step="0.01" value="1" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="return_at" type="datetime-local" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <select name="outcome_status" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+          {% for status in return_statuses %}
+          <option value="{{ status }}">{{ status }}</option>
+          {% endfor %}
+        </select>
+        <select name="condition" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+          <option value="">Condition on return</option>
+          {% for condition in conditions %}
+          <option value="{{ condition }}">{{ condition }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="remarks" placeholder="Remarks" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
+        <button class="w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm">Record Return</button>
+      </form>
+    </details>
+
+    <details class="rounded-lg border border-slate-200 bg-white p-4">
+      <summary class="cursor-pointer text-lg font-semibold">Repair</summary>
+      <form method="post" action="{{ url_for('start_store_asset_repair', asset_id=asset.id) }}" class="mt-4 space-y-3 text-sm">
+        {{ csrf_field() }}
+        <input name="sent_by" placeholder="Sent by" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="vendor_repair_agency" placeholder="Vendor / repair agency" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="sent_date" type="datetime-local" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <input name="estimated_cost" type="number" min="0" step="0.01" placeholder="Estimated cost" class="w-full rounded-lg border border-slate-200 px-3 py-2">
+        <textarea name="problem_description" required placeholder="Problem description" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
+        <textarea name="remarks" placeholder="Remarks" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
+        <button class="w-full px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Send to Repair</button>
+      </form>
+    </details>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <h2 class="text-lg font-semibold mb-3">Repairs</h2>
+    <div class="space-y-3">
+      {% for repair in repairs %}
+      <details class="rounded-lg border border-slate-200 p-3">
+        <summary class="cursor-pointer font-semibold">Repair #{{ repair.id }} - {{ repair.repair_status }}</summary>
+        <p class="mt-2 text-sm text-slate-600">{{ repair.problem_description }}</p>
+        <p class="text-sm text-slate-500">{{ repair.vendor_repair_agency or '-' }}</p>
+        {% if repair.repair_status != 'Closed' %}
+        <form method="post" action="{{ url_for('close_store_asset_repair', repair_id=repair.id) }}" class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+          {{ csrf_field() }}
+          <select name="close_status" class="rounded-lg border border-slate-200 px-3 py-2">
+            <option value="Inventory">Inventory</option>
+            <option value="Breakdown">Breakdown</option>
+            <option value="Decommissioned">Decommissioned</option>
+          </select>
+          <select name="condition" class="rounded-lg border border-slate-200 px-3 py-2">
+            <option value="">Condition</option>
+            {% for condition in conditions %}
+            <option value="{{ condition }}">{{ condition }}</option>
+            {% endfor %}
+          </select>
+          <input name="return_date" type="datetime-local" class="rounded-lg border border-slate-200 px-3 py-2">
+          <input name="actual_cost" type="number" min="0" step="0.01" placeholder="Actual cost" class="rounded-lg border border-slate-200 px-3 py-2">
+          <select name="location" class="rounded-lg border border-slate-200 px-3 py-2">
+            <option value="">Return location</option>
+            {% for location in asset_locations %}
+            <option value="{{ location.name }}">{{ location.name }}</option>
+            {% endfor %}
+          </select>
+          <input name="custodian" placeholder="Custodian" class="rounded-lg border border-slate-200 px-3 py-2">
+          <textarea name="remarks" placeholder="Closure remarks" class="rounded-lg border border-slate-200 px-3 py-2 md:col-span-3"></textarea>
+          <button class="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm">Close Repair</button>
+        </form>
+        {% endif %}
+      </details>
+      {% else %}
+      <p class="text-sm text-slate-500">No repair records.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <h2 class="text-lg font-semibold mb-3">Movement History</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="py-2">Date</th>
+            <th class="py-2">Type</th>
+            <th class="py-2">Status</th>
+            <th class="py-2">Location</th>
+            <th class="py-2">Custodian</th>
+            <th class="py-2">Condition</th>
+            <th class="py-2">Remarks</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for movement in movements %}
+          <tr>
+            <td class="py-2">{{ movement.movement_at|format_india_datetime('%Y-%m-%d %H:%M') if movement.movement_at else '-' }}</td>
+            <td class="py-2 font-semibold">{{ movement.movement_type }}</td>
+            <td class="py-2">{{ movement.previous_status or '-' }} -> {{ movement.new_status or '-' }}</td>
+            <td class="py-2">{{ movement.previous_location or '-' }} -> {{ movement.new_location or '-' }}</td>
+            <td class="py-2">{{ movement.previous_custodian or '-' }} -> {{ movement.new_custodian or '-' }}</td>
+            <td class="py-2">{{ condition_badge(movement.condition) }}</td>
+            <td class="py-2">{{ movement.remarks or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-3 text-slate-500">No movement history yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

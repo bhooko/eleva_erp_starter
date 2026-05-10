@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Store - Asset Repairs{% endblock %}
+{% block content %}
+<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm uppercase text-slate-500">Store Assets</p>
+      <h1 class="text-2xl font-semibold">Repairs</h1>
+      <p class="text-sm text-slate-600">Lightweight repair lifecycle tracking for operational assets.</p>
+    </div>
+    <a href="{{ url_for('store_assets') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm">Back to Assets</a>
+  </div>
+
+  <form method="get" class="rounded-lg border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+    <input name="q" value="{{ request.args.get('q','') }}" placeholder="Asset or repair agency" class="rounded-lg border border-slate-200 px-3 py-2">
+    <select name="repair_status" class="rounded-lg border border-slate-200 px-3 py-2">
+      <option value="">All repair statuses</option>
+      {% for status in statuses %}
+      <option value="{{ status }}" {% if request.args.get('repair_status') == status %}selected{% endif %}>{{ status }}</option>
+      {% endfor %}
+    </select>
+    <button class="px-4 py-2 rounded-lg btn-primary btn-shimmer text-sm">Filter</button>
+    <a href="{{ url_for('store_asset_repairs') }}" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm text-center">Reset</a>
+  </form>
+
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500">
+          <th class="py-3 px-4">Repair</th>
+          <th class="py-3 px-4">Asset</th>
+          <th class="py-3 px-4">Sent</th>
+          <th class="py-3 px-4">Agency</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4">Cost</th>
+          <th class="py-3 px-4">Problem</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for repair in repairs %}
+        <tr class="hover:bg-slate-50 align-top">
+          <td class="py-3 px-4 font-semibold">#{{ repair.id }}</td>
+          <td class="py-3 px-4">
+            {% if repair.asset %}
+            <a href="{{ url_for('store_asset_detail', asset_id=repair.asset.id) }}" class="font-semibold hover:text-orange-600">{{ repair.asset.asset_code }}</a>
+            <p class="text-xs text-slate-500">{{ repair.asset.asset_name }}</p>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          <td class="py-3 px-4">{{ repair.sent_date|format_india_datetime('%Y-%m-%d %H:%M') if repair.sent_date else '-' }}</td>
+          <td class="py-3 px-4">{{ repair.vendor_repair_agency or '-' }}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex rounded-full px-2 py-1 text-xs bg-slate-100 text-slate-700">{{ repair.repair_status }}</span>
+            {% if repair.close_status %}
+            <p class="text-xs text-slate-500 mt-1">Closed as {{ repair.close_status }}</p>
+            {% endif %}
+          </td>
+          <td class="py-3 px-4">
+            <p>Est: {{ repair.estimated_cost if repair.estimated_cost is not none else '-' }}</p>
+            <p>Actual: {{ repair.actual_cost if repair.actual_cost is not none else '-' }}</p>
+          </td>
+          <td class="py-3 px-4 max-w-sm">{{ repair.problem_description }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="py-4 px-4 text-slate-500">No repair records found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
