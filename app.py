@@ -38,6 +38,7 @@ from sqlalchemy.engine.url import make_url
 
 from eleva_app import create_app, csrf, db, login_manager
 from eleva_app.common_import_utils import clean_str, parse_int_field, stringify_cell
+from eleva_app.section_guides import SECTION_GUIDE_CONTENTS, SECTION_GUIDE_TEMPLATE
 
 
 def _safe_console_print(*args, **kwargs):
@@ -7605,6 +7606,7 @@ from eleva_app.models import (
     CallLog,
     CallRecording,
     Notification,
+    SectionGuide,
     DeliveryChallan,
     DeliveryChallanItem,
     AssetClass,
@@ -7690,6 +7692,292 @@ BOM_TYPE_LABELS = {
     "civil": "Civil",
     "supplementary": "Supplementary",
 }
+
+
+SECTION_GUIDE_DEFAULT_TEMPLATE = SECTION_GUIDE_TEMPLATE
+
+SECTION_GUIDE_DEFAULTS = OrderedDict(
+    (section_key, guide["title"])
+    for section_key, guide in SECTION_GUIDE_CONTENTS.items()
+)
+
+SECTION_GUIDE_ENDPOINT_KEYS = {
+    "dashboard": "dashboard",
+    "settings": "settings",
+    "settings_admin_upload_limit": "settings",
+    "settings_dropdown_option_create": "settings",
+    "settings_dropdown_option_update": "settings",
+    "settings_dropdown_option_delete": "settings",
+    "settings_dropdown_option_reorder": "settings",
+    "process_guides": "process_guides",
+    "admin_users": "admin_users",
+    "admin_users_create": "admin_users",
+    "admin_users_update": "admin_users",
+    "admin_departments_create": "admin_users",
+    "admin_departments_update": "admin_users",
+    "admin_departments_delete": "admin_users",
+    "admin_departments_upload": "admin_users",
+    "admin_positions_create": "admin_users",
+    "admin_positions_update": "admin_users",
+    "admin_positions_delete": "admin_users",
+    "admin_positions_upload": "admin_users",
+    "admin_user_toggle_service_manager": "admin_users",
+    "customer_support_home": "customer_support",
+    "customer_support_overview": "customer_support",
+    "customer_support_tasks": "customer_support_tasks",
+    "customer_support_create_linked_task": "customer_support_tasks",
+    "customer_support_update_ticket": "customer_support_tasks",
+    "customer_support_mark_ticket_resolved": "customer_support_tasks",
+    "customer_support_delete_ticket": "customer_support_tasks",
+    "customer_support_post_update": "customer_support_tasks",
+    "customer_support_calls": "customer_support_calls",
+    "customer_support_sarv_test": "customer_support_calls",
+    "customer_support_sarv_update_records": "customer_support_calls",
+    "sarv.sarv_webhook": "customer_support_calls",
+    "calls_demo": "customer_support_calls",
+    "customer_support_settings": "customer_support_settings",
+    "sales_home": "sales",
+    "sales_leads": "sales_leads",
+    "sales_lead_update_status": "sales_leads",
+    "sales_leads_upload": "sales_leads",
+    "sales_leads_upload_template": "sales_leads",
+    "sales_tasks": "sales_tasks",
+    "sales_task_detail": "sales_tasks",
+    "sales_task_toggle": "sales_tasks",
+    "sales_clients": "sales_clients",
+    "sales_client_detail": "sales_clients",
+    "sales_client_inline_update": "sales_clients",
+    "sales_client_summary": "sales_clients",
+    "sales_clients_create": "sales_clients",
+    "sales_clients_upload": "sales_clients",
+    "sales_clients_upload_template": "sales_clients",
+    "sales_clients_export": "sales_clients",
+    "sales_companies_create": "sales_clients",
+    "sales_opportunities_pipeline": "sales_opportunities",
+    "sales_opportunity_detail": "sales_opportunities",
+    "sales_opportunity_stage": "sales_opportunities",
+    "sales_opportunity_close": "sales_opportunities",
+    "sales_opportunity_convert_to_project": "sales_opportunities",
+    "sales_opportunities_create": "sales_opportunities",
+    "sales_opportunities_upload": "sales_opportunities",
+    "sales_opportunities_upload_template": "sales_opportunities",
+    "sales_opportunities_export": "sales_opportunities",
+    "sales_client_requirement_form_detail": "sales_opportunities",
+    "sales_settings": "sales_settings",
+    "projects_pending": "projects",
+    "projects_list": "projects",
+    "project_detail": "projects",
+    "project_edit": "projects",
+    "project_add_comment": "projects",
+    "project_apply_template": "projects",
+    "project_task_create": "projects",
+    "project_templates": "project_templates",
+    "project_template_detail": "project_templates",
+    "project_template_update": "project_templates",
+    "project_template_save_as_task_template": "project_templates",
+    "create_project_template_from_task_template": "project_templates",
+    "project_template_delete": "project_templates",
+    "project_template_task_edit": "project_templates",
+    "project_template_task_delete": "project_templates",
+    "project_template_task_reorder": "project_templates",
+    "ni_settings": "project_templates",
+    "forms_list": "forms",
+    "forms_new": "forms",
+    "forms_edit": "forms",
+    "forms_delete": "forms",
+    "forms_duplicate": "forms",
+    "forms_fill": "forms",
+    "forms_preview": "forms",
+    "submission_view": "forms",
+    "design_overview": "design",
+    "design_metrics_legacy_redirect": "design",
+    "design_tasks": "design_tasks",
+    "design_task_detail": "design_tasks",
+    "design_task_update_status": "design_tasks",
+    "design_task_status": "design_tasks",
+    "design_drawing_history": "drawing_history",
+    "design_drawing_history_detail": "drawing_history",
+    "design_drawing_history_upload": "drawing_history",
+    "download_latest_drawing_revision": "drawing_history",
+    "download_drawing_revision": "drawing_history",
+    "design_drawing_site_detail": "drawing_site",
+    "design_bom_templates": "bom_templates",
+    "design_bom_template_edit": "bom_templates",
+    "duplicate_bom": "bom_templates",
+    "update_bom_item_stage": "bom_templates",
+    "part_classes": "part_classes",
+    "get_part_class": "part_classes",
+    "part_class_primary_parts": "part_classes",
+    "part_class_primary_parts_for_create": "part_classes",
+    "update_part_class": "part_classes",
+    "create_part_class_api": "part_classes",
+    "disable_part_class": "part_classes",
+    "purchase_procurement_plan": "procurement_plan",
+    "project_procurement_plan": "procurement_plan",
+    "bom_procurement_plan": "procurement_plan",
+    "purchase_bom_po_lines_preview": "procurement_plan",
+    "generate_po_from_bom": "procurement_plan",
+    "purchase_orders": "purchase_orders",
+    "purchase_order_detail": "purchase_orders",
+    "purchase_order_detail_view": "purchase_orders",
+    "purchase_order_pdf": "purchase_orders",
+    "purchase_order_request_spec_change": "purchase_orders",
+    "purchase_order_issue_create": "purchase_orders",
+    "purchase_parts": "parts",
+    "purchase_part_new": "parts",
+    "purchase_part_detail": "parts",
+    "purchase_parts_update": "parts",
+    "purchase_part_rate_update": "parts",
+    "products": "parts",
+    "products_upload": "parts",
+    "parts_search": "parts",
+    "parts_create": "parts",
+    "purchase_vendors": "vendors",
+    "purchase_vendor_detail": "vendors",
+    "purchase_vendors_upload": "vendors",
+    "purchase_vendor_edit": "vendors",
+    "purchase_vendor_rate": "vendors",
+    "purchase_vendor_rate_history": "vendors",
+    "purchase_vendor_attachment_download": "vendors",
+    "purchase_vendor_contact_create": "vendors",
+    "purchase_vendor_contact_update": "vendors",
+    "purchase_vendor_contact_delete": "vendors",
+    "purchase_vendor_contact_transfer": "vendors",
+    "purchase_vendor_contact_order": "vendors",
+    "purchase_vendor_issue_create": "vendors",
+    "purchase_vendor_issue_update": "vendors",
+    "purchase_vendor_issue_delete": "vendors",
+    "purchase_procurement_stages": "purchase_settings",
+    "purchase_reports": "purchase_reports",
+    "purchase_odoo_history": "purchase_odoo_history",
+    "purchase_orders_upload_odoo": "purchase_odoo_history",
+    "store_receive": "grn",
+    "store_receipt_detail": "grn",
+    "inventory_upload": "inventory",
+    "store_dispatch": "dc",
+    "edit_dispatch": "dc",
+    "complete_dispatch": "dc",
+    "create_delivery_challan_from_do": "dc",
+    "store_inventory": "inventory",
+    "adjust_inventory_item": "inventory",
+    "inventory_item_movements": "inventory",
+    "inventory_snapshot": "inventory",
+    "store_delivery_orders": "delivery_orders",
+    "create_delivery_order": "delivery_orders",
+    "delivery_order_detail": "delivery_orders",
+    "confirm_delivery_order": "delivery_orders",
+    "dispatch_delivery_order": "delivery_orders",
+    "store_assets": "assets",
+    "create_store_asset": "assets",
+    "store_asset_detail": "assets",
+    "issue_store_asset": "assets",
+    "return_store_asset": "assets",
+    "start_store_asset_repair": "assets",
+    "close_store_asset_repair": "asset_repairs",
+    "store_asset_movements": "asset_movements",
+    "store_asset_repairs": "asset_repairs",
+    "store_settings": "store_settings",
+    "store_asset_settings": "asset_settings",
+    "store_asset_classes": "asset_settings",
+    "store_asset_types": "asset_settings",
+    "service_home": "service",
+    "service_overview": "service",
+    "service_tasks": "service_tasks",
+    "service_task_create": "service_tasks",
+    "service_task_detail": "service_tasks",
+    "service_task_update": "service_tasks",
+    "service_task_parts": "service_tasks",
+    "service_task_close": "service_tasks",
+    "service_customers": "service_customers",
+    "service_customer_detail": "service_customers",
+    "service_customers_create": "service_customers",
+    "service_customer_update": "service_customers",
+    "service_customer_update_address": "service_customers",
+    "service_customer_delete": "service_customers",
+    "service_customer_add_comment": "service_customers",
+    "service_customers_upload": "service_customers",
+    "service_customers_upload_template": "service_customers",
+    "service_customers_export": "service_customers",
+    "service_upload_review": "service_customers",
+    "service_lifts": "service_lifts",
+    "service_lift_detail": "service_lifts",
+    "service_lift_edit": "service_lifts",
+    "service_lift_update": "service_lifts",
+    "service_lift_delete": "service_lifts",
+    "service_lift_update_notes": "service_lifts",
+    "service_lift_add_comment": "service_lifts",
+    "service_lift_upload_file": "service_lifts",
+    "service_lift_generate_schedule": "service_lifts",
+    "service_visit_assign": "service_lifts",
+    "service_lifts_create": "service_lifts",
+    "service_lifts_upload": "service_lifts",
+    "service_lifts_upload_template": "service_lifts",
+    "service_lifts_export": "service_lifts",
+    "service_complaints": "service_complaints",
+    "service_contracts": "service_contracts",
+    "service_contract_new": "service_contracts",
+    "service_contract_edit": "service_contracts",
+    "service_contract_preview": "service_contracts",
+    "service_contract_print": "service_contracts",
+    "service_contract_pdf": "service_contracts",
+    "service_parts_materials": "service_parts_materials",
+    "service_preventive_maintenance": "service_preventive_maintenance",
+    "service_automations": "service_automations",
+    "service_settings": "service_settings",
+    "service_contract_template_settings": "service_settings",
+    "service_contract_price_add": "service_settings",
+    "service_contract_price_update": "service_settings",
+    "service_contract_price_toggle": "service_settings",
+    "service_contract_price_history": "service_settings",
+    "service_contract_price_export": "service_settings",
+    "service_contract_price_import": "service_settings",
+    "service_settings_dropdown_add": "service_settings",
+    "service_settings_dropdown_toggle": "service_settings",
+    "service_settings_dropdown_template": "service_settings",
+    "service_settings_dropdown_import": "service_settings",
+    "service_settings_dropdown_update": "service_settings",
+    "service_settings_dropdown_reorder": "service_settings",
+    "settings_service_route_create": "service_settings",
+    "settings_service_route_update": "service_settings",
+    "settings_service_route_delete": "service_settings",
+    "srt_overview": "srt",
+    "srt_task_create": "srt",
+    "srt_task_data": "srt",
+    "srt_task_update": "srt",
+    "srt_sites": "srt_sites",
+    "srt_settings": "srt_settings",
+    "srt_form_templates": "srt_settings",
+    "qc_overview": "qc",
+    "qc_home": "qc_tasks",
+    "qc_work_new": "qc_tasks",
+    "qc_work_detail": "qc_tasks",
+    "qc_work_assign": "qc_tasks",
+    "qc_work_comment": "qc_tasks",
+    "qc_work_status": "qc_tasks",
+    "qc_recent_submissions": "qc_tasks",
+    "qc_settings": "qc_settings",
+}
+
+
+def _normalize_section_key(value):
+    key = re.sub(r"[^a-z0-9_]+", "_", (value or "").strip().lower())
+    return re.sub(r"_+", "_", key).strip("_")
+
+
+def _current_section_guide():
+    try:
+        section_key = SECTION_GUIDE_ENDPOINT_KEYS.get(request.endpoint or "")
+    except RuntimeError:
+        return None
+    if not section_key:
+        return None
+    try:
+        return SectionGuide.query.filter_by(
+            section_key=section_key,
+            is_active=True,
+        ).first()
+    except Exception:
+        return None
 
 
 def _normalize_bom_type(value, *, default=BOM_TYPE_MAIN):
@@ -7888,6 +8176,13 @@ def inject_workspace_modules():
     return {
         "workspace_modules": WORKSPACE_MODULES,
         "workspace_module_map": WORKSPACE_MODULE_MAP,
+    }
+
+
+@app.context_processor
+def inject_section_guide_helpers():
+    return {
+        "current_section_guide": _current_section_guide,
     }
 
 
@@ -19369,6 +19664,7 @@ def ensure_tables():
         QCWorkComment.__table__,
         QCWorkLog.__table__,
         Notification.__table__,
+        SectionGuide.__table__,
         CallLog.__table__,
         CallRecording.__table__,
         DesignTask.__table__,
@@ -19463,6 +19759,51 @@ def _ensure_sqlite_table(table_name, table_obj, column_defs):
         print(f"✅ Auto-added in {table_name}: {', '.join(added)}")
     else:
         print(f"✔️ {table_name} OK")
+
+
+def ensure_section_guide_table():
+    _ensure_sqlite_table(
+        "section_guide",
+        SectionGuide.__table__,
+        [
+            ("section_key", "TEXT"),
+            ("title", "TEXT"),
+            ("content", "TEXT"),
+            ("is_active", "INTEGER DEFAULT 1"),
+            ("updated_by", "INTEGER"),
+            ("updated_at", "DATETIME"),
+            ("created_at", "DATETIME"),
+        ],
+    )
+
+
+def ensure_section_guides_seed():
+    changed = False
+    legacy_template = (SECTION_GUIDE_DEFAULT_TEMPLATE or "").strip()
+    for section_key, guide_content in SECTION_GUIDE_CONTENTS.items():
+        title = guide_content["title"]
+        content = guide_content["content"]
+        guide = SectionGuide.query.filter_by(section_key=section_key).first()
+        if not guide:
+            db.session.add(
+                SectionGuide(
+                    section_key=section_key,
+                    title=title,
+                    content=content,
+                    is_active=True,
+                )
+            )
+            changed = True
+            continue
+
+        current_content = (guide.content or "").strip()
+        if not current_content or current_content == legacy_template:
+            guide.title = title
+            guide.content = content
+            guide.is_active = True
+            changed = True
+    if changed:
+        db.session.flush()
 
 
 def ensure_sales_lead_columns():
@@ -21216,6 +21557,7 @@ def migrate_plaintext_passwords():
 
 def bootstrap_db():
     ensure_tables()
+    ensure_section_guide_table()
     ensure_inventory_item_columns()
     ensure_asset_tables()
     ensure_user_columns()
@@ -21266,6 +21608,7 @@ def bootstrap_db():
     ensure_bom_template_section_table()
     ensure_bom_template_line_table()
     ensure_procurement_stage_seed()
+    ensure_section_guides_seed()
     ensure_dropdown_options_seed()
     migrate_service_dropdown_category_g_plus_to_floors()
     ensure_client_requirement_template_seed()
@@ -21563,6 +21906,104 @@ def settings():
         positions=positions,
         position_options=position_options,
         admin_settings=admin_settings,
+    )
+
+
+@app.route("/settings/process-guides", methods=["GET", "POST"])
+@login_required
+def process_guides():
+    if not current_user.is_admin:
+        abort(403)
+
+    ensure_bootstrap()
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "save_guide").strip()
+        guide_id = None
+        guide_id_raw = (request.form.get("guide_id") or "").strip()
+        if guide_id_raw:
+            try:
+                guide_id = int(guide_id_raw)
+            except ValueError:
+                guide_id = None
+        guide = db.session.get(SectionGuide, guide_id) if guide_id else None
+
+        if action == "toggle_guide":
+            if not guide:
+                flash("Process guide not found.", "error")
+                return redirect(url_for("process_guides"))
+            guide.is_active = bool(request.form.get("is_active"))
+            guide.updated_by = current_user.id
+            guide.updated_at = datetime.datetime.utcnow()
+            db.session.commit()
+            flash("Process guide status updated.", "success")
+            return redirect(url_for("process_guides"))
+
+        if action != "save_guide":
+            flash("Invalid process guide action.", "error")
+            return redirect(url_for("process_guides"))
+
+        section_key = _normalize_section_key(request.form.get("section_key"))
+        title = clean_str(request.form.get("title"))
+        content = (request.form.get("content") or "").strip()
+        is_active = bool(request.form.get("is_active"))
+
+        if not section_key:
+            flash("Section key is required.", "error")
+            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+
+        duplicate = SectionGuide.query.filter(
+            func.lower(SectionGuide.section_key) == section_key.lower()
+        )
+        if guide:
+            duplicate = duplicate.filter(SectionGuide.id != guide.id)
+        if duplicate.first():
+            flash("Another process guide already uses that section key.", "error")
+            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+
+        if not guide:
+            guide = SectionGuide(section_key=section_key)
+            db.session.add(guide)
+
+        guide.section_key = section_key
+        guide.title = title
+        guide.content = content
+        guide.is_active = is_active
+        guide.updated_by = current_user.id
+        guide.updated_at = datetime.datetime.utcnow()
+
+        try:
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Failed to save process guide")
+            flash("Could not save the process guide.", "error")
+            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+
+        flash("Process guide saved.", "success")
+        return redirect(url_for("process_guides"))
+
+    edit_id = None
+    edit_id_raw = (request.args.get("edit") or "").strip()
+    if edit_id_raw:
+        try:
+            edit_id = int(edit_id_raw)
+        except ValueError:
+            edit_id = None
+    edit_guide = db.session.get(SectionGuide, edit_id) if edit_id else None
+    guides = SectionGuide.query.order_by(
+        SectionGuide.section_key.asc(),
+        SectionGuide.id.asc(),
+    ).all()
+    return render_template(
+        "process_guides.html",
+        guides=guides,
+        edit_guide=edit_guide,
+        guide_template=SECTION_GUIDE_DEFAULT_TEMPLATE,
+        default_section_keys=SECTION_GUIDE_DEFAULTS,
     )
 
 

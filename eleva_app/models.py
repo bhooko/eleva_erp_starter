@@ -2175,6 +2175,25 @@ class Notification(db.Model):
         return self.created_at.strftime("%d %b %Y, %I:%M %p")
 
 
+class SectionGuide(db.Model):
+    __tablename__ = "section_guide"
+
+    id = db.Column(db.Integer, primary_key=True)
+    section_key = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    title = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    updated_by_user = db.relationship("User")
+
+
 # ----------------------------
 # Design module models
 # ----------------------------

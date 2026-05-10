@@ -1,0 +1,98 @@
+{% set section_guide = current_section_guide() if current_section_guide is defined else none %}
+{% if section_guide %}
+  <div class="relative" data-section-guide-root>
+    <button type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800/70 text-sm font-bold text-slate-100 hover:border-emerald-400/70 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+            aria-label="Process Guide"
+            aria-haspopup="dialog"
+            aria-controls="processGuidePanel"
+            title="Process Guide"
+            data-section-guide-open>
+      ?
+    </button>
+
+    <div id="processGuidePanel"
+         class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="processGuideTitle"
+         data-section-guide-overlay>
+      <button type="button"
+              class="absolute inset-0 h-full w-full cursor-default"
+              aria-label="Close process guide"
+              data-section-guide-close></button>
+
+      <aside class="absolute inset-y-0 right-0 flex h-screen max-h-screen w-full max-w-none flex-col border-l border-slate-800/80 bg-slate-950 shadow-2xl shadow-black/40 sm:w-[42rem] lg:w-[56rem] xl:w-[64rem]"
+             data-section-guide-drawer>
+        <header class="flex items-start justify-between gap-4 border-b border-slate-800/80 px-6 py-5">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-300">Process Guide</p>
+            <h2 id="processGuideTitle" class="mt-1 text-lg font-semibold text-slate-100">{{ section_guide.title }}</h2>
+          </div>
+          <button type="button"
+                  class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/80 text-xl leading-none text-slate-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  aria-label="Close process guide"
+                  data-section-guide-close>
+            &times;
+          </button>
+        </header>
+
+        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8">
+          {% if section_guide.content %}
+            <div class="whitespace-pre-wrap break-words text-sm leading-7 text-slate-200 lg:text-[15px]">{{ section_guide.content }}</div>
+          {% else %}
+            <p class="text-sm leading-6 text-slate-300">No process guide has been added for this section yet.</p>
+          {% endif %}
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('[data-section-guide-root]').forEach((root) => {
+        if (root.dataset.sectionGuideReady === 'true') {
+          return;
+        }
+        root.dataset.sectionGuideReady = 'true';
+
+        const openButton = root.querySelector('[data-section-guide-open]');
+        const overlay = root.querySelector('[data-section-guide-overlay]');
+        const closeButtons = root.querySelectorAll('[data-section-guide-close]');
+        const drawer = root.querySelector('[data-section-guide-drawer]');
+
+        if (!openButton || !overlay || !drawer) {
+          return;
+        }
+
+        if (overlay.parentElement !== document.body) {
+          document.body.appendChild(overlay);
+        }
+
+        const closeGuide = () => {
+          overlay.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+          openButton.focus({ preventScroll: true });
+        };
+
+        const openGuide = () => {
+          overlay.classList.remove('hidden');
+          document.body.classList.add('overflow-hidden');
+          const focusTarget = drawer.querySelector('[data-section-guide-close]');
+          if (focusTarget) {
+            focusTarget.focus({ preventScroll: true });
+          }
+        };
+
+        openButton.addEventListener('click', openGuide);
+        closeButtons.forEach((button) => button.addEventListener('click', closeGuide));
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !overlay.classList.contains('hidden')) {
+            closeGuide();
+          }
+        });
+      });
+    });
+  </script>
+{% endif %}
