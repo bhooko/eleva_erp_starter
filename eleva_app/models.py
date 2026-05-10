@@ -13,6 +13,8 @@ from app import (
     OPPORTUNITY_ACTIVITY_LABELS,
     OPPORTUNITY_ACTIVITY_OUTCOMES,
     REMINDER_OPTION_LABELS,
+    SALES_LEAD_PIPELINES,
+    SALES_LEAD_STATUS_LABELS,
     SALES_TASK_CATEGORY_LABELS,
     SERVICE_VISIT_STATUS_LABELS,
     _is_password_hashed,
@@ -628,6 +630,54 @@ class SalesClient(db.Model):
         if not value:
             return "Not set"
         return "Yes" if value in {"yes", "true", "1"} else "No"
+
+
+class SalesLead(db.Model):
+    __tablename__ = "sales_lead"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    pipeline = db.Column(db.String(40), nullable=False, default="new_installation")
+    status = db.Column(db.String(40), nullable=False, default="fresh")
+    source = db.Column(db.String(120), nullable=True)
+    contact_name = db.Column(db.String(200), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(200), nullable=True)
+    company_name = db.Column(db.String(200), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("sales_client.id"), nullable=True)
+    opportunity_id = db.Column(db.Integer, db.ForeignKey("sales_opportunity.id"), nullable=True)
+    support_ticket_id = db.Column(db.String(80), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    qualified_at = db.Column(db.DateTime, nullable=True)
+    rejected_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    owner = db.relationship("User")
+    client = db.relationship("SalesClient", backref=db.backref("leads", lazy="dynamic"))
+    opportunity = db.relationship("SalesOpportunity", backref=db.backref("source_leads", lazy="dynamic"))
+
+    @property
+    def pipeline_label(self):
+        config = SALES_LEAD_PIPELINES.get(self.pipeline or "")
+        return config.get("label") if config else (self.pipeline or "Lead").replace("_", " ").title()
+
+    @property
+    def status_label(self):
+        return SALES_LEAD_STATUS_LABELS.get(
+            self.status,
+            (self.status or "fresh").replace("_", " ").title(),
+        )
+
+    @property
+    def contact_display(self):
+        parts = [self.contact_name, self.phone, self.email]
+        return " / ".join([part for part in parts if part]) or "No contact"
 
 
 class SalesOpportunity(db.Model):

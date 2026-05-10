@@ -1733,6 +1733,67 @@ def build_sales_client_export_workbook(clients):
     return workbook
 
 
+def _sales_lead_upload_row(lead):
+    owner_email = ""
+    if lead.owner and getattr(lead.owner, "email", None):
+        owner_email = lead.owner.email or ""
+    return [
+        lead.title or "",
+        lead.pipeline or "",
+        lead.status or "",
+        lead.contact_name or "",
+        lead.phone or "",
+        lead.email or "",
+        lead.company_name or "",
+        lead.source or "",
+        owner_email,
+        lead.notes or "",
+    ]
+
+
+def build_sales_lead_upload_workbook():
+    _ensure_openpyxl()
+    workbook = Workbook()
+    instructions = workbook.active
+    instructions.title = "Instructions"
+    instructions["A1"] = "Sales leads upload template"
+    instructions["A1"].font = Font(bold=True, size=14)
+    instructions["A3"] = "Fill the Leads sheet with one lead per row."
+    instructions["A4"] = (
+        "Pipeline accepts: "
+        + ", ".join(f"{key} ({cfg['label']})" for key, cfg in SALES_LEAD_PIPELINES.items())
+        + "."
+    )
+    instructions["A5"] = "Status accepts Fresh, Qualified or Rejected. Blank defaults to Fresh."
+    instructions["A6"] = "Qualified rows automatically create an opportunity in the matching sales pipeline."
+
+    data_sheet = workbook.create_sheet(SALES_LEAD_TEMPLATE_SHEET_NAME)
+    data_sheet.append(SALES_LEAD_UPLOAD_HEADERS)
+    data_sheet.append(
+        [
+            "Sample Lead",
+            "new_installation",
+            "Fresh",
+            "Contact Person",
+            "9876543210",
+            "lead@example.com",
+            "Sample Company",
+            "Website Campaign",
+            "sales@example.com",
+            "Notes about this lead",
+        ]
+    )
+
+    for idx, header in enumerate(SALES_LEAD_UPLOAD_HEADERS, start=1):
+        cell = data_sheet.cell(row=1, column=idx)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True)
+        column_letter = data_sheet.cell(row=1, column=idx).column_letter
+        data_sheet.column_dimensions[column_letter].width = max(18, len(header) + 2)
+
+    return workbook
+
+
 def _sales_opportunity_upload_row(opportunity):
     owner_email = ""
     if opportunity.owner and getattr(opportunity.owner, "email", None):
@@ -4737,6 +4798,7 @@ def _handle_customer_support_ticket_creation():
             entity["description"] = " · ".join(lift_details)
         linked_entities.append(entity)
 
+    created_sales_lead = None
     created_opportunity = None
     created_call_activity = None
     created_sales_task = None
@@ -4767,28 +4829,27 @@ def _handle_customer_support_ticket_creation():
                     ),
                 }
             )
-    sales_lead_pipeline_map = {"sales-ni": "lift", "sales-amc": "amc"}
+    sales_lead_pipeline_map = {"sales-ni": "new_installation", "sales-amc": "service"}
     if create_sales_lead and category_id.lower() in sales_lead_pipeline_map:
-        pipeline_key = sales_lead_pipeline_map[category_id.lower()]
-        pipeline_config = get_pipeline_config(pipeline_key)
-        stages = pipeline_config.get("stages", []) if isinstance(pipeline_config, dict) else []
-        lead_stage = stages[0] if stages else "New Enquiry"
-
         lead_title = subject or customer or f"Ticket {ticket_id}"
-        created_opportunity = SalesOpportunity(
+        created_sales_lead = _create_sales_lead(
             title=lead_title,
-            pipeline=pipeline_key,
-            stage=lead_stage,
-            description=remarks or None,
+            pipeline=sales_lead_pipeline_map[category_id.lower()],
+            status="qualified",
+            source="Call on toll free",
+            contact_name=contact_name,
+            phone=contact_phone,
+            email=contact_email,
+            company_name=customer or location,
+            owner_user=sales_lead_owner
+            or (current_user if current_user.is_authenticated else None),
+            client=linked_sales_client or resolved_sales_client,
+            notes=remarks,
+            support_ticket_id=ticket_id,
+            convert_if_qualified=True,
+            actor=current_user if current_user.is_authenticated else None,
         )
-        created_opportunity.owner = sales_lead_owner or (current_user if current_user.is_authenticated else None)
-        if linked_sales_client:
-            created_opportunity.client = linked_sales_client
-        elif resolved_sales_client:
-            created_opportunity.client = resolved_sales_client
-
-        db.session.add(created_opportunity)
-        db.session.flush()
+        created_opportunity = created_sales_lead.opportunity
         log_sales_activity(
             "opportunity",
             created_opportunity.id,
@@ -4831,6 +4892,14 @@ def _handle_customer_support_ticket_creation():
             created_opportunity.id,
             "Call scheduled for today",
             notes=f"New enquiry call created from support ticket {ticket_id}.",
+        )
+        linked_entities.append(
+            {
+                "type": "sales_lead",
+                "label": "Qualified lead",
+                "name": lead_title,
+                "url": url_for("sales_leads", pipeline=created_sales_lead.pipeline),
+            }
         )
         linked_entities.append(
             {
@@ -4910,6 +4979,14 @@ def _handle_customer_support_ticket_creation():
             ticket_record[f"linked_{entity['type']}"] = entity
 
     if created_opportunity:
+        ticket_record["linked_sales_lead"] = {
+            "id": created_sales_lead.id if created_sales_lead else None,
+            "title": created_sales_lead.title if created_sales_lead else created_opportunity.title,
+            "url": url_for(
+                "sales_leads",
+                pipeline=created_sales_lead.pipeline if created_sales_lead else "all",
+            ),
+        }
         ticket_record["linked_sales_opportunity"] = {
             "id": created_opportunity.id,
             "title": created_opportunity.title,
@@ -5455,6 +5532,39 @@ SALES_CLIENT_UPLOAD_HEADERS = [
     "Description",
 ]
 
+SALES_LEAD_PIPELINES = {
+    "new_installation": {
+        "label": "New Installation",
+        "opportunity_pipeline": "lift",
+    },
+    "service": {
+        "label": "Service / AMC",
+        "opportunity_pipeline": "amc",
+    },
+}
+
+SALES_LEAD_STATUS_OPTIONS = [
+    ("fresh", "Fresh"),
+    ("qualified", "Qualified"),
+    ("rejected", "Rejected"),
+]
+SALES_LEAD_STATUS_LABELS = {
+    value: label for value, label in SALES_LEAD_STATUS_OPTIONS
+}
+SALES_LEAD_TEMPLATE_SHEET_NAME = "Leads"
+SALES_LEAD_UPLOAD_HEADERS = [
+    "Lead Name",
+    "Pipeline",
+    "Status",
+    "Contact Name",
+    "Phone",
+    "Email",
+    "Company Name",
+    "Source",
+    "Owner Email",
+    "Notes",
+]
+
 SALES_TASK_CATEGORIES = [
     ("task", "Task"),
     ("activity", "Activity"),
@@ -5709,6 +5819,286 @@ def _get_or_create_sales_client_for_ticket(
         actor=current_user if current_user.is_authenticated else None,
     )
     return client, True
+
+
+def _active_current_user():
+    try:
+        if getattr(current_user, "is_authenticated", False):
+            return current_user._get_current_object()
+    except RuntimeError:
+        return None
+    return None
+
+
+def _normalize_sales_lead_pipeline(value):
+    raw_value = clean_str(value)
+    if not raw_value:
+        return "new_installation"
+    key = re.sub(r"[^a-z0-9]+", "_", raw_value.lower()).strip("_")
+    aliases = {
+        "new_installation": "new_installation",
+        "installation": "new_installation",
+        "ni": "new_installation",
+        "new": "new_installation",
+        "lift": "new_installation",
+        "lifts": "new_installation",
+        "service": "service",
+        "amc": "service",
+        "service_amc": "service",
+        "maintenance": "service",
+    }
+    return aliases.get(key, key if key in SALES_LEAD_PIPELINES else "new_installation")
+
+
+def _normalize_sales_lead_status(value):
+    raw_value = clean_str(value)
+    if not raw_value:
+        return "fresh"
+    key = re.sub(r"[^a-z0-9]+", "_", raw_value.lower()).strip("_")
+    aliases = {
+        "new": "fresh",
+        "fresh": "fresh",
+        "open": "fresh",
+        "qualified": "qualified",
+        "qualify": "qualified",
+        "rejected": "rejected",
+        "reject": "rejected",
+        "lost": "rejected",
+    }
+    return aliases.get(key, key if key in SALES_LEAD_STATUS_LABELS else "fresh")
+
+
+def _sales_lead_opportunity_pipeline(lead_pipeline):
+    lead_pipeline = _normalize_sales_lead_pipeline(lead_pipeline)
+    return SALES_LEAD_PIPELINES.get(lead_pipeline, SALES_LEAD_PIPELINES["new_installation"])[
+        "opportunity_pipeline"
+    ]
+
+
+def _sales_lead_description(lead):
+    parts = []
+    if lead.notes:
+        parts.append(lead.notes)
+    if lead.source:
+        parts.append(f"Lead source: {lead.source}")
+    contact_bits = [lead.contact_name, lead.phone, lead.email]
+    contact = " / ".join([bit for bit in contact_bits if bit])
+    if contact:
+        parts.append(f"Contact: {contact}")
+    if lead.company_name:
+        parts.append(f"Company/Site: {lead.company_name}")
+    if lead.support_ticket_id:
+        parts.append(f"Support ticket: {lead.support_ticket_id}")
+    return "\n".join(parts) or None
+
+
+def _get_or_create_sales_client_for_lead(lead, owner_user=None, actor=None):
+    phone_value = (lead.phone or "").strip()
+    email_value = (lead.email or "").strip()
+    preferred_name = (
+        clean_str(lead.company_name)
+        or clean_str(lead.contact_name)
+        or clean_str(lead.title)
+    )
+    matched_client = _match_sales_client(
+        phone_value,
+        email_value,
+        _normalize_client_name_key(preferred_name),
+    )
+    if matched_client:
+        return matched_client
+
+    client = SalesClient(
+        display_name=preferred_name or lead.title,
+        phone=phone_value or None,
+        email=email_value or None,
+        company_name=clean_str(lead.company_name),
+        category="Individual",
+        lifecycle_stage=(
+            SALES_CLIENT_LIFECYCLE_STAGES[0]
+            if SALES_CLIENT_LIFECYCLE_STAGES
+            else None
+        ),
+        description=f"Auto-created from sales lead: {lead.title}",
+    )
+    client.owner = owner_user or lead.owner or actor
+    db.session.add(client)
+    db.session.flush()
+    log_sales_activity(
+        "client",
+        client.id,
+        "Client auto-created from sales lead",
+        actor=actor,
+    )
+    return client
+
+
+def _create_sales_opportunity_from_lead(lead, actor=None):
+    if lead.opportunity_id and lead.opportunity:
+        return lead.opportunity
+
+    opportunity_pipeline = _sales_lead_opportunity_pipeline(lead.pipeline)
+    pipeline_config = get_pipeline_config(opportunity_pipeline)
+    stages = pipeline_config.get("stages", []) if isinstance(pipeline_config, dict) else []
+    default_stage = stages[0] if stages else "New Enquiry"
+
+    client = lead.client or _get_or_create_sales_client_for_lead(
+        lead,
+        owner_user=lead.owner,
+        actor=actor,
+    )
+    lead.client = client
+
+    opportunity = SalesOpportunity(
+        title=lead.title,
+        pipeline=opportunity_pipeline,
+        stage=default_stage,
+        description=_sales_lead_description(lead),
+    )
+    opportunity.owner = lead.owner or actor
+    opportunity.client = client
+    db.session.add(opportunity)
+    db.session.flush()
+
+    lead.opportunity = opportunity
+    log_sales_activity(
+        "opportunity",
+        opportunity.id,
+        "Opportunity created from qualified lead",
+        notes=f"Lead source: {lead.source or 'Not specified'}",
+        actor=actor,
+    )
+    return opportunity
+
+
+def _set_sales_lead_status(lead, status, actor=None, *, convert_if_qualified=True):
+    status = _normalize_sales_lead_status(status)
+    now = datetime.datetime.utcnow()
+    lead.status = status
+    if status == "qualified":
+        lead.qualified_at = lead.qualified_at or now
+        lead.rejected_at = None
+        if convert_if_qualified:
+            _create_sales_opportunity_from_lead(lead, actor=actor)
+    elif status == "rejected":
+        lead.rejected_at = lead.rejected_at or now
+    elif status == "fresh":
+        lead.rejected_at = None
+    return lead
+
+
+def _create_sales_lead(
+    *,
+    title,
+    pipeline="new_installation",
+    status="fresh",
+    source=None,
+    contact_name=None,
+    phone=None,
+    email=None,
+    company_name=None,
+    owner_user=None,
+    client=None,
+    notes=None,
+    support_ticket_id=None,
+    convert_if_qualified=False,
+    actor=None,
+):
+    title = clean_str(title)
+    if not title:
+        raise ValueError("Lead name is required.")
+
+    actor = actor or owner_user or _active_current_user()
+    lead = SalesLead(
+        title=title,
+        pipeline=_normalize_sales_lead_pipeline(pipeline),
+        status="fresh",
+        source=clean_str(source) or None,
+        contact_name=clean_str(contact_name) or None,
+        phone=clean_str(phone) or None,
+        email=clean_str(email) or None,
+        company_name=clean_str(company_name) or None,
+        owner=owner_user or actor,
+        client=client,
+        notes=clean_str(notes) or None,
+        support_ticket_id=clean_str(support_ticket_id) or None,
+    )
+    db.session.add(lead)
+    db.session.flush()
+    _set_sales_lead_status(
+        lead,
+        status,
+        actor=actor,
+        convert_if_qualified=convert_if_qualified,
+    )
+    log_sales_activity(
+        "lead",
+        lead.id,
+        "Lead created",
+        notes=f"Status: {lead.status_label}; Source: {lead.source or 'Not specified'}",
+        actor=actor,
+    )
+    return lead
+
+
+def _import_sales_lead_rows(rows, *, actor=None):
+    actor = actor or _active_current_user()
+    users = User.query.all()
+    user_lookup = {}
+    for user in users:
+        email_value = clean_str(getattr(user, "email", None))
+        if email_value:
+            user_lookup[email_value.lower()] = user
+
+    result = {
+        "created": 0,
+        "qualified": 0,
+        "skipped": 0,
+        "errors": [],
+    }
+
+    for row_index, row in enumerate(rows or [], start=2):
+        title = clean_str(row.get("Lead Name") or row.get("Title") or row.get("Name"))
+        if not title:
+            result["skipped"] += 1
+            continue
+
+        owner_email = clean_str(row.get("Owner Email"))
+        owner_user = actor
+        if owner_email:
+            owner_user = user_lookup.get(owner_email.lower())
+            if not owner_user or not owner_user.can_be_assigned_module("sales"):
+                result["errors"].append(
+                    f"Row {row_index}: Owner email '{owner_email}' is not linked to a sales user."
+                )
+                result["skipped"] += 1
+                continue
+
+        try:
+            lead = _create_sales_lead(
+                title=title,
+                pipeline=row.get("Pipeline"),
+                status=row.get("Status"),
+                source=row.get("Source"),
+                contact_name=row.get("Contact Name"),
+                phone=row.get("Phone"),
+                email=row.get("Email"),
+                company_name=row.get("Company Name"),
+                owner_user=owner_user,
+                notes=row.get("Notes"),
+                convert_if_qualified=True,
+                actor=actor,
+            )
+        except ValueError as exc:
+            result["errors"].append(f"Row {row_index}: {exc}")
+            result["skipped"] += 1
+            continue
+
+        result["created"] += 1
+        if lead.status == "qualified":
+            result["qualified"] += 1
+
+    return result
 
 
 def normalize_email_opt_out(value):
@@ -7225,6 +7615,7 @@ from eleva_app.models import (
     SalesActivity,
     SalesClient,
     SalesCompany,
+    SalesLead,
     SalesOpportunity,
     SalesOpportunityComment,
     SalesOpportunityEngagement,
@@ -17579,6 +17970,7 @@ def ensure_tables():
         TaskTemplate.__table__,
         SalesCompany.__table__,
         SalesClient.__table__,
+        SalesLead.__table__,
         SalesOpportunity.__table__,
         SalesActivity.__table__,
         SalesTask.__table__,
@@ -17695,6 +18087,32 @@ def _ensure_sqlite_table(table_name, table_obj, column_defs):
         print(f"✅ Auto-added in {table_name}: {', '.join(added)}")
     else:
         print(f"✔️ {table_name} OK")
+
+
+def ensure_sales_lead_columns():
+    _ensure_sqlite_table(
+        "sales_lead",
+        SalesLead.__table__,
+        [
+            ("title", "TEXT"),
+            ("pipeline", "TEXT DEFAULT 'new_installation'"),
+            ("status", "TEXT DEFAULT 'fresh'"),
+            ("source", "TEXT"),
+            ("contact_name", "TEXT"),
+            ("phone", "TEXT"),
+            ("email", "TEXT"),
+            ("company_name", "TEXT"),
+            ("owner_id", "INTEGER"),
+            ("client_id", "INTEGER"),
+            ("opportunity_id", "INTEGER"),
+            ("support_ticket_id", "TEXT"),
+            ("notes", "TEXT"),
+            ("qualified_at", "DATETIME"),
+            ("rejected_at", "DATETIME"),
+            ("created_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
+        ],
+    )
 
 
 def ensure_part_class_table():
@@ -19243,6 +19661,7 @@ def bootstrap_db():
     ensure_lift_columns()
     ensure_service_route_columns()
     ensure_sales_client_columns()
+    ensure_sales_lead_columns()
     ensure_sales_task_columns()
     ensure_sales_opportunity_columns()
     ensure_sales_opportunity_item_columns()
@@ -20074,6 +20493,278 @@ def sales_home():
         period_description=period_description,
         now=now,
     )
+
+
+@app.route("/sales/leads", methods=["GET", "POST"])
+@login_required
+def sales_leads():
+    _module_visibility_required("sales")
+
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        if not title:
+            flash("Lead name is required.", "error")
+            return redirect(url_for("sales_leads"))
+
+        owner_user = current_user if getattr(current_user, "is_authenticated", False) else None
+        owner_id_raw = (request.form.get("owner_id") or "").strip()
+        if owner_id_raw:
+            try:
+                owner_candidate = db.session.get(User, int(owner_id_raw))
+            except (TypeError, ValueError):
+                owner_candidate = None
+            if not owner_candidate or not owner_candidate.can_be_assigned_module("sales"):
+                flash("Choose a valid sales owner for the lead.", "error")
+                return redirect(url_for("sales_leads"))
+            owner_user = owner_candidate
+
+        try:
+            lead = _create_sales_lead(
+                title=title,
+                pipeline=request.form.get("pipeline"),
+                status=request.form.get("status"),
+                source=(request.form.get("source") or "Manual").strip(),
+                contact_name=request.form.get("contact_name"),
+                phone=request.form.get("phone"),
+                email=request.form.get("email"),
+                company_name=request.form.get("company_name"),
+                owner_user=owner_user,
+                notes=request.form.get("notes"),
+                convert_if_qualified=True,
+                actor=current_user,
+            )
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "error")
+            return redirect(url_for("sales_leads"))
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Failed to create sales lead")
+            flash("Could not create the lead. Please try again.", "error")
+            return redirect(url_for("sales_leads"))
+
+        flash("Lead created.", "success")
+        return redirect(url_for("sales_leads", pipeline=lead.pipeline))
+
+    selected_pipeline = (request.args.get("pipeline") or "new_installation").strip().lower()
+    if selected_pipeline not in SALES_LEAD_PIPELINES and selected_pipeline != "all":
+        selected_pipeline = "new_installation"
+
+    query = SalesLead.query.options(
+        joinedload(SalesLead.owner),
+        joinedload(SalesLead.client),
+        joinedload(SalesLead.opportunity),
+    )
+    if selected_pipeline != "all":
+        query = query.filter(SalesLead.pipeline == selected_pipeline)
+    leads = query.order_by(SalesLead.updated_at.desc(), SalesLead.created_at.desc()).all()
+
+    grouped_leads = {status: [] for status, _ in SALES_LEAD_STATUS_OPTIONS}
+    for lead in leads:
+        grouped_leads.setdefault(lead.status or "fresh", []).append(lead)
+
+    source_summary_map = {}
+    for lead in leads:
+        source_key = lead.source or "Not specified"
+        row = source_summary_map.setdefault(
+            source_key,
+            {"source": source_key, "total": 0, "fresh": 0, "qualified": 0, "rejected": 0},
+        )
+        row["total"] += 1
+        row[lead.status or "fresh"] = row.get(lead.status or "fresh", 0) + 1
+    source_summary = sorted(
+        source_summary_map.values(),
+        key=lambda row: (row["qualified"], row["total"]),
+        reverse=True,
+    )
+
+    pipeline_counts = {
+        key: SalesLead.query.filter(SalesLead.pipeline == key).count()
+        for key in SALES_LEAD_PIPELINES
+    }
+    status_counts = {
+        status: SalesLead.query.filter(SalesLead.status == status).count()
+        for status, _ in SALES_LEAD_STATUS_OPTIONS
+    }
+
+    sales_users = [
+        user
+        for user in User.query.filter(User.active.is_(True))
+        .order_by(User.first_name.asc(), User.last_name.asc(), User.username.asc())
+        .all()
+        if user.can_be_assigned_module("sales")
+    ]
+
+    return render_template(
+        "sales/leads.html",
+        leads=leads,
+        grouped_leads=grouped_leads,
+        selected_pipeline=selected_pipeline,
+        lead_pipelines=SALES_LEAD_PIPELINES,
+        lead_status_options=SALES_LEAD_STATUS_OPTIONS,
+        pipeline_counts=pipeline_counts,
+        status_counts=status_counts,
+        source_summary=source_summary,
+        sales_users=sales_users,
+    )
+
+
+@app.route("/sales/leads/<int:lead_id>/status", methods=["POST"])
+@login_required
+def sales_lead_update_status(lead_id):
+    _module_visibility_required("sales")
+    lead = db.session.get(SalesLead, lead_id)
+    if not lead:
+        flash("Lead not found.", "error")
+        return redirect(url_for("sales_leads"))
+
+    desired_status = request.form.get("status")
+    try:
+        _set_sales_lead_status(
+            lead,
+            desired_status,
+            actor=current_user,
+            convert_if_qualified=True,
+        )
+        log_sales_activity(
+            "lead",
+            lead.id,
+            f"Lead marked {lead.status_label}",
+            actor=current_user,
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Failed to update sales lead status")
+        flash("Could not update the lead status.", "error")
+        return redirect(url_for("sales_leads", pipeline=lead.pipeline))
+
+    if lead.status == "qualified" and lead.opportunity_id:
+        flash("Lead qualified and pushed to sales pipeline.", "success")
+    elif lead.status == "rejected":
+        flash("Lead rejected.", "success")
+    else:
+        flash("Lead updated.", "success")
+    return redirect(url_for("sales_leads", pipeline=lead.pipeline))
+
+
+@app.route("/sales/leads/upload-template")
+@login_required
+def sales_leads_upload_template():
+    _module_visibility_required("sales")
+
+    filename = f"sales_leads_template_{datetime.datetime.utcnow():%Y%m%d}.xlsx"
+    if OPENPYXL_AVAILABLE:
+        workbook = build_sales_lead_upload_workbook()
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    csv_output = _build_csv_output(
+        SALES_LEAD_UPLOAD_HEADERS,
+        [["" for _ in SALES_LEAD_UPLOAD_HEADERS]],
+    )
+    return send_file(
+        csv_output,
+        as_attachment=True,
+        download_name=filename.replace(".xlsx", ".csv"),
+        mimetype="text/csv",
+    )
+
+
+@app.route("/sales/leads/upload", methods=["POST"])
+@login_required
+def sales_leads_upload():
+    _module_visibility_required("sales")
+
+    upload = request.files.get("lead_upload_file")
+    try:
+        _validate_upload_stream(
+            upload,
+            allowed_extensions={".xlsx", ".csv"},
+            allow_office_processing=True,
+        )
+    except UploadValidationError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("sales_leads"))
+
+    try:
+        header_cells, data_rows = _extract_tabular_upload(
+            upload, sheet_name=SALES_LEAD_TEMPLATE_SHEET_NAME
+        )
+    except MissingDependencyError:
+        flash(OPENPYXL_MISSING_MESSAGE, "error")
+        return redirect(url_for("sales_leads"))
+    except ValueError:
+        flash("Upload a .xlsx or .csv file exported from the leads template.", "error")
+        return redirect(url_for("sales_leads"))
+    except UploadStageTimeoutError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("sales_leads"))
+    except Exception:
+        flash("Could not read the uploaded file. Ensure it is a valid spreadsheet.", "error")
+        return redirect(url_for("sales_leads"))
+
+    header_map = {}
+    for idx, header in enumerate(header_cells or []):
+        header_label = stringify_cell(header)
+        if header_label:
+            header_map[header_label] = idx
+
+    if "Lead Name" not in header_map:
+        flash("The uploaded sheet must include the 'Lead Name' column.", "error")
+        return redirect(url_for("sales_leads"))
+
+    rows = []
+    for row in data_rows:
+        row_data = {}
+        for header, column_index in header_map.items():
+            row_data[header] = (
+                stringify_cell(row[column_index])
+                if column_index < len(row)
+                else None
+            )
+        rows.append(row_data)
+
+    result = _import_sales_lead_rows(rows, actor=current_user)
+    if result["created"]:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Could not save the uploaded leads due to a database error.", "error")
+            return redirect(url_for("sales_leads"))
+
+    summary_bits = []
+    if result["created"]:
+        summary_bits.append(f"{result['created']} created")
+    if result["qualified"]:
+        summary_bits.append(f"{result['qualified']} pushed to pipeline")
+    if result["skipped"]:
+        summary_bits.append(f"{result['skipped']} skipped")
+
+    if summary_bits:
+        flash("Lead import complete: " + ", ".join(summary_bits) + ".", "success")
+    else:
+        flash("No lead rows were imported.", "warning")
+
+    errors = result.get("errors") or []
+    if errors:
+        preview = errors[:5]
+        more = len(errors) - len(preview)
+        message = "\n".join(preview)
+        if more > 0:
+            message += f"\n…and {more} more issue(s)."
+        flash(message, "warning")
+
+    return redirect(url_for("sales_leads", pipeline="all"))
 
 
 @app.route("/sales/tasks", methods=["GET", "POST"])
@@ -27184,20 +27875,39 @@ def customer_support_create_linked_task():
     owner_label = owner_user.display_name if owner_user else (current_user.display_name if current_user.is_authenticated else "Unassigned")
     owner_id = owner_user.id if owner_user else (current_user.id if current_user.is_authenticated else None)
 
+    created_lead = None
     created_enquiry = None
-    if category and category.lower() == "sales-ni":
+    sales_linked_task_pipeline_map = {
+        "sales-ni": "new_installation",
+        "sales-amc": "service",
+    }
+    if category and category.lower() in sales_linked_task_pipeline_map:
         try:
-            created_enquiry = _create_enquiry_from_sales_ni_task(
-                ticket=ticket,
-                title=title,
-                details=details,
-                assignee_user=assignee_user,
-                owner_user=owner_user,
+            lead_title = title or ticket.get("subject") or ticket.get("id") or "Sales enquiry"
+            linked_client = None
+            if ticket.get("linked_sales_client") and ticket["linked_sales_client"].get("id"):
+                linked_client = db.session.get(SalesClient, ticket["linked_sales_client"]["id"])
+            created_lead = _create_sales_lead(
+                title=lead_title,
+                pipeline=sales_linked_task_pipeline_map[category.lower()],
+                status="qualified",
+                source="Call on toll free",
+                contact_name=ticket.get("contact_name"),
+                phone=ticket.get("contact_phone"),
+                email=ticket.get("contact_email"),
+                company_name=ticket.get("customer") or ticket.get("location"),
+                owner_user=owner_user or assignee_user,
+                client=linked_client,
+                notes=details,
+                support_ticket_id=ticket.get("id"),
+                convert_if_qualified=True,
+                actor=current_user if current_user.is_authenticated else None,
             )
+            created_enquiry = created_lead.opportunity
         except Exception as exc:
-            app.logger.exception("Failed to create enquiry for Sales – NI task: %s", exc)
+            app.logger.exception("Failed to create sales lead for linked task: %s", exc)
             flash(
-                "Could not create the enquiry for this Sales – NI task. Please try again.",
+                "Could not create the sales lead for this linked task. Please try again.",
                 "error",
             )
             return redirect(url_for("customer_support_tasks", ticket=ticket_id, open_linked_task="1"))
@@ -27219,6 +27929,12 @@ def customer_support_create_linked_task():
     }
 
     if created_enquiry:
+        if created_lead:
+            new_task["linked_lead"] = {
+                "id": created_lead.id,
+                "title": created_lead.title,
+                "url": url_for("sales_leads", pipeline=created_lead.pipeline),
+            }
         new_task["linked_enquiry"] = {
             "id": created_enquiry.id,
             "title": created_enquiry.title,

@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Sales - Leads{% endblock %}
+{% block content %}
+<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <p class="text-sm text-slate-400">Sales Intake</p>
+    <h2 class="text-3xl font-semibold tracking-tight">Leads</h2>
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" data-open-lead-upload class="rounded-xl border border-slate-800/70 bg-slate-900/70 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800/70">Upload</button>
+    <button type="button" data-open-lead-modal class="rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30">Add Lead</button>
+  </div>
+</div>
+
+<div class="mb-5 flex flex-wrap items-center gap-2 text-sm">
+  <a href="{{ url_for('sales_leads', pipeline='all') }}" class="rounded-xl border px-3 py-1.5 {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' if selected_pipeline == 'all' else 'border-slate-800/80 bg-slate-900/70 text-slate-300 hover:bg-slate-800/70' }}">All</a>
+  {% for key, cfg in lead_pipelines.items() %}
+    <a href="{{ url_for('sales_leads', pipeline=key) }}" class="rounded-xl border px-3 py-1.5 {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' if selected_pipeline == key else 'border-slate-800/80 bg-slate-900/70 text-slate-300 hover:bg-slate-800/70' }}">
+      {{ cfg.label }} <span class="text-xs text-slate-500">{{ pipeline_counts.get(key, 0) }}</span>
+    </a>
+  {% endfor %}
+</div>
+
+{% if source_summary %}
+<div class="mb-5 overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/40">
+  <div class="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
+    <h3 class="text-sm font-semibold text-slate-100">Source conversion</h3>
+    <span class="text-xs text-slate-500">Current view</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-800/80 text-sm">
+      <thead class="bg-slate-950/40 text-left text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-2">Source</th>
+          <th class="px-4 py-2 text-right">Fresh</th>
+          <th class="px-4 py-2 text-right">Qualified</th>
+          <th class="px-4 py-2 text-right">Rejected</th>
+          <th class="px-4 py-2 text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800/60 text-slate-300">
+        {% for row in source_summary[:8] %}
+          <tr>
+            <td class="px-4 py-2 font-medium text-slate-100">{{ row.source }}</td>
+            <td class="px-4 py-2 text-right">{{ row.fresh }}</td>
+            <td class="px-4 py-2 text-right text-emerald-200">{{ row.qualified }}</td>
+            <td class="px-4 py-2 text-right text-rose-200">{{ row.rejected }}</td>
+            <td class="px-4 py-2 text-right">{{ row.total }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid gap-4 xl:grid-cols-3">
+  {% for status, label in lead_status_options %}
+    {% set status_leads = grouped_leads.get(status, []) %}
+    <section class="rounded-2xl border border-slate-800/80 bg-slate-900/50">
+      <div class="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-100">{{ label }}</h3>
+          <p class="text-xs text-slate-500">{{ status_leads|length }} in current view</p>
+        </div>
+        <span class="rounded-lg border border-slate-800/80 bg-slate-950/70 px-2 py-1 text-xs text-slate-400">{{ status_counts.get(status, 0) }}</span>
+      </div>
+      <div class="space-y-3 p-3">
+        {% for lead in status_leads %}
+          <article class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h4 class="truncate text-sm font-semibold text-emerald-200" title="{{ lead.title }}">{{ lead.title }}</h4>
+                <p class="mt-1 text-xs text-slate-400">{{ lead.pipeline_label }}{% if lead.source %} / {{ lead.source }}{% endif %}</p>
+              </div>
+              {% if lead.status == 'qualified' %}
+                <span class="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-200">Qualified</span>
+              {% elif lead.status == 'rejected' %}
+                <span class="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-xs text-rose-200">Rejected</span>
+              {% else %}
+                <span class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300">Fresh</span>
+              {% endif %}
+            </div>
+            <div class="mt-3 grid gap-1 text-xs text-slate-400">
+              <p>{{ lead.company_name or 'No company/site' }}</p>
+              <p>{{ lead.contact_display }}</p>
+              <p>Owner: {{ lead.owner.display_name if lead.owner else 'Unassigned' }}</p>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              {% if lead.opportunity %}
+                <a href="{{ url_for('sales_opportunity_detail', opportunity_id=lead.opportunity.id) }}" class="rounded-lg border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20">Opportunity</a>
+              {% endif %}
+              {% if lead.status != 'qualified' %}
+                <form method="post" action="{{ url_for('sales_lead_update_status', lead_id=lead.id) }}">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="status" value="qualified">
+                  <button type="submit" class="rounded-lg border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20">Qualify</button>
+                </form>
+              {% endif %}
+              {% if lead.status == 'fresh' %}
+                <form method="post" action="{{ url_for('sales_lead_update_status', lead_id=lead.id) }}">
+                  {{ csrf_field() }}
+                  <input type="hidden" name="status" value="rejected">
+                  <button type="submit" class="rounded-lg border border-rose-400/40 px-3 py-1.5 text-xs font-semibold text-rose-100 hover:bg-rose-500/20">Reject</button>
+                </form>
+              {% endif %}
+            </div>
+          </article>
+        {% else %}
+          <div class="rounded-xl border border-dashed border-slate-800/80 bg-slate-950/40 p-5 text-center text-sm text-slate-500">No {{ label|lower }} leads.</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+</div>
+
+<div id="leadModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-lead-modal></div>
+  <div class="relative mx-auto mt-10 w-full max-w-3xl px-4">
+    <form method="post" action="{{ url_for('sales_leads') }}" class="rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl">
+      {{ csrf_field() }}
+      <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+        <div>
+          <h3 class="text-lg font-semibold">Add Lead</h3>
+          <p class="text-xs text-slate-400">Fresh leads can be qualified into the sales pipeline.</p>
+        </div>
+        <button type="button" class="text-slate-400 hover:text-slate-200" data-close-lead-modal>&times;</button>
+      </div>
+      <div class="grid gap-4 px-6 py-5 text-sm text-slate-100 sm:grid-cols-2">
+        <label class="sm:col-span-2">
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Lead Name</span>
+          <input type="text" name="title" required class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Pipeline</span>
+          <select name="pipeline" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+            {% for key, cfg in lead_pipelines.items() %}
+              <option value="{{ key }}">{{ cfg.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Status</span>
+          <select name="status" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+            {% for status, label in lead_status_options %}
+              <option value="{{ status }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Source</span>
+          <input type="text" name="source" value="Manual" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Owner</span>
+          <select name="owner_id" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+            <option value="">Current user</option>
+            {% for user in sales_users %}
+              <option value="{{ user.id }}">{{ user.display_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Contact Name</span>
+          <input type="text" name="contact_name" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Phone</span>
+          <input type="text" name="phone" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Email</span>
+          <input type="email" name="email" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+        </label>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Company/Site</span>
+          <input type="text" name="company_name" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2">
+        </label>
+        <label class="sm:col-span-2">
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Notes</span>
+          <textarea name="notes" rows="3" class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2"></textarea>
+        </label>
+      </div>
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800/80 px-6 py-4">
+        <button type="button" class="rounded-xl border border-slate-800/80 px-4 py-2 text-xs text-slate-300 hover:text-white" data-close-lead-modal>Cancel</button>
+        <button type="submit" class="rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Save Lead</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="leadUploadModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" data-close-lead-upload></div>
+  <div class="relative mx-auto mt-16 w-full max-w-2xl px-4">
+    <form method="post" action="{{ url_for('sales_leads_upload') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl">
+      {{ csrf_field() }}
+      <div class="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+        <div>
+          <h3 class="text-lg font-semibold">Bulk upload leads</h3>
+          <p class="text-xs text-slate-400">Use the template to import contacts and lead sources.</p>
+        </div>
+        <button type="button" class="text-slate-400 hover:text-slate-200" data-close-lead-upload>&times;</button>
+      </div>
+      <div class="space-y-5 px-6 py-5 text-sm text-slate-200">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/70 p-4">
+          <h4 class="text-sm font-semibold text-slate-100">Template</h4>
+          <p class="mt-1 text-xs text-slate-400">Download the file, fill lead contact details and upload it back.</p>
+          <a href="{{ url_for('sales_leads_upload_template') }}" class="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20" target="_blank" rel="noopener">Download template</a>
+        </div>
+        <ul class="space-y-2 text-xs text-slate-400">
+          <li>Lead Name is required.</li>
+          <li>Pipeline can be new_installation or service.</li>
+          <li>Status can be Fresh, Qualified or Rejected. Qualified rows are pushed to opportunities.</li>
+          <li>Owner Email should match a user with Sales access.</li>
+        </ul>
+        <label>
+          <span class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Upload file</span>
+          <input type="file" name="lead_upload_file" accept=".xlsx,.csv" required class="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-3 py-2 text-slate-100">
+        </label>
+      </div>
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800/80 px-6 py-4">
+        <button type="button" class="rounded-xl border border-slate-800/80 px-4 py-2 text-xs text-slate-300 hover:text-white" data-close-lead-upload>Cancel</button>
+        <button type="submit" class="rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Import leads</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      const bindModal = (modalId, openSelector, closeSelector) => {
+        const modal = document.getElementById(modalId);
+        const openButtons = document.querySelectorAll(openSelector);
+        if (!modal || !openButtons.length) return;
+        const open = () => {
+          modal.classList.remove('hidden');
+          document.body.classList.add('overflow-hidden');
+          const firstInput = modal.querySelector('input, select, textarea');
+          if (firstInput) firstInput.focus();
+        };
+        const close = () => {
+          modal.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+        };
+        openButtons.forEach((button) => button.addEventListener('click', open));
+        modal.querySelectorAll(closeSelector).forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            close();
+          });
+        });
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) close();
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !modal.classList.contains('hidden')) close();
+        });
+        modal.querySelectorAll('form').forEach((form) => form.addEventListener('submit', close));
+      };
+
+      bindModal('leadModal', '[data-open-lead-modal]', '[data-close-lead-modal]');
+      bindModal('leadUploadModal', '[data-open-lead-upload]', '[data-close-lead-upload]');
+    })();
+  </script>
+{% endblock %}
