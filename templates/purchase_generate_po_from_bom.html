@@ -1,17 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Generate PO from BOM · Eleva ERP{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
-  <div class="flex items-center justify-between">
+<div class="space-y-3 overflow-y-auto h-full">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase</p>
-      <h1 class="text-2xl font-semibold">Generate PO from BOM</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Generate PO from BOM</h1>
       <p class="text-sm text-slate-600">Stage-wise ordering for BOM <strong>{{ bom.bom_name }}</strong> (ID {{ bom.id }}).</p>
     </div>
     <a href="{{ request.referrer or url_for('purchase_orders') }}" class="px-3 py-1.5 rounded-lg border text-sm">Back</a>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3 space-y-3">
     {% if missing_spec_items %}
     <div class="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-3">
       <div>

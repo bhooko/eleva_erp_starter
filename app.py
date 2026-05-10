@@ -21870,6 +21870,8 @@ def profile():
 def settings():
     tab = (request.args.get("tab") or "admin").lower()
     allowed_tabs = {"admin", "account", "display", "modules"}
+    if current_user.is_admin:
+        allowed_tabs.add("process-guides")
     active_tab = tab if tab in allowed_tabs else "admin"
 
     users = []
@@ -21877,6 +21879,12 @@ def settings():
     positions = []
     department_options = []
     position_options = []
+    process_guide_context = {
+        "guides": [],
+        "edit_guide": None,
+        "guide_template": SECTION_GUIDE_DEFAULT_TEMPLATE,
+        "default_section_keys": SECTION_GUIDE_DEFAULTS,
+    }
 
     admin_settings = _load_admin_settings()
     app.config["ADMIN_SETTINGS"] = admin_settings
@@ -21894,6 +21902,7 @@ def settings():
         department_options = departments
         position_options = positions
         users = User.query.order_by(User.username.asc()).all()
+        process_guide_context = _process_guides_context()
 
     return render_template(
         "settings.html",
@@ -21906,7 +21915,36 @@ def settings():
         positions=positions,
         position_options=position_options,
         admin_settings=admin_settings,
+        **process_guide_context,
     )
+
+
+def _process_guides_context():
+    edit_id = None
+    edit_id_raw = (request.args.get("edit") or "").strip()
+    if edit_id_raw:
+        try:
+            edit_id = int(edit_id_raw)
+        except ValueError:
+            edit_id = None
+    edit_guide = db.session.get(SectionGuide, edit_id) if edit_id else None
+    guides = SectionGuide.query.order_by(
+        SectionGuide.section_key.asc(),
+        SectionGuide.id.asc(),
+    ).all()
+    return {
+        "guides": guides,
+        "edit_guide": edit_guide,
+        "guide_template": SECTION_GUIDE_DEFAULT_TEMPLATE,
+        "default_section_keys": SECTION_GUIDE_DEFAULTS,
+    }
+
+
+def _process_guides_settings_redirect(edit_id=None):
+    params = {"tab": "process-guides"}
+    if edit_id:
+        params["edit"] = edit_id
+    return redirect(url_for("settings", **params))
 
 
 @app.route("/settings/process-guides", methods=["GET", "POST"])
@@ -21916,6 +21954,15 @@ def process_guides():
         abort(403)
 
     ensure_bootstrap()
+
+    if request.method == "GET":
+        edit_id_raw = (request.args.get("edit") or "").strip()
+        if edit_id_raw:
+            try:
+                return _process_guides_settings_redirect(edit_id=int(edit_id_raw))
+            except ValueError:
+                pass
+        return _process_guides_settings_redirect()
 
     if request.method == "POST":
         action = (request.form.get("action") or "save_guide").strip()
@@ -21931,17 +21978,17 @@ def process_guides():
         if action == "toggle_guide":
             if not guide:
                 flash("Process guide not found.", "error")
-                return redirect(url_for("process_guides"))
+                return _process_guides_settings_redirect()
             guide.is_active = bool(request.form.get("is_active"))
             guide.updated_by = current_user.id
             guide.updated_at = datetime.datetime.utcnow()
             db.session.commit()
             flash("Process guide status updated.", "success")
-            return redirect(url_for("process_guides"))
+            return _process_guides_settings_redirect()
 
         if action != "save_guide":
             flash("Invalid process guide action.", "error")
-            return redirect(url_for("process_guides"))
+            return _process_guides_settings_redirect()
 
         section_key = _normalize_section_key(request.form.get("section_key"))
         title = clean_str(request.form.get("title"))
@@ -21950,10 +21997,10 @@ def process_guides():
 
         if not section_key:
             flash("Section key is required.", "error")
-            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+            return _process_guides_settings_redirect(edit_id=guide_id)
         if not title:
             flash("Title is required.", "error")
-            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+            return _process_guides_settings_redirect(edit_id=guide_id)
 
         duplicate = SectionGuide.query.filter(
             func.lower(SectionGuide.section_key) == section_key.lower()
@@ -21962,7 +22009,7 @@ def process_guides():
             duplicate = duplicate.filter(SectionGuide.id != guide.id)
         if duplicate.first():
             flash("Another process guide already uses that section key.", "error")
-            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+            return _process_guides_settings_redirect(edit_id=guide_id)
 
         if not guide:
             guide = SectionGuide(section_key=section_key)
@@ -21981,30 +22028,12 @@ def process_guides():
             db.session.rollback()
             current_app.logger.exception("Failed to save process guide")
             flash("Could not save the process guide.", "error")
-            return redirect(url_for("process_guides", edit=guide_id) if guide_id else url_for("process_guides"))
+            return _process_guides_settings_redirect(edit_id=guide_id)
 
         flash("Process guide saved.", "success")
-        return redirect(url_for("process_guides"))
+        return _process_guides_settings_redirect()
 
-    edit_id = None
-    edit_id_raw = (request.args.get("edit") or "").strip()
-    if edit_id_raw:
-        try:
-            edit_id = int(edit_id_raw)
-        except ValueError:
-            edit_id = None
-    edit_guide = db.session.get(SectionGuide, edit_id) if edit_id else None
-    guides = SectionGuide.query.order_by(
-        SectionGuide.section_key.asc(),
-        SectionGuide.id.asc(),
-    ).all()
-    return render_template(
-        "process_guides.html",
-        guides=guides,
-        edit_guide=edit_guide,
-        guide_template=SECTION_GUIDE_DEFAULT_TEMPLATE,
-        default_section_keys=SECTION_GUIDE_DEFAULTS,
-    )
+    return _process_guides_settings_redirect()
 
 
 @app.route("/settings/admin/upload-limit", methods=["POST"])

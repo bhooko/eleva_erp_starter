@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Purchase Settings · Eleva ERP{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+<div class="space-y-3 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase · Settings</p>
-      <h1 class="text-2xl font-semibold">Purchase Settings</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Purchase Settings</h1>
       <p class="text-sm text-slate-600">Manage default PO terms and procurement stage labels.</p>
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
     <h2 class="text-lg font-semibold mb-3">Purchase Settings</h2>
     <form method="POST" class="space-y-3">
       {{ csrf_field() }}
@@ -25,7 +24,7 @@
     </form>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
     <h2 class="text-lg font-semibold mb-3">Add new stage</h2>
     <form method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-3">
       {{ csrf_field() }}

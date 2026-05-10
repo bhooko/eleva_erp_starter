@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Purchase · Parts{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
-  <div class="flex items-center justify-between">
+<div class="space-y-3 overflow-y-auto h-full">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-sm uppercase text-slate-500">Inventory</p>
-      <h1 class="text-2xl font-semibold">Parts</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Parts</h1>
       <p class="text-sm text-slate-600">Manage part master data and sync updates from Odoo exports.</p>
     </div>
-    <div class="flex items-center gap-3">
-      <a href="{{ url_for('purchase_part_new') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700">Create Part</a>
-      <label for="upload-products" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Parts (Odoo)</label>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{{ url_for('purchase_part_new') }}" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700">Create Part</a>
+      <label for="upload-products" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg transition cursor-pointer">Upload Parts (Odoo)</label>
     </div>
   </div>
 
@@ -55,8 +54,8 @@
     <p class="text-xs text-slate-500">Type to filter results; click a column header to sort.</p>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-    <table id="parts-table" class="w-full text-sm">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+    <table id="parts-table" class="w-full text-sm" data-compact-table>
       <thead>
         <tr class="text-left text-slate-500">
           <th class="py-3 px-4 cursor-pointer select-none" data-sort-index="0">

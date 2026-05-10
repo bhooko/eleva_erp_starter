@@ -1,15 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Purchase Reports · Eleva ERP{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
+<div class="space-y-3 overflow-y-auto h-full">
   <div class="flex items-center justify-between">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase Analytics</p>
-      <h1 class="text-2xl font-semibold">Reports & Price History</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Reports & Price History</h1>
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3 space-y-3" data-compact-filter-bar>
     <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       <label class="space-y-1">
         <span class="text-sm">Item code</span>
@@ -45,7 +44,7 @@
   </div>
 
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
       <div class="flex items-center justify-between mb-3">
         <div>
           <p class="text-xs uppercase text-slate-500">Price history</p>
@@ -54,7 +53,7 @@
       </div>
       <canvas id="priceChart" class="w-full h-64"></canvas>
       <div class="mt-3 overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm" data-compact-table>
           <thead>
             <tr class="text-left text-slate-500">
               <th class="py-1">Source</th>
@@ -82,7 +81,7 @@
     </div>
 
     <div class="space-y-4">
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
         <p class="text-xs uppercase text-slate-500">Vendor summary</p>
         <h3 class="text-lg font-semibold mb-2">Spend by vendor</h3>
         <div class="space-y-2">
@@ -96,7 +95,7 @@
           {% endfor %}
         </div>
       </div>
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
         <p class="text-xs uppercase text-slate-500">Project summary</p>
         <h3 class="text-lg font-semibold mb-2">Spend by project</h3>
         <div class="space-y-2">

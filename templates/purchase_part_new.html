@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Purchase · Create Part{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
-  <div class="flex items-center justify-between">
+<div class="space-y-3 overflow-y-auto h-full">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-sm uppercase text-slate-500">Inventory</p>
-      <h1 class="text-2xl font-semibold">Create Part</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Create Part</h1>
     </div>
-    <a href="{{ url_for('purchase_parts') }}" class="px-4 py-2 rounded-xl border">← Back</a>
+    <a href="{{ url_for('purchase_parts') }}" class="px-3 py-1.5 text-sm rounded-lg border">← Back</a>
   </div>
 
-  <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+  <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
     <form method="POST" class="space-y-4">
       {{ csrf_field() }}
       <div class="grid md:grid-cols-2 gap-4">

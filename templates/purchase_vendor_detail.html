@@ -1,17 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Purchase · Vendor Detail{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6">
-  <div class="flex items-center justify-between">
+<div class="space-y-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase</p>
-      <h1 class="text-2xl font-semibold">{{ vendor.display_name or vendor.name }}</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>{{ vendor.display_name or vendor.name }}</h1>
       <p class="text-sm text-slate-600">Status: <span class="font-semibold">{{ vendor.status or 'Active' }}</span></p>
     </div>
-    <a href="{{ url_for('purchase_vendors') }}" class="px-4 py-2 rounded-xl border">← Back</a>
+    <a href="{{ url_for('purchase_vendors') }}" class="px-3 py-1.5 text-sm rounded-lg border">← Back</a>
   </div>
 
-  <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+  <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Vendor Details</h2>
       <label for="edit-vendor-modal" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">

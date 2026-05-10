@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Purchase Order {{ po.po_number }} · Eleva ERP{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6">
-  <div class="flex items-start justify-between gap-4">
+<div class="space-y-3">
+  <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs uppercase text-slate-500">Purchase</p>
-      <h1 class="text-2xl font-semibold">Purchase Order {{ po.po_number }}</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Purchase Order {{ po.po_number }}</h1>
       <div class="flex items-center gap-2">
         <p class="text-sm text-slate-600">Detailed view with linked BOM information.</p>
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{{ (po.origin or 'ERP')|upper }}</span>
@@ -292,7 +291,6 @@
 
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
     <div class="mb-2">
-      <p class="text-xs uppercase text-slate-500">Purchase</p>
       <h2 class="text-lg font-semibold">PO Change Log</h2>
     </div>
     {% if po_status_history %}

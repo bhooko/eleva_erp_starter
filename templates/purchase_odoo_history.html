@@ -1,21 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Odoo Purchase Orders · Eleva ERP{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-6 overflow-y-auto h-full">
-  <div class="flex items-center justify-between gap-3">
+<div class="space-y-3 overflow-y-auto h-full">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-sm uppercase text-slate-500">Purchase</p>
-      <h1 class="text-2xl font-semibold">Odoo PO History</h1>
+      <h1 class="text-xl font-semibold" data-compact-page-title>Odoo PO History</h1>
       <p class="text-sm text-slate-600">Historical reference only. All new POs must be created in Eleva ERP.</p>
     </div>
     {% if odoo_import_enabled %}
-    <label for="upload-po-odoo" class="inline-flex items-center gap-2 px-4 py-2 btn-primary btn-shimmer rounded-xl shadow hover:shadow-lg hover:scale-[1.02] transition cursor-pointer">Upload Odoo PO file</label>
+    <label for="upload-po-odoo" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm btn-primary btn-shimmer rounded-lg shadow hover:shadow-lg transition cursor-pointer">Upload Odoo PO file</label>
     {% else %}
     <span class="text-sm text-slate-500">Odoo PO import is disabled.</span>
     {% endif %}
   </div>
 
-  <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 p-4 text-sm">
+  <div class="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm">
     <p class="font-semibold">Odoo Purchase Orders – historical reference only.</p>
     <p>All new POs must be created in Eleva ERP. These records cannot be edited or deleted.</p>
   </div>
@@ -51,7 +50,7 @@
   </div>
   {% endif %}
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3 space-y-3" data-compact-filter-bar>
     <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
       <label class="space-y-1">
         <span class="text-sm">Odoo Order Reference</span>

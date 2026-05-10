@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Vendor Rate History{% endblock %}
 {% block content %}
-<div class="px-6 py-6 space-y-4">
+<div class="space-y-3">
   <a href="{{ url_for('purchase_vendor_detail', vendor_id=vendor.id) }}" class="text-blue-600">← Back to vendor</a>
-  <h1 class="text-2xl font-semibold">Rate History · {{ vendor.display_name or vendor.name }} · {{ product.name }}</h1>
-  <table class="w-full text-sm bg-white rounded-xl border">
+  <h1 class="text-xl font-semibold" data-compact-page-title>Rate History · {{ vendor.display_name or vendor.name }} · {{ product.name }}</h1>
+  <table class="w-full text-sm bg-white rounded-xl border" data-compact-table>
     <thead><tr class="text-left"><th class="p-2">Date</th><th class="p-2">Old rate</th><th class="p-2">New rate</th><th class="p-2">Changed by</th><th class="p-2">Note</th></tr></thead>
     <tbody>
       {% for row in history_rows %}

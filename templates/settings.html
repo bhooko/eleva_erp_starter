@@ -10,6 +10,9 @@
   {"id": "display", "label": "Display", "description": "Switch colour schemes and tune visual comfort."},
   {"id": "modules", "label": "Module Settings", "description": "Configure workspace modules without touching code."}
 ] %}
+{% if current_user.is_admin %}
+  {% set tabs = tabs + [{"id": "process-guides", "label": "Process Guides", "description": "Maintain section-level operating guidance."}] %}
+{% endif %}
 
 <div class="space-y-6">
   <div>
@@ -201,6 +204,21 @@
 
               <p class="text-xs text-slate-300">Themes adjust interface colours, accents, stage gradients and button treatments without affecting your data.</p>
             </section>
+
+            {% if current_user.is_admin %}
+            <section id="settings-panel-process-guides"
+               class="motion-panel space-y-4 {{ 'is-active' if active == 'process-guides' else 'hidden' }}"
+               role="tabpanel"
+               aria-labelledby="settings-tab-process-guides"
+               data-tab-panel="process-guides">
+        <header>
+          <h3 class="text-lg font-semibold text-slate-100">Process Guides</h3>
+          <p class="mt-1 text-sm text-slate-400">Create and maintain the guide panels shown inside ERP sections.</p>
+        </header>
+
+        {% include "_process_guides_panel.html" %}
+      </section>
+      {% endif %}
 
             <section id="settings-panel-modules"
                class="motion-panel space-y-5 {{ 'is-active' if active == 'modules' else 'hidden' }}"

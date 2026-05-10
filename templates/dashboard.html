@@ -115,24 +115,24 @@
     {% endfor %}
   {% endfor %}
 
-  <div class="space-y-4" data-filter-scope data-dashboard-workspace>
-    <div class="flex flex-wrap items-center justify-between gap-3">
+  <div class="space-y-2" data-filter-scope data-dashboard-workspace>
+    <div class="flex flex-wrap items-center justify-between gap-2" data-dashboard-filter-toolbar>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Show</span>
-        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="all">All</button>
-        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="overdue">Overdue</button>
-        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="today">Today</button>
-        <button type="button" class="px-3 py-1 rounded-full text-sm border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="upcoming">Next 7 days</button>
+        <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Show</span>
+        <button type="button" class="px-2.5 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="all">All</button>
+        <button type="button" class="px-2.5 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="overdue">Overdue</button>
+        <button type="button" class="px-2.5 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="today">Today</button>
+        <button type="button" class="px-2.5 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900/60 text-slate-200" data-filter-value="upcoming">Next 7 days</button>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-1" aria-label="Dashboard view mode">
-          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="table">Table</button>
-          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="kanban">Kanban</button>
+        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-0.5" aria-label="Dashboard view mode">
+          <button type="button" class="rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="table">Table</button>
+          <button type="button" class="rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-view-mode-value="kanban">Kanban</button>
         </div>
-        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-1" aria-label="Dashboard grouping mode">
-          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="module">By Module</button>
-          <button type="button" class="rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="all">No Grouping</button>
+        <div class="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-0.5" aria-label="Dashboard grouping mode">
+          <button type="button" class="rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="module">By Module</button>
+          <button type="button" class="rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-group-mode-value="all">No Grouping</button>
         </div>
       </div>
     </div>
@@ -142,7 +142,7 @@
         {{ empty_text }}
       </div>
     {% else %}
-      <div class="space-y-4" data-view-pane data-view-mode="table" data-group-mode="module">
+      <div class="space-y-3" data-view-pane data-view-mode="table" data-group-mode="module">
         {% for module in modules %}
           {% set items = module['items'] or [] %}
           {% if items %}
@@ -150,13 +150,10 @@
             {% for item in items %}
               {% set _ = variants.values.append(item.due_variant or 'none') %}
             {% endfor %}
-            <section class="rounded-xl border border-slate-800 bg-slate-950/40" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
-              <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+            <section class="rounded-lg border border-slate-800 bg-slate-950/40" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
+              <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
                 <div>
                   <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
-                  {% if module.description %}
-                    <p class="text-xs text-slate-500">{{ module.description }}</p>
-                  {% endif %}
                 </div>
                 <div class="text-xs uppercase tracking-wide text-slate-500">{{ items|length }} item{{ 's' if items|length != 1 else '' }}</div>
               </div>
@@ -183,8 +180,8 @@
       </div>
 
       <div class="hidden" data-view-pane data-view-mode="table" data-group-mode="all">
-        <section class="rounded-xl border border-slate-800 bg-slate-950/40" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
-          <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <section class="rounded-lg border border-slate-800 bg-slate-950/40" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
+          <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
             <h2 class="text-sm font-semibold text-slate-100">All Pending Work</h2>
             <div class="text-xs uppercase tracking-wide text-slate-500">{{ totals.count }} item{{ 's' if totals.count != 1 else '' }}</div>
           </div>
@@ -211,7 +208,7 @@
         </section>
       </div>
 
-      <div class="hidden space-y-4" data-view-pane data-view-mode="kanban" data-group-mode="module">
+      <div class="hidden space-y-3" data-view-pane data-view-mode="kanban" data-group-mode="module">
         {% for module in modules %}
           {% set items = module['items'] or [] %}
           {% if items %}
@@ -219,7 +216,7 @@
             {% for item in items %}
               {% set _ = variants.values.append(item.due_variant or 'none') %}
             {% endfor %}
-            <section class="rounded-xl border border-slate-800 bg-slate-950/30 p-3 space-y-3" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
+            <section class="rounded-lg border border-slate-800 bg-slate-950/30 p-2 space-y-2" data-variants="{{ variants.values | unique | join(',') }}" data-filter-section>
               <div class="flex items-center justify-between gap-3 px-1">
                 <h2 class="text-sm font-semibold text-slate-100">{{ module['module'] }}</h2>
                 <div class="text-xs uppercase tracking-wide text-slate-500">{{ items|length }} item{{ 's' if items|length != 1 else '' }}</div>
@@ -231,7 +228,7 @@
       </div>
 
       <div class="hidden" data-view-pane data-view-mode="kanban" data-group-mode="all">
-        <section class="rounded-xl border border-slate-800 bg-slate-950/30 p-3 space-y-3" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
+        <section class="rounded-lg border border-slate-800 bg-slate-950/30 p-2 space-y-2" data-variants="{{ totals.variants | unique | join(',') }}" data-filter-section>
           <div class="flex items-center justify-between gap-3 px-1">
             <h2 class="text-sm font-semibold text-slate-100">All Pending Work</h2>
             <div class="text-xs uppercase tracking-wide text-slate-500">{{ totals.count }} item{{ 's' if totals.count != 1 else '' }}</div>
@@ -246,8 +243,9 @@
 {% block title %}Eleva ERP – {{ 'Project Tasks' if view_mode == 'projects' else 'Dashboard' }}{% endblock %}
 
 {% block content %}
-<div class="space-y-6" data-dashboard-tabs data-default-tab="my">
-  <div class="rounded-2xl bg-slate-900/60 border border-slate-800 shadow-inner shadow-black/20 p-6 flex flex-wrap items-start gap-6 card-hover-lift fade-in-up">
+<div class="space-y-3" data-dashboard-tabs data-default-tab="my">
+  {% if false %}
+  <div class="hidden">
     <div>
       <h2 class="text-lg font-semibold text-slate-100">
         {% if view_mode == 'projects' %}
@@ -255,7 +253,7 @@
           <span data-tab-label="team" class="hidden">Team Project Tasks for {{ viewing_user.display_name }}</span>
           <span data-tab-label="created" class="hidden">Items You Assigned</span>
         {% else %}
-          <span data-tab-label="my">Pending Work for {{ viewing_user.display_name }}</span>
+          <span data-tab-label="my">Work for {{ viewing_user.display_name }}</span>
           <span data-tab-label="team" class="hidden">Team Workload for {{ viewing_user.display_name }}</span>
           <span data-tab-label="created" class="hidden">Items You Assigned</span>
         {% endif %}
@@ -266,7 +264,7 @@
           <span data-tab-description="team" class="hidden">See open project and QC work owned by your direct and indirect reports.</span>
           <span data-tab-description="created" class="hidden">Tasks and activities you created for others to complete.</span>
         {% else %}
-          <span data-tab-description="my">Only tasks and activities that are still pending across Sales, Projects, and QC modules.</span>
+          <span data-tab-description="my">Pending tasks and activities across Sales, Projects, and QC modules.</span>
           <span data-tab-description="team" class="hidden">Everything pending across your team's assignments in Sales, Projects, and QC.</span>
           <span data-tab-description="created" class="hidden">Tasks and activities you created for others to complete.</span>
         {% endif %}
@@ -289,10 +287,12 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-3 border-b border-slate-800/80 pb-2" role="tablist" aria-label="Dashboard scope selector">
+  {% endif %}
+
+  <div class="flex items-center gap-2 border-b border-slate-800/80 pb-1" role="tablist" aria-label="Dashboard scope selector">
     <button
       type="button"
-      class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+      class="inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
       data-tab-target="my"
       role="tab"
       aria-selected="false"
@@ -301,14 +301,14 @@
     >
       <span>My Dash</span>
       <span
-        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-6 min-w-[1.5rem] px-2"
         data-tab-count="my"
       >{{ pending_total|default(0) }}</span>
     </button>
     {% if view_mode != 'projects' %}
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+        class="inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
         data-tab-target="created"
         role="tab"
         aria-selected="false"
@@ -317,14 +317,14 @@
       >
         <span>Assigned by Me</span>
         <span
-          class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+          class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-6 min-w-[1.5rem] px-2"
           data-tab-count="created"
         >{{ created_by_total|default(0) }}</span>
       </button>
     {% endif %}
     <button
       type="button"
-      class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
+      class="inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold tracking-wide uppercase border border-transparent text-slate-400 hover:text-slate-200 transition"
       data-tab-target="team"
       role="tab"
       aria-selected="false"
@@ -333,7 +333,7 @@
     >
       <span>Team Dash</span>
       <span
-        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-7 min-w-[1.75rem] px-2"
+        class="inline-flex items-center justify-center rounded-full bg-slate-800/70 text-slate-200 h-6 min-w-[1.5rem] px-2"
         data-tab-count="team"
       >{{ team_pending_total|default(0) }}</span>
     </button>
