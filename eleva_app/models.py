@@ -204,6 +204,15 @@ class User(UserMixin, db.Model):
         module_key = (module_key or "").strip().lower()
         if not module_key:
             return True
+        cached_permissions = self._module_permissions_cache()
+        if module_key not in cached_permissions:
+            role = (self.role or "").strip().lower()
+            if module_key == "store":
+                return True
+            if module_key == "design":
+                return "design" in role
+            if module_key == "purchase":
+                return "purchase" in role
         settings = self.get_module_permission_settings(module_key)
         return bool(settings.get("visibility", True))
 
@@ -213,6 +222,15 @@ class User(UserMixin, db.Model):
         module_key = (module_key or "").strip().lower()
         if not module_key:
             return True
+        cached_permissions = self._module_permissions_cache()
+        if module_key not in cached_permissions:
+            role = (self.role or "").strip().lower()
+            if module_key == "store":
+                return "store" in role
+            if module_key == "design":
+                return "design" in role
+            if module_key == "purchase":
+                return "purchase" in role
         settings = self.get_module_permission_settings(module_key)
         return bool(settings.get("assignment", True))
 

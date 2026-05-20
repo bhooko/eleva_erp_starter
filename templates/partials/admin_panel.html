@@ -142,7 +142,6 @@
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Username</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Department</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Position</th>
-                <th scope="col" class="px-4 py-3 text-center font-semibold">Service I/C</th>
                 <th scope="col" class="px-4 py-3 text-left font-semibold">Status</th>
                 <th scope="col" class="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
@@ -172,21 +171,6 @@
                     {% else %}
                       <span class="text-slate-500">No position</span>
                     {% endif %}
-                  </td>
-                  <td class="px-4 py-3 text-center">
-                    <form method="post"
-                          action="{{ url_for('admin_user_toggle_service_manager', user_id=user.id) }}">
-                      {{ csrf_field() }}
-                      <label class="inline-flex items-center gap-1 text-xs text-slate-200">
-                        <input type="checkbox"
-                               name="is_service_manager"
-                               value="1"
-                               class="rounded border-slate-700 bg-slate-900"
-                               onchange="this.form.submit()"
-                               {% if user.is_service_manager %}checked{% endif %}>
-                        <span>Service I/C</span>
-                      </label>
-                    </form>
                   </td>
                   <td class="px-4 py-3">
                     <span class="inline-flex items-center rounded-lg border px-2 py-1 text-xs {{ 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200' if user.is_active else 'border-rose-400/40 bg-rose-500/20 text-rose-100' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>
@@ -287,6 +271,19 @@
               <div>
                 <h4 class="text-sm font-semibold text-slate-100">Module permissions</h4>
                 <p class="text-xs text-slate-400">Choose where {{ user.display_name or user.username }} appears in the app and which areas they can be assigned work in.</p>
+              </div>
+              <div class="rounded-xl border border-slate-800/60 bg-slate-900/70 p-4">
+                <label class="inline-flex items-start gap-3 text-sm text-slate-200">
+                  <input type="checkbox"
+                         name="is_service_manager"
+                         value="1"
+                         class="mt-1 rounded border-slate-700 bg-slate-900"
+                         {% if user.is_service_manager %}checked{% endif %}>
+                  <span>
+                    <span class="block font-semibold text-slate-100">Service I/C</span>
+                    <span class="block text-xs text-slate-400">Allows service in-charge views and approvals where service workflows require an I/C.</span>
+                  </span>
+                </label>
               </div>
               <div class="space-y-4">
                 {% for module in workspace_modules %}

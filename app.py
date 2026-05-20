@@ -3285,10 +3285,31 @@ WORKSPACE_MODULES = [
     },
     {
         "key": "operations",
-        "label": "Operations",
+        "label": "New Installation",
         "description": "Project delivery tools inside the New Installation area.",
-        "visibility_label": "Show Operations workspace",
-        "assignment_label": "Allow Operations task assignment",
+        "visibility_label": "Show New Installation workspace",
+        "assignment_label": "Allow New Installation task assignment",
+    },
+    {
+        "key": "design",
+        "label": "Design",
+        "description": "Design tasks, drawing history and BOM template work.",
+        "visibility_label": "Show Design workspace",
+        "assignment_label": "Allow Design task assignment",
+    },
+    {
+        "key": "purchase",
+        "label": "Purchase",
+        "description": "Purchase orders, procurement planning, vendors and part rates.",
+        "visibility_label": "Show Purchase workspace",
+        "assignment_label": "Allow Purchase task assignment",
+    },
+    {
+        "key": "store",
+        "label": "Store",
+        "description": "Stores inventory, delivery orders, assets and movement tracking.",
+        "visibility_label": "Show Store workspace",
+        "assignment_label": "Allow Store task assignment",
     },
     {
         "key": "srt",
@@ -21555,6 +21576,59 @@ def migrate_plaintext_passwords():
         print(f"🔒 Migrated {migrated} plaintext password(s) to hashed storage.")
 
 
+def _legacy_workspace_permission_default(user, module_key):
+    role = (getattr(user, "role", "") or "").strip().lower()
+    if getattr(user, "is_admin", False):
+        return {"visibility": True, "assignment": True}
+    if module_key == "design":
+        enabled = "design" in role
+        return {"visibility": enabled, "assignment": enabled}
+    if module_key == "purchase":
+        enabled = "purchase" in role
+        return {"visibility": enabled, "assignment": enabled}
+    if module_key == "store":
+        return {"visibility": True, "assignment": "store" in role}
+    return {"visibility": False, "assignment": False}
+
+
+def ensure_workspace_module_permission_keys():
+    any_changed = False
+    for user in User.query.all():
+        changed = False
+        try:
+            raw_permissions = json.loads(user.module_permissions_json or "{}")
+        except (TypeError, ValueError):
+            raw_permissions = {}
+            changed = True
+        if not isinstance(raw_permissions, dict):
+            raw_permissions = {}
+            changed = True
+
+        permissions = {}
+        for key, value in raw_permissions.items():
+            module_key = (key or "").strip().lower()
+            if not module_key or not isinstance(value, dict):
+                continue
+            permissions[module_key] = {
+                "visibility": bool(value.get("visibility", False)),
+                "assignment": bool(value.get("assignment", False)),
+            }
+
+        for module in WORKSPACE_MODULES:
+            module_key = module["key"]
+            if module_key not in permissions:
+                permissions[module_key] = _legacy_workspace_permission_default(
+                    user, module_key
+                )
+                changed = True
+
+        if changed:
+            user.set_module_permissions(permissions)
+            any_changed = True
+
+    return any_changed
+
+
 def bootstrap_db():
     ensure_tables()
     ensure_section_guide_table()
@@ -21651,6 +21725,7 @@ def bootstrap_db():
         user.active = True
     for user in User.query.filter(or_(User.module_permissions_json.is_(None), User.module_permissions_json == "")).all():
         user.module_permissions_json = "{}"
+    ensure_workspace_module_permission_keys()
 
     get_or_create_default_task_form()
 
@@ -26392,6 +26467,7 @@ def admin_users_update(user_id):
     user.mobile_number = mobile_number or None
     user.department = department.name if department else None
     user.active = active_flag
+    user.is_service_manager = _form_truthy(request.form.get("is_service_manager"))
     user.position = position
     if not user.department and position and position.department:
         user.department = position.department.name

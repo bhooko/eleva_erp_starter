@@ -1916,10 +1916,9 @@
         {% endif %}
 
         {% if current_user.is_authenticated %}
-          {% set role_key = (current_user.role or '').lower() %}
-          {% set design_visible = current_user.is_admin or 'design' in role_key %}
-          {% set purchase_visible = current_user.is_admin or 'purchase' in role_key %}
-          {% set store_visible = true %}
+          {% set design_visible = current_user.can_view_module('design') %}
+          {% set purchase_visible = current_user.can_view_module('purchase') %}
+          {% set store_visible = current_user.can_view_module('store') %}
 
           {% if design_visible %}
           {% set design_endpoints = ['design_overview','design_tasks','design_task_detail','design_drawing_history','design_drawing_history_upload','design_bom_templates','design_bom_template_edit','part_classes'] %}
