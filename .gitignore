@@ -31,3 +31,6 @@ instance/
 .DS_Store
 Thumbs.db
 /static/uploads
+
+# Generated dependency folders inside output artifacts
+outputs/**/node_modules/
